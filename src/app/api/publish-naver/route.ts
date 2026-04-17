@@ -4,10 +4,6 @@ import { getDecryptedCredentials } from '@/lib/credentials';
 
 export const maxDuration = 300;
 
-// Vercel 환경인지 판단
-const IS_VERCEL = !!process.env.VERCEL;
-
-// @sparticuz/chromium-min CDN URL (Chromium 131 = playwright-core 1.49 호환)
 const CHROMIUM_CDN =
   'https://github.com/Sparticuz/chromium/releases/download/v131.0.0/chromium-v131.0.0-pack.tar';
 
@@ -23,19 +19,16 @@ function markdownToPlainText(body: string): string {
     .trim();
 }
 
-/** 로컬 환경에서 Chrome 실행 경로 자동 탐색 (Windows/Mac/Linux) */
+/** 로컬 Chrome 실행 경로 탐색 */
 async function findLocalChrome(): Promise<string | undefined> {
   const { existsSync } = await import('fs');
   const candidates = [
-    // Windows
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
     process.env.LOCALAPPDATA
       ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`
       : '',
-    // macOS
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    // Linux
     '/usr/bin/google-chrome',
     '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
@@ -45,6 +38,45 @@ async function findLocalChrome(): Promise<string | undefined> {
     if (existsSync(p)) return p;
   }
   return undefined;
+}
+
+/** 환경에 맞는 브라우저 실행 */
+async function launchBrowser() {
+  const { chromium } = await import('playwright-core');
+
+  // Linux = Vercel / Railway 등 서버 환경
+  if (process.platform === 'linux') {
+    const chromiumModule = await import('@sparticuz/chromium-min');
+    // CJS default export 또는 모듈 자체 처리
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chromiumBin: any = (chromiumModule as any).default ?? chromiumModule;
+
+    const executablePath: string = await chromiumBin.executablePath(CHROMIUM_CDN);
+    if (!executablePath) {
+      throw new Error(
+        'Chromium 실행 경로를 가져올 수 없습니다. CDN 다운로드에 실패했을 수 있습니다.'
+      );
+    }
+
+    const args: string[] = Array.isArray(chromiumBin.args)
+      ? [...chromiumBin.args, '--disable-blink-features=AutomationControlled']
+      : ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'];
+
+    return chromium.launch({ args, executablePath, headless: true });
+  }
+
+  // Windows / macOS = 로컬 개발 환경
+  const executablePath = await findLocalChrome();
+  if (!executablePath) {
+    throw new Error(
+      'Chrome을 찾을 수 없습니다. Chrome을 설치한 후 다시 시도하세요.'
+    );
+  }
+  return chromium.launch({
+    executablePath,
+    headless: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'],
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -81,52 +113,24 @@ export async function POST(req: NextRequest) {
 
   const { naverId, naverPw, blogCategory } = creds;
 
-  // 4. 브라우저 실행
   let browser: import('playwright-core').Browser | null = null;
 
   try {
-    const { chromium } = await import('playwright-core');
-
-    if (IS_VERCEL) {
-      // Vercel: @sparticuz/chromium-min 사용
-      const chromiumBin = (await import('@sparticuz/chromium-min')).default;
-      const executablePath = await chromiumBin.executablePath(CHROMIUM_CDN);
-      browser = await chromium.launch({
-        args: [...chromiumBin.args, '--disable-blink-features=AutomationControlled'],
-        executablePath,
-        headless: true,
-      });
-    } else {
-      // 로컬: 시스템 Chrome 자동 탐색
-      const executablePath = await findLocalChrome();
-      if (!executablePath) {
-        return NextResponse.json(
-          { error: '로컬 Chrome을 찾을 수 없습니다. Chrome을 설치하거나 VERCEL 환경에서 실행하세요.' },
-          { status: 500 }
-        );
-      }
-      browser = await chromium.launch({
-        executablePath,
-        headless: false,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'],
-      });
-    }
+    browser = await launchBrowser();
 
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     });
-
     const page = await context.newPage();
 
-    // ── 5. 네이버 로그인 ─────────────────────────────────────────
+    // ── 4. 네이버 로그인 ──────────────────────────────────────────
     await page.goto('https://nid.naver.com/nidlogin.login?mode=form', {
       waitUntil: 'domcontentloaded',
     });
     await page.waitForTimeout(1500);
 
-    // JavaScript로 값 주입 (자동화 감지 우회)
     await page.evaluate(
       ({ id, pw }: { id: string; pw: string }) => {
         function setNativeValue(el: HTMLInputElement, value: string) {
@@ -150,9 +154,8 @@ export async function POST(req: NextRequest) {
     await page.click('.btn_login');
     await page.waitForTimeout(5000);
 
-    // 로그인 실패 감지
     const afterLoginUrl = page.url();
-    if (afterLoginUrl.includes('nidlogin') || afterLoginUrl.includes('login')) {
+    if (afterLoginUrl.includes('nidlogin') || afterLoginUrl.includes('/login')) {
       const errMsg = await page
         .locator('.error_message, .msg_error, #err_common')
         .first()
@@ -160,15 +163,14 @@ export async function POST(req: NextRequest) {
         .catch(() => null);
       throw new Error(
         errMsg?.trim() ||
-          '로그인에 실패했습니다. 아이디/비밀번호를 확인하세요. CAPTCHA가 표시되면 잠시 후 다시 시도하세요.'
+          '로그인에 실패했습니다. 아이디/비밀번호를 확인하세요. CAPTCHA가 표시된 경우 잠시 후 다시 시도하세요.'
       );
     }
 
-    // ── 6. 블로그 글쓰기 이동 ─────────────────────────────────────
-    await page.goto(
-      `https://blog.naver.com/PostWriteForm.naver?blogId=${naverId}`,
-      { waitUntil: 'domcontentloaded' }
-    );
+    // ── 5. 글쓰기 페이지 이동 ─────────────────────────────────────
+    await page.goto(`https://blog.naver.com/${naverId}/postwrite`, {
+      waitUntil: 'domcontentloaded',
+    });
     await page.waitForTimeout(4000);
 
     // iframe(mainFrame) 탐색
@@ -177,12 +179,12 @@ export async function POST(req: NextRequest) {
       page.frames().find((f) => f.url().includes('blog.naver.com') && f !== page.mainFrame());
 
     if (!mainFrame) {
-      throw new Error('블로그 에디터 프레임을 찾을 수 없습니다. 네이버 블로그 URL을 확인하세요.');
+      throw new Error('블로그 에디터 프레임을 찾을 수 없습니다.');
     }
 
     await mainFrame.waitForTimeout(3000);
 
-    // ── 7. 제목 입력 ──────────────────────────────────────────────
+    // ── 6. 제목 입력 ──────────────────────────────────────────────
     await mainFrame.waitForSelector('.se-title-input', { timeout: 20000 });
     await mainFrame.click('.se-title-input');
     await mainFrame.waitForTimeout(300);
@@ -198,8 +200,7 @@ export async function POST(req: NextRequest) {
 
     await mainFrame.waitForTimeout(500);
 
-    // ── 8. 본문 입력 ──────────────────────────────────────────────
-    // 본문 영역 클릭
+    // ── 7. 본문 입력 ──────────────────────────────────────────────
     const bodySelectors = [
       '.se-main-container .se-text-paragraph',
       '.se-main-container',
@@ -210,35 +211,26 @@ export async function POST(req: NextRequest) {
     for (const sel of bodySelectors) {
       try {
         const el = await mainFrame.$(sel);
-        if (el) {
-          await el.click();
-          break;
-        }
-      } catch { /* continue */ }
+        if (el) { await el.click(); break; }
+      } catch { /* next */ }
     }
 
     await mainFrame.waitForTimeout(500);
 
-    const cleanBody = markdownToPlainText(body);
-    const lines = cleanBody.split('\n');
-
+    const lines = markdownToPlainText(body).split('\n');
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (line) {
+      if (lines[i]) {
         await mainFrame.evaluate((text: string) => {
           document.execCommand('insertText', false, text);
-        }, line);
+        }, lines[i]);
       }
-      if (i < lines.length - 1) {
-        await page.keyboard.press('Enter');
-      }
+      if (i < lines.length - 1) await page.keyboard.press('Enter');
       if (i % 15 === 14) await mainFrame.waitForTimeout(100);
     }
 
     await mainFrame.waitForTimeout(500);
 
-    // ── 9. 발행하기 버튼 클릭 → 발행 설정 패널 열기 ─────────────────
-    // 네이버 스마트에디터 ONE: "발행하기" 버튼이 mainFrame 밖(메인 페이지)에 있음
+    // ── 8. 발행하기 버튼 클릭 (패널 열기) ────────────────────────
     const publishTriggerSelectors = [
       '.publish_btn',
       'button.se-btn-publish',
@@ -249,69 +241,42 @@ export async function POST(req: NextRequest) {
     let panelOpened = false;
     for (const sel of publishTriggerSelectors) {
       try {
-        // mainFrame 내부 먼저, 없으면 page에서 찾기
         const btn = (await mainFrame.$(sel).catch(() => null)) ?? (await page.$(sel).catch(() => null));
-        if (btn) {
-          await btn.click();
-          panelOpened = true;
-          break;
-        }
-      } catch { /* continue */ }
+        if (btn) { await btn.click(); panelOpened = true; break; }
+      } catch { /* next */ }
     }
 
-    // XPath로 "발행하기" 텍스트 버튼 찾기
     if (!panelOpened) {
       try {
         await page.locator('button:has-text("발행하기")').first().click({ timeout: 3000 });
         panelOpened = true;
-      } catch { /* continue */ }
+      } catch { /* continue without panel */ }
     }
 
     if (panelOpened) {
       await page.waitForTimeout(2000);
 
-      // ── 10. 카테고리 선택 ────────────────────────────────────────
+      // ── 9. 카테고리 선택 ──────────────────────────────────────
       if (blogCategory) {
         try {
-          // 카테고리 드롭다운 열기
-          const catTriggerSelectors = [
-            '.category_item',
-            '.se-category-wrap button',
-            '[class*="category"] button',
-            'button[data-type="category"]',
-          ];
-
-          for (const sel of catTriggerSelectors) {
-            try {
-              const trigger =
-                (await page.$(sel).catch(() => null)) ??
-                (await mainFrame.$(sel).catch(() => null));
-              if (trigger) {
-                await trigger.click();
-                await page.waitForTimeout(500);
-                break;
-              }
-            } catch { /* continue */ }
+          // 카테고리 드롭다운 클릭
+          for (const sel of ['.category_item', '.se-category-wrap button', '[class*="category"] button']) {
+            const trigger = (await page.$(sel).catch(() => null)) ?? (await mainFrame.$(sel).catch(() => null));
+            if (trigger) { await trigger.click(); await page.waitForTimeout(500); break; }
           }
-
-          // 카테고리 이름으로 항목 클릭
-          try {
-            await page
-              .locator(`li:has-text("${blogCategory}"), a:has-text("${blogCategory}")`)
-              .first()
-              .click({ timeout: 3000 });
-            await page.waitForTimeout(500);
-          } catch { /* 카테고리 미일치 시 기본값으로 발행 */ }
-        } catch { /* 카테고리 선택 실패해도 계속 진행 */ }
+          // 카테고리명으로 선택
+          await page
+            .locator(`li:has-text("${blogCategory}"), a:has-text("${blogCategory}")`)
+            .first()
+            .click({ timeout: 3000 });
+          await page.waitForTimeout(300);
+        } catch { /* 카테고리 미일치 시 기본값으로 진행 */ }
       }
 
-      // ── 11. 태그 입력 ────────────────────────────────────────────
+      // ── 10. 태그 입력 ─────────────────────────────────────────
       if (tags.length > 0) {
         try {
-          const tagInput = await page
-            .$('input[placeholder*="태그"], .se-tag-input input, .tag_input input')
-            .catch(() => null);
-
+          const tagInput = await page.$('input[placeholder*="태그"], .se-tag-input input, .tag_input input').catch(() => null);
           if (tagInput) {
             for (const tag of tags.slice(0, 10)) {
               await tagInput.click();
@@ -320,69 +285,53 @@ export async function POST(req: NextRequest) {
               await page.waitForTimeout(200);
             }
           }
-        } catch { /* 태그 입력 실패 무시 */ }
+        } catch { /* 태그 실패 무시 */ }
       }
 
       await page.waitForTimeout(500);
 
-      // ── 12. 최종 발행 버튼 ───────────────────────────────────────
-      const finalPublishSelectors = [
-        '.btn_submit',
-        '.confirm_btn',
-        'button[data-type="submit"]',
-        '.btn_publish_confirm',
-      ];
-
+      // ── 11. 최종 발행 클릭 ─────────────────────────────────────
       let published = false;
-      for (const sel of finalPublishSelectors) {
+      for (const sel of ['.btn_submit', '.confirm_btn', 'button[data-type="submit"]', '.btn_publish_confirm']) {
         try {
           const btn = (await page.$(sel).catch(() => null)) ?? (await mainFrame.$(sel).catch(() => null));
-          if (btn) {
-            await btn.click();
-            published = true;
-            break;
-          }
-        } catch { /* continue */ }
+          if (btn) { await btn.click(); published = true; break; }
+        } catch { /* next */ }
       }
 
       if (!published) {
         try {
           await page.locator('button:has-text("발행"):not(:has-text("발행하기"))').first().click({ timeout: 3000 });
           published = true;
-        } catch { /* continue */ }
+        } catch { /* fallback */ }
       }
 
-      if (!published) {
-        await page.keyboard.press('Enter');
-      }
+      if (!published) await page.keyboard.press('Enter');
+
     } else {
-      // 발행 패널을 못 열었을 경우 Ctrl+Enter 시도
       await page.keyboard.press('Control+Enter');
     }
 
     await page.waitForTimeout(4000);
 
-    // ── 13. 발행된 URL 추출 ──────────────────────────────────────
+    // ── 12. 발행 URL 추출 ──────────────────────────────────────
     const publishedUrl = await page
       .evaluate(() => {
         const a = document.querySelector('a[href*="/postview"], a[href*="logNo="]') as HTMLAnchorElement | null;
-        return a ? a.href : null;
+        return a?.href ?? null;
       })
       .catch(() => null);
 
-    const blogUrl = publishedUrl || `https://blog.naver.com/${naverId}`;
-
     return NextResponse.json({
       success: true,
-      url: blogUrl,
+      url: publishedUrl || `https://blog.naver.com/${naverId}`,
       message: '네이버 블로그에 발행되었습니다.',
     });
+
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 500 });
   } finally {
-    if (browser) {
-      setTimeout(() => browser?.close().catch(() => {}), 5000);
-    }
+    if (browser) setTimeout(() => browser?.close().catch(() => {}), 5000);
   }
 }
