@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npx playwright install chromium && next build",
+    "build": "node node_modules/.bin/playwright install chromium-headless-shell && next build",
     "start": "next start",
     "lint": "eslint"
   },
