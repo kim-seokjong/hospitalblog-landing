@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 
+const LS_CATEGORY_KEY = 'naver_blog_category';
+
 interface NaverCredentialSetupProps {
   onSaved: () => void;
 }
@@ -12,17 +14,19 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
   const [blogCategory, setBlogCategory] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [existing, setExisting] = useState<{ exists: boolean; maskedId?: string; blogCategory?: string } | null>(null);
+  const [existing, setExisting] = useState<{ exists: boolean; maskedId?: string } | null>(null);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
+    // localStorage에서 카테고리 복원
+    setBlogCategory(localStorage.getItem(LS_CATEGORY_KEY) ?? '');
+
     fetch('/api/credentials')
       .then((r) => r.json())
       .then((d) => {
         setExisting(d);
-        if (d.exists) setBlogCategory(d.blogCategory ?? '');
-        else setShowForm(true);
+        if (!d.exists) setShowForm(true);
       })
       .catch(() => setShowForm(true))
       .finally(() => setChecking(false));
@@ -44,21 +48,30 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
       const data = await res.json();
       if (!res.ok) { setError(data.error || '저장 실패'); return; }
 
-      setExisting({ exists: true, maskedId: naverId.slice(0, 2) + '***' + naverId.slice(-1), blogCategory });
+      // 카테고리는 localStorage에도 항상 저장
+      localStorage.setItem(LS_CATEGORY_KEY, blogCategory);
+
+      setExisting({ exists: true, maskedId: naverId.slice(0, 2) + '***' + naverId.slice(-1) });
       setShowForm(false);
       setNaverId('');
       setNaverPw('');
       onSaved();
     } catch {
-      setError('네트워크 오류가 발생했습니다. 다시 시도해주세요.');
+      setError('네트워크 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCategorySave = () => {
+    localStorage.setItem(LS_CATEGORY_KEY, blogCategory);
+    alert('카테고리가 저장되었습니다.');
+  };
+
   const handleDelete = async () => {
     if (!confirm('네이버 계정 정보를 삭제하시겠습니까?')) return;
     await fetch('/api/credentials', { method: 'DELETE' });
+    localStorage.removeItem(LS_CATEGORY_KEY);
     setExisting({ exists: false });
     setBlogCategory('');
     setShowForm(true);
@@ -87,35 +100,53 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
             <h3 className="text-sm font-bold text-gray-900">네이버 계정 연동</h3>
             <p className="text-xs text-gray-500">
               {existing?.exists
-                ? `연동됨: ${existing.maskedId}${existing.blogCategory ? ` · 카테고리: ${existing.blogCategory}` : ' · 카테고리 미설정'}`
+                ? `연동됨: ${existing.maskedId}`
                 : '계정을 연동하면 발행 시 자동 로그인됩니다'}
             </p>
           </div>
         </div>
         {existing?.exists && (
           <div className="flex gap-2">
-            <button
-              onClick={() => setShowForm((v) => !v)}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-            >
-              변경
-            </button>
-            <button
-              onClick={handleDelete}
-              className="text-xs text-red-500 hover:text-red-600 font-medium"
-            >
-              삭제
-            </button>
+            <button onClick={() => setShowForm((v) => !v)} className="text-xs text-blue-600 hover:text-blue-700 font-medium">변경</button>
+            <button onClick={handleDelete} className="text-xs text-red-500 hover:text-red-600 font-medium">삭제</button>
           </div>
         )}
       </div>
 
-      {/* 입력 폼 */}
+      {/* 카테고리 (항상 표시) */}
+      {existing?.exists && !showForm && (
+        <div className="px-5 pb-5 border-t border-gray-100 pt-4">
+          <label className="text-xs font-semibold text-gray-700 block mb-1">
+            블로그 카테고리명
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={blogCategory}
+              onChange={(e) => setBlogCategory(e.target.value)}
+              placeholder="예: 건강정보, 의료칼럼 (네이버에 있는 카테고리명 그대로)"
+              className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
+              onKeyDown={(e) => e.key === 'Enter' && handleCategorySave()}
+            />
+            <button
+              onClick={handleCategorySave}
+              className="px-3 py-2.5 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-lg"
+            >
+              저장
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            비워두면 기본 카테고리로 발행됩니다.
+          </p>
+        </div>
+      )}
+
+      {/* 계정 입력 폼 */}
       {showForm && (
         <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-3">
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
             <p className="text-xs text-amber-700">
-              비밀번호는 AES-256 암호화되어 저장됩니다. 서버에서 복호화 후 즉시 사용하며 로그로 남기지 않습니다.
+              비밀번호는 AES-256 암호화되어 저장됩니다.
             </p>
           </div>
 
@@ -153,9 +184,6 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
             />
-            <p className="text-xs text-gray-400">
-              네이버 블로그에 설정된 카테고리 이름을 정확히 입력하세요. 비워두면 기본 카테고리로 발행됩니다.
-            </p>
           </div>
 
           {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
@@ -169,10 +197,7 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
               {loading ? '저장 중...' : '저장하기'}
             </button>
             {existing?.exists && (
-              <button
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50"
-              >
+              <button onClick={() => setShowForm(false)} className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
                 취소
               </button>
             )}

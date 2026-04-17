@@ -88,12 +88,13 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. 요청 파싱
-  let title: string, body: string, tags: string[];
+  let title: string, body: string, tags: string[], requestCategory: string;
   try {
-    const parsed = await req.json() as { title?: string; body?: string; tags?: string[] };
+    const parsed = await req.json() as { title?: string; body?: string; tags?: string[]; category?: string };
     title = parsed.title ?? '';
     body = parsed.body ?? '';
     tags = parsed.tags ?? [];
+    requestCategory = parsed.category ?? '';
   } catch {
     return NextResponse.json({ error: '요청 형식이 올바르지 않습니다.' }, { status: 400 });
   }
@@ -111,7 +112,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { naverId, naverPw, blogCategory } = creds;
+  const { naverId, naverPw, blogCategory: dbCategory } = creds;
+  // 프론트에서 보낸 category 우선, 없으면 DB 값 사용
+  const blogCategory = requestCategory || dbCategory;
 
   let browser: import('playwright-core').Browser | null = null;
 
