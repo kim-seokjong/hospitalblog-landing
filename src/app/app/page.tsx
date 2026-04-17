@@ -14,7 +14,6 @@ import OriginalityChecker from '@/components/OriginalityChecker';
 import TagPanel from '@/components/TagPanel';
 import NaverPreview from '@/components/NaverPreview';
 import NaverPublisher from '@/components/NaverPublisher';
-import NaverCredentialSetup from '@/components/NaverCredentialSetup';
 import AuthModal from '@/components/AuthModal';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData } from '@/types';
 
@@ -387,22 +386,18 @@ export default function HomePage() {
               />
             )}
 
-            {/* 로그인된 경우에만 네이버 연동 + 발행 표시 */}
-            {user && (
-              <NaverCredentialSetup onSaved={() => {}} />
-            )}
-
             {user && content && selectedTitle && (
               <NaverPublisher
                 title={selectedTitle.title}
                 content={content}
                 tags={tags}
+                images={images}
               />
             )}
 
             {!user && authChecked && content && (
               <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center">
-                <p className="text-sm font-semibold text-blue-800 mb-2">자동발행하려면 로그인이 필요합니다</p>
+                <p className="text-sm font-semibold text-blue-800 mb-2">발행 도우미는 로그인 후 사용할 수 있습니다</p>
                 <button
                   onClick={() => setShowAuthModal(true)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl"
