@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: hospitalblog-publish
+    runtime: node
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: node index.js
+    envVars:
+      - key: PUBLISH_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
+    autoDeploy: true

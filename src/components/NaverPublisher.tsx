@@ -101,10 +101,13 @@ export default function NaverPublisher({ title, content, tags }: NaverPublisherP
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm font-semibold text-blue-700">발행 중... (최대 2~3분 소요)</p>
+              <p className="text-sm font-semibold text-blue-700">발행 중... (최대 3~4분 소요)</p>
             </div>
             <p className="text-xs text-blue-600">
               서버에서 브라우저가 자동으로 네이버 블로그에 글을 작성합니다.
+            </p>
+            <p className="text-xs text-blue-500">
+              첫 발행 시 서버 시작으로 30초 추가 소요될 수 있습니다.
             </p>
           </div>
         )}
