@@ -149,9 +149,11 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1">
             <p className="text-xs font-semibold text-blue-800">쿠키 가져오는 방법</p>
             <ol className="text-xs text-blue-700 space-y-0.5 list-decimal list-inside">
-              <li>Chrome에서 naver.com 로그인 (로그인 상태 유지 체크)</li>
-              <li>F12 → Application 탭 → Cookies → .naver.com</li>
-              <li>NID_AUT, NID_SES 값 각각 복사</li>
+              <li>Chrome에서 naver.com 로그인</li>
+              <li>F12 → <strong>Network</strong> 탭 클릭</li>
+              <li>blog.naver.com 주소창 입력 후 Enter</li>
+              <li>Network 목록에서 첫 번째 요청 클릭</li>
+              <li>Request Headers → <strong>cookie:</strong> 값 전체 복사</li>
             </ol>
             <p className="text-xs text-blue-500 mt-1">쿠키는 AES-256 암호화되어 저장됩니다.</p>
           </div>
@@ -168,24 +170,13 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-700">NID_AUT 쿠키값</label>
-            <input
-              type="password"
+            <label className="text-xs font-semibold text-gray-700">네이버 쿠키 전체</label>
+            <textarea
               value={naverCookie}
               onChange={(e) => setNaverCookie(e.target.value)}
-              placeholder="NID_AUT 쿠키값 붙여넣기"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-700">NID_SES 쿠키값</label>
-            <input
-              type="password"
-              value={naverSes}
-              onChange={(e) => setNaverSes(e.target.value)}
-              placeholder="NID_SES 쿠키값 붙여넣기"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
+              placeholder="cookie: NID_AUT=xxx; NID_SES=yyy; ... 전체 붙여넣기"
+              rows={4}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 font-mono resize-none"
             />
           </div>
 

@@ -61,12 +61,22 @@ app.post('/api/publish-naver', async (req, res) => {
     });
 
     // ── 쿠키 인증 ─────────────────────────────────────────────
-    const cookiesToAdd = [
-      { name: 'NID_AUT', value: naverCookie, domain: '.naver.com', path: '/', httpOnly: true, secure: true },
-    ];
-    if (naverSes) {
-      cookiesToAdd.push({ name: 'NID_SES', value: naverSes, domain: '.naver.com', path: '/', httpOnly: true, secure: true });
-    }
+    // 쿠키 문자열 파싱 (예: "NID_AUT=xxx; NID_SES=yyy; ...")
+    const cookieStr = naverCookie.replace(/^cookie:\s*/i, '').trim();
+    const cookiesToAdd = cookieStr.split(';')
+      .map(c => c.trim())
+      .filter(c => c.includes('='))
+      .map(c => {
+        const idx = c.indexOf('=');
+        return {
+          name: c.substring(0, idx).trim(),
+          value: c.substring(idx + 1).trim(),
+          domain: '.naver.com',
+          path: '/',
+        };
+      })
+      .filter(c => c.name && c.value);
+    console.log('[publish-naver] injecting cookies:', cookiesToAdd.map(c => c.name));
     await context.addCookies(cookiesToAdd);
 
     const page = await context.newPage();
