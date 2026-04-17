@@ -3,7 +3,7 @@ const nextConfig = {
   images: {
     domains: ['oaidalleapiprodscus.blob.core.windows.net', 'image.pollinations.ai', 'images.pexels.com'],
   },
-  serverExternalPackages: ['playwright'],
+  serverExternalPackages: ['playwright-core', '@sparticuz/chromium-min'],
 };
 
 module.exports = nextConfig;

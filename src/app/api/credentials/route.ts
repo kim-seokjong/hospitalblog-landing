@@ -9,7 +9,7 @@ async function getAuthUser() {
   return user;
 }
 
-/** GET: 저장된 네이버 자격증명 존재 여부 확인 (id만 반환, 비밀번호 절대 반환 안 함) */
+/** GET: 저장된 자격증명 존재 여부 확인 (id 마스킹 + 카테고리 반환) */
 export async function GET() {
   const user = await getAuthUser();
   if (!user) {
@@ -19,7 +19,7 @@ export async function GET() {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('naver_credentials')
-    .select('naver_id_enc, iv, tag')
+    .select('naver_id_enc, iv, tag, blog_category')
     .eq('user_id', user.id)
     .single();
 
@@ -27,30 +27,32 @@ export async function GET() {
     return NextResponse.json({ exists: false });
   }
 
-  // 아이디만 복호화해서 마스킹 후 반환
   try {
     const naverId = decrypt({ enc: data.naver_id_enc, iv: data.iv, tag: data.tag });
     const masked = naverId.slice(0, 2) + '***' + naverId.slice(-1);
-    return NextResponse.json({ exists: true, maskedId: masked });
+    return NextResponse.json({
+      exists: true,
+      maskedId: masked,
+      blogCategory: data.blog_category ?? '',
+    });
   } catch {
-    return NextResponse.json({ exists: true, maskedId: '***' });
+    return NextResponse.json({ exists: true, maskedId: '***', blogCategory: '' });
   }
 }
 
-/** POST: 네이버 자격증명 저장 (암호화) */
+/** POST: 자격증명 저장 (아이디/비밀번호 암호화, 카테고리 평문) */
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) {
     return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
   }
 
-  const { naverId, naverPw } = await req.json();
+  const { naverId, naverPw, blogCategory = '' } = await req.json();
 
   if (!naverId?.trim() || !naverPw?.trim()) {
     return NextResponse.json({ error: '아이디와 비밀번호를 모두 입력해주세요.' }, { status: 400 });
   }
 
-  // 아이디/비밀번호 각각 암호화
   const encId = encrypt(naverId.trim());
   const encPw = encrypt(naverPw.trim());
 
@@ -66,6 +68,7 @@ export async function POST(req: NextRequest) {
         tag: encId.tag,
         pw_iv: encPw.iv,
         pw_tag: encPw.tag,
+        blog_category: blogCategory.trim(),
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' }
@@ -94,4 +97,3 @@ export async function DELETE() {
 
   return NextResponse.json({ success: true });
 }
-

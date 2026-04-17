@@ -9,9 +9,10 @@ interface NaverCredentialSetupProps {
 export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupProps) {
   const [naverId, setNaverId] = useState('');
   const [naverPw, setNaverPw] = useState('');
+  const [blogCategory, setBlogCategory] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [existing, setExisting] = useState<{ exists: boolean; maskedId?: string } | null>(null);
+  const [existing, setExisting] = useState<{ exists: boolean; maskedId?: string; blogCategory?: string } | null>(null);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
 
@@ -20,7 +21,8 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
       .then((r) => r.json())
       .then((d) => {
         setExisting(d);
-        if (!d.exists) setShowForm(true);
+        if (d.exists) setBlogCategory(d.blogCategory ?? '');
+        else setShowForm(true);
       })
       .catch(() => setShowForm(true))
       .finally(() => setChecking(false));
@@ -37,16 +39,12 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
       const res = await fetch('/api/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ naverId, naverPw }),
+        body: JSON.stringify({ naverId, naverPw, blogCategory }),
       });
       const data = await res.json();
+      if (!res.ok) { setError(data.error || '저장 실패'); return; }
 
-      if (!res.ok) {
-        setError(data.error || '저장 실패');
-        return;
-      }
-
-      setExisting({ exists: true, maskedId: naverId.slice(0, 2) + '***' + naverId.slice(-1) });
+      setExisting({ exists: true, maskedId: naverId.slice(0, 2) + '***' + naverId.slice(-1), blogCategory });
       setShowForm(false);
       setNaverId('');
       setNaverPw('');
@@ -62,6 +60,7 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
     if (!confirm('네이버 계정 정보를 삭제하시겠습니까?')) return;
     await fetch('/api/credentials', { method: 'DELETE' });
     setExisting({ exists: false });
+    setBlogCategory('');
     setShowForm(true);
   };
 
@@ -88,7 +87,7 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
             <h3 className="text-sm font-bold text-gray-900">네이버 계정 연동</h3>
             <p className="text-xs text-gray-500">
               {existing?.exists
-                ? `연동됨: ${existing.maskedId}`
+                ? `연동됨: ${existing.maskedId}${existing.blogCategory ? ` · 카테고리: ${existing.blogCategory}` : ' · 카테고리 미설정'}`
                 : '계정을 연동하면 발행 시 자동 로그인됩니다'}
             </p>
           </div>
@@ -139,8 +138,24 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
               onChange={(e) => setNaverPw(e.target.value)}
               placeholder="비밀번호"
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-700">
+              블로그 카테고리명 <span className="text-gray-400 font-normal">(선택)</span>
+            </label>
+            <input
+              type="text"
+              value={blogCategory}
+              onChange={(e) => setBlogCategory(e.target.value)}
+              placeholder="예: 건강정보, 의료칼럼"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
             />
+            <p className="text-xs text-gray-400">
+              네이버 블로그에 설정된 카테고리 이름을 정확히 입력하세요. 비워두면 기본 카테고리로 발행됩니다.
+            </p>
           </div>
 
           {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
