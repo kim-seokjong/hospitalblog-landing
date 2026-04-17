@@ -48,11 +48,9 @@ async function launchBrowser() {
   const { chromium } = await import('playwright-core');
 
   if (process.env.VERCEL) {
-    // @sparticuz/chromium-min: Lambda 전용 Chromium, /tmp/ 에 캐시되어 재사용됨
-    const chromiumSparticuz = (await import('@sparticuz/chromium-min')).default;
-    const executablePath = await chromiumSparticuz.executablePath(
-      'https://github.com/Sparticuz/chromium/releases/download/v131.0.0/chromium-v131.0.0-pack.tar'
-    );
+    // @sparticuz/chromium: 라이브러리까지 번들링된 Lambda 전용 Chromium
+    const chromiumSparticuz = (await import('@sparticuz/chromium')).default;
+    const executablePath = await chromiumSparticuz.executablePath();
     return chromium.launch({
       args: chromiumSparticuz.args,
       executablePath,

@@ -5,7 +5,7 @@ const nextConfig = {
   },
   experimental: {
     // playwright-core, @sparticuz/chromium-min 을 webpack 번들링에서 제외 (Node.js 런타임에서 직접 require)
-    serverComponentsExternalPackages: ['playwright-core', '@sparticuz/chromium-min'],
+    serverComponentsExternalPackages: ['playwright-core', '@sparticuz/chromium'],
   },
 };
 
