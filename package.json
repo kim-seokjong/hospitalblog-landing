@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "PLAYWRIGHT_BROWSERS_PATH=0 node node_modules/.bin/playwright install chromium-headless-shell && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.55.0",
+    "@sparticuz/chromium-min": "^131.0.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
     "next": "14.2.5",

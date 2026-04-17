@@ -4,14 +4,8 @@ const nextConfig = {
     domains: ['oaidalleapiprodscus.blob.core.windows.net', 'image.pollinations.ai', 'images.pexels.com'],
   },
   experimental: {
-    // Next.js 14에서 playwright-core를 번들링하지 않도록 external 처리
-    serverComponentsExternalPackages: ['playwright-core'],
-    // Lambda에 playwright 브라우저 바이너리 파일을 명시적으로 포함
-    outputFileTracingIncludes: {
-      '/api/publish-naver': [
-        './node_modules/playwright-core/.local-browsers/**/*',
-      ],
-    },
+    // playwright-core, @sparticuz/chromium-min 을 webpack 번들링에서 제외 (Node.js 런타임에서 직접 require)
+    serverComponentsExternalPackages: ['playwright-core', '@sparticuz/chromium-min'],
   },
 };
 
