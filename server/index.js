@@ -84,8 +84,14 @@ app.post('/api/publish-naver', async (req, res) => {
     }
 
     // ── 글쓰기 페이지 ─────────────────────────────────────────
-    await page.goto(`https://blog.naver.com/PostWriteForm.naver?blogId=${blogId}`, { waitUntil: 'load' });
+    // 블로그 홈 먼저 방문하여 세션 확립
+    await page.goto(`https://blog.naver.com/${blogId}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
+
+    // 글쓰기 페이지로 이동
+    await page.goto(`https://blog.naver.com/${blogId}/postwrite`, { waitUntil: 'load' });
     await page.waitForTimeout(5000);
+    console.log('[publish-naver] write page url:', page.url());
 
     // 모든 프레임에서 .se-title-input 찾기 (최대 30초 대기)
     let mainFrame = null;
