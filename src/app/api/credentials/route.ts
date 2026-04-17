@@ -64,13 +64,15 @@ export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
-  const { naverId, naverPw, blogCategory = '' } = await req.json();
+  const { naverId, naverPw, naverSes = '', blogCategory = '' } = await req.json();
   if (!naverId?.trim() || !naverPw?.trim()) {
-    return NextResponse.json({ error: '아이디와 비밀번호를 모두 입력해주세요.' }, { status: 400 });
+    return NextResponse.json({ error: '아이디와 NID_AUT 쿠키를 입력해주세요.' }, { status: 400 });
   }
 
   const encId = encrypt(naverId.trim());
-  const encPw = encrypt(naverPw.trim());
+  // NID_AUT와 NID_SES를 || 구분자로 합쳐서 저장
+  const combined = naverSes.trim() ? `${naverPw.trim()}||${naverSes.trim()}` : naverPw.trim();
+  const encPw = encrypt(combined);
   const admin = createAdminClient();
 
   // 1차: blog_category 포함 upsert

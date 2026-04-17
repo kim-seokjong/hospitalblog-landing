@@ -4,6 +4,7 @@ import { decrypt } from '@/lib/crypto';
 export interface DecryptedCredentials {
   naverId: string;
   naverCookie: string;
+  naverSes: string;
   blogCategory: string;
 }
 
@@ -31,8 +32,9 @@ export async function getDecryptedCredentials(userId: string): Promise<Decrypted
 
     try {
       const naverId = decrypt({ enc: data2.naver_id_enc, iv: data2.iv, tag: data2.tag });
-      const naverCookie = decrypt({ enc: data2.naver_pw_enc, iv: data2.pw_iv, tag: data2.pw_tag });
-      return { naverId, naverCookie, blogCategory: '' };
+      const combined = decrypt({ enc: data2.naver_pw_enc, iv: data2.pw_iv, tag: data2.pw_tag });
+      const [naverCookie, naverSes = ''] = combined.split('||');
+      return { naverId, naverCookie, naverSes, blogCategory: '' };
     } catch {
       return null;
     }
@@ -42,8 +44,9 @@ export async function getDecryptedCredentials(userId: string): Promise<Decrypted
 
   try {
     const naverId = decrypt({ enc: data.naver_id_enc, iv: data.iv, tag: data.tag });
-    const naverCookie = decrypt({ enc: data.naver_pw_enc, iv: data.pw_iv, tag: data.pw_tag });
-    return { naverId, naverCookie, blogCategory: data.blog_category ?? '' };
+    const combined = decrypt({ enc: data.naver_pw_enc, iv: data.pw_iv, tag: data.pw_tag });
+    const [naverCookie, naverSes = ''] = combined.split('||');
+    return { naverId, naverCookie, naverSes, blogCategory: data.blog_category ?? '' };
   } catch {
     return null;
   }

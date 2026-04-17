@@ -32,7 +32,7 @@ function markdownToPlainText(body) {
 
 // ── 네이버 블로그 발행 API ─────────────────────────────────
 app.post('/api/publish-naver', async (req, res) => {
-  const { naverId, naverCookie, title, body, tags = [], category = '' } = req.body;
+  const { naverId, naverCookie, naverSes = '', title, body, tags = [], category = '' } = req.body;
 
   if (!naverId || !naverCookie || !title || !body) {
     return res.status(400).json({ error: '필수 파라미터가 누락됐습니다.' });
@@ -61,9 +61,13 @@ app.post('/api/publish-naver', async (req, res) => {
     });
 
     // ── 쿠키 인증 ─────────────────────────────────────────────
-    await context.addCookies([
+    const cookiesToAdd = [
       { name: 'NID_AUT', value: naverCookie, domain: '.naver.com', path: '/', httpOnly: true, secure: true },
-    ]);
+    ];
+    if (naverSes) {
+      cookiesToAdd.push({ name: 'NID_SES', value: naverSes, domain: '.naver.com', path: '/', httpOnly: true, secure: true });
+    }
+    await context.addCookies(cookiesToAdd);
 
     const page = await context.newPage();
 

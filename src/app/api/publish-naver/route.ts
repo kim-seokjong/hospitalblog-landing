@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { naverId, naverCookie, blogCategory: dbCategory } = creds;
+  const { naverId, naverCookie, naverSes, blogCategory: dbCategory } = creds;
   const category = requestCategory || dbCategory;
 
   // 4. 발행 서버(Render)로 프록시
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
         'x-api-key': process.env.PUBLISH_API_KEY ?? '',
       },
-      body: JSON.stringify({ naverId, naverCookie, title, body, tags, category }),
+      body: JSON.stringify({ naverId, naverCookie, naverSes, title, body, tags, category }),
     });
 
     const data = await response.json() as { error?: string; url?: string; message?: string };
