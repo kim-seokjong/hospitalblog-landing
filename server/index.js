@@ -84,26 +84,28 @@ app.post('/api/publish-naver', async (req, res) => {
     await page.goto(`https://blog.naver.com/PostWriteForm.naver?blogId=${naverId}`, { waitUntil: 'load' });
     await page.waitForTimeout(5000);
 
-    // 모든 프레임 로그
-    const allFrames = page.frames();
-    console.log('[publish-naver] frames:', allFrames.map(f => ({ name: f.name(), url: f.url() })));
-
-    const mainFrame =
-      page.frame({ name: 'mainFrame' }) ??
-      page.frames().find((f) => f.name() === 'mainFrame') ??
-      page.frames().find((f) => f.url().includes('PostWriteForm') || f.url().includes('postwrite')) ??
-      page.frames().find((f) => f.url().includes('blog.naver.com') && f !== page.mainFrame());
-
-    if (!mainFrame) {
-      // 프레임 목록을 에러에 포함
-      const frameList = allFrames.map(f => `${f.name()}:${f.url()}`).join(', ');
-      throw new Error(`블로그 에디터 프레임을 찾을 수 없습니다. frames: ${frameList}`);
+    // 모든 프레임에서 .se-title-input 찾기 (최대 30초 대기)
+    let mainFrame = null;
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      for (const f of page.frames()) {
+        try {
+          const el = await f.$('.se-title-input');
+          if (el) { mainFrame = f; break; }
+        } catch {}
+      }
+      if (mainFrame) break;
+      await page.waitForTimeout(1000);
     }
 
-    await mainFrame.waitForTimeout(3000);
+    if (!mainFrame) {
+      const frameList = page.frames().map(f => `${f.name()}:${f.url()}`).join(' | ');
+      throw new Error(`블로그 에디터(.se-title-input)를 찾을 수 없습니다. frames: ${frameList}`);
+    }
+    console.log('[publish-naver] editor frame:', mainFrame.name(), mainFrame.url());
 
     // ── 제목 입력 ─────────────────────────────────────────────
-    await mainFrame.waitForSelector('.se-title-input', { timeout: 20000 });
+    await mainFrame.waitForSelector('.se-title-input', { timeout: 10000 });
     await mainFrame.click('.se-title-input');
     await mainFrame.waitForTimeout(300);
     await mainFrame.evaluate((t) => {
