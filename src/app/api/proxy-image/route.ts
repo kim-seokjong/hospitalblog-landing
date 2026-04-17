@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ALLOWED_HOSTS = [
   'fal.run',
-  'v3.fal.media',
+  'fal.media',         // covers v3.fal.media, cdn.fal.media, etc.
   'storage.googleapis.com',
   'images.pexels.com',
   'images.unsplash.com',
