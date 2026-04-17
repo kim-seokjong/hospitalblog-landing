@@ -88,21 +88,33 @@ app.post('/api/publish-naver', async (req, res) => {
     }
 
     // ── 글쓰기 페이지 ─────────────────────────────────────────
-    // 내 블로그 URL로 이동해서 실제 blogId 감지
-    await page.goto(`https://blog.naver.com/${blogId}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(2000);
-    const actualBlogUrl = page.url();
-    console.log('[publish-naver] actual blog url:', actualBlogUrl);
+    // 글쓰기 페이지로 이동 (리다이렉트에서 실제 blogId 추출)
+    await page.goto(`https://blog.naver.com/${blogId}/postwrite`, { waitUntil: 'load' });
+    await page.waitForTimeout(3000);
+    const writeUrl = page.url();
+    console.log('[publish-naver] write page url:', writeUrl);
 
-    // 리다이렉트된 실제 blogId 추출
-    const blogIdMatch = actualBlogUrl.match(/blog\.naver\.com\/([^/?#]+)/);
-    const actualBlogId = (blogIdMatch && !blogIdMatch[1].includes('.naver')) ? blogIdMatch[1] : blogId;
-    console.log('[publish-naver] actualBlogId:', actualBlogId);
+    // 로그인 페이지로 튄 경우 redirect URL에서 실제 blogId 추출 후 재시도
+    if (writeUrl.includes('nidlogin')) {
+      const m = writeUrl.match(/blog\.naver\.com(?:%2F|\/)([^%?&/]+)/);
+      const realBlogId = m ? decodeURIComponent(m[1]) : null;
+      console.log('[publish-naver] realBlogId from redirect:', realBlogId);
 
-    // 글쓰기 페이지로 이동
-    await page.goto(`https://blog.naver.com/${actualBlogId}/postwrite`, { waitUntil: 'load' });
-    await page.waitForTimeout(5000);
-    console.log('[publish-naver] write page url:', page.url());
+      if (realBlogId && realBlogId !== blogId) {
+        // 실제 블로그 홈 먼저 방문
+        await page.goto(`https://blog.naver.com/${realBlogId}`, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(2000);
+        // 글쓰기 재시도
+        await page.goto(`https://blog.naver.com/${realBlogId}/postwrite`, { waitUntil: 'load' });
+        await page.waitForTimeout(5000);
+        console.log('[publish-naver] retry write page url:', page.url());
+      }
+
+      // 여전히 로그인 페이지면 에러
+      if (page.url().includes('nidlogin')) {
+        throw new Error('쿠키 인증 실패: NID_AUT와 NID_SES를 모두 설정에서 다시 입력해주세요.');
+      }
+    }
 
     // 모든 프레임에서 .se-title-input 찾기 (최대 30초 대기)
     let mainFrame = null;
