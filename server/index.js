@@ -38,6 +38,9 @@ app.post('/api/publish-naver', async (req, res) => {
     return res.status(400).json({ error: '필수 파라미터가 누락됐습니다.' });
   }
 
+  // @naver.com 등 도메인 제거 (순수 아이디만 사용)
+  const blogId = naverId.includes('@') ? naverId.split('@')[0] : naverId;
+
   let browser = null;
   try {
     browser = await chromium.launch({
@@ -81,7 +84,7 @@ app.post('/api/publish-naver', async (req, res) => {
     }
 
     // ── 글쓰기 페이지 ─────────────────────────────────────────
-    await page.goto(`https://blog.naver.com/PostWriteForm.naver?blogId=${naverId}`, { waitUntil: 'load' });
+    await page.goto(`https://blog.naver.com/PostWriteForm.naver?blogId=${blogId}`, { waitUntil: 'load' });
     await page.waitForTimeout(5000);
 
     // 모든 프레임에서 .se-title-input 찾기 (최대 30초 대기)
@@ -226,7 +229,7 @@ app.post('/api/publish-naver', async (req, res) => {
 
     return res.json({
       success: true,
-      url: publishedUrl || `https://blog.naver.com/${naverId}`,
+      url: publishedUrl || `https://blog.naver.com/${blogId}`,
       message: '네이버 블로그에 발행되었습니다.',
     });
 
