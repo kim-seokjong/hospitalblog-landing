@@ -37,27 +37,29 @@ async function findLocalChrome(): Promise<string | undefined> {
   return undefined;
 }
 
-/** 환경에 맞는 브라우저 실행 */
+/** 환경에 맞는 브라우저 실행
+ *  Vercel: build 시 `npx playwright install chromium` + PLAYWRIGHT_BROWSERS_PATH=0
+ *          → node_modules/playwright-core/.local-browsers/ 에 설치됨 → Lambda에 포함
+ *  로컬: 시스템 Chrome 자동 탐색
+ */
 async function launchBrowser() {
   const { chromium } = await import('playwright-core');
 
-  // Linux = Vercel / Railway 서버 환경
-  // @sparticuz/chromium 은 바이너리가 패키지에 내장 → 런타임 다운로드 불필요
   if (process.platform === 'linux') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chromiumMod = await import('@sparticuz/chromium') as any;
-    const chromiumBin = chromiumMod.default ?? chromiumMod;
-
-    const executablePath: string = await chromiumBin.executablePath();
-    const args: string[] = [
-      ...(Array.isArray(chromiumBin.args) ? chromiumBin.args : []),
-      '--disable-blink-features=AutomationControlled',
-    ];
-
-    return chromium.launch({ args, executablePath, headless: true });
+    // Vercel / 서버: playwright-core가 설치된 chromium을 자동으로 찾음
+    return chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--single-process',
+      ],
+    });
   }
 
-  // Windows / macOS = 로컬 개발 환경
+  // 로컬 (Windows / macOS): 시스템 Chrome 사용
   const executablePath = await findLocalChrome();
   if (!executablePath) {
     throw new Error('Chrome을 찾을 수 없습니다. Chrome을 설치한 후 다시 시도하세요.');
