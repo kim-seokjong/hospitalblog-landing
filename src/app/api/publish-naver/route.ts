@@ -4,9 +4,6 @@ import { getDecryptedCredentials } from '@/lib/credentials';
 
 export const maxDuration = 300;
 
-const CHROMIUM_CDN =
-  'https://github.com/Sparticuz/chromium/releases/download/v131.0.0/chromium-v131.0.0-pack.tar';
-
 /** 마크다운 → 네이버 에디터용 평문 변환 */
 function markdownToPlainText(body: string): string {
   return body
@@ -44,23 +41,18 @@ async function findLocalChrome(): Promise<string | undefined> {
 async function launchBrowser() {
   const { chromium } = await import('playwright-core');
 
-  // Linux = Vercel / Railway 등 서버 환경
+  // Linux = Vercel / Railway 서버 환경
+  // @sparticuz/chromium 은 바이너리가 패키지에 내장 → 런타임 다운로드 불필요
   if (process.platform === 'linux') {
-    const chromiumModule = await import('@sparticuz/chromium-min');
-    // CJS default export 또는 모듈 자체 처리
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chromiumBin: any = (chromiumModule as any).default ?? chromiumModule;
+    const chromiumMod = await import('@sparticuz/chromium') as any;
+    const chromiumBin = chromiumMod.default ?? chromiumMod;
 
-    const executablePath: string = await chromiumBin.executablePath(CHROMIUM_CDN);
-    if (!executablePath) {
-      throw new Error(
-        'Chromium 실행 경로를 가져올 수 없습니다. CDN 다운로드에 실패했을 수 있습니다.'
-      );
-    }
-
-    const args: string[] = Array.isArray(chromiumBin.args)
-      ? [...chromiumBin.args, '--disable-blink-features=AutomationControlled']
-      : ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'];
+    const executablePath: string = await chromiumBin.executablePath();
+    const args: string[] = [
+      ...(Array.isArray(chromiumBin.args) ? chromiumBin.args : []),
+      '--disable-blink-features=AutomationControlled',
+    ];
 
     return chromium.launch({ args, executablePath, headless: true });
   }
@@ -68,9 +60,7 @@ async function launchBrowser() {
   // Windows / macOS = 로컬 개발 환경
   const executablePath = await findLocalChrome();
   if (!executablePath) {
-    throw new Error(
-      'Chrome을 찾을 수 없습니다. Chrome을 설치한 후 다시 시도하세요.'
-    );
+    throw new Error('Chrome을 찾을 수 없습니다. Chrome을 설치한 후 다시 시도하세요.');
   }
   return chromium.launch({
     executablePath,
