@@ -63,21 +63,27 @@ app.post('/api/publish-naver', async (req, res) => {
     // ── 쿠키 인증 ─────────────────────────────────────────────
     // 쿠키 문자열 파싱 (예: "NID_AUT=xxx; NID_SES=yyy; ...")
     const cookieStr = naverCookie.replace(/^cookie:\s*/i, '').trim();
-    const cookiesToAdd = cookieStr.split(';')
+    const parsedCookies = cookieStr.split(';')
       .map(c => c.trim())
       .filter(c => c.includes('='))
       .map(c => {
         const idx = c.indexOf('=');
-        return {
-          name: c.substring(0, idx).trim(),
-          value: c.substring(idx + 1).trim(),
-          domain: '.naver.com',
-          path: '/',
-        };
+        const name = c.substring(0, idx).trim();
+        const value = c.substring(idx + 1).trim();
+        return { name, value, domain: '.naver.com', path: '/' };
       })
-      .filter(c => c.name && c.value);
-    console.log('[publish-naver] injecting cookies:', cookiesToAdd.map(c => c.name));
-    await context.addCookies(cookiesToAdd);
+      .filter(c => c.name && /^[\w\-]+$/.test(c.name)); // 유효한 쿠키 이름만
+
+    console.log('[publish-naver] injecting cookies:', parsedCookies.map(c => c.name));
+
+    // 쿠키를 하나씩 추가 (실패해도 계속)
+    for (const cookie of parsedCookies) {
+      try {
+        await context.addCookies([cookie]);
+      } catch (e) {
+        console.log('[publish-naver] skip cookie:', cookie.name, e.message);
+      }
+    }
 
     const page = await context.newPage();
 
