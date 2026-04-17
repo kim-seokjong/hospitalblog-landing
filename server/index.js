@@ -93,14 +93,24 @@ app.post('/api/publish-naver', async (req, res) => {
     }
 
     // ── 글쓰기 페이지 ─────────────────────────────────────────
-    await page.goto(`https://blog.naver.com/${naverId}/postwrite`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(4000);
+    await page.goto(`https://blog.naver.com/PostWriteForm.naver?blogId=${naverId}`, { waitUntil: 'load' });
+    await page.waitForTimeout(5000);
+
+    // 모든 프레임 로그
+    const allFrames = page.frames();
+    console.log('[publish-naver] frames:', allFrames.map(f => ({ name: f.name(), url: f.url() })));
 
     const mainFrame =
       page.frame({ name: 'mainFrame' }) ??
+      page.frames().find((f) => f.name() === 'mainFrame') ??
+      page.frames().find((f) => f.url().includes('PostWriteForm') || f.url().includes('postwrite')) ??
       page.frames().find((f) => f.url().includes('blog.naver.com') && f !== page.mainFrame());
 
-    if (!mainFrame) throw new Error('블로그 에디터 프레임을 찾을 수 없습니다.');
+    if (!mainFrame) {
+      // 프레임 목록을 에러에 포함
+      const frameList = allFrames.map(f => `${f.name()}:${f.url()}`).join(', ');
+      throw new Error(`블로그 에디터 프레임을 찾을 수 없습니다. frames: ${frameList}`);
+    }
 
     await mainFrame.waitForTimeout(3000);
 
