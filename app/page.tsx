@@ -29,7 +29,7 @@ export default function HomePage() {
           <a href="#pricing" className="hover:text-white transition-colors hidden md:block">요금</a>
           <Link href="/terms" className="hover:text-white transition-colors hidden md:block">이용약관</Link>
           <a
-            href="https://app.hospitalblog.kr"
+            href="https://hospital-blog-app.vercel.app"
             className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
             style={{ background: "var(--accent)", color: "#fff" }}
           >
@@ -60,7 +60,7 @@ export default function HomePage() {
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <a
-            href="https://app.hospitalblog.kr"
+            href="https://hospital-blog-app.vercel.app"
             className="px-8 py-3 rounded-xl font-bold text-white transition-opacity hover:opacity-90"
             style={{ background: "var(--accent)" }}
           >
@@ -187,7 +187,7 @@ export default function HomePage() {
                 ))}
               </ul>
               <a
-                href="https://app.hospitalblog.kr"
+                href="https://hospital-blog-app.vercel.app"
                 className="text-center py-2.5 rounded-xl text-sm font-bold transition-opacity hover:opacity-90"
                 style={{
                   background: highlight ? "var(--accent)" : "transparent",
@@ -214,7 +214,7 @@ export default function HomePage() {
           병원 마케팅의 가장 큰 고민, AI가 해결해드립니다.
         </p>
         <a
-          href="https://app.hospitalblog.kr"
+          href="https://hospital-blog-app.vercel.app"
           className="inline-block px-10 py-3.5 rounded-xl font-bold text-white transition-opacity hover:opacity-90"
           style={{ background: "var(--accent)" }}
         >
