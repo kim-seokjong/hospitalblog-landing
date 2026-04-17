@@ -10,7 +10,7 @@ interface NaverCredentialSetupProps {
 
 export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupProps) {
   const [naverId, setNaverId] = useState('');
-  const [naverPw, setNaverPw] = useState('');
+  const [naverCookie, setNaverCookie] = useState('');
   const [blogCategory, setBlogCategory] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -33,8 +33,8 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
   }, []);
 
   const handleSave = async () => {
-    if (!naverId || !naverPw) {
-      setError('아이디와 비밀번호를 입력해주세요.');
+    if (!naverId || !naverCookie) {
+      setError('아이디와 NID_AUT 쿠키를 입력해주세요.');
       return;
     }
     setLoading(true);
@@ -43,7 +43,7 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
       const res = await fetch('/api/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ naverId, naverPw, blogCategory }),
+        body: JSON.stringify({ naverId, naverPw: naverCookie, blogCategory }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || '저장 실패'); return; }
@@ -54,7 +54,7 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
       setExisting({ exists: true, maskedId: naverId.slice(0, 2) + '***' + naverId.slice(-1) });
       setShowForm(false);
       setNaverId('');
-      setNaverPw('');
+      setNaverCookie('');
       onSaved();
     } catch {
       setError('네트워크 오류가 발생했습니다.');
@@ -144,10 +144,14 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
       {/* 계정 입력 폼 */}
       {showForm && (
         <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-3">
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-            <p className="text-xs text-amber-700">
-              비밀번호는 AES-256 암호화되어 저장됩니다.
-            </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1">
+            <p className="text-xs font-semibold text-blue-800">쿠키 가져오는 방법</p>
+            <ol className="text-xs text-blue-700 space-y-0.5 list-decimal list-inside">
+              <li>Chrome에서 naver.com 로그인</li>
+              <li>F12 → Application → Cookies → .naver.com</li>
+              <li>NID_AUT 값 복사 후 아래에 붙여넣기</li>
+            </ol>
+            <p className="text-xs text-blue-500 mt-1">쿠키는 AES-256 암호화되어 저장됩니다.</p>
           </div>
 
           <div className="space-y-1">
@@ -162,12 +166,12 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-700">비밀번호</label>
+            <label className="text-xs font-semibold text-gray-700">NID_AUT 쿠키값</label>
             <input
               type="password"
-              value={naverPw}
-              onChange={(e) => setNaverPw(e.target.value)}
-              placeholder="비밀번호"
+              value={naverCookie}
+              onChange={(e) => setNaverCookie(e.target.value)}
+              placeholder="NID_AUT 쿠키값 붙여넣기"
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
             />
           </div>

@@ -32,9 +32,9 @@ function markdownToPlainText(body) {
 
 // ── 네이버 블로그 발행 API ─────────────────────────────────
 app.post('/api/publish-naver', async (req, res) => {
-  const { naverId, naverPw, title, body, tags = [], category = '' } = req.body;
+  const { naverId, naverCookie, title, body, tags = [], category = '' } = req.body;
 
-  if (!naverId || !naverPw || !title || !body) {
+  if (!naverId || !naverCookie || !title || !body) {
     return res.status(400).json({ error: '필수 파라미터가 누락됐습니다.' });
   }
 
@@ -56,55 +56,28 @@ app.post('/api/publish-naver', async (req, res) => {
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     });
+
+    // ── 쿠키 인증 ─────────────────────────────────────────────
+    await context.addCookies([
+      { name: 'NID_AUT', value: naverCookie, domain: '.naver.com', path: '/', httpOnly: true, secure: true },
+    ]);
+
     const page = await context.newPage();
 
-    // ── 로그인 ───────────────────────────────────────────────
-    await page.goto('https://nid.naver.com/nidlogin.login?mode=form', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1500);
+    // 로그인 상태 확인
+    await page.goto('https://www.naver.com/', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
 
-    // CapsLock이 켜져 있으면 끄기
-    await page.keyboard.press('CapsLock');
+    const isLoggedIn = await page.evaluate(() => {
+      return !!(document.querySelector('.MyView-module__my_naver___iyCDL') ||
+                document.querySelector('#account') ||
+                document.querySelector('.gnb_my_issue') ||
+                document.querySelector('[class*="NM_FAVORITE"]'));
+    });
+    console.log('[publish-naver] isLoggedIn:', isLoggedIn);
 
-    // ID/PW 입력 - setNativeValue 방식
-    await page.evaluate(({ id, pw }) => {
-      function setNativeValue(el, value) {
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-        setter?.call(el, value);
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      const idEl = document.querySelector('#id');
-      const pwEl = document.querySelector('#pw');
-      if (idEl) setNativeValue(idEl, id);
-      if (pwEl) setNativeValue(pwEl, pw);
-    }, { id: naverId, pw: naverPw });
-
-    await page.waitForTimeout(500);
-    await page.click('.btn_login');
-    await page.waitForTimeout(5000);
-
-    const afterLoginUrl = page.url();
-    console.log('[publish-naver] after login url:', afterLoginUrl);
-    if (afterLoginUrl.includes('nidlogin') || afterLoginUrl.includes('/login')) {
-      // 페이지의 실제 에러 메시지 (Caps Lock 경고 제외)
-      const errMsg = await page.evaluate(() => {
-        const selectors = ['.error_message', '.msg_error', '#err_common', '.login_error', '#loginErrorMsg'];
-        for (const sel of selectors) {
-          const el = document.querySelector(sel);
-          if (el && el.textContent.trim() && !el.textContent.includes('Caps Lock')) {
-            return el.textContent.trim();
-          }
-        }
-        // CAPTCHA 확인
-        if (document.querySelector('iframe[src*="captcha"]') || document.querySelector('#captcha')) {
-          return 'CAPTCHA가 감지됐습니다. 잠시 후 다시 시도하세요.';
-        }
-        return null;
-      }).catch(() => null);
-      throw new Error(
-        errMsg ||
-          '로그인에 실패했습니다. 아이디/비밀번호를 확인하거나 CAPTCHA가 있으면 잠시 후 다시 시도하세요.'
-      );
+    if (!isLoggedIn) {
+      throw new Error('쿠키가 만료됐습니다. 설정에서 NID_AUT 쿠키를 다시 입력해주세요.');
     }
 
     // ── 글쓰기 페이지 ─────────────────────────────────────────

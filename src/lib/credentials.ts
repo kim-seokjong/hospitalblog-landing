@@ -3,7 +3,7 @@ import { decrypt } from '@/lib/crypto';
 
 export interface DecryptedCredentials {
   naverId: string;
-  naverPw: string;
+  naverCookie: string;
   blogCategory: string;
 }
 
@@ -31,8 +31,8 @@ export async function getDecryptedCredentials(userId: string): Promise<Decrypted
 
     try {
       const naverId = decrypt({ enc: data2.naver_id_enc, iv: data2.iv, tag: data2.tag });
-      const naverPw = decrypt({ enc: data2.naver_pw_enc, iv: data2.pw_iv, tag: data2.pw_tag });
-      return { naverId, naverPw, blogCategory: '' };
+      const naverCookie = decrypt({ enc: data2.naver_pw_enc, iv: data2.pw_iv, tag: data2.pw_tag });
+      return { naverId, naverCookie, blogCategory: '' };
     } catch {
       return null;
     }
@@ -42,8 +42,8 @@ export async function getDecryptedCredentials(userId: string): Promise<Decrypted
 
   try {
     const naverId = decrypt({ enc: data.naver_id_enc, iv: data.iv, tag: data.tag });
-    const naverPw = decrypt({ enc: data.naver_pw_enc, iv: data.pw_iv, tag: data.pw_tag });
-    return { naverId, naverPw, blogCategory: data.blog_category ?? '' };
+    const naverCookie = decrypt({ enc: data.naver_pw_enc, iv: data.pw_iv, tag: data.pw_tag });
+    return { naverId, naverCookie, blogCategory: data.blog_category ?? '' };
   } catch {
     return null;
   }
