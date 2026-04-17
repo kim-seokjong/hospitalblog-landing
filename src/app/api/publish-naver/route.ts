@@ -37,17 +37,53 @@ async function findLocalChrome(): Promise<string | undefined> {
   return undefined;
 }
 
+/** Vercel Lambda 내 playwright-core .local-browsers 탐색 */
+async function findVercelChromium(): Promise<string> {
+  const fs = await import('fs');
+  const path = await import('path');
+
+  // PLAYWRIGHT_BROWSERS_PATH=0 이면 playwright-core 패키지 내 .local-browsers 에 설치됨
+  const bases = [
+    path.join(process.cwd(), 'node_modules', 'playwright-core', '.local-browsers'),
+    '/var/task/node_modules/playwright-core/.local-browsers',
+  ];
+
+  for (const base of bases) {
+    if (!fs.existsSync(base)) continue;
+    const subdirs = fs.readdirSync(base);
+    for (const subdir of subdirs) {
+      // chromium-headless-shell 또는 chromium
+      const exes = [
+        path.join(base, subdir, 'chrome-linux64', 'headless_shell'),
+        path.join(base, subdir, 'chrome-linux64', 'chrome'),
+      ];
+      for (const exe of exes) {
+        if (fs.existsSync(exe)) return exe;
+      }
+    }
+  }
+
+  throw new Error(
+    `Chromium 실행 파일을 찾을 수 없습니다. (탐색: ${bases.join(', ')})\n` +
+    '빌드 스크립트에 "PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium-headless-shell" 가 포함되어 있는지 확인하세요.'
+  );
+}
+
 /** 환경에 맞는 브라우저 실행
- *  Vercel: build 시 `npx playwright install chromium` + PLAYWRIGHT_BROWSERS_PATH=0
- *          → node_modules/playwright-core/.local-browsers/ 에 설치됨 → Lambda에 포함
+ *  ⚠️ process.platform === 'linux' 를 사용하면 Windows 빌드 시 webpack이
+ *     해당 분기를 dead code로 제거합니다 → process.env.VERCEL 로 감지해야 합니다.
+ *  Vercel: build 시 PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium-headless-shell
+ *          → node_modules/playwright-core/.local-browsers/ 에 설치 → Lambda에 포함
  *  로컬: 시스템 Chrome 자동 탐색
  */
 async function launchBrowser() {
   const { chromium } = await import('playwright-core');
 
-  if (process.platform === 'linux') {
-    // Vercel / 서버: playwright-core가 설치된 chromium을 자동으로 찾음
+  // process.env.VERCEL 은 webpack이 빌드 타임에 평가할 수 없으므로 분기가 보존됨
+  if (process.env.VERCEL) {
+    const executablePath = await findVercelChromium();
     return chromium.launch({
+      executablePath,
       headless: true,
       args: [
         '--no-sandbox',
