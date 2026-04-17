@@ -1,8 +1,7 @@
 {
   "functions": {
     "app/api/publish-naver/route.ts": {
-      "maxDuration": 300,
-      "includeFiles": "node_modules/playwright-core/.local-browsers/**"
+      "maxDuration": 300
     }
   }
 }

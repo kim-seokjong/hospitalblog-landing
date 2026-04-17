@@ -37,68 +37,19 @@ async function findLocalChrome(): Promise<string | undefined> {
   return undefined;
 }
 
-/** Vercel Lambda: PLAYWRIGHT_BROWSERS_PATH=0 으로 설치된 Chromium 탐색
- *  playwright 자체 Chromium은 libnss3 등 모든 필요 라이브러리를 번들 포함
- */
-async function findVercelChromium(): Promise<string> {
-  const fs = await import('fs');
-  const path = await import('path');
-
-  // PLAYWRIGHT_BROWSERS_PATH=0 이면 playwright-core 패키지 내 .local-browsers 에 설치
-  const bases = [
-    path.join(process.cwd(), 'node_modules', 'playwright-core', '.local-browsers'),
-    '/var/task/node_modules/playwright-core/.local-browsers',
-  ];
-
-  for (const base of bases) {
-    if (!fs.existsSync(base)) continue;
-    const subdirs = fs.readdirSync(base);
-    for (const subdir of subdirs) {
-      const candidates = [
-        // chromium-headless-shell
-        path.join(base, subdir, 'chrome-linux64', 'headless_shell'),
-        // full chromium
-        path.join(base, subdir, 'chrome-linux64', 'chrome'),
-      ];
-      for (const exe of candidates) {
-        if (fs.existsSync(exe)) return exe;
-      }
-    }
-  }
-
-  throw new Error(
-    `Chromium을 찾을 수 없습니다. 탐색 경로: ${bases.join(', ')}\n` +
-    '.local-browsers 하위 디렉토리: ' +
-    (fs.existsSync(bases[0]) ? fs.readdirSync(bases[0]).join(', ') : '없음')
-  );
-}
-
-/** 환경에 맞는 브라우저 실행
- *  Vercel Lambda: 빌드 시 playwright install chromium-headless-shell → .local-browsers 에 설치
+/** 환경에 맞는 브라우저 실행 (로컬 전용)
  *  로컬 (Windows/macOS): 시스템 Chrome 자동 탐색
- *
- *  ⚠️ process.platform === 'linux' 대신 process.env.VERCEL 사용:
- *     Windows 빌드 시 webpack이 process.platform 분기를 dead code로 제거하기 때문
+ *  Vercel: 브라우저 자동화 미지원 (Lambda 250MB 제한으로 Chromium 번들 불가)
  */
 async function launchBrowser() {
-  const { chromium } = await import('playwright-core');
-
   if (process.env.VERCEL) {
-    const executablePath = await findVercelChromium();
-    return chromium.launch({
-      executablePath,
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-blink-features=AutomationControlled',
-        '--single-process',
-      ],
-    });
+    throw new Error(
+      '네이버 블로그 자동발행은 로컬 환경에서만 지원됩니다.\n' +
+      'Vercel 서버는 브라우저 실행이 불가합니다. 로컬 개발 서버(npm run dev)를 사용해주세요.'
+    );
   }
 
-  // 로컬 (Windows / macOS): 시스템 Chrome 사용
+  const { chromium } = await import('playwright-core');
   const executablePath = await findLocalChrome();
   if (!executablePath) {
     throw new Error('Chrome을 찾을 수 없습니다. Chrome을 설치한 후 다시 시도하세요.');
