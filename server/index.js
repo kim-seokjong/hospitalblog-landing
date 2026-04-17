@@ -88,12 +88,48 @@ app.post('/api/publish-naver', async (req, res) => {
     }
 
     // ── 글쓰기 페이지 ─────────────────────────────────────────
-    // 블로그 홈 먼저 방문하여 세션 확립
-    await page.goto(`https://blog.naver.com/${blogId}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(2000);
+    // 네이버 블로그 홈 이동 후 글쓰기 버튼 클릭 (블로그 ID 자동 감지)
+    await page.goto('https://blog.naver.com', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3000);
+    console.log('[publish-naver] blog home url:', page.url());
 
-    // 글쓰기 페이지로 이동
-    await page.goto(`https://blog.naver.com/${blogId}/postwrite`, { waitUntil: 'load' });
+    // 글쓰기 버튼 클릭
+    let writeClicked = false;
+    for (const sel of [
+      'a[href*="postwrite"]',
+      'a[href*="PostWriteForm"]',
+      '.blog_write a',
+      'a:has-text("글쓰기")',
+      '.btn_write',
+      '#writePostBtn',
+    ]) {
+      try {
+        const btn = await page.$(sel);
+        if (btn) {
+          const href = await btn.getAttribute('href');
+          console.log('[publish-naver] write btn found:', sel, href);
+          await btn.click();
+          writeClicked = true;
+          break;
+        }
+      } catch {}
+    }
+
+    if (!writeClicked) {
+      // 직접 URL로 시도
+      const detectedBlogId = await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll('a[href*="blog.naver.com"]'));
+        for (const a of links) {
+          const m = a.href.match(/blog\.naver\.com\/([^/?#]+)/);
+          if (m && m[1] && !['PostList', 'section', 'BlogHome'].includes(m[1])) return m[1];
+        }
+        return null;
+      });
+      console.log('[publish-naver] detected blogId:', detectedBlogId);
+      const targetId = detectedBlogId || blogId;
+      await page.goto(`https://blog.naver.com/${targetId}/postwrite`, { waitUntil: 'load' });
+    }
+
     await page.waitForTimeout(5000);
     console.log('[publish-naver] write page url:', page.url());
 
