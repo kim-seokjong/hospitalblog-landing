@@ -62,6 +62,10 @@ app.post('/api/publish-naver', async (req, res) => {
     await page.goto('https://nid.naver.com/nidlogin.login?mode=form', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1500);
 
+    // CapsLock이 켜져 있으면 끄기
+    await page.keyboard.press('CapsLock');
+
+    // ID/PW 입력 - setNativeValue 방식
     await page.evaluate(({ id, pw }) => {
       function setNativeValue(el, value) {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
@@ -80,14 +84,25 @@ app.post('/api/publish-naver', async (req, res) => {
     await page.waitForTimeout(5000);
 
     const afterLoginUrl = page.url();
+    console.log('[publish-naver] after login url:', afterLoginUrl);
     if (afterLoginUrl.includes('nidlogin') || afterLoginUrl.includes('/login')) {
-      const errMsg = await page
-        .locator('.error_message, .msg_error, #err_common')
-        .first()
-        .textContent()
-        .catch(() => null);
+      // 페이지의 실제 에러 메시지 (Caps Lock 경고 제외)
+      const errMsg = await page.evaluate(() => {
+        const selectors = ['.error_message', '.msg_error', '#err_common', '.login_error', '#loginErrorMsg'];
+        for (const sel of selectors) {
+          const el = document.querySelector(sel);
+          if (el && el.textContent.trim() && !el.textContent.includes('Caps Lock')) {
+            return el.textContent.trim();
+          }
+        }
+        // CAPTCHA 확인
+        if (document.querySelector('iframe[src*="captcha"]') || document.querySelector('#captcha')) {
+          return 'CAPTCHA가 감지됐습니다. 잠시 후 다시 시도하세요.';
+        }
+        return null;
+      }).catch(() => null);
       throw new Error(
-        errMsg?.trim() ||
+        errMsg ||
           '로그인에 실패했습니다. 아이디/비밀번호를 확인하거나 CAPTCHA가 있으면 잠시 후 다시 시도하세요.'
       );
     }
