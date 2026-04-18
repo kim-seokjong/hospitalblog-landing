@@ -8,6 +8,7 @@ interface NaverPublisherProps {
   content: BlogContent;
   tags: TagResult | null;
   images: GeneratedImage[];
+  naverBlogId?: string;
 }
 
 /** 본문에 이미지 자리표시자를 균등 삽입 */
@@ -62,7 +63,7 @@ async function downloadImage(url: string, filename: string): Promise<void> {
   }
 }
 
-export default function NaverPublisher({ title, content, tags, images }: NaverPublisherProps) {
+export default function NaverPublisher({ title, content, tags, images, naverBlogId }: NaverPublisherProps) {
   const [titleCopied, setTitleCopied] = useState(false);
   const [bodyCopied, setBodyCopied] = useState(false);
   const [tagsCopied, setTagsCopied] = useState(false);
@@ -75,7 +76,10 @@ export default function NaverPublisher({ title, content, tags, images }: NaverPu
   };
 
   const handleOpenNaver = async () => {
-    window.open('https://blog.naver.com/write', '_blank');
+    const url = naverBlogId
+      ? `https://blog.naver.com/PostWriteForm.naver?blogId=${naverBlogId}`
+      : 'https://blog.naver.com/write';
+    window.open(url, '_blank');
     if (await copyText(title)) flash(setTitleCopied);
   };
 
@@ -115,7 +119,9 @@ export default function NaverPublisher({ title, content, tags, images }: NaverPu
         </div>
         <div className="flex-1">
           <h3 className="text-sm font-bold text-gray-900">네이버 블로그 발행 도우미</h3>
-          <p className="text-xs text-gray-500">단계별로 복사 → 네이버에 붙여넣기</p>
+          <p className="text-xs text-gray-500">
+            {naverBlogId ? `@${naverBlogId} · 단계별 복사 → 붙여넣기` : '단계별로 복사 → 네이버에 붙여넣기'}
+          </p>
         </div>
         {doneCount > 0 && (
           <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-1 rounded-lg">

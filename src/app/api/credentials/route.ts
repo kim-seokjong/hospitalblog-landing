@@ -31,11 +31,12 @@ export async function GET() {
   if (!error && data) {
     exists = true;
     blogCategory = data.blog_category ?? '';
+    let naverId = '';
     try {
-      const naverId = decrypt({ enc: data.naver_id_enc, iv: data.iv, tag: data.tag });
+      naverId = decrypt({ enc: data.naver_id_enc, iv: data.iv, tag: data.tag });
       maskedId = naverId.slice(0, 2) + '***' + naverId.slice(-1);
     } catch { /* keep default */ }
-    return NextResponse.json({ exists, maskedId, blogCategory });
+    return NextResponse.json({ exists, maskedId, naverId, blogCategory });
   }
 
   // 컬럼 없음 에러(42703)이면 blog_category 없이 재조회
@@ -48,11 +49,12 @@ export async function GET() {
 
     if (!error2 && data2) {
       exists = true;
+      let naverId2 = '';
       try {
-        const naverId = decrypt({ enc: data2.naver_id_enc, iv: data2.iv, tag: data2.tag });
-        maskedId = naverId.slice(0, 2) + '***' + naverId.slice(-1);
+        naverId2 = decrypt({ enc: data2.naver_id_enc, iv: data2.iv, tag: data2.tag });
+        maskedId = naverId2.slice(0, 2) + '***' + naverId2.slice(-1);
       } catch { /* keep default */ }
-      return NextResponse.json({ exists, maskedId, blogCategory: '' });
+      return NextResponse.json({ exists, maskedId, naverId: naverId2, blogCategory: '' });
     }
   }
 
