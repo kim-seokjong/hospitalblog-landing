@@ -14,7 +14,6 @@ import OriginalityChecker from '@/components/OriginalityChecker';
 import TagPanel from '@/components/TagPanel';
 import NaverPreview from '@/components/NaverPreview';
 import NaverPublisher from '@/components/NaverPublisher';
-import NaverCredentialSetup from '@/components/NaverCredentialSetup';
 import AuthModal from '@/components/AuthModal';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData } from '@/types';
 
@@ -22,7 +21,6 @@ export default function HomePage() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [naverBlogId, setNaverBlogId] = useState<string>('');
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -30,18 +28,9 @@ export default function HomePage() {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setAuthChecked(true);
-      if (data.user) {
-        fetch('/api/credentials').then(r => r.json()).then(d => setNaverBlogId(d.naverId ?? '')).catch(() => {});
-      }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) {
-        fetch('/api/credentials').then(r => r.json()).then(d => setNaverBlogId(d.naverId ?? '')).catch(() => {});
-      } else {
-        setNaverBlogId('');
-      }
+      setUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
   }, [supabase]);
@@ -308,13 +297,6 @@ export default function HomePage() {
           {/* 왼쪽: 입력 영역 */}
           <div className="lg:col-span-1 space-y-6">
             <KeywordInput onSubmit={handleKeywordSubmit} isLoading={loadingTitles} />
-            {user && (
-              <NaverCredentialSetup
-                onSaved={() => {
-                  fetch('/api/credentials').then(r => r.json()).then(d => setNaverBlogId(d.naverId ?? '')).catch(() => {});
-                }}
-              />
-            )}
             {keyword && <KeywordTrend mainKeyword={keyword} />}
             {keyword && (
               <TitleSelector
@@ -410,7 +392,6 @@ export default function HomePage() {
                 content={content}
                 tags={tags}
                 images={images}
-                naverBlogId={naverBlogId}
               />
             )}
 

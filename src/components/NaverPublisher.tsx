@@ -8,7 +8,6 @@ interface NaverPublisherProps {
   content: BlogContent;
   tags: TagResult | null;
   images: GeneratedImage[];
-  naverBlogId?: string;
 }
 
 /** 본문에 이미지 자리표시자를 균등 삽입 */
@@ -63,7 +62,7 @@ async function downloadImage(url: string, filename: string): Promise<void> {
   }
 }
 
-export default function NaverPublisher({ title, content, tags, images, naverBlogId }: NaverPublisherProps) {
+export default function NaverPublisher({ title, content, tags, images }: NaverPublisherProps) {
   const [titleCopied, setTitleCopied] = useState(false);
   const [bodyCopied, setBodyCopied] = useState(false);
   const [tagsCopied, setTagsCopied] = useState(false);
@@ -75,11 +74,7 @@ export default function NaverPublisher({ title, content, tags, images, naverBlog
     setTimeout(() => setter(false), 3000);
   };
 
-  const handleOpenNaver = async () => {
-    const url = naverBlogId
-      ? `https://blog.naver.com/${naverBlogId}`
-      : 'https://blog.naver.com';
-    window.open(url, '_blank');
+  const handleCopyTitle = async () => {
     if (await copyText(title)) flash(setTitleCopied);
   };
 
@@ -119,9 +114,7 @@ export default function NaverPublisher({ title, content, tags, images, naverBlog
         </div>
         <div className="flex-1">
           <h3 className="text-sm font-bold text-gray-900">네이버 블로그 발행 도우미</h3>
-          <p className="text-xs text-gray-500">
-            {naverBlogId ? `@${naverBlogId} · 단계별 복사 → 붙여넣기` : '단계별로 복사 → 네이버에 붙여넣기'}
-          </p>
+          <p className="text-xs text-gray-500">단계별로 복사 → 네이버에 붙여넣기</p>
         </div>
         {doneCount > 0 && (
           <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-1 rounded-lg">
@@ -131,18 +124,18 @@ export default function NaverPublisher({ title, content, tags, images, naverBlog
       </div>
 
       <div className="px-5 py-4 space-y-2.5">
-        {/* STEP 1 */}
+        {/* STEP 1: 제목 복사 */}
         <Step
           n={1}
-          label={naverBlogId ? '내 블로그 열기 + 제목 복사' : '네이버 글쓰기 열기 + 제목 복사'}
+          label="제목 복사"
           sub={titleCopied ? '제목이 클립보드에 복사됨 — 제목란에 Ctrl+V' : `"${title.slice(0, 30)}${title.length > 30 ? '…' : ''}"`}
           done={titleCopied}
-          btnLabel={titleCopied ? '다시 열기' : '열기 + 복사'}
+          btnLabel={titleCopied ? '재복사' : '제목 복사'}
           btnClass="bg-green-500 hover:bg-green-600"
-          onClick={handleOpenNaver}
+          onClick={handleCopyTitle}
         />
 
-        {/* STEP 2 */}
+        {/* STEP 2: 본문 복사 */}
         <Step
           n={2}
           label="본문 복사"
@@ -195,7 +188,7 @@ export default function NaverPublisher({ title, content, tags, images, naverBlog
           </div>
         )}
 
-        {/* STEP 4: 태그 */}
+        {/* STEP 4: 태그 복사 */}
         {(tags?.naverTags?.length ?? 0) > 0 && (
           <Step
             n={images.length > 0 ? 4 : 3}
@@ -214,10 +207,11 @@ export default function NaverPublisher({ title, content, tags, images, naverBlog
         <div className="bg-blue-50 rounded-xl p-3">
           <p className="text-xs font-semibold text-blue-800 mb-1">붙여넣기 순서</p>
           <ol className="text-xs text-blue-700 space-y-0.5 list-decimal list-inside">
-            <li>열기 클릭 → 제목란 클릭 → Ctrl+V</li>
-            <li>본문 복사 → 본문 영역 클릭 → Ctrl+V</li>
-            {images.length > 0 && <li>이미지 다운로드 → [이미지N] 텍스트 자리에 각 이미지 삽입</li>}
-            {(tags?.naverTags?.length ?? 0) > 0 && <li>태그 복사 → 태그 입력란 → Ctrl+V → Enter</li>}
+            <li>네이버 블로그 글쓰기 열기</li>
+            <li>제목 복사 → 제목란 Ctrl+V</li>
+            <li>본문 복사 → 본문 영역 Ctrl+V</li>
+            {images.length > 0 && <li>이미지 다운로드 → [이미지N] 자리에 삽입</li>}
+            {(tags?.naverTags?.length ?? 0) > 0 && <li>태그 복사 → 태그 입력란 Ctrl+V → Enter</li>}
           </ol>
         </div>
       </div>
