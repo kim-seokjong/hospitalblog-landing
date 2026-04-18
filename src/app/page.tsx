@@ -234,23 +234,23 @@ export default function LandingPage() {
             병원 규모에 맞게 선택하세요. 언제든지 변경 가능합니다.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
+            [
               {
-                name: "베이직", desc: "블로그 자동 작성 시작",
+                name: "베이직", price: "99,000원", desc: "블로그 자동 작성 시작",
                 features: ["AI 블로그 작성 월 10건", "SEO 분석", "네이버 트렌드"],
                 highlight: false,
               },
               {
-                name: "스탠다드", desc: "이미지까지 한번에",
-                features: ["AI 블로그 작성 월 30건", "카드뉴스 이미지 생성", "독창성 검사", "의료광고법 검수"],
+                name: "스탠다드", price: "199,000원", desc: "핵심 기능 한번에",
+                features: ["AI 블로그 작성 월 20건", "SEO 분석", "독창성 검사", "의료광고법 검수"],
                 highlight: true,
               },
               {
-                name: "프로", desc: "모든 기능 무제한",
-                features: ["AI 블로그 작성 무제한", "이미지 생성 무제한", "우선 고객 지원", "모든 기능 포함"],
+                name: "프로", price: "399,000원", desc: "이미지까지 완전 자동화",
+                features: ["AI 블로그 작성 월 20건", "카드뉴스·이미지 자동 생성", "독창성 검사", "의료광고법 검수", "우선 고객 지원"],
                 highlight: false,
               },
-            ].map(({ name, desc, features, highlight }) => (
+            ].map(({ name, price, desc, features, highlight }) => (
               <div key={name} className={`relative p-6 rounded-2xl border flex flex-col ${
                 highlight
                   ? 'border-blue-500/50 bg-blue-500/10 shadow-2xl shadow-blue-500/10'
@@ -262,6 +262,7 @@ export default function LandingPage() {
                   </span>
                 )}
                 <h3 className="text-xl font-bold text-white mb-1">{name}</h3>
+                <p className="text-2xl font-extrabold text-white mt-1 mb-1">{price}<span className="text-sm font-normal text-gray-500"> / 월</span></p>
                 <p className="text-sm text-gray-500 mb-5">{desc}</p>
                 <ul className="space-y-2.5 mb-8 flex-1">
                   {features.map((f) => (
