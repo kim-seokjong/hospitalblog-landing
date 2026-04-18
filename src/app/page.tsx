@@ -247,7 +247,7 @@ export default function LandingPage() {
               },
               {
                 name: "프로", price: "399,000원", desc: "모든 기능 무제한",
-                features: ["AI 블로그 작성 월 20건", "이미지 생성 무제한", "독창성 검사", "의료광고법 검수", "우선 고객 지원"],
+                features: ["AI 블로그 작성 무제한", "이미지 생성 무제한", "독창성 검사 무제한", "의료광고법 검수", "우선 고객 지원"],
                 highlight: false,
               },
             ].map(({ name, price, desc, features, highlight }) => (
