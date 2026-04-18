@@ -234,7 +234,7 @@ export default function LandingPage() {
             병원 규모에 맞게 선택하세요. 언제든지 변경 가능합니다.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            [
+            {[
               {
                 name: "베이직", price: "99,000원", desc: "블로그 자동 작성 시작",
                 features: ["AI 블로그 작성 월 10건", "SEO 분석", "네이버 트렌드"],
