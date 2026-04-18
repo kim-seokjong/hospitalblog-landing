@@ -241,13 +241,13 @@ export default function LandingPage() {
                 highlight: false,
               },
               {
-                name: "스탠다드", price: "199,000원", desc: "핵심 기능 한번에",
-                features: ["AI 블로그 작성 월 20건", "SEO 분석", "독창성 검사", "의료광고법 검수"],
+                name: "스탠다드", price: "199,000원", desc: "이미지까지 한번에",
+                features: ["AI 블로그 작성 월 20건", "카드뉴스·이미지 자동 생성", "독창성 검사", "의료광고법 검수"],
                 highlight: true,
               },
               {
-                name: "프로", price: "399,000원", desc: "이미지까지 완전 자동화",
-                features: ["AI 블로그 작성 월 20건", "카드뉴스·이미지 자동 생성", "독창성 검사", "의료광고법 검수", "우선 고객 지원"],
+                name: "프로", price: "399,000원", desc: "모든 기능 무제한",
+                features: ["AI 블로그 작성 월 20건", "이미지 생성 무제한", "독창성 검사", "의료광고법 검수", "우선 고객 지원"],
                 highlight: false,
               },
             ].map(({ name, price, desc, features, highlight }) => (
