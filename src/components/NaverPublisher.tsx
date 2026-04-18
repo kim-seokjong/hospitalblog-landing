@@ -77,8 +77,8 @@ export default function NaverPublisher({ title, content, tags, images, naverBlog
 
   const handleOpenNaver = async () => {
     const url = naverBlogId
-      ? `https://blog.naver.com/PostWriteForm.naver?blogId=${naverBlogId}`
-      : 'https://blog.naver.com/write';
+      ? `https://blog.naver.com/${naverBlogId}`
+      : 'https://blog.naver.com';
     window.open(url, '_blank');
     if (await copyText(title)) flash(setTitleCopied);
   };
@@ -134,7 +134,7 @@ export default function NaverPublisher({ title, content, tags, images, naverBlog
         {/* STEP 1 */}
         <Step
           n={1}
-          label="네이버 글쓰기 열기 + 제목 복사"
+          label={naverBlogId ? '내 블로그 열기 + 제목 복사' : '네이버 글쓰기 열기 + 제목 복사'}
           sub={titleCopied ? '제목이 클립보드에 복사됨 — 제목란에 Ctrl+V' : `"${title.slice(0, 30)}${title.length > 30 ? '…' : ''}"`}
           done={titleCopied}
           btnLabel={titleCopied ? '다시 열기' : '열기 + 복사'}
