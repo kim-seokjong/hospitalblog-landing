@@ -56,9 +56,12 @@ export default function LandingPage() {
     }
   };
 
+  const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? 'terro6936@naver.com').split(',');
+  const isAdmin = user ? ADMIN_EMAILS.includes(user.email ?? '') : false;
+
   const handlePricingClick = () => {
     if (user) {
-      router.push('/pricing');
+      router.push(isAdmin ? '/app' : '/pricing');
     } else {
       setAuthMode('signup');
       setPendingPricingRedirect(true);
