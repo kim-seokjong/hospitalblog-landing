@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import './globals.css';
 import MetaPixel from '@/components/MetaPixel';
 
@@ -11,6 +12,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
+        <Script
+          src="https://cdn.portone.io/v2/browser-sdk.js"
+          strategy="lazyOnload"
+        />
         <MetaPixel />
         {children}
       </body>
