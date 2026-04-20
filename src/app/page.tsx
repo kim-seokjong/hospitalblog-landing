@@ -123,7 +123,7 @@ export default function LandingPage() {
                     onClick={handleStart}
                     className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-bold rounded-lg transition-colors shadow-lg shadow-blue-500/30"
                   >
-                    무료 시작하기
+                    회원가입하기
                   </button>
                 </>
               )
@@ -163,7 +163,7 @@ export default function LandingPage() {
               onClick={handleStart}
               className="px-8 py-4 bg-blue-500 hover:bg-blue-400 text-white font-bold text-lg rounded-xl transition-all shadow-2xl shadow-blue-500/30 hover:shadow-blue-400/40 hover:-translate-y-0.5"
             >
-              무료로 시작하기 →
+              회원가입하기 →
             </button>
             <a
               href="#features"
