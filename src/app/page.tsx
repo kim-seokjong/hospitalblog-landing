@@ -172,7 +172,6 @@ export default function LandingPage() {
               기능 살펴보기
             </a>
           </div>
-          <p className="text-sm text-gray-600">신용카드 불필요 · 즉시 시작 가능</p>
 
           {/* 스탯 */}
           <div className="mt-16 grid grid-cols-3 gap-6 max-w-2xl mx-auto">
@@ -321,10 +320,10 @@ export default function LandingPage() {
           </h2>
           <p className="text-gray-500 mb-8">병원 마케팅의 가장 큰 고민, AI가 해결해드립니다.</p>
           <button
-            onClick={handleStart}
+            onClick={handlePricingClick}
             className="px-10 py-4 bg-blue-500 hover:bg-blue-400 text-white font-bold text-lg rounded-xl transition-all shadow-2xl shadow-blue-500/30 hover:-translate-y-0.5"
           >
-            무료로 시작하기 →
+            시작하기 →
           </button>
         </div>
       </section>
