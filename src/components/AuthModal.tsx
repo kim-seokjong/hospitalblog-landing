@@ -11,55 +11,91 @@ interface AuthModalProps {
 
 type Mode = 'login' | 'signup';
 
+const POSITIONS = ['원장', '부원장', '간호사', '원무', '마케터', '기타'] as const;
+
 export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
+
+  // 로그인 필드
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // 회원가입 추가 필드
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [hospitalName, setHospitalName] = useState('');
+  const [hospitalAddress, setHospitalAddress] = useState('');
+  const [position, setPosition] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   const supabase = createClient();
 
-  const handleSubmit = async () => {
-    if (!email || !password) {
-      setError('이메일과 비밀번호를 입력해주세요.');
-      return;
-    }
+  const resetFields = () => {
+    setEmail(''); setPassword(''); setFullName(''); setPhone('');
+    setHospitalName(''); setHospitalAddress(''); setPosition('');
+    setConfirmPassword(''); setError(''); setMessage('');
+  };
 
-    setLoading(true);
-    setError('');
-    setMessage('');
-
-    if (mode === 'signup') {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: `${location.origin}/api/auth/callback` },
-      });
-      if (error) {
-        setError(error.message);
-      } else {
-        setMessage('가입 확인 이메일을 보냈습니다. 메일함을 확인해주세요.');
-      }
+  const handleLogin = async () => {
+    if (!email || !password) { setError('이메일과 비밀번호를 입력해주세요.'); return; }
+    setLoading(true); setError('');
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setError('이메일 또는 비밀번호가 올바르지 않습니다.');
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
-      } else {
-        onSuccess();
-        onClose();
-      }
+      onSuccess(); onClose();
     }
-
     setLoading(false);
   };
 
+  const handleSignup = async () => {
+    if (!fullName || !phone || !hospitalName || !position) {
+      setError('필수 항목을 모두 입력해주세요.'); return;
+    }
+    if (!email) { setError('이메일을 입력해주세요.'); return; }
+    if (password.length < 6) { setError('비밀번호는 최소 6자리입니다.'); return; }
+    if (password !== confirmPassword) { setError('비밀번호가 일치하지 않습니다.'); return; }
+
+    setLoading(true); setError('');
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${location.origin}/api/auth/callback` },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      setLoading(false);
+      return;
+    }
+
+    const userId = data.user?.id;
+    if (userId) {
+      await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, fullName, phone, hospitalName, hospitalAddress, position }),
+      });
+    }
+
+    setMessage('가입 확인 이메일을 보냈습니다. 메일함을 확인해주세요.');
+    setLoading(false);
+  };
+
+  const inputClass = 'w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400';
+  const labelClass = 'text-xs font-semibold text-gray-700';
+  const requiredMark = <span className="text-red-500 ml-0.5">*</span>;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden max-h-[90vh] flex flex-col">
         {/* 헤더 */}
-        <div className="bg-blue-600 px-6 py-5 flex items-center justify-between">
+        <div className="bg-blue-600 px-6 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
               <span className="text-white text-lg">🏥</span>
@@ -67,7 +103,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
             <div>
               <h2 className="text-white font-bold text-lg">병원 블로그 자동화</h2>
               <p className="text-blue-100 text-xs">
-                {mode === 'login' ? '로그인하여 계속하세요' : '새 계정을 만드세요'}
+                {mode === 'login' ? '로그인하여 계속하세요' : '병원 관계자 전용 서비스입니다'}
               </p>
             </div>
           </div>
@@ -75,15 +111,13 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
         </div>
 
         {/* 탭 */}
-        <div className="flex border-b border-gray-200">
+        <div className="flex border-b border-gray-200 shrink-0">
           {(['login', 'signup'] as Mode[]).map((m) => (
             <button
               key={m}
-              onClick={() => { setMode(m); setError(''); setMessage(''); }}
+              onClick={() => { setMode(m); resetFields(); }}
               className={`flex-1 py-3 text-sm font-semibold transition-colors ${
-                mode === m
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-400 hover:text-gray-600'
+                mode === m ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
               {m === 'login' ? '로그인' : '회원가입'}
@@ -91,46 +125,108 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
           ))}
         </div>
 
-        {/* 폼 */}
-        <div className="px-6 py-5 space-y-4">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-gray-700">이메일</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="example@email.com"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-            />
+        {/* 스크롤 영역 */}
+        <div className="overflow-y-auto flex-1">
+          <div className="px-6 py-5 space-y-4">
+
+            {mode === 'login' ? (
+              <>
+                <div className="space-y-2">
+                  <label className={labelClass}>이메일</label>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                    placeholder="example@email.com" className={inputClass}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
+                </div>
+                <div className="space-y-2">
+                  <label className={labelClass}>비밀번호</label>
+                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                    placeholder="비밀번호 입력" className={inputClass}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
+                </div>
+              </>
+            ) : (
+              <>
+                {/* 안내 문구 */}
+                <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs text-blue-700">
+                  병원 관계자 확인을 위한 정보를 입력해주세요. <span className="text-red-500">*</span> 표시는 필수 항목입니다.
+                </div>
+
+                {/* 성함 */}
+                <div className="space-y-2">
+                  <label className={labelClass}>성함{requiredMark}</label>
+                  <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
+                    placeholder="홍길동" className={inputClass} />
+                </div>
+
+                {/* 연락처 */}
+                <div className="space-y-2">
+                  <label className={labelClass}>연락처{requiredMark}</label>
+                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                    placeholder="010-0000-0000" className={inputClass} />
+                </div>
+
+                {/* 병원명 + 직책 */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className={labelClass}>병원명{requiredMark}</label>
+                    <input type="text" value={hospitalName} onChange={(e) => setHospitalName(e.target.value)}
+                      placeholder="○○병원" className={inputClass} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className={labelClass}>직책{requiredMark}</label>
+                    <select value={position} onChange={(e) => setPosition(e.target.value)} className={inputClass}>
+                      <option value="">선택</option>
+                      {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* 병원 주소 */}
+                <div className="space-y-2">
+                  <label className={labelClass}>병원 주소</label>
+                  <input type="text" value={hospitalAddress} onChange={(e) => setHospitalAddress(e.target.value)}
+                    placeholder="서울특별시 강남구 테헤란로 123" className={inputClass} />
+                </div>
+
+                {/* 구분선 */}
+                <div className="border-t border-gray-100 pt-2">
+                  <p className="text-xs text-gray-400 mb-3">로그인 계정 정보</p>
+                </div>
+
+                {/* 이메일 */}
+                <div className="space-y-2">
+                  <label className={labelClass}>이메일 (인증용){requiredMark}</label>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                    placeholder="example@email.com" className={inputClass} />
+                </div>
+
+                {/* 비밀번호 */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className={labelClass}>비밀번호{requiredMark}</label>
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                      placeholder="최소 6자리" className={inputClass} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className={labelClass}>비밀번호 확인{requiredMark}</label>
+                    <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="동일하게 입력" className={inputClass} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+            {message && <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg">{message}</p>}
+
+            <button
+              onClick={mode === 'login' ? handleLogin : handleSignup}
+              disabled={loading}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold rounded-xl text-sm transition-colors"
+            >
+              {loading ? '처리 중...' : mode === 'login' ? '로그인' : '가입 신청하기'}
+            </button>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-gray-700">비밀번호</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === 'signup' ? '최소 6자리' : '비밀번호 입력'}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-            />
-          </div>
-
-          {error && (
-            <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
-          )}
-          {message && (
-            <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg">{message}</p>
-          )}
-
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold rounded-xl text-sm transition-colors"
-          >
-            {loading ? '처리 중...' : mode === 'login' ? '로그인' : '회원가입'}
-          </button>
         </div>
       </div>
     </div>
