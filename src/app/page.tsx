@@ -44,9 +44,26 @@ export default function LandingPage() {
     setShowAuthModal(true);
   };
 
+  const [pendingPricingRedirect, setPendingPricingRedirect] = useState(false);
+
   const handleAuthSuccess = () => {
     setShowAuthModal(false);
-    router.push('/app');
+    if (pendingPricingRedirect) {
+      setPendingPricingRedirect(false);
+      router.push('/pricing');
+    } else {
+      router.push('/app');
+    }
+  };
+
+  const handlePricingClick = () => {
+    if (user) {
+      router.push('/pricing');
+    } else {
+      setAuthMode('signup');
+      setPendingPricingRedirect(true);
+      setShowAuthModal(true);
+    }
   };
 
   return (
@@ -272,7 +289,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <button
-                  onClick={handleStart}
+                  onClick={handlePricingClick}
                   className={`w-full py-2.5 rounded-xl text-sm font-bold transition-colors ${
                     highlight
                       ? 'bg-blue-500 hover:bg-blue-400 text-white shadow-lg shadow-blue-500/30'
@@ -285,7 +302,7 @@ export default function LandingPage() {
             ))}
           </div>
           <p className="text-center text-xs text-gray-600 mt-6">
-            정확한 요금은 서비스 출시 시 안내됩니다. 사전 등록 시 첫 달 무료 혜택을 드립니다.
+            모든 플랜은 월 단위 구독이며, 언제든지 해지 가능합니다.
           </p>
         </div>
       </section>
