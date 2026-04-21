@@ -4,7 +4,7 @@ import './globals.css';
 import MetaPixel from '@/components/MetaPixel';
 
 export const metadata: Metadata = {
-  title: '병원 마케팅 블로그 자동화',
+  title: '닥터포스트',
   description: '의료광고법 준수 병원 블로그 콘텐츠 자동 생성 서비스',
 };
 

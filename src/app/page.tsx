@@ -86,7 +86,7 @@ export default function LandingPage() {
             <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
               <span className="text-white text-base">🏥</span>
             </div>
-            <span className="font-bold text-white text-lg">HospitalBlog</span>
+            <span className="font-bold text-white text-lg">닥터포스트</span>
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm text-gray-400">
             <a href="#features" className="hover:text-white transition-colors">기능</a>

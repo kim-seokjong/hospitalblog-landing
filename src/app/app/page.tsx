@@ -233,7 +233,7 @@ export default function HomePage() {
               <span className="text-white text-lg">🏥</span>
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">병원 블로그 자동화</h1>
+              <h1 className="text-lg font-bold text-gray-900">닥터포스트</h1>
               <p className="text-xs text-gray-500">네이버 SEO 최적화 · 의료광고법 준수 · Claude AI · DALL-E 3</p>
             </div>
           </div>

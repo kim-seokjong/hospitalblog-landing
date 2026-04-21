@@ -105,7 +105,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
               <span className="text-white text-lg">🏥</span>
             </div>
             <div>
-              <h2 className="text-white font-bold text-lg">병원 블로그 자동화</h2>
+              <h2 className="text-white font-bold text-lg">닥터포스트</h2>
               <p className="text-blue-100 text-xs">
                 {mode === 'login' ? '로그인하여 계속하세요' : '병원 관계자 전용 서비스입니다'}
               </p>
