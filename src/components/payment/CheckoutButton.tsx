@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { PlanId } from '@/lib/payment/plans'
+import { trackEvent } from '@/lib/meta-pixel'
 
 declare global {
   interface Window {
@@ -40,6 +41,11 @@ export default function CheckoutButton({ plan, label = '구독 시작하기', cl
       const { paymentId, amount, orderName, channelKey, customer } = await prepRes.json()
 
       // 2. 포트원 SDK 로드 확인
+      trackEvent('InitiateCheckout', {
+        content_name: label || '구독',
+        content_category: 'subscription',
+        currency: 'KRW',
+      })
       if (!window.PortOne) throw new Error('결제 모듈이 로드되지 않았습니다. 잠시 후 다시 시도해주세요.')
 
       const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID

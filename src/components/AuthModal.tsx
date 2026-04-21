@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { trackEvent } from '@/lib/meta-pixel';
 
 interface AuthModalProps {
   onClose: () => void;
@@ -73,6 +74,9 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
       setLoading(false);
       return;
     }
+
+    trackEvent('CompleteRegistration', { content_name: 'signup', status: 'complete' });
+    trackEvent('Lead', { content_name: '무료체험', content_category: 'free_plan' });
 
     const userId = data.user?.id;
     if (userId) {
