@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { verifyAndActivate } from '@/lib/payment/verify'
+import { PLANS } from '@/lib/payment/plans'
+import { sendCAPIEvent } from '@/lib/meta-capi'
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +25,23 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await verifyAndActivate(paymentId)
+
+    // CAPI: Subscribe 이벤트 서버사이드 전송
+    const headersList = await headers();
+    sendCAPIEvent({
+      eventName: 'Subscribe',
+      eventSourceUrl: 'https://hospitalblog.kr/pricing',
+      userData: {
+        clientIpAddress: headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || '',
+        clientUserAgent: headersList.get('user-agent') || '',
+      },
+      customData: {
+        currency: 'KRW',
+        value: PLANS[result.plan].price,
+        predicted_ltv: PLANS[result.plan].price * 12,
+      },
+    }).catch(err => console.error('[CAPI] Subscribe event failed:', err));
+
     return NextResponse.json(result)
   } catch (e) {
     const msg = e instanceof Error ? e.message : '결제 검증 실패'
