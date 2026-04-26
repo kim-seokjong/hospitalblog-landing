@@ -235,8 +235,9 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                       onChange={(e) => setPrompts(prev => ({ ...prev, [image.id]: e.target.value }))}
                       rows={3}
                       className="w-full px-2.5 py-2 rounded-lg bg-[#0b0d2b] border border-[#4f6ef7]/40 text-white text-[10px] focus:outline-none focus:border-[#4f6ef7] resize-none"
-                      placeholder="이미지 프롬프트 직접 입력..."
+                      placeholder="한국어로 입력하세요 (예: 피부과 의사가 환자에게 시술 설명하는 장면)&#10;AI가 자동으로 영어로 번역해서 생성합니다"
                     />
+                    <p className="text-[9px] text-[#555d8a]">💡 한국어 입력 가능 — Claude가 자동 번역 후 생성</p>
                     <div className="flex gap-1">
                       <button
                         onClick={() => { setEditingPrompt(null); handleRegenerateOne(image); }}
