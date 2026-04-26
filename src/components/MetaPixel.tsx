@@ -6,13 +6,6 @@ import { useEffect, Suspense } from 'react';
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
-// 전역 fbq 타입 선언
-declare global {
-  interface Window {
-    fbq: (...args: any[]) => void;
-    _fbq: any;
-  }
-}
 
 function PixelPageView() {
   const pathname = usePathname();

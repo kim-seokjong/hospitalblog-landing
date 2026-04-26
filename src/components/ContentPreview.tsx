@@ -28,74 +28,66 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
   };
 
   const charColor =
-    content.charCount >= 1500 && content.charCount <= 1800 ? 'text-green-600' :
-    content.charCount >= 1200 ? 'text-amber-500' : 'text-red-500';
+    content.charCount >= 1500 && content.charCount <= 1800 ? 'text-emerald-400' :
+    content.charCount >= 1200 ? 'text-amber-400' : 'text-red-400';
 
   const renderBody = (text: string) => {
     return text.split('\n').map((line, i) => {
-      // H3 세부소제목: ▶ 로 시작
       if (line.startsWith('▶')) {
         return (
-          <h3 key={i} className="text-sm font-semibold text-indigo-700 mt-3 mb-1 pl-1 border-l-2 border-indigo-300">
+          <h3 key={i} className="text-sm font-semibold text-[#4f6ef7] mt-3 mb-1 pl-2 border-l-2 border-[#4f6ef7]/40">
             {line.replace(/^▶\s*/, '')}
           </h3>
         );
       }
-      // 이미지 위치 표시
       if (/^\[이미지\s*\d+:/.test(line)) {
         return (
-          <div key={i} className="my-2 bg-blue-50 border border-dashed border-blue-300 rounded-lg px-3 py-2 flex items-center gap-2">
-            <span className="text-blue-500 text-sm">🖼</span>
-            <span className="text-xs text-blue-600 font-medium">{line.replace(/[\[\]]/g, '')}</span>
+          <div key={i} className="my-2 bg-[#191970]/30 border border-dashed border-[#4f6ef7]/30 rounded-lg px-3 py-2 flex items-center gap-2">
+            <span className="text-[#4f6ef7] text-sm">🖼</span>
+            <span className="text-xs text-[#8891bd]">{line.replace(/[\[\]]/g, '')}</span>
           </div>
         );
       }
-      // H2 소제목: 앞뒤 빈 줄 사이의 단독 줄 (15자 이상이고 ▶ 아님)
       if (line.trim().length >= 10 && line.trim().length <= 45 && !line.startsWith('[')) {
         const prevEmpty = i === 0 || text.split('\n')[i - 1]?.trim() === '';
         if (prevEmpty) {
-          return <h2 key={i} className="text-base font-bold text-gray-800 mt-5 mb-2">{line}</h2>;
+          return <h2 key={i} className="text-sm font-bold text-white mt-5 mb-2">{line}</h2>;
         }
       }
       if (line.trim() === '') return <br key={i} />;
-      return <p key={i} className="text-gray-700 leading-relaxed text-sm mb-1">{line}</p>;
+      return <p key={i} className="text-[#c5caf0] leading-relaxed text-xs mb-1">{line}</p>;
     });
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+    <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] overflow-hidden shadow-xl">
       {/* 헤더 */}
-      <div className="p-5 border-b border-gray-100">
+      <div className="p-5 border-b border-[#2a2b6e]">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
-            <span className="text-white text-lg font-bold">3</span>
+          <div className="w-9 h-9 rounded-xl bg-[#191970] border border-emerald-500/30 flex items-center justify-center">
+            <span className="text-emerald-400 font-bold text-sm">3</span>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-800">본문 미리보기</h2>
-            <p className="text-sm text-gray-500">D.I.A+ 최적화 콘텐츠</p>
+            <h2 className="text-base font-bold text-white">본문 미리보기</h2>
+            <p className="text-xs text-[#8891bd]">D.I.A+ 최적화 콘텐츠</p>
           </div>
         </div>
 
-        {/* 통계 뱃지들 */}
-        <div className="flex flex-wrap gap-2">
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 ${charColor}`}>
-            {content.charCount.toLocaleString()}자
-            {content.charCount >= 1500 ? ' ✓' : content.charCount >= 1200 ? ' (1500+ 권장)' : ' ⚠'}
+        <div className="flex flex-wrap gap-1.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0b0d2b] border border-[#2a2b6e] ${charColor}`}>
+            {content.charCount.toLocaleString()}자{content.charCount >= 1500 ? ' ✓' : ' ⚠'}
           </span>
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
-            H2 {content.seoAnalysis.h2Count}개
-          </span>
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">
-            H3 {content.seoAnalysis.h3Count}개
-          </span>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">H2 {content.seoAnalysis.h2Count}개</span>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">H3 {content.seoAnalysis.h3Count}개</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
             content.seoAnalysis.keywordCount >= 4 && content.seoAnalysis.keywordCount <= 6
-              ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-          }`}>
-            키워드 {content.seoAnalysis.keywordCount}회
-          </span>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-            content.compliance.isCompliant ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+              : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+          }`}>키워드 {content.seoAnalysis.keywordCount}회</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+            content.compliance.isCompliant
+              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+              : 'bg-red-500/10 text-red-300 border-red-500/20'
           }`}>
             {content.compliance.isCompliant ? '✅ 광고법 준수' : `⚠ 위반 ${content.compliance.violations.length}건`}
           </span>
@@ -104,38 +96,37 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
 
       {/* 위반사항 */}
       {!content.compliance.isCompliant && (
-        <div className="mx-5 mt-4 bg-red-50 border border-red-200 rounded-xl p-3">
-          <p className="text-xs font-bold text-red-700 mb-2">⚠️ 의료광고법 위반 감지</p>
-          <div className="space-y-1.5">
+        <div className="mx-5 mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+          <p className="text-xs font-bold text-red-300 mb-1.5">⚠️ 의료광고법 위반 감지</p>
+          <div className="space-y-1">
             {content.compliance.violations.map((v, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <span className={`font-bold px-1.5 py-0.5 rounded ${
-                  v.severity === 'CRITICAL' ? 'bg-red-200 text-red-800' :
-                  v.severity === 'HIGH' ? 'bg-orange-200 text-orange-800' :
-                  'bg-yellow-200 text-yellow-800'
+              <div key={i} className="flex items-center gap-2 text-[10px]">
+                <span className={`font-bold px-1.5 py-0.5 rounded text-[9px] ${
+                  v.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-300' :
+                  v.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-300' :
+                  'bg-yellow-500/20 text-yellow-300'
                 }`}>{v.severity}</span>
-                <span className="font-bold text-red-700">{v.word}</span>
-                <span className="text-gray-500">→ {v.suggestion}</span>
+                <span className="font-bold text-red-300">{v.word}</span>
+                <span className="text-[#8891bd]">→ {v.suggestion}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* 경고 */}
       {content.compliance.warnings.length > 0 && (
-        <div className="mx-5 mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
-          <p className="text-xs font-bold text-amber-700 mb-1">⚠ 주의사항</p>
+        <div className="mx-5 mt-3 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-amber-300 mb-1">⚠ 주의사항</p>
           {content.compliance.warnings.map((w, i) => (
-            <p key={i} className="text-xs text-amber-600">• {w}</p>
+            <p key={i} className="text-[10px] text-amber-300/80">• {w}</p>
           ))}
         </div>
       )}
 
       {/* 본문 */}
       <div className="p-5">
-        <div className="bg-gray-50 rounded-xl p-5 border border-gray-200 max-h-96 overflow-y-auto">
-          <h1 className="text-lg font-bold text-gray-900 mb-4 pb-3 border-b border-gray-200">{content.title}</h1>
+        <div className="bg-[#0b0d2b] rounded-xl p-4 border border-[#2a2b6e] max-h-80 overflow-y-auto">
+          <h1 className="text-sm font-bold text-white mb-3 pb-3 border-b border-[#2a2b6e]">{content.title}</h1>
           <div>{renderBody(content.body)}</div>
         </div>
       </div>
@@ -145,7 +136,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
         <div className="px-5 pb-2">
           <button
             onClick={() => setShowImageHints(!showImageHints)}
-            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            className="text-[10px] font-bold text-[#4f6ef7] hover:text-blue-300 flex items-center gap-1"
           >
             <span>{showImageHints ? '▼' : '▶'}</span>
             이미지 배치 가이드 ({content.imageGuidelines.placementHints.length}곳)
@@ -153,76 +144,52 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
           {showImageHints && (
             <div className="mt-2 space-y-1.5">
               {content.imageGuidelines.placementHints.map((hint, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs bg-blue-50 rounded-lg px-3 py-1.5">
-                  <span className="text-blue-500 font-bold">🖼 {i + 1}</span>
-                  <span className="text-blue-700">{hint.description}</span>
+                <div key={i} className="flex items-start gap-2 text-[10px] bg-[#191970]/20 rounded-lg px-3 py-1.5">
+                  <span className="text-[#4f6ef7] font-bold">🖼 {i + 1}</span>
+                  <span className="text-[#8891bd]">{hint.description}</span>
                 </div>
               ))}
-              <p className="text-xs text-gray-400 mt-1">
-                권장 이미지: {content.imageGuidelines.recommendedCount}장 이상 (네이버 상위노출 기준)
-              </p>
             </div>
           )}
         </div>
       )}
 
-      {/* 액션 버튼 */}
+      {/* 액션 */}
       <div className="p-5 pt-3 space-y-3">
         <button
           onClick={handleCopy}
-          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-emerald-500/20"
         >
           {copied ? <><span>✅</span> 복사 완료!</> : <><span>📋</span> 제목 + 본문 원클릭 복사</>}
         </button>
 
-        <div className="border-t border-gray-100 pt-3 space-y-3">
-          {/* 이미지 스타일 선택 */}
+        <div className="border-t border-[#2a2b6e] pt-3 space-y-3">
           <div>
-            <p className="text-xs font-bold text-gray-600 mb-2">이미지 스타일</p>
+            <p className="text-[10px] font-bold text-[#8891bd] mb-2">이미지 스타일</p>
             <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => onImageStyleChange('photo')}
-                disabled={isLoadingImages}
-                className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border-2 transition-all ${
-                  imageStyle === 'photo'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-                }`}
-              >
-                <span className="text-xl">📷</span>
-                <span className="text-[11px] font-bold">실사 이미지</span>
-                <span className="text-[9px] text-center leading-tight opacity-70">실제 의료 사진</span>
-              </button>
-              <button
-                onClick={() => onImageStyleChange('cardnews')}
-                disabled={isLoadingImages}
-                className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border-2 transition-all ${
-                  imageStyle === 'cardnews'
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-                }`}
-              >
-                <span className="text-xl">🎨</span>
-                <span className="text-[11px] font-bold">카드뉴스</span>
-                <span className="text-[9px] text-center leading-tight opacity-70">AI 디자인 합성</span>
-              </button>
-              <button
-                onClick={() => onImageStyleChange('upload')}
-                disabled={isLoadingImages}
-                className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border-2 transition-all ${
-                  imageStyle === 'upload'
-                    ? 'border-purple-500 bg-purple-50 text-purple-700'
-                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-                }`}
-              >
-                <span className="text-xl">📎</span>
-                <span className="text-[11px] font-bold">직접 첨부</span>
-                <span className="text-[9px] text-center leading-tight opacity-70">편집기로 꾸미기</span>
-              </button>
+              {[
+                { val: 'photo' as const, icon: '📷', label: '실사 이미지', sub: '실제 의료 사진' },
+                { val: 'cardnews' as const, icon: '🎨', label: '카드뉴스', sub: 'AI 디자인 합성' },
+                { val: 'upload' as const, icon: '📎', label: '직접 첨부', sub: '편집기로 꾸미기' },
+              ].map(({ val, icon, label, sub }) => (
+                <button
+                  key={val}
+                  onClick={() => onImageStyleChange(val)}
+                  disabled={isLoadingImages}
+                  className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border-2 transition-all ${
+                    imageStyle === val
+                      ? 'border-[#4f6ef7] bg-[#4f6ef7]/10 text-white'
+                      : 'border-[#2a2b6e] bg-[#0b0d2b] text-[#8891bd] hover:border-[#4f6ef7]/30'
+                  }`}
+                >
+                  <span className="text-lg">{icon}</span>
+                  <span className="text-[10px] font-bold">{label}</span>
+                  <span className="text-[8px] text-center opacity-70">{sub}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* 숨김 파일 인풋 */}
           <input
             ref={fileInputRef}
             type="file"
@@ -236,31 +203,29 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
             }}
           />
 
-          {/* 장수 선택 (업로드 제외) */}
           {imageStyle !== 'upload' && (
             <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-400">권장 {content.imageGuidelines.recommendedCount}장 이상</p>
+              <p className="text-[10px] text-[#555d8a]">권장 {content.imageGuidelines.recommendedCount}장 이상</p>
               <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-500">장수:</label>
+                <label className="text-[10px] text-[#8891bd]">장수:</label>
                 <select
                   value={imageCount}
                   onChange={(e) => setImageCount(Number(e.target.value))}
-                  className="text-sm border border-gray-200 rounded-lg px-2 py-1 bg-white"
+                  className="text-xs border border-[#2a2b6e] rounded-lg px-2 py-1 bg-[#0b0d2b] text-white"
                   disabled={isLoadingImages}
                 >
                   {[4, 5, 6, 7, 8].map((n) => (
-                    <option key={n} value={n}>{n}장{n === 6 ? ' (권장)' : ''}</option>
+                    <option key={n} value={n} className="bg-[#12153d]">{n}장{n === 6 ? ' (권장)' : ''}</option>
                   ))}
                 </select>
               </div>
             </div>
           )}
 
-          {/* 액션 버튼 */}
           {imageStyle === 'upload' ? (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
             >
               <span>📎</span> 이미지 파일 선택하기
             </button>
@@ -268,44 +233,31 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
             <button
               onClick={() => onGenerateImages(imageCount, imageStyle)}
               disabled={isLoadingImages}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20"
             >
               {isLoadingImages ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  이미지 생성 중... ({imageCount}장)
-                </>
+                <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 이미지 생성 중... ({imageCount}장)</>
               ) : (
                 <><span>{imageStyle === 'cardnews' ? '🎨' : '📷'}</span> {imageStyle === 'cardnews' ? '카드뉴스' : '실사 이미지'} {imageCount}장 생성</>
               )}
             </button>
           )}
 
-          {/* 디자인 카드뉴스 */}
           {onGenerateSlides && (
-            <div className="border-t border-gray-100 pt-3">
-              <p className="text-xs font-bold text-gray-600 mb-2">인포그래픽 카드뉴스</p>
+            <div className="border-t border-[#2a2b6e] pt-3">
+              <p className="text-[10px] font-bold text-[#8891bd] mb-2">인포그래픽 카드뉴스</p>
               <button
                 onClick={onGenerateSlides}
                 disabled={isLoadingSlides}
-                className="w-full py-3 bg-sky-500 hover:bg-sky-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
               >
                 {isLoadingSlides ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    슬라이드 생성 중...
-                  </>
+                  <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 슬라이드 생성 중...</>
                 ) : (
                   <><span>✦</span> 디자인 카드뉴스 3장 생성</>
                 )}
               </button>
-              <p className="text-[10px] text-gray-400 mt-1.5 text-center">표지 · 단계 · 마무리 슬라이드 · 1080×1080 PNG</p>
+              <p className="text-[9px] text-[#555d8a] mt-1.5 text-center">표지 · 단계 · 마무리 슬라이드 · 1080×1080 PNG</p>
             </div>
           )}
         </div>

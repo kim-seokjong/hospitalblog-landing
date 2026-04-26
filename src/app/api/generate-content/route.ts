@@ -41,9 +41,32 @@ function buildFormatSpecificStructure(format: TitleFormat, keyword: string): str
   }
 }
 
+function buildWritingStylePrompt(style: string): string {
+  switch (style) {
+    case '고객이해':
+      return `【글쓰기 시점: 고객이해시점】
+당신은 환자가 쉽게 이해할 수 있도록 설명하는 친절한 의료진입니다.
+- 전문용어를 최대한 피하고, 반드시 사용해야 할 경우 괄호 안에 쉬운 설명 추가
+- 마치 상담실에서 환자에게 직접 이야기하듯 따뜻하고 편안한 문체
+- 어려운 의학 개념은 일상 속 비유나 예시로 풀어서 설명
+- "~하실 수 있습니다", "걱정하지 않으셔도 됩니다", "쉽게 말씀드리면" 같은 친근한 표현 사용
+- 증상·원인·치료를 '환자 입장에서 궁금한 것' 순서로 서술`;
+    case '사무장':
+      return `【글쓰기 시점: 사무장시점】
+당신은 병원 행정·운영을 총괄하는 경험 많은 사무장입니다.
+- 병원 서비스와 진료 프로세스를 명확하고 신뢰감 있게 안내
+- 내원 절차, 치료 과정, 비용 구조, 보험 적용 여부 등 실용적 정보 중심
+- 환자가 '이 병원에서 어떻게 치료받는지'를 구체적으로 알 수 있도록 서술
+- 병원의 전문성과 시설·장비를 자연스럽게 어필
+- 단호하고 명확한 문체, 군더더기 없이 핵심 정보 전달`;
+    default:
+      return '';
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { title, keyword, hospitalType, additionalInfo, titleFormat } = await req.json();
+    const { title, keyword, hospitalType, additionalInfo, titleFormat, writingStyle = '전문가' } = await req.json();
 
     if (!title || !keyword) {
       return NextResponse.json({ error: '제목과 키워드를 입력해주세요.' }, { status: 400 });
@@ -51,6 +74,7 @@ export async function POST(req: NextRequest) {
 
     const format: TitleFormat = titleFormat || '정보형';
     const formatGuide = buildFormatSpecificStructure(format, keyword);
+    const writingStyleGuide = buildWritingStylePrompt(writingStyle);
 
     const longtailKeywords = [
       `${keyword} 원인`,
@@ -62,6 +86,8 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = `당신은 해당 진료과에서 10년 이상 임상 경험을 가진 전문의이자 의학 콘텐츠 전문 작가입니다.
 환자들이 실제로 궁금해하는 내용을 의학적으로 정확하면서도 이해하기 쉽게 설명합니다.
+
+${writingStyleGuide}
 
 ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 
@@ -95,7 +121,9 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 - 전문적이지만 어렵지 않은 표현 사용 (환자가 이해할 수 있는 수준)
 - 단락은 2~4문장으로 자연스럽게 끊기`;
 
-    const userPrompt = `아래 제목으로 네이버 블로그 본문을 작성해주세요. 해당 분야 전문의가 환자에게 직접 설명하듯 쓴 글이어야 합니다.
+    const writingStyleLabel = writingStyle === '고객이해' ? '고객이해시점 (전문용어 없이 쉽게)' : writingStyle === '사무장' ? '사무장시점 (병원 서비스·프로세스 중심)' : '전문가시점 (의학적 전문성 강조)';
+
+    const userPrompt = `아래 제목으로 네이버 블로그 본문을 작성해주세요. [글쓰기 시점: ${writingStyleLabel}]
 
 제목: "${title}"
 핵심 키워드: "${keyword}"

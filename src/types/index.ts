@@ -84,6 +84,8 @@ export interface GeneratedImage {
 
 export type AppStep = 'keyword' | 'titles' | 'content' | 'images' | 'preview';
 
+export type WritingStyle = '전문가' | '고객이해' | '사무장';
+
 export interface SlideStyleConfig {
   name: string;
   emoji: string;

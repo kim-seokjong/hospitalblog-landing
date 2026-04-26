@@ -15,12 +15,34 @@ import TagPanel from '@/components/TagPanel';
 import NaverPreview from '@/components/NaverPreview';
 import NaverPublisher from '@/components/NaverPublisher';
 import AuthModal from '@/components/AuthModal';
-import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData } from '@/types';
+import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle } from '@/types';
 
-export default function HomePage() {
+type ViewStep = 'input' | 'content';
+
+function AdBanner({ side }: { side: 'left' | 'right' }) {
+  return (
+    <div className={`hidden xl:flex flex-col w-36 flex-shrink-0 ${side === 'left' ? 'mr-4' : 'ml-4'}`}>
+      <div className="sticky top-24 space-y-4">
+        <div className="w-full h-64 rounded-xl border border-[#2a2b6e] bg-[#12153d]/50 flex flex-col items-center justify-center gap-2">
+          <span className="text-[10px] text-[#555d8a] font-semibold tracking-widest uppercase">광고</span>
+          <div className="w-8 h-0.5 bg-[#2a2b6e]" />
+          <span className="text-[9px] text-[#555d8a]">160 × 250</span>
+        </div>
+        <div className="w-full h-56 rounded-xl border border-[#2a2b6e] bg-[#12153d]/50 flex flex-col items-center justify-center gap-2">
+          <span className="text-[10px] text-[#555d8a] font-semibold tracking-widest uppercase">광고</span>
+          <div className="w-8 h-0.5 bg-[#2a2b6e]" />
+          <span className="text-[9px] text-[#555d8a]">160 × 220</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function AppPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [viewStep, setViewStep] = useState<ViewStep>('input');
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -43,6 +65,7 @@ export default function HomePage() {
   const [keyword, setKeyword] = useState('');
   const [hospitalType, setHospitalType] = useState('');
   const [additionalInfo, setAdditionalInfo] = useState('');
+  const [writingStyle, setWritingStyle] = useState<WritingStyle>('전문가');
 
   const [titles, setTitles] = useState<BlogTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>(null);
@@ -55,22 +78,23 @@ export default function HomePage() {
   const [loadingImages, setLoadingImages] = useState(false);
   const [loadingTags, setLoadingTags] = useState(false);
   const [loadingSlides, setLoadingSlides] = useState(false);
-  const [lastImageCount, setLastImageCount] = useState(6);
+  const [lastImageCount] = useState(6);
   const [imageStyle, setImageStyle] = useState<'photo' | 'cardnews' | 'upload'>('cardnews');
   const [cardNewsData, setCardNewsData] = useState<CardNewsData | null>(null);
-
   const [error, setError] = useState<string | null>(null);
 
-  const handleKeywordSubmit = async (kw: string, ht: string, ai: string) => {
+  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle) => {
     setKeyword(kw);
     setHospitalType(ht);
     setAdditionalInfo(ai);
+    setWritingStyle(ws);
     setTitles([]);
     setSelectedTitle(null);
     setContent(null);
     setImages([]);
     setTags(null);
     setError(null);
+    setViewStep('input');
     setLoadingTitles(true);
 
     try {
@@ -99,12 +123,14 @@ export default function HomePage() {
     setLoadingContent(true);
 
     try {
-      // 본문 + 태그 병렬 생성
       const [contentRes, tagRes] = await Promise.all([
         fetch('/api/generate-content', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: selectedTitle.title, keyword, hospitalType, additionalInfo, titleFormat: selectedTitle.seoDetails?.format }),
+          body: JSON.stringify({
+            title: selectedTitle.title, keyword, hospitalType, additionalInfo,
+            titleFormat: selectedTitle.seoDetails?.format, writingStyle,
+          }),
         }),
         fetch('/api/generate-tags', {
           method: 'POST',
@@ -114,10 +140,10 @@ export default function HomePage() {
       ]);
 
       const [contentData, tagData] = await Promise.all([contentRes.json(), tagRes.json()]);
-
       if (!contentRes.ok) throw new Error(contentData.error || '본문 생성에 실패했습니다.');
       setContent(contentData);
       if (tagRes.ok) setTags(tagData);
+      setViewStep('content');
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
     } finally {
@@ -136,16 +162,13 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (res.ok) setTags(data);
-    } catch {
-      // 태그 재생성 실패는 무시
-    } finally {
+    } catch { /* silent */ } finally {
       setLoadingTags(false);
     }
   };
 
   const handleGenerateImages = async (count: number, style?: 'photo' | 'cardnews') => {
     if (!selectedTitle) return;
-    setLastImageCount(count);
     const activeStyle = style ?? imageStyle;
     setError(null);
     setLoadingImages(true);
@@ -174,12 +197,7 @@ export default function HomePage() {
       const res = await fetch('/api/generate-cardnews-slides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keyword,
-          title: selectedTitle.title,
-          body: content.body,
-          hospitalType,
-        }),
+        body: JSON.stringify({ keyword, title: selectedTitle.title, body: content.body, hospitalType }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '카드뉴스 생성에 실패했습니다.');
@@ -192,7 +210,7 @@ export default function HomePage() {
   };
 
   const handleImagesUploaded = (files: File[]) => {
-    const readers = files.map(file => new Promise<import('@/types').GeneratedImage>(resolve => {
+    const readers = files.map(file => new Promise<GeneratedImage>(resolve => {
       const reader = new FileReader();
       reader.onload = e => resolve({
         id: `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -207,72 +225,74 @@ export default function HomePage() {
       .catch(() => setError('이미지 파일을 읽는 데 실패했습니다.'));
   };
 
-  const stepDone = {
-    keyword: titles.length > 0,
-    title: selectedTitle !== null,
-    content: content !== null,
-    image: images.length > 0,
+  const STYLE_LABEL: Record<WritingStyle, string> = {
+    '전문가': '🩺 전문가시점',
+    '고객이해': '👥 고객이해시점',
+    '사무장': '🏥 사무장시점',
   };
 
-  const stepActive = [true, titles.length > 0, selectedTitle !== null, content !== null];
-
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#0b0d2b] text-white">
       {showAuthModal && (
-        <AuthModal
-          onClose={() => setShowAuthModal(false)}
-          onSuccess={() => setShowAuthModal(false)}
-        />
+        <AuthModal onClose={() => setShowAuthModal(false)} onSuccess={() => setShowAuthModal(false)} />
       )}
 
       {/* 헤더 */}
-      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
-              <span className="text-white text-lg">🏥</span>
+      <header className="sticky top-0 z-40 border-b border-[#2a2b6e] bg-[#0b0d2b]/90 backdrop-blur-md">
+        <div className="max-w-screen-2xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          {/* 로고 + 회사명 */}
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center shadow-lg shadow-[#4f6ef7]/10">
+              <span className="text-base">🏥</span>
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-gray-900">닥터포스트</h1>
-              <p className="text-xs text-gray-500">네이버 SEO 최적화 · 의료광고법 준수 · Claude AI · DALL-E 3</p>
+            <div className="flex flex-col leading-tight">
+              <span className="text-[10px] text-[#4f6ef7] font-bold tracking-wide">광고진정성</span>
+              <span className="text-sm font-bold text-white">블로그 자동화</span>
             </div>
           </div>
-          <div className="hidden md:flex items-center gap-3">
-            {[
-              { n: 1, label: '키워드', done: stepDone.keyword },
-              { n: 2, label: '제목', done: stepDone.title },
-              { n: 3, label: '본문', done: stepDone.content },
-              { n: 4, label: '이미지', done: stepDone.image },
-            ].map(({ n, label, done }, i) => (
-              <div key={n} className="flex items-center">
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
-                  done ? 'bg-green-100 text-green-700' :
-                  stepActive[n - 1] ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'
-                }`}>
-                  <span>{done ? '✓' : n}</span>
-                  <span>{label}</span>
-                </div>
-                {i < 3 && <span className="text-gray-300 mx-1 text-xs">→</span>}
-              </div>
-            ))}
 
-            {/* 인증 버튼 */}
+          {/* 단계 표시 */}
+          {viewStep === 'input' && (
+            <div className="hidden md:flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#4f6ef7]/10 text-[#4f6ef7] border border-[#4f6ef7]/20 font-semibold">
+                <span className="w-1.5 h-1.5 bg-[#4f6ef7] rounded-full animate-pulse" />
+                Step 1 · 키워드 → 제목 선택
+              </div>
+              <span className="text-[#555d8a]">→</span>
+              <div className="px-2.5 py-1 rounded-full bg-[#2a2b6e]/40 text-[#555d8a] border border-[#2a2b6e] font-semibold">
+                Step 2 · 본문 · 이미지
+              </div>
+            </div>
+          )}
+
+          {viewStep === 'content' && selectedTitle && (
+            <div className="hidden md:flex items-center gap-2 text-xs flex-1 min-w-0">
+              <button
+                onClick={() => setViewStep('input')}
+                className="flex items-center gap-1 text-[#8891bd] hover:text-white transition-colors flex-shrink-0"
+              >
+                ← 뒤로
+              </button>
+              <span className="text-[#555d8a]">·</span>
+              <span className="text-[#c5caf0] truncate text-xs">{selectedTitle.title}</span>
+              <span className="flex-shrink-0 px-2 py-0.5 rounded-full bg-[#191970] text-[10px] text-[#8891bd] border border-[#2a2b6e]">
+                {STYLE_LABEL[writingStyle]}
+              </span>
+            </div>
+          )}
+
+          {/* 인증 */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             {authChecked && (
               user ? (
-                <div className="flex items-center gap-2 ml-2">
-                  <span className="text-xs text-gray-500 hidden lg:block">{user.email}</span>
-                  <button
-                    onClick={handleLogout}
-                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
+                <>
+                  <span className="text-xs text-[#8891bd] hidden lg:block">{user.email}</span>
+                  <button onClick={handleLogout} className="px-3 py-1.5 text-xs border border-[#2a2b6e] rounded-lg text-[#8891bd] hover:bg-[#191970] hover:text-white transition-colors">
                     로그아웃
                   </button>
-                </div>
+                </>
               ) : (
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="ml-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors"
-                >
+                <button onClick={() => setShowAuthModal(true)} className="px-3 py-1.5 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-xs font-bold rounded-lg transition-colors">
                   로그인
                 </button>
               )
@@ -281,159 +301,203 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-            <span className="text-red-500 text-xl flex-shrink-0">❌</span>
+      {/* 에러 */}
+      {error && (
+        <div className="max-w-screen-2xl mx-auto px-4 pt-4">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-3">
+            <span className="text-red-400 text-lg flex-shrink-0">❌</span>
             <div className="flex-1">
-              <p className="font-semibold text-red-800">오류 발생</p>
-              <p className="text-sm text-red-600 mt-1">{error}</p>
+              <p className="font-semibold text-red-300 text-sm">오류 발생</p>
+              <p className="text-xs text-red-400 mt-0.5">{error}</p>
             </div>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 text-xl">×</button>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-200 text-lg">×</button>
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 왼쪽: 입력 영역 */}
-          <div className="lg:col-span-1 space-y-6">
-            <KeywordInput onSubmit={handleKeywordSubmit} isLoading={loadingTitles} />
-            {keyword && <KeywordTrend mainKeyword={keyword} />}
-            {keyword && (
-              <TitleSelector
-                titles={titles}
-                selectedTitle={selectedTitle}
-                onSelect={setSelectedTitle}
-                onGenerate={handleGenerateContent}
-                isLoading={loadingContent}
-              />
-            )}
-          </div>
+      {/* 본문 */}
+      <main className="max-w-screen-2xl mx-auto px-4 py-6">
+        <div className="flex">
+          <AdBanner side="left" />
 
-          {/* 중간: 본문 + SEO */}
-          <div className="lg:col-span-1 space-y-6">
-            {loadingContent && (
-              <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 animate-pulse">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-gray-200 rounded-xl" />
-                  <div className="space-y-2 flex-1">
-                    <div className="h-5 bg-gray-200 rounded w-32" />
-                    <div className="h-3 bg-gray-200 rounded w-48" />
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {Array.from({ length: 10 }).map((_, i) => (
-                    <div key={i} className={`h-3 bg-gray-200 rounded ${i % 3 === 2 ? 'w-3/4' : 'w-full'}`} />
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="flex-1 min-w-0">
 
-            {content && !loadingContent && (
+            {/* ── STEP 1: 키워드 입력 + 제목 선택 ── */}
+            {viewStep === 'input' && (
               <>
-                <ContentPreview
-                  content={content}
-                  onGenerateImages={handleGenerateImages}
-                  onImagesUploaded={handleImagesUploaded}
-                  isLoadingImages={loadingImages}
-                  imageStyle={imageStyle}
-                  onImageStyleChange={setImageStyle}
-                  onGenerateSlides={handleGenerateSlides}
-                  isLoadingSlides={loadingSlides}
-                />
-                <SeoAnalysis content={content} />
-                <OriginalityChecker
-                  title={content.title}
-                  body={content.body}
-                  keyword={keyword}
-                />
+                {loadingContent && (
+                  <div className="flex items-center justify-center py-24">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-[#4f6ef7] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                      <p className="text-white font-semibold">본문 + 태그 생성 중...</p>
+                      <p className="text-xs text-[#8891bd] mt-1">Claude AI가 작성하고 있습니다</p>
+                    </div>
+                  </div>
+                )}
+
+                {!loadingContent && (
+                  <div className={`grid gap-5 transition-all ${titles.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-md mx-auto'}`}>
+                    {/* 왼쪽: 키워드 입력 */}
+                    <div className="space-y-4">
+                      <KeywordInput onSubmit={handleKeywordSubmit} isLoading={loadingTitles} />
+                    </div>
+
+                    {/* 오른쪽: 검색 트렌드 + 제목 선택 (titles 생성 후 나타남) */}
+                    {titles.length > 0 && (
+                      <div className="space-y-4">
+                        {keyword && <KeywordTrend mainKeyword={keyword} />}
+                        <TitleSelector
+                          titles={titles}
+                          selectedTitle={selectedTitle}
+                          onSelect={setSelectedTitle}
+                          onGenerate={handleGenerateContent}
+                          isLoading={loadingContent}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 빈 상태 */}
+                {titles.length === 0 && !loadingTitles && !loadingContent && (
+                  <div className="mt-12 text-center max-w-md mx-auto">
+                    <div className="text-5xl mb-4">✍️</div>
+                    <p className="text-base font-semibold text-white mb-1">키워드를 입력하여 시작하세요</p>
+                    <p className="text-xs text-[#8891bd] mb-6">
+                      네이버 C-Rank · D.I.A+ 알고리즘 기반 SEO 최적화 블로그 자동 생성
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {['레이저 토닝', '보톡스 시술', '도수치료', '허리디스크', '임플란트', '라식 수술'].map((kw) => (
+                        <span key={kw} className="bg-[#191970]/50 text-[#8891bd] text-xs px-3 py-1.5 rounded-full border border-[#2a2b6e] hover:border-[#4f6ef7]/40 hover:text-white transition-colors cursor-default">
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── STEP 2: 본문 + 이미지 ── */}
+            {viewStep === 'content' && (
+              <>
+                {/* 뒤로 가기 (모바일) */}
+                <div className="flex items-center gap-3 mb-5 md:hidden">
+                  <button
+                    onClick={() => setViewStep('input')}
+                    className="flex items-center gap-1.5 text-sm text-[#8891bd] hover:text-white transition-colors"
+                  >
+                    ← 뒤로
+                  </button>
+                  <span className="text-[#555d8a] text-xs">·</span>
+                  <span className="text-xs text-[#4f6ef7] bg-[#191970]/50 px-2 py-0.5 rounded-full border border-[#2a2b6e]">
+                    {STYLE_LABEL[writingStyle]}
+                  </span>
+                </div>
+
+                {loadingContent && (
+                  <div className="flex items-center justify-center py-24">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-[#4f6ef7] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                      <p className="text-white font-semibold">본문 + 태그 생성 중...</p>
+                    </div>
+                  </div>
+                )}
+
+                {content && !loadingContent && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    {/* 왼쪽: 본문 + SEO + 독창성 */}
+                    <div className="space-y-5">
+                      <ContentPreview
+                        content={content}
+                        onGenerateImages={handleGenerateImages}
+                        onImagesUploaded={handleImagesUploaded}
+                        isLoadingImages={loadingImages}
+                        imageStyle={imageStyle}
+                        onImageStyleChange={setImageStyle}
+                        onGenerateSlides={handleGenerateSlides}
+                        isLoadingSlides={loadingSlides}
+                      />
+                      <SeoAnalysis content={content} />
+                      <OriginalityChecker
+                        title={content.title}
+                        body={content.body}
+                        keyword={keyword}
+                      />
+                    </div>
+
+                    {/* 오른쪽: 네이버 미리보기 + 태그 + 이미지 + 발행 */}
+                    <div className="space-y-5">
+                      {selectedTitle && (
+                        <NaverPreview
+                          title={selectedTitle.title}
+                          body={content.body}
+                          keyword={keyword}
+                        />
+                      )}
+
+                      {tags && (
+                        <TagPanel
+                          tags={tags}
+                          onRegenerate={handleGenerateTags}
+                          isLoading={loadingTags}
+                        />
+                      )}
+
+                      {images.length > 0 && (
+                        <ImageGallery
+                          images={images}
+                          keyword={keyword}
+                          title={selectedTitle?.title || keyword}
+                          style={imageStyle}
+                          onRegenerate={() => handleGenerateImages(lastImageCount)}
+                          isLoading={loadingImages}
+                          onImagesUpdate={setImages}
+                        />
+                      )}
+
+                      {cardNewsData && (
+                        <CardNewsDesigner data={cardNewsData} keyword={keyword} />
+                      )}
+
+                      {user && selectedTitle && (
+                        <NaverPublisher
+                          title={selectedTitle.title}
+                          content={content}
+                          tags={tags}
+                          images={images}
+                        />
+                      )}
+
+                      {!user && authChecked && (
+                        <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-5 text-center">
+                          <p className="text-sm font-semibold text-white mb-1">발행 도우미는 로그인 후 사용 가능합니다</p>
+                          <p className="text-xs text-[#8891bd] mb-4">로그인하고 네이버 블로그에 바로 발행하세요</p>
+                          <button
+                            onClick={() => setShowAuthModal(true)}
+                            className="px-5 py-2 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-sm font-bold rounded-xl transition-colors"
+                          >
+                            로그인 / 회원가입
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
 
-          {/* 오른쪽: 미리보기 + 태그 + 이미지 */}
-          <div className="lg:col-span-1 space-y-6">
-            {selectedTitle && (
-              <NaverPreview
-                title={selectedTitle.title}
-                body={content?.body || ''}
-                keyword={keyword}
-              />
-            )}
-
-            {tags && (
-              <TagPanel
-                tags={tags}
-                onRegenerate={handleGenerateTags}
-                isLoading={loadingTags}
-              />
-            )}
-
-            {images.length > 0 && (
-              <ImageGallery
-                images={images}
-                keyword={keyword}
-                title={selectedTitle?.title || keyword}
-                style={imageStyle}
-                onRegenerate={() => handleGenerateImages(lastImageCount)}
-                isLoading={loadingImages}
-              />
-            )}
-
-            {cardNewsData && (
-              <CardNewsDesigner
-                data={cardNewsData}
-                keyword={keyword}
-              />
-            )}
-
-            {user && content && selectedTitle && (
-              <NaverPublisher
-                title={selectedTitle.title}
-                content={content}
-                tags={tags}
-                images={images}
-              />
-            )}
-
-            {!user && authChecked && content && (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center">
-                <p className="text-sm font-semibold text-blue-800 mb-2">발행 도우미는 로그인 후 사용할 수 있습니다</p>
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl"
-                >
-                  로그인 / 회원가입
-                </button>
-              </div>
-            )}
-          </div>
+          <AdBanner side="right" />
         </div>
-
-        {/* 빈 상태 */}
-        {titles.length === 0 && !loadingTitles && (
-          <div className="mt-8 text-center py-16 text-gray-400">
-            <div className="text-6xl mb-4">📝</div>
-            <p className="text-lg font-semibold text-gray-500">키워드를 입력하여 시작하세요</p>
-            <p className="text-sm mt-2 text-gray-400">
-              네이버 C-Rank · D.I.A+ 알고리즘 기반 상위노출 최적화 콘텐츠를 자동 생성합니다
-            </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {['레이저 토닝', '보톡스 시술', '도수치료', '허리디스크', '임플란트', '라식 수술'].map((kw) => (
-                <span key={kw} className="bg-blue-50 text-blue-600 text-sm px-3 py-1.5 rounded-full border border-blue-200">
-                  {kw}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
 
-      <footer className="mt-16 border-t border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-5 flex flex-col md:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-gray-400">
+      <footer className="mt-16 border-t border-[#2a2b6e] bg-[#0b0d2b]">
+        <div className="max-w-screen-2xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-2">
+          <p className="text-[10px] text-[#555d8a]">
             본 서비스는 의료광고법(의료법 제56조) 준수를 지원합니다. 최종 광고 심의는 의료광고 심의기관을 통해 확인하시기 바랍니다.
           </p>
-          <p className="text-xs text-gray-400 flex-shrink-0">Claude AI + DALL-E 3 · 네이버 C-Rank · D.I.A+ 최적화</p>
+          <p className="text-[10px] text-[#555d8a] flex-shrink-0">광고진정성 © 2026 · Claude AI · 네이버 C-Rank · D.I.A+ 최적화</p>
         </div>
       </footer>
     </div>

@@ -6,7 +6,8 @@ export type FeatureType =
   | 'generate-tags'
   | 'generate-images'
   | 'generate-cardnews-slides'
-  | 'check-originality';
+  | 'check-originality'
+  | 'regenerate-image';
 
 export type ApiProvider = 'anthropic' | 'fal' | 'pexels';
 
