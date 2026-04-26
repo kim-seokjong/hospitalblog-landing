@@ -62,7 +62,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
   return (
     <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] overflow-hidden shadow-xl">
       {/* 헤더 */}
-      <div className="p-5 border-b border-[#2a2b6e]">
+      <div className="p-4 sm:p-5 border-b border-[#2a2b6e]">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-9 h-9 rounded-xl bg-[#191970] border border-emerald-500/30 flex items-center justify-center">
             <span className="text-emerald-400 font-bold text-sm">3</span>
@@ -124,8 +124,8 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
       )}
 
       {/* 본문 */}
-      <div className="p-5">
-        <div className="bg-[#0b0d2b] rounded-xl p-4 border border-[#2a2b6e] max-h-80 overflow-y-auto">
+      <div className="p-4 sm:p-5">
+        <div className="bg-[#0b0d2b] rounded-xl p-3 sm:p-4 border border-[#2a2b6e] max-h-72 sm:max-h-80 overflow-y-auto">
           <h1 className="text-sm font-bold text-white mb-3 pb-3 border-b border-[#2a2b6e]">{content.title}</h1>
           <div>{renderBody(content.body)}</div>
         </div>
@@ -155,10 +155,10 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
       )}
 
       {/* 액션 */}
-      <div className="p-5 pt-3 space-y-3">
+      <div className="p-4 sm:p-5 pt-3 space-y-3">
         <button
           onClick={handleCopy}
-          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-emerald-500/20"
+          className="w-full py-3 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-emerald-500/20 min-h-[48px]"
         >
           {copied ? <><span>✅</span> 복사 완료!</> : <><span>📋</span> 제목 + 본문 원클릭 복사</>}
         </button>
@@ -176,7 +176,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
                   key={val}
                   onClick={() => onImageStyleChange(val)}
                   disabled={isLoadingImages}
-                  className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border-2 transition-all ${
+                  className={`flex flex-col items-center gap-1 px-1 py-3 rounded-xl border-2 transition-all min-h-[72px] ${
                     imageStyle === val
                       ? 'border-[#4f6ef7] bg-[#4f6ef7]/10 text-white'
                       : 'border-[#2a2b6e] bg-[#0b0d2b] text-[#8891bd] hover:border-[#4f6ef7]/30'
@@ -233,7 +233,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
             <button
               onClick={() => onGenerateImages(imageCount, imageStyle)}
               disabled={isLoadingImages}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20"
+              className="w-full py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20 min-h-[48px]"
             >
               {isLoadingImages ? (
                 <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 이미지 생성 중... ({imageCount}장)</>

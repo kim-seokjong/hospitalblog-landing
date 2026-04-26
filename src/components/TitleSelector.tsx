@@ -48,9 +48,9 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
   };
 
   return (
-    <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-6 shadow-xl">
+    <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-4 sm:p-6 shadow-xl">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-9 h-9 rounded-xl bg-[#191970] border border-[#7c3aed]/30 flex items-center justify-center">
+        <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-[#191970] border border-[#7c3aed]/30 flex items-center justify-center">
           <span className="text-purple-400 font-bold text-sm">2</span>
         </div>
         <div>
@@ -65,8 +65,8 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              tab === t ? 'bg-[#191970] text-white shadow-sm' : 'text-[#8891bd] hover:text-white'
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors min-h-[40px] ${
+              tab === t ? 'bg-[#191970] text-white shadow-sm' : 'text-[#8891bd] hover:text-white active:bg-[#191970]/50'
             }`}
           >
             {t === 'ai' ? 'AI 생성 제목' : '직접 입력'}
@@ -93,7 +93,7 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
           <button
             onClick={onGenerate}
             disabled={!manualTitle.trim() || isLoading}
-            className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2"
+            className="w-full py-4 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 min-h-[52px]"
           >
             {isLoading ? (
               <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 본문 생성 중...</>
@@ -121,14 +121,14 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
                     <button
                       key={title.id}
                       onClick={() => onSelect(title)}
-                      className={`w-full text-left p-3.5 rounded-xl border-2 transition-all ${
+                      className={`w-full text-left p-3.5 rounded-xl border-2 transition-all active:scale-[0.99] ${
                         isSelected
                           ? 'border-purple-500/60 bg-purple-500/10'
-                          : 'border-[#2a2b6e] hover:border-purple-500/30 hover:bg-[#191970]/30'
+                          : 'border-[#2a2b6e] hover:border-purple-500/30 hover:bg-[#191970]/30 active:bg-[#191970]/50'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <div className="flex items-start gap-2 flex-1">
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
                           <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
                             isSelected ? 'border-purple-500 bg-purple-500' : 'border-[#555d8a]'
                           }`}>
@@ -138,7 +138,8 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
                             {title.title}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {/* 배지: 모바일에서 줄바꿈 허용 */}
+                        <div className="flex flex-wrap items-center gap-1 flex-shrink-0 justify-end">
                           {title.seoDetails?.format && (
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${formatColor}`}>
                               {title.seoDetails.format}
@@ -183,7 +184,7 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
               <button
                 onClick={onGenerate}
                 disabled={!selectedTitle || isLoading}
-                className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
+                className="w-full py-4 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 min-h-[52px]"
               >
                 {isLoading ? (
                   <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 본문 + 태그 생성 중...</>

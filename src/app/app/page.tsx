@@ -238,10 +238,10 @@ export default function AppPage() {
       )}
 
       {/* 헤더 */}
-      <header className="sticky top-0 z-40 border-b border-[#2a2b6e] bg-[#0b0d2b]/90 backdrop-blur-md">
-        <div className="max-w-screen-2xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 border-b border-[#2a2b6e] bg-[#0b0d2b]/95 backdrop-blur-md">
+        <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 h-13 sm:h-14 flex items-center justify-between gap-2 sm:gap-4" style={{ minHeight: '52px' }}>
           {/* 로고 + 회사명 */}
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-8 h-8 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center shadow-lg shadow-[#4f6ef7]/10">
               <span className="text-base">🏥</span>
             </div>
@@ -251,48 +251,55 @@ export default function AppPage() {
             </div>
           </div>
 
-          {/* 단계 표시 */}
-          {viewStep === 'input' && (
-            <div className="hidden md:flex items-center gap-2 text-xs">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#4f6ef7]/10 text-[#4f6ef7] border border-[#4f6ef7]/20 font-semibold">
-                <span className="w-1.5 h-1.5 bg-[#4f6ef7] rounded-full animate-pulse" />
-                Step 1 · 키워드 → 제목 선택
-              </div>
-              <span className="text-[#555d8a]">→</span>
-              <div className="px-2.5 py-1 rounded-full bg-[#2a2b6e]/40 text-[#555d8a] border border-[#2a2b6e] font-semibold">
-                Step 2 · 본문 · 이미지
-              </div>
-            </div>
-          )}
-
-          {viewStep === 'content' && selectedTitle && (
-            <div className="hidden md:flex items-center gap-2 text-xs flex-1 min-w-0">
-              <button
-                onClick={() => setViewStep('input')}
-                className="flex items-center gap-1 text-[#8891bd] hover:text-white transition-colors flex-shrink-0"
-              >
-                ← 뒤로
-              </button>
-              <span className="text-[#555d8a]">·</span>
-              <span className="text-[#c5caf0] truncate text-xs">{selectedTitle.title}</span>
-              <span className="flex-shrink-0 px-2 py-0.5 rounded-full bg-[#191970] text-[10px] text-[#8891bd] border border-[#2a2b6e]">
-                {STYLE_LABEL[writingStyle]}
-              </span>
-            </div>
-          )}
+          {/* 단계 표시 — 모바일: 간략, 데스크탑: 상세 */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-center">
+            {viewStep === 'input' ? (
+              <>
+                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#4f6ef7]/10 text-[#4f6ef7] border border-[#4f6ef7]/20 text-[10px] sm:text-xs font-semibold">
+                  <span className="w-1.5 h-1.5 bg-[#4f6ef7] rounded-full animate-pulse flex-shrink-0" />
+                  <span className="sm:hidden">Step 1</span>
+                  <span className="hidden sm:inline">Step 1 · 키워드 → 제목 선택</span>
+                </div>
+                <span className="text-[#555d8a] text-xs hidden sm:block">→</span>
+                <div className="hidden sm:block px-2.5 py-1 rounded-full bg-[#2a2b6e]/40 text-[#555d8a] border border-[#2a2b6e] text-xs font-semibold">
+                  Step 2 · 본문 · 이미지
+                </div>
+              </>
+            ) : selectedTitle ? (
+              <>
+                <button
+                  onClick={() => setViewStep('input')}
+                  className="flex items-center gap-1 text-[#8891bd] hover:text-white active:text-white transition-colors flex-shrink-0 text-xs min-h-[36px] px-1"
+                >
+                  ← 뒤로
+                </button>
+                <span className="text-[#555d8a] text-xs">·</span>
+                <span className="text-[#c5caf0] truncate text-[10px] sm:text-xs">{selectedTitle.title}</span>
+                <span className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-[#191970] text-[9px] text-[#8891bd] border border-[#2a2b6e] hidden sm:block">
+                  {STYLE_LABEL[writingStyle]}
+                </span>
+              </>
+            ) : null}
+          </div>
 
           {/* 인증 */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             {authChecked && (
               user ? (
                 <>
-                  <span className="text-xs text-[#8891bd] hidden lg:block">{user.email}</span>
-                  <button onClick={handleLogout} className="px-3 py-1.5 text-xs border border-[#2a2b6e] rounded-lg text-[#8891bd] hover:bg-[#191970] hover:text-white transition-colors">
+                  <span className="text-xs text-[#8891bd] hidden lg:block max-w-[120px] truncate">{user.email}</span>
+                  <button
+                    onClick={handleLogout}
+                    className="px-2.5 sm:px-3 py-1.5 text-xs border border-[#2a2b6e] rounded-lg text-[#8891bd] hover:bg-[#191970] hover:text-white active:bg-[#191970] transition-colors min-h-[36px]"
+                  >
                     로그아웃
                   </button>
                 </>
               ) : (
-                <button onClick={() => setShowAuthModal(true)} className="px-3 py-1.5 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-xs font-bold rounded-lg transition-colors">
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="px-2.5 sm:px-3 py-1.5 bg-[#4f6ef7] hover:bg-[#3d5ef0] active:bg-[#2d4ee0] text-white text-xs font-bold rounded-lg transition-colors min-h-[36px]"
+                >
                   로그인
                 </button>
               )
@@ -316,17 +323,17 @@ export default function AppPage() {
       )}
 
       {/* 본문 */}
-      <main className="max-w-screen-2xl mx-auto px-4 py-6">
+      <main className="max-w-screen-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <div className="flex">
           <AdBanner side="left" />
 
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 overflow-hidden">
 
             {/* ── STEP 1: 키워드 입력 + 제목 선택 ── */}
             {viewStep === 'input' && (
               <>
                 {loadingContent && (
-                  <div className="flex items-center justify-center py-24">
+                  <div className="flex items-center justify-center py-16 sm:py-24">
                     <div className="text-center">
                       <div className="w-12 h-12 border-4 border-[#4f6ef7] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                       <p className="text-white font-semibold">본문 + 태그 생성 중...</p>
@@ -336,13 +343,13 @@ export default function AppPage() {
                 )}
 
                 {!loadingContent && (
-                  <div className={`grid gap-5 transition-all ${titles.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-md mx-auto'}`}>
+                  <div className={`grid gap-4 sm:gap-5 ${titles.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-full sm:max-w-md mx-auto'}`}>
                     {/* 왼쪽: 키워드 입력 */}
                     <div className="space-y-4">
                       <KeywordInput onSubmit={handleKeywordSubmit} isLoading={loadingTitles} />
                     </div>
 
-                    {/* 오른쪽: 검색 트렌드 + 제목 선택 (titles 생성 후 나타남) */}
+                    {/* 오른쪽: 검색 트렌드 + 제목 선택 */}
                     {titles.length > 0 && (
                       <div className="space-y-4">
                         {keyword && <KeywordTrend mainKeyword={keyword} />}
@@ -360,15 +367,15 @@ export default function AppPage() {
 
                 {/* 빈 상태 */}
                 {titles.length === 0 && !loadingTitles && !loadingContent && (
-                  <div className="mt-12 text-center max-w-md mx-auto">
-                    <div className="text-5xl mb-4">✍️</div>
+                  <div className="mt-8 sm:mt-12 text-center px-4">
+                    <div className="text-4xl sm:text-5xl mb-3">✍️</div>
                     <p className="text-base font-semibold text-white mb-1">키워드를 입력하여 시작하세요</p>
-                    <p className="text-xs text-[#8891bd] mb-6">
+                    <p className="text-xs text-[#8891bd] mb-5">
                       네이버 C-Rank · D.I.A+ 알고리즘 기반 SEO 최적화 블로그 자동 생성
                     </p>
                     <div className="flex flex-wrap justify-center gap-2">
                       {['레이저 토닝', '보톡스 시술', '도수치료', '허리디스크', '임플란트', '라식 수술'].map((kw) => (
-                        <span key={kw} className="bg-[#191970]/50 text-[#8891bd] text-xs px-3 py-1.5 rounded-full border border-[#2a2b6e] hover:border-[#4f6ef7]/40 hover:text-white transition-colors cursor-default">
+                        <span key={kw} className="bg-[#191970]/50 text-[#8891bd] text-xs px-3 py-1.5 rounded-full border border-[#2a2b6e]">
                           {kw}
                         </span>
                       ))}
@@ -381,22 +388,8 @@ export default function AppPage() {
             {/* ── STEP 2: 본문 + 이미지 ── */}
             {viewStep === 'content' && (
               <>
-                {/* 뒤로 가기 (모바일) */}
-                <div className="flex items-center gap-3 mb-5 md:hidden">
-                  <button
-                    onClick={() => setViewStep('input')}
-                    className="flex items-center gap-1.5 text-sm text-[#8891bd] hover:text-white transition-colors"
-                  >
-                    ← 뒤로
-                  </button>
-                  <span className="text-[#555d8a] text-xs">·</span>
-                  <span className="text-xs text-[#4f6ef7] bg-[#191970]/50 px-2 py-0.5 rounded-full border border-[#2a2b6e]">
-                    {STYLE_LABEL[writingStyle]}
-                  </span>
-                </div>
-
                 {loadingContent && (
-                  <div className="flex items-center justify-center py-24">
+                  <div className="flex items-center justify-center py-16 sm:py-24">
                     <div className="text-center">
                       <div className="w-12 h-12 border-4 border-[#4f6ef7] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                       <p className="text-white font-semibold">본문 + 태그 생성 중...</p>
@@ -405,7 +398,7 @@ export default function AppPage() {
                 )}
 
                 {content && !loadingContent && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
                     {/* 왼쪽: 본문 + SEO + 독창성 */}
                     <div className="space-y-5">
                       <ContentPreview

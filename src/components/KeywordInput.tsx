@@ -15,24 +15,9 @@ const HOSPITAL_TYPES = [
 ];
 
 const WRITING_STYLES: { value: WritingStyle; label: string; desc: string; icon: string }[] = [
-  {
-    value: '전문가',
-    label: '전문가시점',
-    desc: '의학적 전문성 강조',
-    icon: '🩺',
-  },
-  {
-    value: '고객이해',
-    label: '고객이해시점',
-    desc: '전문용어 없이 쉽게',
-    icon: '👥',
-  },
-  {
-    value: '사무장',
-    label: '사무장시점',
-    desc: '서비스·절차 중심',
-    icon: '🏥',
-  },
+  { value: '전문가',  label: '전문가시점',  desc: '의학 전문성 강조', icon: '🩺' },
+  { value: '고객이해', label: '고객이해시점', desc: '전문용어 없이',    icon: '👥' },
+  { value: '사무장',  label: '사무장시점',  desc: '서비스·절차 중심', icon: '🏥' },
 ];
 
 export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps) {
@@ -48,9 +33,9 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
   };
 
   return (
-    <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-6 shadow-xl">
+    <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-4 sm:p-6 shadow-xl">
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-9 h-9 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center">
+        <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center">
           <span className="text-[#4f6ef7] font-bold text-sm">1</span>
         </div>
         <div>
@@ -69,8 +54,9 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="예: 레이저 토닝, 보톡스, 도수치료"
-            className="w-full px-4 py-2.5 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white placeholder-[#555d8a] text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
+            className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white placeholder-[#555d8a] text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
             disabled={isLoading}
+            autoComplete="off"
           />
         </div>
 
@@ -79,7 +65,7 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
           <select
             value={hospitalType}
             onChange={(e) => setHospitalType(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
+            className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
             disabled={isLoading}
           >
             {HOSPITAL_TYPES.map((type) => (
@@ -97,12 +83,12 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
             onChange={(e) => setAdditionalInfo(e.target.value)}
             placeholder="강조할 내용, 타겟 환자군, 주요 서비스 등"
             rows={2}
-            className="w-full px-4 py-2.5 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white placeholder-[#555d8a] text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors resize-none"
+            className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white placeholder-[#555d8a] text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors resize-none"
             disabled={isLoading}
           />
         </div>
 
-        {/* 글쓰기 말투 선택 */}
+        {/* 글쓰기 말투 */}
         <div>
           <label className="block text-xs font-semibold text-[#8891bd] mb-2">글쓰기 말투</label>
           <div className="grid grid-cols-3 gap-2">
@@ -112,15 +98,15 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
                 type="button"
                 onClick={() => setWritingStyle(style.value)}
                 disabled={isLoading}
-                className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-center ${
+                className={`flex flex-col items-center gap-1 py-3 px-1 rounded-xl border-2 transition-all text-center min-h-[72px] ${
                   writingStyle === style.value
                     ? 'border-[#4f6ef7] bg-[#4f6ef7]/10 text-white'
-                    : 'border-[#2a2b6e] bg-[#0b0d2b] text-[#8891bd] hover:border-[#4f6ef7]/40'
+                    : 'border-[#2a2b6e] bg-[#0b0d2b] text-[#8891bd] hover:border-[#4f6ef7]/40 active:bg-[#191970]/30'
                 }`}
               >
-                <span className="text-lg">{style.icon}</span>
+                <span className="text-xl leading-none">{style.icon}</span>
                 <span className="text-[11px] font-bold leading-tight">{style.label}</span>
-                <span className="text-[9px] opacity-70 leading-tight">{style.desc}</span>
+                <span className="text-[9px] opacity-70 leading-tight hidden sm:block">{style.desc}</span>
               </button>
             ))}
           </div>
@@ -128,7 +114,7 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
 
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
           <div className="flex items-start gap-2">
-            <span className="text-amber-400 text-sm">⚠️</span>
+            <span className="text-amber-400 text-sm flex-shrink-0">⚠️</span>
             <p className="text-[10px] text-amber-300/80 leading-relaxed">
               의료법 제56조 금지어 필터링 자동 적용 (완치, 최고, 100% 등 금지)
             </p>
@@ -138,11 +124,11 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
         <button
           type="submit"
           disabled={!keyword.trim() || isLoading}
-          className="w-full py-3 bg-[#4f6ef7] hover:bg-[#3d5ef0] disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#4f6ef7]/20"
+          className="w-full py-4 bg-[#4f6ef7] hover:bg-[#3d5ef0] active:bg-[#2d4ee0] disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#4f6ef7]/20 min-h-[52px]"
         >
           {isLoading ? (
             <>
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <svg className="animate-spin h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
