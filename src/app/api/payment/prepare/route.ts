@@ -9,7 +9,6 @@ import type { PlanId } from '@/lib/payment/plans'
 const CHANNEL_KEYS: Record<string, string | undefined> = {
   CARD:     process.env.PORTONE_CHANNEL_KEY_GALAXIA,
   KAKAOPAY: process.env.PORTONE_CHANNEL_KEY_KAKAOPAY,
-  PAYCO:    process.env.PORTONE_CHANNEL_KEY_PAYCO,
 }
 
 export async function POST(req: NextRequest) {

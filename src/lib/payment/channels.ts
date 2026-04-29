@@ -1,4 +1,4 @@
-export type PaymentMethodType = 'CARD' | 'KAKAOPAY' | 'PAYCO'
+export type PaymentMethodType = 'CARD' | 'KAKAOPAY'
 
 export interface PaymentMethodConfig {
   type: PaymentMethodType
@@ -24,14 +24,6 @@ export const PAYMENT_METHODS: PaymentMethodConfig[] = [
     payMethod: 'EASY_PAY',
     easyPayProvider: 'KAKAOPAY',
     icon: '💛',
-  },
-  {
-    type: 'PAYCO',
-    label: '페이코',
-    channelKeyEnv: 'PORTONE_CHANNEL_KEY_PAYCO',
-    payMethod: 'EASY_PAY',
-    easyPayProvider: 'PAYCO',
-    icon: '🅿️',
   },
 ]
 

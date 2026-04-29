@@ -9,7 +9,6 @@ import { trackEvent } from '@/lib/meta-pixel'
 const PAY_METHODS: Record<PaymentMethodType, string> = {
   CARD: 'CARD',
   KAKAOPAY: 'EASY_PAY',
-  PAYCO: 'EASY_PAY',
 }
 
 interface Props {
@@ -73,7 +72,7 @@ export default function CheckoutButton({
         locale: 'KO_KR',
       }
 
-      if (payMethod === 'EASY_PAY' && paymentMethod !== 'PAYCO') {
+      if (payMethod === 'EASY_PAY') {
         paymentParams.easyPay = { easyPayProvider: 'KAKAOPAY' }
       }
 

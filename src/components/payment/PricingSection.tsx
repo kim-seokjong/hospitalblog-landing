@@ -10,11 +10,10 @@ type BillingMode = 'single' | 'recurring'
 const PAYMENT_METHODS: { type: PaymentMethodType; label: string; icon: string }[] = [
   { type: 'CARD',     label: '신용/체크카드', icon: '💳' },
   { type: 'KAKAOPAY', label: '카카오페이',    icon: '💛' },
-  { type: 'PAYCO',    label: '페이코',        icon: '🅿️' },
 ]
 
 export default function PricingSection() {
-  const [mode, setMode] = useState<BillingMode>('single')
+  const [mode, setMode] = useState<BillingMode>('recurring')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('CARD')
   const plans = [PLANS.basic, PLANS.standard, PLANS.pro]
 
@@ -28,15 +27,6 @@ export default function PricingSection() {
         <div className="flex justify-center mb-4">
           <div className="flex bg-gray-800 rounded-xl p-1 gap-1">
             <button
-              onClick={() => setMode('single')}
-              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all
-                ${mode === 'single'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-gray-400 hover:text-white'}`}
-            >
-              이번 달만 결제
-            </button>
-            <button
               onClick={() => setMode('recurring')}
               className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all
                 ${mode === 'recurring'
@@ -44,6 +34,15 @@ export default function PricingSection() {
                   : 'text-gray-400 hover:text-white'}`}
             >
               자동 갱신 구독
+            </button>
+            <button
+              onClick={() => setMode('single')}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all
+                ${mode === 'single'
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-gray-400 hover:text-white'}`}
+            >
+              이번 달만 결제
             </button>
           </div>
         </div>
@@ -81,7 +80,6 @@ export default function PricingSection() {
           <p className="text-center text-gray-500 text-xs mb-6 -mt-6">
             {paymentMethod === 'CARD' && '갤럭시아머니트리 · 인증 단건결제'}
             {paymentMethod === 'KAKAOPAY' && '카카오페이 · 간편결제'}
-            {paymentMethod === 'PAYCO' && '페이코 · 간편결제'}
           </p>
         )}
 
