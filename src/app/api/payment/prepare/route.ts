@@ -7,9 +7,9 @@ import { createPendingPayment } from '@/lib/payment/repository'
 import type { PlanId } from '@/lib/payment/plans'
 
 const CHANNEL_KEYS: Record<string, string | undefined> = {
-  CARD:     process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_GALAXIA,
-  MOBILE:   process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_DANAL,
-  KAKAOPAY: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_KAKAOPAY,
+  CARD:     process.env.PORTONE_CHANNEL_KEY_GALAXIA,
+  MOBILE:   process.env.PORTONE_CHANNEL_KEY_DANAL,
+  KAKAOPAY: process.env.PORTONE_CHANNEL_KEY_KAKAOPAY,
 }
 
 export async function POST(req: NextRequest) {
