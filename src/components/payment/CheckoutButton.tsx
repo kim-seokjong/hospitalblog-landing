@@ -8,8 +8,8 @@ import { trackEvent } from '@/lib/meta-pixel'
 
 const PAY_METHODS: Record<PaymentMethodType, string> = {
   CARD: 'CARD',
-  MOBILE: 'MOBILE',
   KAKAOPAY: 'EASY_PAY',
+  PAYCO: 'EASY_PAY',
 }
 
 interface Props {
@@ -74,7 +74,8 @@ export default function CheckoutButton({
       }
 
       if (payMethod === 'EASY_PAY') {
-        paymentParams.easyPay = { easyPayProvider: 'KAKAOPAY' }
+        const provider = paymentMethod === 'PAYCO' ? 'PAYCO' : 'KAKAOPAY'
+        paymentParams.easyPay = { easyPayProvider: provider }
       }
 
       const result = await window.PortOne.requestPayment(paymentParams)

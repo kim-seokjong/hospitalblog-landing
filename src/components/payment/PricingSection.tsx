@@ -9,8 +9,8 @@ type BillingMode = 'single' | 'recurring'
 
 const PAYMENT_METHODS: { type: PaymentMethodType; label: string; icon: string }[] = [
   { type: 'CARD',     label: '신용/체크카드', icon: '💳' },
-  { type: 'MOBILE',   label: '휴대폰 결제',   icon: '📱' },
   { type: 'KAKAOPAY', label: '카카오페이',    icon: '💛' },
+  { type: 'PAYCO',    label: '페이코',        icon: '🅿️' },
 ]
 
 export default function PricingSection() {
@@ -80,8 +80,8 @@ export default function PricingSection() {
         {mode === 'single' && (
           <p className="text-center text-gray-500 text-xs mb-6 -mt-6">
             {paymentMethod === 'CARD' && '갤럭시아머니트리 · 인증 단건결제'}
-            {paymentMethod === 'MOBILE' && '다날 · 휴대폰 소액결제'}
             {paymentMethod === 'KAKAOPAY' && '카카오페이 · 간편결제'}
+            {paymentMethod === 'PAYCO' && '페이코 · 간편결제'}
           </p>
         )}
 

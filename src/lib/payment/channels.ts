@@ -1,4 +1,4 @@
-export type PaymentMethodType = 'CARD' | 'MOBILE' | 'KAKAOPAY'
+export type PaymentMethodType = 'CARD' | 'KAKAOPAY' | 'PAYCO'
 
 export interface PaymentMethodConfig {
   type: PaymentMethodType
@@ -18,19 +18,20 @@ export const PAYMENT_METHODS: PaymentMethodConfig[] = [
     icon: '💳',
   },
   {
-    type: 'MOBILE',
-    label: '휴대폰 결제',
-    channelKeyEnv: 'PORTONE_CHANNEL_KEY_MOBILIANS',
-    payMethod: 'MOBILE',
-    icon: '📱',
-  },
-  {
     type: 'KAKAOPAY',
     label: '카카오페이',
     channelKeyEnv: 'NEXT_PUBLIC_PORTONE_CHANNEL_KEY_KAKAOPAY',
     payMethod: 'EASY_PAY',
     easyPayProvider: 'KAKAOPAY',
     icon: '💛',
+  },
+  {
+    type: 'PAYCO',
+    label: '페이코',
+    channelKeyEnv: 'PORTONE_CHANNEL_KEY_TOSSPAYMENTS',
+    payMethod: 'EASY_PAY',
+    easyPayProvider: 'PAYCO',
+    icon: '🅿️',
   },
 ]
 
