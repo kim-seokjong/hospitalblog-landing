@@ -52,12 +52,14 @@ export async function POST(req: NextRequest) {
       amount: planInfo.price,
     })
 
+    const customerId = user.id.replace(/-/g, '').slice(0, 20)
+
     return NextResponse.json({
       paymentId,
       amount: planInfo.price,
       orderName: `hospitalblog.kr ${planInfo.name} 플랜 1개월`,
       channelKey,
-      customer: { email: user.email ?? '' },
+      customer: { customerId, email: user.email ?? '' },
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '서버 오류'

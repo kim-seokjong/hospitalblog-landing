@@ -69,7 +69,7 @@ export default function CheckoutButton({
         totalAmount: amount,
         currency: 'KRW',
         payMethod,
-        customer: { email: customer.email },
+        customer: { customerId: customer.customerId, email: customer.email },
         locale: 'KO_KR',
       }
 

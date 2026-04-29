@@ -58,7 +58,7 @@ export default function BillingButton({
         totalAmount: amount,
         currency: 'KRW',
         payMethod: 'CARD',
-        customer: { email: customer.email },
+        customer: { customerId: customer.customerId, email: customer.email },
         locale: 'KO_KR',
       })
 
