@@ -8,7 +8,7 @@ import type { PlanId } from '@/lib/payment/plans'
 
 const CHANNEL_KEYS: Record<string, string | undefined> = {
   CARD:     process.env.PORTONE_CHANNEL_KEY_GALAXIA,
-  MOBILE:   process.env.PORTONE_CHANNEL_KEY_DANAL,
+  MOBILE:   process.env.PORTONE_CHANNEL_KEY_MOBILIANS,
   KAKAOPAY: process.env.PORTONE_CHANNEL_KEY_KAKAOPAY,
 }
 
