@@ -28,7 +28,7 @@ export const PAYMENT_METHODS: PaymentMethodConfig[] = [
   {
     type: 'PAYCO',
     label: '페이코',
-    channelKeyEnv: 'PORTONE_CHANNEL_KEY_TOSSPAYMENTS',
+    channelKeyEnv: 'PORTONE_CHANNEL_KEY_PAYCO',
     payMethod: 'EASY_PAY',
     easyPayProvider: 'PAYCO',
     icon: '🅿️',
