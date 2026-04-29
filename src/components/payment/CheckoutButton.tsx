@@ -6,12 +6,6 @@ import type { PlanId } from '@/lib/payment/plans'
 import type { PaymentMethodType } from '@/lib/payment/channels'
 import { trackEvent } from '@/lib/meta-pixel'
 
-const CHANNEL_KEYS: Record<PaymentMethodType, string> = {
-  CARD: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_GALAXIA ?? '',
-  MOBILE: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_DANAL ?? '',
-  KAKAOPAY: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_KAKAOPAY ?? '',
-}
-
 const PAY_METHODS: Record<PaymentMethodType, string> = {
   CARD: 'CARD',
   MOBILE: 'MOBILE',
@@ -39,22 +33,21 @@ export default function CheckoutButton({
     setLoading(true)
     setError(null)
     try {
-      const channelKey = CHANNEL_KEYS[paymentMethod]
       const payMethod = PAY_METHODS[paymentMethod]
 
-      if (!channelKey) throw new Error('결제 채널 설정 오류. 잠시 후 다시 시도해주세요.')
-
-      // 1. 서버에서 paymentId + 금액 발급
+      // 1. 서버에서 paymentId + 금액 + channelKey 발급
       const prepRes = await fetch('/api/payment/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan, paymentMethod }),
       })
       if (!prepRes.ok) {
         const { error: msg } = await prepRes.json()
         throw new Error(msg ?? '결제 준비 실패')
       }
-      const { paymentId, amount, orderName, customer } = await prepRes.json()
+      const { paymentId, amount, orderName, customer, channelKey } = await prepRes.json()
+
+      if (!channelKey) throw new Error('결제 채널 설정 오류. 잠시 후 다시 시도해주세요.')
 
       if (!window.PortOne) throw new Error('결제 모듈이 로드되지 않았습니다. 잠시 후 다시 시도해주세요.')
 

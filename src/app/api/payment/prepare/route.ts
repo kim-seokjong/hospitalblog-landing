@@ -6,6 +6,12 @@ import { PLANS, PAID_PLAN_IDS } from '@/lib/payment/plans'
 import { createPendingPayment } from '@/lib/payment/repository'
 import type { PlanId } from '@/lib/payment/plans'
 
+const CHANNEL_KEYS: Record<string, string | undefined> = {
+  CARD:     process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_GALAXIA,
+  MOBILE:   process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_DANAL,
+  KAKAOPAY: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_KAKAOPAY,
+}
+
 export async function POST(req: NextRequest) {
   try {
     const cookieStore = cookies()
@@ -22,9 +28,18 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const plan = body.plan as PlanId
+    const paymentMethod: string = body.paymentMethod ?? 'CARD'
 
     if (!PAID_PLAN_IDS.includes(plan)) {
       return NextResponse.json({ error: '유효하지 않은 플랜입니다' }, { status: 400 })
+    }
+
+    const channelKey = CHANNEL_KEYS[paymentMethod]
+    if (!channelKey) {
+      return NextResponse.json(
+        { error: `결제 채널키 미설정: ${paymentMethod}` },
+        { status: 500 },
+      )
     }
 
     const planInfo = PLANS[plan]
@@ -36,9 +51,6 @@ export async function POST(req: NextRequest) {
       plan,
       amount: planInfo.price,
     })
-
-    const channelKey = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY
-    if (!channelKey) throw new Error('NEXT_PUBLIC_PORTONE_CHANNEL_KEY 미설정')
 
     return NextResponse.json({
       paymentId,
