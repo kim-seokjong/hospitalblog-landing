@@ -21,7 +21,7 @@ export const PAYMENT_METHODS: PaymentMethodConfig[] = [
     type: 'MOBILE',
     label: '휴대폰 결제',
     channelKeyEnv: 'NEXT_PUBLIC_PORTONE_CHANNEL_KEY_DANAL',
-    payMethod: 'MOBILE',
+    payMethod: 'MOBILE_PHONE',
     icon: '📱',
   },
   {

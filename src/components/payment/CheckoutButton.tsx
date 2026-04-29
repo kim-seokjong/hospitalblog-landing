@@ -8,7 +8,7 @@ import { trackEvent } from '@/lib/meta-pixel'
 
 const PAY_METHODS: Record<PaymentMethodType, string> = {
   CARD: 'CARD',
-  MOBILE: 'MOBILE',
+  MOBILE: 'MOBILE_PHONE',
   KAKAOPAY: 'EASY_PAY',
 }
 
