@@ -6,12 +6,21 @@ import type { PlanId } from '@/lib/payment/plans'
 import type { PaymentMethodType } from '@/lib/payment/channels'
 import { trackEvent } from '@/lib/meta-pixel'
 
+const CHANNEL_KEYS: Record<PaymentMethodType, string> = {
+  CARD: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_GALAXIA ?? '',
+  MOBILE: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_DANAL ?? '',
+  KAKAOPAY: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_KAKAOPAY ?? '',
+}
+
+const PAY_METHODS: Record<PaymentMethodType, string> = {
+  CARD: 'CARD',
+  MOBILE: 'MOBILE',
+  KAKAOPAY: 'EASY_PAY',
+}
+
 interface Props {
   plan: PlanId
   paymentMethod: PaymentMethodType
-  channelKey: string
-  payMethod: string
-  easyPayProvider?: string
   label?: string
   className?: string
 }
@@ -19,9 +28,6 @@ interface Props {
 export default function CheckoutButton({
   plan,
   paymentMethod,
-  channelKey,
-  payMethod,
-  easyPayProvider,
   label = '구독 시작하기',
   className = '',
 }: Props) {
@@ -33,6 +39,11 @@ export default function CheckoutButton({
     setLoading(true)
     setError(null)
     try {
+      const channelKey = CHANNEL_KEYS[paymentMethod]
+      const payMethod = PAY_METHODS[paymentMethod]
+
+      if (!channelKey) throw new Error('결제 채널 설정 오류. 잠시 후 다시 시도해주세요.')
+
       // 1. 서버에서 paymentId + 금액 발급
       const prepRes = await fetch('/api/payment/prepare', {
         method: 'POST',
@@ -69,8 +80,8 @@ export default function CheckoutButton({
         locale: 'KO_KR',
       }
 
-      if (payMethod === 'EASY_PAY' && easyPayProvider) {
-        paymentParams.easyPay = { easyPayProvider }
+      if (payMethod === 'EASY_PAY') {
+        paymentParams.easyPay = { easyPayProvider: 'KAKAOPAY' }
       }
 
       const result = await window.PortOne.requestPayment(paymentParams)

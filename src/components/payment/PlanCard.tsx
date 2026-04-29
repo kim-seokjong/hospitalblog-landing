@@ -3,18 +3,6 @@ import type { PaymentMethodType } from '@/lib/payment/channels'
 import CheckoutButton from './CheckoutButton'
 import BillingButton from './BillingButton'
 
-const CHANNEL_KEYS: Record<PaymentMethodType, string> = {
-  CARD: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_GALAXIA ?? '',
-  MOBILE: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_DANAL ?? '',
-  KAKAOPAY: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_KAKAOPAY ?? '',
-}
-
-const PAY_METHODS: Record<PaymentMethodType, string> = {
-  CARD: 'CARD',
-  MOBILE: 'MOBILE',
-  KAKAOPAY: 'EASY_PAY',
-}
-
 interface Props {
   plan: Plan
   currentPlan?: string
@@ -78,9 +66,6 @@ export default function PlanCard({
         <CheckoutButton
           plan={plan.id}
           paymentMethod={paymentMethod}
-          channelKey={CHANNEL_KEYS[paymentMethod]}
-          payMethod={PAY_METHODS[paymentMethod]}
-          easyPayProvider={paymentMethod === 'KAKAOPAY' ? 'KAKAOPAY' : undefined}
           label="구독 시작하기"
           className={recommended
             ? 'bg-blue-500 text-white'
