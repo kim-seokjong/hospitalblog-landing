@@ -1,5 +1,28 @@
 import type { PlanId } from './plans'
 
+export type BillingKeyStatus = 'ACTIVE' | 'CANCELLED'
+
+export interface BillingKey {
+  id: string
+  user_id: string
+  billing_key: string
+  plan: PlanId
+  card_name: string | null
+  card_last4: string | null
+  status: BillingKeyStatus
+  next_billing_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BillingConfirmResponse {
+  success: boolean
+  plan: PlanId
+  expiresAt: string
+  billingKey: string
+  receiptUrl: string | null
+}
+
 export type PaymentStatus =
   | 'PENDING'
   | 'PAID'

@@ -17,6 +17,7 @@ export default function LandingPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
+        setAuthChecked(true);
         router.push('/app');
         return;
       }

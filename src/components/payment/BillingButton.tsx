@@ -3,37 +3,28 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { PlanId } from '@/lib/payment/plans'
-import type { PaymentMethodType } from '@/lib/payment/channels'
 import { trackEvent } from '@/lib/meta-pixel'
 
 interface Props {
   plan: PlanId
-  paymentMethod: PaymentMethodType
-  channelKey: string
-  payMethod: string
-  easyPayProvider?: string
   label?: string
   className?: string
 }
 
-export default function CheckoutButton({
+export default function BillingButton({
   plan,
-  paymentMethod,
-  channelKey,
-  payMethod,
-  easyPayProvider,
-  label = '구독 시작하기',
+  label = '자동 갱신 구독하기',
   className = '',
 }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  async function handleCheckout() {
+  async function handleBilling() {
     setLoading(true)
     setError(null)
     try {
-      // 1. 서버에서 paymentId + 금액 발급
+      // 1. 서버에서 paymentId + 금액 발급 (단건결제 prepare 재사용)
       const prepRes = await fetch('/api/payment/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -43,45 +34,42 @@ export default function CheckoutButton({
         const { error: msg } = await prepRes.json()
         throw new Error(msg ?? '결제 준비 실패')
       }
-      const { paymentId, amount, orderName, customer } = await prepRes.json()
+      const { paymentId, amount, orderName, channelKey, customer } = await prepRes.json()
 
-      if (!window.PortOne) throw new Error('결제 모듈이 로드되지 않았습니다. 잠시 후 다시 시도해주세요.')
+      if (!window.PortOne?.requestBillingKeyAndPay) {
+        throw new Error('결제 모듈이 로드되지 않았습니다. 잠시 후 다시 시도해주세요.')
+      }
 
       const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID
       if (!storeId) throw new Error('결제 설정 오류')
 
       trackEvent('InitiateCheckout', {
-        content_name: label || '구독',
-        content_category: 'subscription',
+        content_name: '정기구독',
+        content_category: 'subscription_recurring',
         currency: 'KRW',
       })
 
-      // 2. 결제창 호출 (결제 수단별 파라미터)
-      const paymentParams: Record<string, unknown> = {
+      // 2. 빌링키 발급 + 첫 결제 (포트원 SDK)
+      const result = await window.PortOne.requestBillingKeyAndPay({
         storeId,
         channelKey,
-        paymentId,
+        billingKeyAndPayId: paymentId,
         orderName,
         totalAmount: amount,
         currency: 'KRW',
-        payMethod,
+        payMethod: 'CARD',
         customer: { email: customer.email },
         locale: 'KO_KR',
-      }
-
-      if (payMethod === 'EASY_PAY' && easyPayProvider) {
-        paymentParams.easyPay = { easyPayProvider }
-      }
-
-      const result = await window.PortOne.requestPayment(paymentParams)
+      })
 
       if (result.code) throw new Error(result.message ?? '결제가 취소되었습니다')
+      if (!result.billingKey) throw new Error('빌링키 발급에 실패했습니다')
 
-      // 3. 서버 검증
-      const confirmRes = await fetch('/api/payment/confirm', {
+      // 3. 서버 검증 + 빌링키 저장 + 플랜 활성화
+      const confirmRes = await fetch('/api/payment/billing/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId }),
+        body: JSON.stringify({ paymentId, billingKey: result.billingKey }),
       })
       if (!confirmRes.ok) {
         const { error: msg } = await confirmRes.json()
@@ -99,7 +87,7 @@ export default function CheckoutButton({
   return (
     <div>
       <button
-        onClick={handleCheckout}
+        onClick={handleBilling}
         disabled={loading}
         className={`w-full py-3 px-6 rounded-lg font-semibold transition-all
           ${loading ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90 active:scale-95'}

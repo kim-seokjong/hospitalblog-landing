@@ -95,10 +95,11 @@ export default function NaverPublisher({ title, content, tags, images }: NaverPu
   };
 
   const handleDownloadAll = async () => {
+    const snapshot = [...images];
     setDownloadingAll(true);
-    for (let i = 0; i < images.length; i++) {
-      await handleDownloadOne(images[i], i);
-      if (i < images.length - 1) await new Promise((r) => setTimeout(r, 400));
+    for (let i = 0; i < snapshot.length; i++) {
+      await handleDownloadOne(snapshot[i], i);
+      if (i < snapshot.length - 1) await new Promise((r) => setTimeout(r, 400));
     }
     setDownloadingAll(false);
   };

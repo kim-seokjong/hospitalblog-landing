@@ -161,8 +161,11 @@ export default function AppPage() {
         body: JSON.stringify({ keyword, title: selectedTitle.title, hospitalType }),
       });
       const data = await res.json();
-      if (res.ok) setTags(data);
-    } catch { /* silent */ } finally {
+      if (!res.ok) throw new Error(data.error || '태그 생성에 실패했습니다.');
+      setTags(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '태그 생성 오류가 발생했습니다.');
+    } finally {
       setLoadingTags(false);
     }
   };

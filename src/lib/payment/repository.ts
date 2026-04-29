@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Payment, PaymentStatus, Profile } from './types'
+import type { Payment, PaymentStatus, Profile, BillingKey } from './types'
 import type { PlanId } from './plans'
 
 function getAdmin() {
@@ -119,4 +119,55 @@ export async function getUserPayments(userId: string): Promise<Payment[]> {
     .limit(20)
   if (error) return []
   return data as Payment[]
+}
+
+// ── 빌링키 ──────────────────────────────────────────────
+
+export async function createBillingKey(params: {
+  userId: string
+  billingKey: string
+  plan: PlanId
+  cardName: string | null
+  cardLast4: string | null
+  nextBillingAt: string
+}): Promise<void> {
+  // 기존 활성 빌링키 비활성화
+  await getAdmin()
+    .from('billing_keys')
+    .update({ status: 'CANCELLED', updated_at: new Date().toISOString() })
+    .eq('user_id', params.userId)
+    .eq('status', 'ACTIVE')
+
+  const { error } = await getAdmin()
+    .from('billing_keys')
+    .insert({
+      user_id: params.userId,
+      billing_key: params.billingKey,
+      plan: params.plan,
+      card_name: params.cardName,
+      card_last4: params.cardLast4,
+      status: 'ACTIVE',
+      next_billing_at: params.nextBillingAt,
+    })
+  if (error) throw new Error(`빌링키 저장 실패: ${error.message}`)
+}
+
+export async function getActiveBillingKey(userId: string): Promise<BillingKey | null> {
+  const { data, error } = await getAdmin()
+    .from('billing_keys')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+  if (error) return null
+  return data as BillingKey
+}
+
+export async function cancelBillingKeyById(billingKeyId: string): Promise<void> {
+  await getAdmin()
+    .from('billing_keys')
+    .update({ status: 'CANCELLED', updated_at: new Date().toISOString() })
+    .eq('id', billingKeyId)
 }

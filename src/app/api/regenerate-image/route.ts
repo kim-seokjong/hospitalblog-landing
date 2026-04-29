@@ -60,8 +60,15 @@ async function generatePexels(query: string): Promise<string> {
   const apiKey = process.env.PEXELS_API_KEY;
   if (!apiKey) throw new Error('PEXELS_API_KEY가 설정되지 않았습니다.');
 
-  // Pexels도 한국어면 번역
-  const searchQuery = hasKorean(query) ? await translateToFluxPrompt(query) : query;
+  // Pexels도 한국어면 번역, 실패 시 원문 사용
+  let searchQuery = query;
+  if (hasKorean(query)) {
+    try {
+      searchQuery = await translateToFluxPrompt(query);
+    } catch {
+      searchQuery = query;
+    }
+  }
 
   const res = await fetch(
     `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=15&orientation=landscape`,
