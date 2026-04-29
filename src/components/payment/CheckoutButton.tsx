@@ -76,6 +76,9 @@ export default function CheckoutButton({
       if (payMethod === 'EASY_PAY') {
         paymentParams.easyPay = { easyPayProvider: 'KAKAOPAY' }
       }
+      if (payMethod === 'MOBILE') {
+        paymentParams.mobile = { isDigital: true }
+      }
 
       const result = await window.PortOne.requestPayment(paymentParams)
 
