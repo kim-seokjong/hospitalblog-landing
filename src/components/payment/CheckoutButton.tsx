@@ -73,9 +73,8 @@ export default function CheckoutButton({
         locale: 'KO_KR',
       }
 
-      if (payMethod === 'EASY_PAY') {
-        const provider = paymentMethod === 'PAYCO' ? 'PAYCO' : 'KAKAOPAY'
-        paymentParams.easyPay = { easyPayProvider: provider }
+      if (payMethod === 'EASY_PAY' && paymentMethod !== 'PAYCO') {
+        paymentParams.easyPay = { easyPayProvider: 'KAKAOPAY' }
       }
 
       const result = await window.PortOne.requestPayment(paymentParams)
