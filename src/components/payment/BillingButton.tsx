@@ -65,6 +65,7 @@ export default function BillingButton({
         storeId,
         channelKey,
         issueName: orderName,
+        billingKeyMethod: paymentMethod === 'KAKAOPAY' ? 'EASY_PAY' : 'CARD',
         customer: { customerId: customer.customerId, email: customer.email },
         locale: 'KO_KR',
       }
