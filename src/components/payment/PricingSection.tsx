@@ -13,7 +13,7 @@ const PAYMENT_METHODS: { type: PaymentMethodType; label: string; icon: string }[
 ]
 
 export default function PricingSection() {
-  const [mode, setMode] = useState<BillingMode>('recurring')
+  const [mode] = useState<BillingMode>('single')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('CARD')
   const plans = [PLANS.basic, PLANS.standard, PLANS.pro]
 
@@ -23,59 +23,30 @@ export default function PricingSection() {
         <h2 className="text-3xl font-bold text-center text-white mb-2">요금제</h2>
         <p className="text-center text-gray-400 mb-8">병원 규모에 맞는 플랜을 선택하세요</p>
 
-        {/* 결제 방식 탭 (단건 / 정기) */}
+        {/* 결제 수단 탭 */}
         <div className="flex justify-center mb-4">
-          <div className="flex bg-gray-800 rounded-xl p-1 gap-1">
-            <button
-              onClick={() => setMode('recurring')}
-              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all
-                ${mode === 'recurring'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-gray-400 hover:text-white'}`}
-            >
-              자동 갱신 구독
-            </button>
-            <button
-              onClick={() => setMode('single')}
-              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all
-                ${mode === 'single'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-gray-400 hover:text-white'}`}
-            >
-              이번 달만 결제
-            </button>
+          <div className="flex bg-gray-900 border border-gray-700 rounded-xl p-1 gap-1">
+            {PAYMENT_METHODS.map((m) => (
+              <button
+                key={m.type}
+                onClick={() => setPaymentMethod(m.type)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                  ${paymentMethod === m.type
+                    ? 'bg-gray-700 text-white shadow'
+                    : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                <span>{m.icon}</span>
+                <span>{m.label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* 결제 수단 탭 — 이번달만 결제일 때만 표시 */}
-        {mode === 'single' && (
-          <div className="flex justify-center mb-4">
-            <div className="flex bg-gray-900 border border-gray-700 rounded-xl p-1 gap-1">
-              {PAYMENT_METHODS.map((m) => (
-                <button
-                  key={m.type}
-                  onClick={() => setPaymentMethod(m.type)}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all
-                    ${paymentMethod === m.type
-                      ? 'bg-gray-700 text-white shadow'
-                      : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  <span>{m.icon}</span>
-                  <span>{m.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* 설명 문구 */}
         <p className="text-center text-xs mb-8 -mt-1">
-          {mode === 'recurring'
-            ? <span className="text-green-400">💳 신용/체크카드 한 번 등록으로 매월 자동 결제됩니다</span>
-            : <span className="text-gray-500">
-                {paymentMethod === 'CARD' ? '갤럭시아머니트리 · 인증 단건결제' : '카카오페이 · 간편결제'}
-              </span>
-          }
+          <span className="text-gray-500">
+            {paymentMethod === 'CARD' ? '갤럭시아머니트리 · 월 단위 인증결제' : '카카오페이 · 간편결제'}
+          </span>
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -90,9 +61,7 @@ export default function PricingSection() {
         </div>
 
         <p className="text-center text-gray-500 text-sm mt-8">
-          {mode === 'single'
-            ? '월 단위 인증 단건결제이며, 언제든지 해지 가능합니다.'
-            : '자동 갱신 구독이며, 언제든지 해지 가능합니다.'}
+          월 단위 인증결제이며, 언제든지 해지 가능합니다.
         </p>
       </div>
     </section>
