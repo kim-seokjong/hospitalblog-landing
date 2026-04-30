@@ -60,6 +60,7 @@ export default function BillingButton({
       const issueParams: Record<string, unknown> = {
         storeId,
         channelKey,
+        issueId: paymentId,
         issueName: orderName,
         billingKeyMethod: paymentMethod === 'KAKAOPAY' ? 'EASY_PAY' : 'CARD',
         customer: { customerId: customer.customerId, email: customer.email },
