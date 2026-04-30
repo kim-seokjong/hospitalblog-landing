@@ -12,13 +12,22 @@ function getStoreId(): string {
   return id
 }
 
+export interface ChargeResult {
+  status: string
+  transactionId: string
+  pgProvider: string
+  receiptUrl: string | null
+  paidAt: string | null
+  cardName: string | null
+}
+
 export async function chargeWithBillingKey(params: {
   paymentId: string
   billingKey: string
   orderName: string
   amount: number
   customerEmail: string
-}): Promise<{ status: string; receiptUrl?: string; paidAt?: string }> {
+}): Promise<ChargeResult> {
   const res = await fetch(
     `${PORTONE_API_BASE}/payments/${encodeURIComponent(params.paymentId)}/instant`,
     {
@@ -42,7 +51,14 @@ export async function chargeWithBillingKey(params: {
     throw new Error(`포트원 빌링키 결제 실패 [${res.status}]: ${body}`)
   }
   const data = await res.json()
-  return { status: data.status, receiptUrl: data.receiptUrl, paidAt: data.paidAt }
+  return {
+    status: data.status,
+    transactionId: data.transactionId ?? data.pgTxId ?? params.paymentId,
+    pgProvider: data.pgProvider ?? 'UNKNOWN',
+    receiptUrl: data.receiptUrl ?? null,
+    paidAt: data.paidAt ?? null,
+    cardName: data.method?.card?.name ?? null,
+  }
 }
 
 export async function deleteBillingKey(billingKey: string): Promise<void> {

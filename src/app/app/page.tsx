@@ -248,10 +248,7 @@ export default function AppPage() {
             <div className="w-8 h-8 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center shadow-lg shadow-[#4f6ef7]/10">
               <span className="text-base">🏥</span>
             </div>
-            <div className="flex flex-col leading-tight">
-              <span className="text-[10px] text-[#4f6ef7] font-bold tracking-wide">광고진정성</span>
-              <span className="text-sm font-bold text-white">블로그 자동화</span>
-            </div>
+            <span className="font-bold text-white text-lg">닥터포스트</span>
           </div>
 
           {/* 단계 표시 — 모바일: 간략, 데스크탑: 상세 */}
@@ -493,7 +490,7 @@ export default function AppPage() {
           <p className="text-[10px] text-[#555d8a]">
             본 서비스는 의료광고법(의료법 제56조) 준수를 지원합니다. 최종 광고 심의는 의료광고 심의기관을 통해 확인하시기 바랍니다.
           </p>
-          <p className="text-[10px] text-[#555d8a] flex-shrink-0">광고진정성 © 2026 · Claude AI · 네이버 C-Rank · D.I.A+ 최적화</p>
+          <p className="text-[10px] text-[#555d8a] flex-shrink-0">닥터포스트 © 2026 · Claude AI · 네이버 C-Rank · D.I.A+ 최적화</p>
         </div>
       </footer>
     </div>

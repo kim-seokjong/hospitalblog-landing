@@ -10,9 +10,8 @@ interface Window {
       message?: string
       paymentId?: string
     }>
-    requestBillingKeyAndPay: (params: unknown) => Promise<{
+    requestIssueBillingKey: (params: unknown) => Promise<{
       billingKey?: string
-      paymentId?: string
       code?: string
       message?: string
     }>

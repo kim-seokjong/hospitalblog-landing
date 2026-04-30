@@ -24,7 +24,7 @@ export default function BillingButton({
     setLoading(true)
     setError(null)
     try {
-      // 1. 서버에서 paymentId + 금액 발급 (단건결제 prepare 재사용)
+      // 1. 서버에서 paymentId + channelKey + 고객정보 발급
       const prepRes = await fetch('/api/payment/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -34,9 +34,9 @@ export default function BillingButton({
         const { error: msg } = await prepRes.json()
         throw new Error(msg ?? '결제 준비 실패')
       }
-      const { paymentId, amount, orderName, channelKey, customer } = await prepRes.json()
+      const { paymentId, orderName, channelKey, customer } = await prepRes.json()
 
-      if (!window.PortOne?.requestBillingKeyAndPay) {
+      if (!window.PortOne?.requestIssueBillingKey) {
         throw new Error('결제 모듈이 로드되지 않았습니다. 잠시 후 다시 시도해주세요.')
       }
 
@@ -49,23 +49,19 @@ export default function BillingButton({
         currency: 'KRW',
       })
 
-      // 2. 빌링키 발급 + 첫 결제 (포트원 SDK)
-      const result = await window.PortOne.requestBillingKeyAndPay({
+      // 2. 빌링키 발급 (카드 등록만, 결제 없음)
+      const result = await window.PortOne.requestIssueBillingKey({
         storeId,
         channelKey,
-        billingKeyAndPayId: paymentId,
-        orderName,
-        totalAmount: amount,
-        currency: 'KRW',
-        payMethod: 'CARD',
+        issueName: orderName,
         customer: { customerId: customer.customerId, email: customer.email },
         locale: 'KO_KR',
       })
 
-      if (result.code) throw new Error(result.message ?? '결제가 취소되었습니다')
+      if (result.code) throw new Error(result.message ?? '카드 등록이 취소되었습니다')
       if (!result.billingKey) throw new Error('빌링키 발급에 실패했습니다')
 
-      // 3. 서버 검증 + 빌링키 저장 + 플랜 활성화
+      // 3. 서버에서 첫 결제 실행 + 빌링키 저장 + 플랜 활성화
       const confirmRes = await fetch('/api/payment/billing/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -73,7 +69,7 @@ export default function BillingButton({
       })
       if (!confirmRes.ok) {
         const { error: msg } = await confirmRes.json()
-        throw new Error(msg ?? '결제 검증 실패')
+        throw new Error(msg ?? '결제 처리 실패')
       }
 
       router.push(`/payment/success?paymentId=${paymentId}`)
