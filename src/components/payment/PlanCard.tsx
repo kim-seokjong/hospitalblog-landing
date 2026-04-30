@@ -57,6 +57,7 @@ export default function PlanCard({
       ) : billingMode === 'recurring' ? (
         <BillingButton
           plan={plan.id}
+          paymentMethod={paymentMethod}
           label="자동 갱신 구독하기"
           className={recommended
             ? 'bg-blue-500 text-white'
