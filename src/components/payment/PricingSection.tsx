@@ -47,29 +47,31 @@ export default function PricingSection() {
           </div>
         </div>
 
-        {/* 결제 수단 탭 (항상 표시) */}
-        <div className="flex justify-center mb-4">
-          <div className="flex bg-gray-900 border border-gray-700 rounded-xl p-1 gap-1">
-            {PAYMENT_METHODS.map((m) => (
-              <button
-                key={m.type}
-                onClick={() => setPaymentMethod(m.type)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all
-                  ${paymentMethod === m.type
-                    ? 'bg-gray-700 text-white shadow'
-                    : 'text-gray-500 hover:text-gray-300'}`}
-              >
-                <span>{m.icon}</span>
-                <span>{m.label}</span>
-              </button>
-            ))}
+        {/* 결제 수단 탭 — 이번달만 결제일 때만 표시 */}
+        {mode === 'single' && (
+          <div className="flex justify-center mb-4">
+            <div className="flex bg-gray-900 border border-gray-700 rounded-xl p-1 gap-1">
+              {PAYMENT_METHODS.map((m) => (
+                <button
+                  key={m.type}
+                  onClick={() => setPaymentMethod(m.type)}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                    ${paymentMethod === m.type
+                      ? 'bg-gray-700 text-white shadow'
+                      : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                  <span>{m.icon}</span>
+                  <span>{m.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 설명 문구 */}
         <p className="text-center text-xs mb-8 -mt-1">
           {mode === 'recurring'
-            ? <span className="text-green-400">카드 한 번 등록으로 매월 자동 결제됩니다</span>
+            ? <span className="text-green-400">💳 신용/체크카드 한 번 등록으로 매월 자동 결제됩니다</span>
             : <span className="text-gray-500">
                 {paymentMethod === 'CARD' ? '갤럭시아머니트리 · 인증 단건결제' : '카카오페이 · 간편결제'}
               </span>
