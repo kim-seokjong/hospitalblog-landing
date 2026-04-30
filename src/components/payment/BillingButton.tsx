@@ -53,11 +53,7 @@ export default function BillingButton({
       })
 
       // 2. 빌링키 발급 (카드/카카오페이 등록, 결제는 서버에서)
-      const issueFn = (window.PortOne as Record<string, unknown>)['requestIssueBillingKey'] as
-        | ((params: unknown) => Promise<{ billingKey?: string; code?: string; message?: string }>)
-        | undefined
-
-      if (typeof issueFn !== 'function') {
+      if (typeof window.PortOne.requestIssueBillingKey !== 'function') {
         throw new Error('이 결제수단은 정기구독을 지원하지 않습니다.')
       }
 
@@ -73,7 +69,7 @@ export default function BillingButton({
         issueParams.easyPay = { easyPayProvider: 'KAKAOPAY' }
       }
 
-      const result = await issueFn(issueParams)
+      const result = await window.PortOne.requestIssueBillingKey(issueParams)
 
       if (result.code) throw new Error(result.message ?? '카드 등록이 취소되었습니다')
       if (!result.billingKey) throw new Error('빌링키 발급에 실패했습니다')
