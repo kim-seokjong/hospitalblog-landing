@@ -269,7 +269,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
               ) : (
                 <div className="flex gap-1.5">
                   <button
-                    onClick={() => setEditingPrompt(image.id)}
+                    onClick={() => { setPrompts(prev => ({ ...prev, [image.id]: '' })); setEditingPrompt(image.id); }}
                     className="flex-1 py-2.5 bg-[#0b0d2b] hover:bg-[#191970] active:bg-[#2a2b6e] text-[#8891bd] hover:text-white text-[11px] rounded-lg border border-[#2a2b6e] transition-colors truncate px-2 min-h-[44px]"
                   >
                     ✏️ 프롬프트 편집
