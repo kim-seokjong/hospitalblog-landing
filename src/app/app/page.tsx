@@ -28,16 +28,8 @@ function AdBanner({ side }: { side: 'left' | 'right' }) {
   return (
     <div className={`hidden xl:flex flex-col w-36 flex-shrink-0 ${side === 'left' ? 'mr-4' : 'ml-4'}`}>
       <div className="sticky top-24 space-y-4">
-        <div className="w-full h-64 rounded-xl border border-[#2a2b6e] bg-[#12153d]/50 flex flex-col items-center justify-center gap-2">
-          <span className="text-[10px] text-[#555d8a] font-semibold tracking-widest uppercase">광고</span>
-          <div className="w-8 h-0.5 bg-[#2a2b6e]" />
-          <span className="text-[9px] text-[#555d8a]">160 × 250</span>
-        </div>
-        <div className="w-full h-56 rounded-xl border border-[#2a2b6e] bg-[#12153d]/50 flex flex-col items-center justify-center gap-2">
-          <span className="text-[10px] text-[#555d8a] font-semibold tracking-widest uppercase">광고</span>
-          <div className="w-8 h-0.5 bg-[#2a2b6e]" />
-          <span className="text-[9px] text-[#555d8a]">160 × 220</span>
-        </div>
+        <div className="w-full h-64" />
+        <div className="w-full h-56" />
       </div>
     </div>
   );
