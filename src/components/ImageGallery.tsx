@@ -60,6 +60,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [prompts, setPrompts] = useState<Record<string, string>>({});
   const [editingPrompt, setEditingPrompt] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>('');
   const [regenLoading, setRegenLoading] = useState<Record<string, boolean>>({});
   const [regenCount, setRegenCount] = useState<Record<string, number>>({});
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
@@ -120,7 +121,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
   };
 
   const handleRegenerateOne = async (image: GeneratedImage) => {
-    const prompt = prompts[image.id] || image.prompt;
+    const prompt = editingText.trim() || image.prompt;
     setRegenLoading(prev => ({ ...prev, [image.id]: true }));
     setEditingPrompt(null);
 
@@ -242,8 +243,8 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
               {editingPrompt === image.id ? (
                 <div className="space-y-2">
                   <textarea
-                    value={prompts[image.id] || ''}
-                    onChange={(e) => setPrompts(prev => ({ ...prev, [image.id]: e.target.value }))}
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
                     rows={3}
                     className="w-full px-3 py-2.5 rounded-lg bg-[#0b0d2b] border border-[#4f6ef7]/40 text-white text-xs focus:outline-none focus:border-[#4f6ef7] resize-none"
                     placeholder="한국어로 입력하세요&#10;예: 피부과 의사가 환자에게 시술 설명하는 장면"
@@ -269,7 +270,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
               ) : (
                 <div className="flex gap-1.5">
                   <button
-                    onClick={() => { setPrompts(prev => ({ ...prev, [image.id]: '' })); setEditingPrompt(image.id); }}
+                    onClick={() => { setEditingText(''); setEditingPrompt(image.id); }}
                     className="flex-1 py-2.5 bg-[#0b0d2b] hover:bg-[#191970] active:bg-[#2a2b6e] text-[#8891bd] hover:text-white text-[11px] rounded-lg border border-[#2a2b6e] transition-colors truncate px-2 min-h-[44px]"
                   >
                     ✏️ 프롬프트 편집
