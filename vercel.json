@@ -2,6 +2,12 @@
   "functions": {
     "app/api/publish-naver/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/generate-images/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/regenerate-image/route.ts": {
+      "maxDuration": 60
     }
   }
 }
