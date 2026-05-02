@@ -144,6 +144,8 @@ export default function UsagePage() {
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 12, color: '#94a3b8' }}>{user.email}</span>
+            <a href="/payment/history" style={{ fontSize: 13, color: '#64748b', textDecoration: 'none' }}>결제내역</a>
+            <a href="/settings/profile" style={{ fontSize: 13, color: '#64748b', textDecoration: 'none' }}>프로필</a>
             <a href="/" style={{ fontSize: 13, color: '#64748b', textDecoration: 'none' }}>← 앱으로 돌아가기</a>
           </div>
         </div>

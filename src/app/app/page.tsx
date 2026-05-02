@@ -15,6 +15,8 @@ import TagPanel from '@/components/TagPanel';
 import NaverPreview from '@/components/NaverPreview';
 import NaverPublisher from '@/components/NaverPublisher';
 import AuthModal from '@/components/AuthModal';
+import SnsCopyPanel from '@/components/SnsCopyPanel';
+import SmsCopyPanel from '@/components/SmsCopyPanel';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle } from '@/types';
 
 type ViewStep = 'input' | 'content';
@@ -473,6 +475,22 @@ export default function AppPage() {
                             로그인 / 회원가입
                           </button>
                         </div>
+                      )}
+
+                      {selectedTitle && content && (
+                        <SnsCopyPanel
+                          title={selectedTitle.title}
+                          content={content.body}
+                          keyword={keyword}
+                        />
+                      )}
+
+                      {selectedTitle && content && (
+                        <SmsCopyPanel
+                          title={selectedTitle.title}
+                          content={content.body}
+                          keyword={keyword}
+                        />
                       )}
                     </div>
                   </div>

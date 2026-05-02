@@ -9,7 +9,7 @@ export type FeatureType =
   | 'check-originality'
   | 'regenerate-image';
 
-export type ApiProvider = 'anthropic' | 'fal' | 'pexels';
+export type ApiProvider = 'anthropic' | 'fal' | 'pexels' | 'openai';
 
 // Claude Sonnet 4.6 pricing (USD per token)
 const CLAUDE_INPUT_COST_PER_TOKEN = 3 / 1_000_000;   // $3 / MTok

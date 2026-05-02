@@ -61,6 +61,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
   const [prompts, setPrompts] = useState<Record<string, string>>({});
   const [editingPrompt, setEditingPrompt] = useState<string | null>(null);
   const [regenLoading, setRegenLoading] = useState<Record<string, boolean>>({});
+  const [regenCount, setRegenCount] = useState<Record<string, number>>({});
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const composingRef = useRef<Set<string>>(new Set());
 
@@ -122,11 +123,17 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
     const prompt = prompts[image.id] || image.prompt;
     setRegenLoading(prev => ({ ...prev, [image.id]: true }));
     setEditingPrompt(null);
+
+    const nextCount = (regenCount[image.id] ?? 0) + 1;
+    setRegenCount(prev => ({ ...prev, [image.id]: nextCount }));
+    // 홀수 번째(1,3,5...): OpenAI / 짝수 번째(2,4,6...): Fal.ai
+    const provider = nextCount % 2 === 1 ? 'openai' : 'fal';
+
     try {
       const res = await fetch('/api/regenerate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageId: image.id, prompt, style }),
+        body: JSON.stringify({ imageId: image.id, prompt, style, provider }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);

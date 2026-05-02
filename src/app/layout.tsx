@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import './globals.css';
 import MetaPixel from '@/components/MetaPixel';
+import NotificationBell from '@/components/NotificationBell';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
   title: '닥터포스트',
@@ -14,7 +16,16 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  let isLoggedIn = false;
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    isLoggedIn = !!user;
+  } catch {
+    isLoggedIn = false;
+  }
+
   return (
     <html lang="ko">
       <body className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
@@ -23,6 +34,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="lazyOnload"
         />
         <MetaPixel />
+        {isLoggedIn && (
+          <div className="fixed top-3 right-3 sm:top-4 sm:right-4 z-[100]">
+            <NotificationBell />
+          </div>
+        )}
         {children}
       </body>
     </html>

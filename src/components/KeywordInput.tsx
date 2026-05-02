@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { WritingStyle } from '@/types';
+import SpecialtyKeywordSuggester from '@/components/SpecialtyKeywordSuggester';
 
 interface KeywordInputProps {
   onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle) => void;
@@ -23,6 +24,7 @@ const WRITING_STYLES: { value: WritingStyle; label: string; desc: string; icon: 
 export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps) {
   const [keyword, setKeyword] = useState('');
   const [hospitalType, setHospitalType] = useState('피부과');
+  const [region, setRegion] = useState('');
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [writingStyle, setWritingStyle] = useState<WritingStyle>('전문가');
 
@@ -73,6 +75,27 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
             ))}
           </select>
         </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-[#8891bd] mb-1.5">
+            지역 <span className="text-[#555d8a] font-normal">(선택 · 키워드 추천에 활용)</span>
+          </label>
+          <input
+            type="text"
+            value={region}
+            onChange={(e) => setRegion(e.target.value)}
+            placeholder="예: 강남, 홍대, 분당"
+            className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white placeholder-[#555d8a] text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
+            disabled={isLoading}
+            autoComplete="off"
+          />
+        </div>
+
+        <SpecialtyKeywordSuggester
+          specialty={hospitalType}
+          region={region}
+          onSelect={(kw) => setKeyword((prev) => prev ? `${prev}, ${kw}` : kw)}
+        />
 
         <div>
           <label className="block text-xs font-semibold text-[#8891bd] mb-1.5">

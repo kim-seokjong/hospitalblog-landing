@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/lib/anthropic';
+import { getOpenAIClient, OPENAI_IMAGE_MODEL } from '@/lib/openai';
 import { logUsage } from '@/lib/usage-logger';
 import type { GeneratedImage } from '@/types';
 
@@ -141,6 +142,57 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}`,
   return (input.queries || []).slice(0, count);
 }
 
+async function generateWithOpenAIImages(
+  keyword: string,
+  title: string,
+  body: string,
+  imageCount: number
+): Promise<{ images: GeneratedImage[]; errors: string[] }> {
+  const client = getOpenAIClient();
+  const descriptions = extractImageDescriptions(body);
+  const prompts = await buildFluxPrompts(descriptions, keyword, title, imageCount);
+
+  const images: GeneratedImage[] = [];
+  const errors: string[] = [];
+
+  await Promise.allSettled(
+    prompts.map(async (prompt, index) => {
+      try {
+        const response = await client.images.generate({
+          model: OPENAI_IMAGE_MODEL,
+          prompt,
+          n: 1,
+          size: '1024x1024',
+          response_format: 'url',
+        });
+
+        const item = response.data?.[0];
+        const url = item?.url;
+        if (!url) throw new Error('OpenAI 응답에 이미지 URL이 없습니다.');
+
+        images.push({
+          id: `img-${index + 1}`,
+          url,
+          prompt,
+          revised_prompt: item?.revised_prompt ?? (descriptions[index] || prompt).slice(0, 80),
+        });
+      } catch (err) {
+        errors.push(`img-${index + 1}: ${err instanceof Error ? err.message : '실패'}`);
+      }
+    })
+  );
+
+  if (images.length > 0) {
+    logUsage({
+      feature: 'generate-images',
+      api_provider: 'openai',
+      image_count: images.length,
+    });
+  }
+
+  return { images, errors };
+}
+
 async function generateCardnewsImages(
   keyword: string,
   title: string,
@@ -239,7 +291,9 @@ export async function POST(req: NextRequest) {
 
     const { images, errors } = style === 'photo'
       ? await generatePhotoImages(keyword, body, imageCount)
-      : await generateCardnewsImages(keyword, title, body, imageCount);
+      : style === 'openai'
+        ? await generateWithOpenAIImages(keyword, title, body, imageCount)
+        : await generateCardnewsImages(keyword, title, body, imageCount);
 
     if (images.length === 0) {
       return NextResponse.json({ error: '이미지 생성에 실패했습니다.', details: errors }, { status: 500 });

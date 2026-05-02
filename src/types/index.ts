@@ -126,3 +126,22 @@ export interface CardNewsData {
   conclusionPoints: string[];
   footerText: string;
 }
+
+export interface SavedPost {
+  id: string
+  user_id: string
+  title: string
+  content: string
+  keyword: string | null
+  tags: string[] | null
+  specialty: string | null
+  seo_score: number | null
+  image_urls: string[] | null
+  sns_copy: string | null
+  sms_copy: string | null
+  status: 'draft' | 'scheduled' | 'published'
+  scheduled_at: string | null
+  published_at: string | null
+  created_at: string
+  updated_at: string
+}

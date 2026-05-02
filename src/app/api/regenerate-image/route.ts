@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/lib/anthropic';
+import { getOpenAIClient, OPENAI_IMAGE_MODEL } from '@/lib/openai';
 import { logUsage } from '@/lib/usage-logger';
 import type { GeneratedImage } from '@/types';
 
@@ -29,6 +30,27 @@ async function translateToFluxPrompt(koreanDesc: string): Promise<string> {
 
   const text = res.content.find(b => b.type === 'text');
   return text?.type === 'text' ? text.text.trim() : koreanDesc;
+}
+
+async function generateWithOpenAI(prompt: string): Promise<string> {
+  const client = getOpenAIClient();
+  const response = await client.images.generate({
+    model: OPENAI_IMAGE_MODEL,
+    prompt,
+    n: 1,
+    size: '1024x1024',
+  });
+
+  const item = response.data?.[0];
+  if (!item) throw new Error('OpenAI 응답이 없습니다.');
+
+  if (item.url) return item.url;
+
+  if ((item as { b64_json?: string }).b64_json) {
+    return `data:image/png;base64,${(item as { b64_json: string }).b64_json}`;
+  }
+
+  throw new Error('OpenAI 이미지 데이터 없음');
 }
 
 async function generateWithFal(prompt: string): Promise<string> {
@@ -84,7 +106,7 @@ async function generatePexels(query: string): Promise<string> {
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageId, prompt, style = 'cardnews' } = await req.json();
+    const { imageId, prompt, style = 'cardnews', provider = 'openai' } = await req.json();
 
     if (!prompt) return NextResponse.json({ error: '프롬프트를 입력해주세요.' }, { status: 400 });
 
@@ -95,9 +117,12 @@ export async function POST(req: NextRequest) {
     let url: string;
     if (style === 'photo') {
       url = await generatePexels(prompt);
-    } else {
+    } else if (provider === 'fal') {
       url = await generateWithFal(englishPrompt);
       logUsage({ feature: 'regenerate-image', api_provider: 'fal', image_count: 1 });
+    } else {
+      url = await generateWithOpenAI(englishPrompt);
+      logUsage({ feature: 'regenerate-image', api_provider: 'openai', image_count: 1 });
     }
 
     const image: GeneratedImage = {
