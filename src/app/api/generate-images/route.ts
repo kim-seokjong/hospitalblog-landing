@@ -71,7 +71,7 @@ async function buildFluxPrompts(
     tool_choice: { type: 'tool', name: 'build_flux_prompts' },
     messages: [{
       role: 'user',
-      content: `병원 블로그 이미지 ${count}장의 Flux.1 Pro 프롬프트를 만들어주세요.
+      content: `병원 블로그용 gpt-image-2 이미지 프롬프트 ${count}개를 만들어주세요.
 
 제목: ${title}
 키워드: ${keyword}
@@ -79,15 +79,16 @@ async function buildFluxPrompts(
 이미지 설명:
 ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
 
-프롬프트 규칙:
-- 영어, 80~120단어
-- 실사 스타일 필수: "ultra-realistic, phone camera realism, slight sensor grain, slight edge softness, no symmetry correction"
-- 조명: "natural indoor lighting, soft diffused daylight" (cinematic light, studio light 절대 금지)
-- 인물 피부/질감: "visible pores, fine micro-texture, subsurface scattering skin, natural skin texture, real skin imperfections"
-- 각 장면마다 다른 구도 (클로즈업 / 미디엄샷 / 와이드샷 순환)
-- 의료 현장의 실제 모습 (병원 인테리어, 의료진, 장비, 환자 치료)
-- 등장인물은 반드시 동양인(한국인) 외모로: "Korean people, East Asian appearance, Korean patient, Korean doctor, Korean medical staff"
-- 금지 키워드 반드시 포함: "no AI glow, no plastic skin, no beauty filters, no retouching, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"`,
+프롬프트 구조 (각 이미지마다 아래 순서로 작성):
+1. 장면: 촬영 방식 + 인물/상황 설명 (ultra-realistic photo / close-up portrait / medium shot 중 구도 순환)
+2. 인물: Korean people, East Asian appearance, Korean patient/doctor/medical staff
+3. 조명: natural indoor lighting, soft diffused daylight, true-to-life colors, accurate white balance (cinematic light, studio light 절대 금지)
+4. 피부 실사 섹션 반드시 포함: "Skin realism focus: visible pores, fine micro-texture, organic acne marks (non-repeating), uneven pigmentation, subtle redness, natural oil sheen only on high points, visible peach fuzz and very fine vellus hair. No symmetry correction."
+5. 카메라: phone camera realism, subtle sensor grain, slight edge softness
+6. 금지: "No retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"
+
+- 영어로만 출력, 각 프롬프트 80~120단어
+- 의료 현장의 실제 모습 (병원 인테리어, 의료진, 장비, 환자 치료)`,
     }],
   });
 

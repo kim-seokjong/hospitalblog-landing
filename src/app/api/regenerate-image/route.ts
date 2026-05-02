@@ -15,18 +15,20 @@ async function translateToFluxPrompt(koreanDesc: string): Promise<string> {
     max_tokens: 300,
     messages: [{
       role: 'user',
-      content: `아래 한국어 이미지 설명을 Flux.1 Pro 이미지 생성에 최적화된 영어 프롬프트로 변환해주세요.
+      content: `아래 한국어 이미지 설명을 gpt-image-2에 최적화된 영어 프롬프트로 변환해주세요.
 
 한국어 설명: "${koreanDesc}"
 
-규칙:
+프롬프트 구조 (순서대로):
+1. 장면: ultra-realistic photo + 상황 설명
+2. 인물: Korean people, East Asian appearance
+3. 조명: natural indoor lighting, soft diffused daylight, true-to-life colors (cinematic light, studio light 금지)
+4. 피부 실사 섹션: "Skin realism focus: visible pores, fine micro-texture, organic acne marks (non-repeating), uneven pigmentation, subtle redness, natural oil sheen only on high points, visible peach fuzz and very fine vellus hair. No symmetry correction."
+5. 카메라: phone camera realism, subtle sensor grain, slight edge softness
+6. 금지: "No retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"
+
 - 영어로만 출력 (80~120단어)
-- 실사 스타일 필수: "ultra-realistic, phone camera realism, slight sensor grain, slight edge softness"
-- 조명: "natural indoor lighting, soft diffused daylight" (cinematic light, studio light 금지)
-- 피부/질감: "visible pores, subsurface scattering skin, fine micro-texture, no AI glow, no plastic skin"
 - 병원·의료 맥락 유지
-- 등장인물은 한국인 외모로: "Korean people, East Asian appearance"
-- 금지: "no beauty filters, no retouching, no studio light, no illustration, no cartoon, no 3D render"
 - 설명 없이 프롬프트 텍스트만 출력`,
     }],
   });
