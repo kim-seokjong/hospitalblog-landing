@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const maxDuration = 60;
 import { getAnthropicClient, MODEL } from '@/lib/anthropic';
-import { getOpenAIClient, OPENAI_IMAGE_MODEL } from '@/lib/openai';
+import { OPENAI_IMAGE_MODEL } from '@/lib/openai';
 import { logUsage } from '@/lib/usage-logger';
 import type { GeneratedImage } from '@/types';
 
@@ -38,23 +40,28 @@ async function translateToFluxPrompt(koreanDesc: string): Promise<string> {
 }
 
 async function generateWithOpenAI(prompt: string): Promise<string> {
-  const client = getOpenAIClient();
-  const response = await client.images.generate({
-    model: OPENAI_IMAGE_MODEL,
-    prompt,
-    n: 1,
-    size: '1024x1024',
-    quality: 'high',
-  } as Parameters<typeof client.images.generate>[0]);
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY가 설정되지 않았습니다.');
 
-  const item = response.data?.[0];
+  const res = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OPENAI_IMAGE_MODEL,
+      prompt,
+      n: 1,
+      size: '1024x1024',
+      quality: 'medium',
+    }),
+  });
+
+  if (!res.ok) throw new Error(`OpenAI 이미지 생성 실패: ${await res.text()}`);
+  const data = await res.json();
+  const item = data.data?.[0];
   if (!item) throw new Error('OpenAI 응답이 없습니다.');
 
-  if (item.url) return item.url;
-
-  const b64 = (item as { b64_json?: string }).b64_json;
-  if (b64) return `data:image/png;base64,${b64}`;
-
+  if (item.url) return item.url as string;
+  if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
   throw new Error('OpenAI 이미지 데이터 없음');
 }
 
