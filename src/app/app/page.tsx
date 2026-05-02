@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import KeywordInput from '@/components/KeywordInput';
@@ -292,6 +293,15 @@ export default function AppPage() {
               user ? (
                 <>
                   <span className="text-xs text-[#8891bd] hidden lg:block max-w-[120px] truncate">{user.email}</span>
+                  {user.email === 'terro6936@naver.com' && (
+                    <Link
+                      href="/admin"
+                      className="px-2.5 sm:px-3 py-1.5 text-xs border border-yellow-500/40 rounded-lg text-yellow-400 hover:bg-yellow-500/10 transition-colors min-h-[36px] flex items-center gap-1"
+                    >
+                      <span>⚙️</span>
+                      <span className="hidden sm:inline">관리자</span>
+                    </Link>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="px-2.5 sm:px-3 py-1.5 text-xs border border-[#2a2b6e] rounded-lg text-[#8891bd] hover:bg-[#191970] hover:text-white active:bg-[#191970] transition-colors min-h-[36px]"
