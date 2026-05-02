@@ -81,12 +81,13 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
 
 프롬프트 규칙:
 - 영어, 80~120단어
-- Flux.1에 최적화: "RAW photo, professional DSLR, 8K UHD, photorealistic, hyperrealistic, sharp focus, cinematic lighting"
+- 실사 스타일 필수: "ultra-realistic, phone camera realism, slight sensor grain, slight edge softness, no symmetry correction"
+- 조명: "natural indoor lighting, soft diffused daylight" (cinematic light, studio light 절대 금지)
+- 인물 피부/질감: "visible pores, fine micro-texture, subsurface scattering skin, natural skin texture, real skin imperfections"
 - 각 장면마다 다른 구도 (클로즈업 / 미디엄샷 / 와이드샷 순환)
 - 의료 현장의 실제 모습 (병원 인테리어, 의료진, 장비, 환자 치료)
-- 자연스럽고 따뜻한 분위기, 신뢰감
 - 등장인물은 반드시 동양인(한국인) 외모로: "Korean people, East Asian appearance, Korean patient, Korean doctor, Korean medical staff"
-- 절대 일러스트/만화/AI 스타일 금지`,
+- 금지 키워드 반드시 포함: "no AI glow, no plastic skin, no beauty filters, no retouching, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"`,
     }],
   });
 
@@ -100,7 +101,7 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
   const toolUse = res.content.find(b => b.type === 'tool_use');
   if (!toolUse || toolUse.type !== 'tool_use') {
     return targets.slice(0, count).map(d =>
-      `RAW photo, ${d}, professional DSLR photography, 8K UHD, photorealistic, hospital setting, cinematic lighting`
+      `ultra-realistic, ${d}, Korean medical staff and patients, East Asian appearance, phone camera realism, slight sensor grain, natural indoor lighting, soft diffused daylight, visible pores, subsurface scattering skin, no AI glow, no plastic skin, no studio light, no illustration, no cartoon`
     );
   }
   const input = toolUse.input as { prompts: string[] };
@@ -163,18 +164,21 @@ async function generateWithOpenAIImages(
           prompt,
           n: 1,
           size: '1024x1024',
-          response_format: 'url',
-        });
+          quality: 'high',
+        } as Parameters<typeof client.images.generate>[0]);
 
         const item = response.data?.[0];
-        const url = item?.url;
-        if (!url) throw new Error('OpenAI 응답에 이미지 URL이 없습니다.');
+        if (!item) throw new Error('OpenAI 응답이 없습니다.');
+
+        const b64 = (item as { b64_json?: string }).b64_json;
+        const url = item.url ?? (b64 ? `data:image/png;base64,${b64}` : null);
+        if (!url) throw new Error('OpenAI 응답에 이미지 데이터가 없습니다.');
 
         images.push({
           id: `img-${index + 1}`,
           url,
           prompt,
-          revised_prompt: item?.revised_prompt ?? (descriptions[index] || prompt).slice(0, 80),
+          revised_prompt: (item as { revised_prompt?: string }).revised_prompt ?? (descriptions[index] || prompt).slice(0, 80),
         });
       } catch (err) {
         errors.push(`img-${index + 1}: ${err instanceof Error ? err.message : '실패'}`);
@@ -291,9 +295,9 @@ export async function POST(req: NextRequest) {
 
     const { images, errors } = style === 'photo'
       ? await generatePhotoImages(keyword, body, imageCount)
-      : style === 'openai'
-        ? await generateWithOpenAIImages(keyword, title, body, imageCount)
-        : await generateCardnewsImages(keyword, title, body, imageCount);
+      : style === 'fal'
+        ? await generateCardnewsImages(keyword, title, body, imageCount)
+        : await generateWithOpenAIImages(keyword, title, body, imageCount);
 
     if (images.length === 0) {
       return NextResponse.json({ error: '이미지 생성에 실패했습니다.', details: errors }, { status: 500 });

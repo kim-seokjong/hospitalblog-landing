@@ -125,10 +125,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
     setRegenLoading(prev => ({ ...prev, [image.id]: true }));
     setEditingPrompt(null);
 
-    const nextCount = (regenCount[image.id] ?? 0) + 1;
-    setRegenCount(prev => ({ ...prev, [image.id]: nextCount }));
-    // 홀수 번째(1,3,5...): OpenAI / 짝수 번째(2,4,6...): Fal.ai
-    const provider = nextCount % 2 === 1 ? 'openai' : 'fal';
+    const provider = 'openai';
 
     try {
       const res = await fetch('/api/regenerate-image', {

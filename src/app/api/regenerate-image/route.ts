@@ -21,9 +21,12 @@ async function translateToFluxPrompt(koreanDesc: string): Promise<string> {
 
 규칙:
 - 영어로만 출력 (80~120단어)
-- Flux.1 스타일: "RAW photo, professional DSLR, 8K UHD, photorealistic, sharp focus, cinematic lighting"
+- 실사 스타일 필수: "ultra-realistic, phone camera realism, slight sensor grain, slight edge softness"
+- 조명: "natural indoor lighting, soft diffused daylight" (cinematic light, studio light 금지)
+- 피부/질감: "visible pores, subsurface scattering skin, fine micro-texture, no AI glow, no plastic skin"
 - 병원·의료 맥락 유지
 - 등장인물은 한국인 외모로: "Korean people, East Asian appearance"
+- 금지: "no beauty filters, no retouching, no studio light, no illustration, no cartoon, no 3D render"
 - 설명 없이 프롬프트 텍스트만 출력`,
     }],
   });
@@ -39,16 +42,16 @@ async function generateWithOpenAI(prompt: string): Promise<string> {
     prompt,
     n: 1,
     size: '1024x1024',
-  });
+    quality: 'high',
+  } as Parameters<typeof client.images.generate>[0]);
 
   const item = response.data?.[0];
   if (!item) throw new Error('OpenAI 응답이 없습니다.');
 
   if (item.url) return item.url;
 
-  if ((item as { b64_json?: string }).b64_json) {
-    return `data:image/png;base64,${(item as { b64_json: string }).b64_json}`;
-  }
+  const b64 = (item as { b64_json?: string }).b64_json;
+  if (b64) return `data:image/png;base64,${b64}`;
 
   throw new Error('OpenAI 이미지 데이터 없음');
 }
