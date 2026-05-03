@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { WritingStyle } from '@/types';
 import SpecialtyKeywordSuggester from '@/components/SpecialtyKeywordSuggester';
 
@@ -24,6 +24,7 @@ const WRITING_STYLES: { value: WritingStyle; label: string; desc: string; icon: 
 export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps) {
   const [keyword, setKeyword] = useState('');
   const [hospitalType, setHospitalType] = useState('피부과');
+  const keywordInputRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState('');
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [writingStyle, setWritingStyle] = useState<WritingStyle>('전문가');
@@ -52,6 +53,7 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
             핵심 키워드 <span className="text-[#4f6ef7]">*</span>
           </label>
           <input
+            ref={keywordInputRef}
             type="text"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
@@ -103,6 +105,7 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
                 return parts.join(', ');
               });
             }
+            setTimeout(() => keywordInputRef.current?.focus(), 0);
           }}
         />
 
