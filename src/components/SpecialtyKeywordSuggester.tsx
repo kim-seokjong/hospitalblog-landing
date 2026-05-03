@@ -5,7 +5,7 @@ import { useState } from 'react';
 interface SpecialtyKeywordSuggesterProps {
   specialty: string;
   region: string;
-  onSelect: (keyword: string) => void;
+  onSelect: (keyword: string, isSelected: boolean) => void;
 }
 
 interface RecommendResponse {
@@ -56,6 +56,7 @@ export default function SpecialtyKeywordSuggester({
   };
 
   const handleChipClick = (keyword: string) => {
+    const willBeSelected = !selected.has(keyword);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(keyword)) {
@@ -65,7 +66,7 @@ export default function SpecialtyKeywordSuggester({
       }
       return next;
     });
-    onSelect(keyword);
+    onSelect(keyword, willBeSelected);
   };
 
   return (

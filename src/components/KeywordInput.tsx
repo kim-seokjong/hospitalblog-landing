@@ -94,7 +94,16 @@ export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps)
         <SpecialtyKeywordSuggester
           specialty={hospitalType}
           region={region}
-          onSelect={(kw) => setKeyword((prev) => prev ? `${prev}, ${kw}` : kw)}
+          onSelect={(kw, isSelected) => {
+            if (isSelected) {
+              setKeyword((prev) => prev ? `${prev}, ${kw}` : kw);
+            } else {
+              setKeyword((prev) => {
+                const parts = prev.split(',').map(k => k.trim()).filter(k => k !== kw);
+                return parts.join(', ');
+              });
+            }
+          }}
         />
 
         <div>
