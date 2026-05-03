@@ -7,6 +7,10 @@ import SpecialtyKeywordSuggester from '@/components/SpecialtyKeywordSuggester';
 interface KeywordInputProps {
   onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle) => void;
   isLoading: boolean;
+  defaultKeyword?: string;
+  defaultHospitalType?: string;
+  defaultAdditionalInfo?: string;
+  defaultWritingStyle?: WritingStyle;
 }
 
 const HOSPITAL_TYPES = [
@@ -21,13 +25,13 @@ const WRITING_STYLES: { value: WritingStyle; label: string; desc: string; icon: 
   { value: '사무장',  label: '사무장시점',  desc: '서비스·절차 중심', icon: '🏥' },
 ];
 
-export default function KeywordInput({ onSubmit, isLoading }: KeywordInputProps) {
-  const [keyword, setKeyword] = useState('');
-  const [hospitalType, setHospitalType] = useState('피부과');
+export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle }: KeywordInputProps) {
+  const [keyword, setKeyword] = useState(defaultKeyword ?? '');
+  const [hospitalType, setHospitalType] = useState(defaultHospitalType || '피부과');
   const keywordInputRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState('');
-  const [additionalInfo, setAdditionalInfo] = useState('');
-  const [writingStyle, setWritingStyle] = useState<WritingStyle>('전문가');
+  const [additionalInfo, setAdditionalInfo] = useState(defaultAdditionalInfo ?? '');
+  const [writingStyle, setWritingStyle] = useState<WritingStyle>(defaultWritingStyle || '전문가');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -26,6 +26,14 @@ const VOLUME_BADGES: Record<string, string> = {
 
 export default function TagPanel({ tags, onRegenerate, isLoading }: TagPanelProps) {
   const [copiedType, setCopiedType] = useState<string | null>(null);
+  const [prevTags, setPrevTags] = useState<TagResult | null>(null);
+  const [showPrev, setShowPrev] = useState(false);
+
+  const handleRegenerate = () => {
+    setPrevTags(tags);
+    setShowPrev(false);
+    onRegenerate();
+  };
 
   const copy = async (text: string, type: string) => {
     await navigator.clipboard.writeText(text);
@@ -103,8 +111,32 @@ export default function TagPanel({ tags, onRegenerate, isLoading }: TagPanelProp
           </ul>
         </div>
 
+        {prevTags && (
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setShowPrev(!showPrev)}
+              className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-xs font-semibold text-gray-600"
+            >
+              <span>🕐 이전 태그 보기</span>
+              <span>{showPrev ? '▲' : '▼'}</span>
+            </button>
+            {showPrev && (
+              <div className="px-3 py-2 space-y-2 bg-white">
+                <div className="flex flex-wrap gap-1.5">
+                  {prevTags.tags.map((tag, i) => (
+                    <span key={i} className={`text-xs font-semibold px-2 py-0.5 rounded-full opacity-60 ${CATEGORY_COLORS[tag.category] || 'bg-gray-100 text-gray-700'}`}>
+                      {tag.tag}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-400 font-mono break-all">{prevTags.naverTags.join(' ')}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         <button
-          onClick={onRegenerate}
+          onClick={handleRegenerate}
           disabled={isLoading}
           className="w-full py-2.5 border-2 border-emerald-200 hover:border-emerald-400 text-emerald-700 hover:bg-emerald-50 font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2"
         >

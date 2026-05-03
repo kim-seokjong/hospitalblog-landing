@@ -186,6 +186,16 @@ export default function NaverPublisher({ title, content, tags, images }: NaverPu
                 </button>
               ))}
             </div>
+
+            <div className="mt-2 bg-indigo-50 rounded-xl p-2.5">
+              <p className="text-xs font-bold text-indigo-700 mb-1">📌 이미지 삽입 방법</p>
+              <ol className="text-xs text-indigo-600 space-y-0.5 list-decimal list-inside">
+                <li>본문 붙여넣기 후 <strong>[이미지N]</strong> 텍스트 위치로 스크롤</li>
+                <li><strong>[이미지N]</strong> 텍스트 앞에 커서 위치 → 에디터 상단 <strong>사진 버튼</strong> 클릭</li>
+                <li>다운로드한 이미지 선택 후 업로드</li>
+                <li>이미지 삽입 완료 후 <strong>[이미지N]</strong> 텍스트 드래그 → Delete</li>
+              </ol>
+            </div>
           </div>
         )}
 
@@ -211,7 +221,7 @@ export default function NaverPublisher({ title, content, tags, images }: NaverPu
             <li>네이버 블로그 글쓰기 열기</li>
             <li>제목 복사 → 제목란 Ctrl+V</li>
             <li>본문 복사 → 본문 영역 Ctrl+V</li>
-            {images.length > 0 && <li>이미지 다운로드 → [이미지N] 자리에 삽입</li>}
+            {images.length > 0 && <li>이미지 다운로드 → 에디터 사진 버튼 → [이미지N] 위치에 삽입 후 텍스트 삭제</li>}
             {(tags?.naverTags?.length ?? 0) > 0 && <li>태그 복사 → 태그 입력란 Ctrl+V → Enter</li>}
           </ol>
         </div>

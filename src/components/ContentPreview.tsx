@@ -12,13 +12,16 @@ interface ContentPreviewProps {
   onImageStyleChange: (style: 'photo' | 'cardnews' | 'upload') => void;
   onGenerateSlides?: () => void;
   isLoadingSlides?: boolean;
+  onContentChange?: (newBody: string) => void;
 }
 
-export default function ContentPreview({ content, onGenerateImages, onImagesUploaded, isLoadingImages, imageStyle, onImageStyleChange, onGenerateSlides, isLoadingSlides }: ContentPreviewProps) {
+export default function ContentPreview({ content, onGenerateImages, onImagesUploaded, isLoadingImages, imageStyle, onImageStyleChange, onGenerateSlides, isLoadingSlides, onContentChange }: ContentPreviewProps) {
   const [imageCount, setImageCount] = useState(6);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
   const [showImageHints, setShowImageHints] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editBody, setEditBody] = useState('');
 
   const handleCopy = async () => {
     const fullText = `${content.title}\n\n${content.body}`;
@@ -125,10 +128,46 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
 
       {/* 본문 */}
       <div className="p-4 sm:p-5">
-        <div className="bg-[#0b0d2b] rounded-xl p-3 sm:p-4 border border-[#2a2b6e] max-h-72 sm:max-h-80 overflow-y-auto">
-          <h1 className="text-sm font-bold text-white mb-3 pb-3 border-b border-[#2a2b6e]">{content.title}</h1>
-          <div>{renderBody(content.body)}</div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] text-[#555d8a]">본문 내용</span>
+          {!isEditing && onContentChange && (
+            <button
+              onClick={() => { setEditBody(content.body); setIsEditing(true); }}
+              className="text-[10px] font-bold text-[#4f6ef7] hover:text-blue-300 px-2 py-1 rounded-lg border border-[#2a2b6e] hover:border-[#4f6ef7]/50 transition-colors"
+            >
+              ✏️ 직접 편집
+            </button>
+          )}
         </div>
+        {isEditing ? (
+          <div className="space-y-2">
+            <textarea
+              value={editBody}
+              onChange={(e) => setEditBody(e.target.value)}
+              rows={12}
+              className="w-full px-3 py-3 rounded-xl bg-[#0b0d2b] border border-[#4f6ef7]/50 text-white text-xs leading-relaxed focus:outline-none focus:ring-1 focus:ring-[#4f6ef7]/30 resize-none"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => { onContentChange?.(editBody); setIsEditing(false); }}
+                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors"
+              >
+                저장
+              </button>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="flex-1 py-2 bg-[#2a2b6e] hover:bg-[#3a3b8e] text-[#8891bd] text-xs font-bold rounded-xl transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-[#0b0d2b] rounded-xl p-3 sm:p-4 border border-[#2a2b6e] max-h-72 sm:max-h-80 overflow-y-auto">
+            <h1 className="text-sm font-bold text-white mb-3 pb-3 border-b border-[#2a2b6e]">{content.title}</h1>
+            <div>{renderBody(content.body)}</div>
+          </div>
+        )}
       </div>
 
       {/* 이미지 가이드라인 */}
@@ -214,7 +253,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
                   className="text-xs border border-[#2a2b6e] rounded-lg px-2 py-1 bg-[#0b0d2b] text-white"
                   disabled={isLoadingImages}
                 >
-                  {[4, 5, 6, 7, 8].map((n) => (
+                  {[3, 4, 5, 6, 7, 8].map((n) => (
                     <option key={n} value={n} className="bg-[#12153d]">{n}장{n === 6 ? ' (권장)' : ''}</option>
                   ))}
                 </select>
@@ -238,7 +277,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
               {isLoadingImages ? (
                 <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 이미지 생성 중... ({imageCount}장)</>
               ) : (
-                <><span>{imageStyle === 'cardnews' ? '🎨' : '📷'}</span> {imageStyle === 'cardnews' ? '카드뉴스' : '실사 이미지'} {imageCount}장 생성</>
+                <><span>{imageStyle === 'cardnews' ? '🎨' : '📷'}</span> {imageStyle === 'cardnews' ? 'AI이미지' : '실사AI이미지'} {imageCount}장 생성</>
               )}
             </button>
           )}

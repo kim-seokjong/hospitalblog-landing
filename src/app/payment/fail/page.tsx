@@ -1,10 +1,14 @@
-import Link from 'next/link'
+'use client';
 
-interface Props {
-  searchParams: { message?: string }
-}
+import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense } from 'react';
 
-export default function PaymentFailPage({ searchParams }: Props) {
+function FailContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const message = searchParams.get('message');
+
   return (
     <main className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="max-w-md w-full text-center">
@@ -16,13 +20,19 @@ export default function PaymentFailPage({ searchParams }: Props) {
 
         <h1 className="text-2xl font-bold text-white mb-2">결제에 실패했습니다</h1>
         <p className="text-gray-400 mb-4">
-          {searchParams.message ?? '결제 처리 중 오류가 발생했습니다.'}
+          {message ?? '결제 처리 중 오류가 발생했습니다.'}
         </p>
         <p className="text-gray-500 text-sm mb-8">
           문제가 지속되면 고객센터(010-2558-1115)로 문의해주세요.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors"
+          >
+            뒤로 가기
+          </button>
           <Link
             href="/pricing"
             className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors"
@@ -38,5 +48,13 @@ export default function PaymentFailPage({ searchParams }: Props) {
         </div>
       </div>
     </main>
-  )
+  );
+}
+
+export default function PaymentFailPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-gray-950" />}>
+      <FailContent />
+    </Suspense>
+  );
 }

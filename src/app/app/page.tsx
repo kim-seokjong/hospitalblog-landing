@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
@@ -24,6 +24,21 @@ import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, W
 
 type ViewStep = 'input' | 'content';
 
+const PLAN_LIMITS: Record<string, number> = { free: 2, basic: 10, standard: 20, pro: 999 };
+const STORAGE_KEY = 'dp_session_v2';
+
+function loadSession(): Record<string, unknown> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const s = JSON.parse(raw) as Record<string, unknown>;
+    return (Date.now() - ((s.savedAt as number) || 0) < 86400000) ? s : {};
+  } catch {
+    return {};
+  }
+}
+
 function AdBanner({ side }: { side: 'left' | 'right' }) {
   return (
     <div className={`hidden xl:flex flex-col w-36 flex-shrink-0 ${side === 'left' ? 'mr-4' : 'ml-4'}`}>
@@ -35,38 +50,45 @@ function AdBanner({ side }: { side: 'left' | 'right' }) {
   );
 }
 
+const GEN_STEPS = ['SEO 키워드 분석', '본문 초안 작성', '의료광고법 검토', '태그 최적화'];
+
+function GeneratingSpinner() {
+  return (
+    <div className="flex items-center justify-center py-16 sm:py-24">
+      <div className="text-center">
+        <div className="w-12 h-12 border-4 border-[#4f6ef7] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-white font-semibold">본문 + 태그 생성 중...</p>
+        <p className="text-xs text-[#8891bd] mt-1">Claude AI · 약 20~30초 소요</p>
+        <div className="mt-4 space-y-2 text-left inline-block">
+          {GEN_STEPS.map((step, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs text-[#8891bd]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4f6ef7] animate-pulse flex-shrink-0" style={{ animationDelay: `${i * 0.4}s` }} />
+              {step}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AppPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [viewStep, setViewStep] = useState<ViewStep>('input');
+  const [userPlan, setUserPlan] = useState<{ plan: string; usage_count: number } | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
+  const s = useRef(loadSession()).current;
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-      setAuthChecked(true);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => subscription.unsubscribe();
-  }, [supabase]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-  };
-
-  const [keyword, setKeyword] = useState('');
-  const [hospitalType, setHospitalType] = useState('');
-  const [additionalInfo, setAdditionalInfo] = useState('');
-  const [writingStyle, setWritingStyle] = useState<WritingStyle>('전문가');
-
-  const [titles, setTitles] = useState<BlogTitle[]>([]);
-  const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>(null);
-  const [content, setContent] = useState<BlogContent | null>(null);
+  const [viewStep, setViewStep] = useState<ViewStep>((s.viewStep as ViewStep) ?? 'input');
+  const [keyword, setKeyword] = useState<string>((s.keyword as string) ?? '');
+  const [hospitalType, setHospitalType] = useState<string>((s.hospitalType as string) || '피부과');
+  const [additionalInfo, setAdditionalInfo] = useState<string>((s.additionalInfo as string) ?? '');
+  const [writingStyle, setWritingStyle] = useState<WritingStyle>((s.writingStyle as WritingStyle) ?? '전문가');
+  const [titles, setTitles] = useState<BlogTitle[]>((s.titles as BlogTitle[]) ?? []);
+  const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>((s.selectedTitle as BlogTitle) ?? null);
+  const [content, setContent] = useState<BlogContent | null>((s.content as BlogContent) ?? null);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [tags, setTags] = useState<TagResult | null>(null);
 
@@ -79,6 +101,52 @@ export default function AppPage() {
   const [imageStyle, setImageStyle] = useState<'photo' | 'cardnews' | 'upload'>('cardnews');
   const [cardNewsData, setCardNewsData] = useState<CardNewsData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryAction, setRetryAction] = useState<'titles' | 'content' | null>(null);
+
+  // localStorage 자동 저장
+  useEffect(() => {
+    if (!keyword && !titles.length && !content) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        keyword, hospitalType, additionalInfo, writingStyle,
+        titles, selectedTitle, content, viewStep,
+        savedAt: Date.now(),
+      }));
+    } catch { /* storage full 무시 */ }
+  }, [keyword, hospitalType, additionalInfo, writingStyle, titles, selectedTitle, content, viewStep]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setAuthChecked(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  // 플랜/사용량 fetch
+  useEffect(() => {
+    if (!user) { setUserPlan(null); return; }
+    supabase.from('profiles')
+      .select('plan, usage_count')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => { if (data) setUserPlan(data as { plan: string; usage_count: number }); });
+  }, [user, supabase]);
+
+  const refreshUsage = () => {
+    if (!user) return;
+    supabase.from('profiles').select('plan, usage_count').eq('id', user.id).single()
+      .then(({ data }) => { if (data) setUserPlan(data as { plan: string; usage_count: number }); });
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setUserPlan(null);
+  };
 
   const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle) => {
     setKeyword(kw);
@@ -91,6 +159,7 @@ export default function AppPage() {
     setImages([]);
     setTags(null);
     setError(null);
+    setRetryAction(null);
     setViewStep('input');
     setLoadingTitles(true);
 
@@ -103,8 +172,10 @@ export default function AppPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '제목 생성에 실패했습니다.');
       setTitles(data.titles);
+      setRetryAction(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
+      setRetryAction('titles');
     } finally {
       setLoadingTitles(false);
     }
@@ -117,6 +188,7 @@ export default function AppPage() {
     setTags(null);
     setCardNewsData(null);
     setError(null);
+    setRetryAction(null);
     setLoadingContent(true);
 
     try {
@@ -141,11 +213,21 @@ export default function AppPage() {
       setContent(contentData);
       if (tagRes.ok) setTags(tagData);
       setViewStep('content');
+      refreshUsage();
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
+      setRetryAction('content');
     } finally {
       setLoadingContent(false);
     }
+  };
+
+  const handleRetry = () => {
+    const action = retryAction;
+    setError(null);
+    setRetryAction(null);
+    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle);
+    else if (action === 'content') handleGenerateContent();
   };
 
   const handleGenerateTags = async () => {
@@ -225,11 +307,17 @@ export default function AppPage() {
       .catch(() => setError('이미지 파일을 읽는 데 실패했습니다.'));
   };
 
+  const handleContentChange = (newBody: string) => {
+    setContent(prev => prev ? { ...prev, body: newBody } : prev);
+  };
+
   const STYLE_LABEL: Record<WritingStyle, string> = {
     '전문가': '🩺 전문가시점',
     '고객이해': '👥 고객이해시점',
     '사무장': '🏥 사무장시점',
   };
+
+  const planLimit = userPlan ? (PLAN_LIMITS[userPlan.plan] ?? 2) : null;
 
   return (
     <div className="min-h-screen bg-[#0b0d2b] text-white">
@@ -240,7 +328,6 @@ export default function AppPage() {
       {/* 헤더 */}
       <header className="sticky top-0 z-40 border-b border-[#2a2b6e] bg-[#0b0d2b]/95 backdrop-blur-md">
         <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 h-13 sm:h-14 flex items-center justify-between gap-2 sm:gap-4" style={{ minHeight: '52px' }}>
-          {/* 로고 + 회사명 */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-8 h-8 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center shadow-lg shadow-[#4f6ef7]/10">
               <span className="text-base">🏥</span>
@@ -248,7 +335,6 @@ export default function AppPage() {
             <span className="font-bold text-white text-lg">닥터포스트</span>
           </div>
 
-          {/* 단계 표시 — 모바일: 간략, 데스크탑: 상세 */}
           <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-center">
             {viewStep === 'input' ? (
               <>
@@ -279,8 +365,15 @@ export default function AppPage() {
             ) : null}
           </div>
 
-          {/* 인증 */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            {/* 사용량 표시 */}
+            {userPlan && planLimit !== null && (
+              <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[#191970]/50 border border-[#2a2b6e]">
+                <span className={`text-[10px] font-semibold ${userPlan.usage_count >= (planLimit === 999 ? Infinity : planLimit) ? 'text-red-400' : 'text-[#8891bd]'}`}>
+                  {userPlan.usage_count}/{planLimit === 999 ? '∞' : planLimit}회
+                </span>
+              </div>
+            )}
             {authChecked && (
               user ? (
                 <>
@@ -323,7 +416,17 @@ export default function AppPage() {
               <p className="font-semibold text-red-300 text-sm">오류 발생</p>
               <p className="text-xs text-red-400 mt-0.5">{error}</p>
             </div>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-200 text-lg">×</button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {retryAction && (
+                <button
+                  onClick={handleRetry}
+                  className="px-3 py-1.5 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-xs font-bold rounded-lg transition-colors min-h-[36px]"
+                >
+                  🔄 다시 시도
+                </button>
+              )}
+              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-200 text-lg leading-none">×</button>
+            </div>
           </div>
         </div>
       )}
@@ -335,27 +438,24 @@ export default function AppPage() {
 
           <div className="flex-1 min-w-0 overflow-hidden">
 
-            {/* ── STEP 1: 키워드 입력 + 제목 선택 ── */}
+            {/* ── STEP 1 ── */}
             {viewStep === 'input' && (
               <>
-                {loadingContent && (
-                  <div className="flex items-center justify-center py-16 sm:py-24">
-                    <div className="text-center">
-                      <div className="w-12 h-12 border-4 border-[#4f6ef7] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                      <p className="text-white font-semibold">본문 + 태그 생성 중...</p>
-                      <p className="text-xs text-[#8891bd] mt-1">Claude AI가 작성하고 있습니다</p>
-                    </div>
-                  </div>
-                )}
+                {loadingContent && <GeneratingSpinner />}
 
                 {!loadingContent && (
                   <div className={`grid gap-4 sm:gap-5 ${titles.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-full sm:max-w-md mx-auto'}`}>
-                    {/* 왼쪽: 키워드 입력 */}
                     <div className="space-y-4">
-                      <KeywordInput onSubmit={handleKeywordSubmit} isLoading={loadingTitles} />
+                      <KeywordInput
+                        onSubmit={handleKeywordSubmit}
+                        isLoading={loadingTitles}
+                        defaultKeyword={keyword}
+                        defaultHospitalType={hospitalType}
+                        defaultAdditionalInfo={additionalInfo}
+                        defaultWritingStyle={writingStyle}
+                      />
                     </div>
 
-                    {/* 오른쪽: 검색 트렌드 + 제목 선택 */}
                     {titles.length > 0 && (
                       <div className="space-y-4">
                         {keyword && <KeywordTrend mainKeyword={keyword} />}
@@ -366,12 +466,22 @@ export default function AppPage() {
                           onGenerate={handleGenerateContent}
                           isLoading={loadingContent}
                         />
+                        <button
+                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle)}
+                          disabled={loadingTitles}
+                          className="w-full py-2.5 text-xs text-[#8891bd] hover:text-white border border-[#2a2b6e] hover:border-[#4f6ef7]/40 bg-[#0b0d2b] hover:bg-[#191970]/30 rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
+                        >
+                          {loadingTitles ? (
+                            <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 생성 중...</>
+                          ) : (
+                            <><span>🔄</span> 마음에 드는 제목이 없으신가요? 새로 5개 생성</>
+                          )}
+                        </button>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* 빈 상태 */}
                 {titles.length === 0 && !loadingTitles && !loadingContent && (
                   <div className="mt-8 sm:mt-12 text-center px-4">
                     <div className="text-4xl sm:text-5xl mb-3">✍️</div>
@@ -391,21 +501,13 @@ export default function AppPage() {
               </>
             )}
 
-            {/* ── STEP 2: 본문 + 이미지 ── */}
+            {/* ── STEP 2 ── */}
             {viewStep === 'content' && (
               <>
-                {loadingContent && (
-                  <div className="flex items-center justify-center py-16 sm:py-24">
-                    <div className="text-center">
-                      <div className="w-12 h-12 border-4 border-[#4f6ef7] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                      <p className="text-white font-semibold">본문 + 태그 생성 중...</p>
-                    </div>
-                  </div>
-                )}
+                {loadingContent && <GeneratingSpinner />}
 
                 {content && !loadingContent && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-                    {/* 왼쪽: 본문 + SEO + 독창성 */}
                     <div className="space-y-5">
                       <ContentPreview
                         content={content}
@@ -416,6 +518,7 @@ export default function AppPage() {
                         onImageStyleChange={setImageStyle}
                         onGenerateSlides={handleGenerateSlides}
                         isLoadingSlides={loadingSlides}
+                        onContentChange={handleContentChange}
                       />
                       <SeoAnalysis content={content} />
                       <OriginalityChecker
@@ -425,7 +528,6 @@ export default function AppPage() {
                       />
                     </div>
 
-                    {/* 오른쪽: 네이버 미리보기 + 태그 + 이미지 + 발행 */}
                     <div className="space-y-5">
                       {selectedTitle && (
                         <NaverPreview
