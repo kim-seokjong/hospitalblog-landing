@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
@@ -25,19 +25,6 @@ import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, W
 type ViewStep = 'input' | 'content';
 
 const PLAN_LIMITS: Record<string, number> = { free: 2, basic: 10, standard: 20, pro: 999 };
-const STORAGE_KEY = 'dp_session_v2';
-
-function loadSession(): Record<string, unknown> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const s = JSON.parse(raw) as Record<string, unknown>;
-    return (Date.now() - ((s.savedAt as number) || 0) < 86400000) ? s : {};
-  } catch {
-    return {};
-  }
-}
 
 function AdBanner({ side }: { side: 'left' | 'right' }) {
   return (
@@ -79,16 +66,15 @@ export default function AppPage() {
   const [userPlan, setUserPlan] = useState<{ plan: string; usage_count: number } | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
-  const s = useRef(loadSession()).current;
 
-  const [viewStep, setViewStep] = useState<ViewStep>((s.viewStep as ViewStep) ?? 'input');
-  const [keyword, setKeyword] = useState<string>((s.keyword as string) ?? '');
-  const [hospitalType, setHospitalType] = useState<string>((s.hospitalType as string) || '피부과');
-  const [additionalInfo, setAdditionalInfo] = useState<string>((s.additionalInfo as string) ?? '');
-  const [writingStyle, setWritingStyle] = useState<WritingStyle>((s.writingStyle as WritingStyle) ?? '전문가');
-  const [titles, setTitles] = useState<BlogTitle[]>((s.titles as BlogTitle[]) ?? []);
-  const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>((s.selectedTitle as BlogTitle) ?? null);
-  const [content, setContent] = useState<BlogContent | null>((s.content as BlogContent) ?? null);
+  const [viewStep, setViewStep] = useState<ViewStep>('input');
+  const [keyword, setKeyword] = useState<string>('');
+  const [hospitalType, setHospitalType] = useState<string>('피부과');
+  const [additionalInfo, setAdditionalInfo] = useState<string>('');
+  const [writingStyle, setWritingStyle] = useState<WritingStyle>('전문가');
+  const [titles, setTitles] = useState<BlogTitle[]>([]);
+  const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>(null);
+  const [content, setContent] = useState<BlogContent | null>(null);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [tags, setTags] = useState<TagResult | null>(null);
 
@@ -102,18 +88,6 @@ export default function AppPage() {
   const [cardNewsData, setCardNewsData] = useState<CardNewsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryAction, setRetryAction] = useState<'titles' | 'content' | null>(null);
-
-  // localStorage 자동 저장
-  useEffect(() => {
-    if (!keyword && !titles.length && !content) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        keyword, hospitalType, additionalInfo, writingStyle,
-        titles, selectedTitle, content, viewStep,
-        savedAt: Date.now(),
-      }));
-    } catch { /* storage full 무시 */ }
-  }, [keyword, hospitalType, additionalInfo, writingStyle, titles, selectedTitle, content, viewStep]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -449,10 +423,6 @@ export default function AppPage() {
                       <KeywordInput
                         onSubmit={handleKeywordSubmit}
                         isLoading={loadingTitles}
-                        defaultKeyword={keyword}
-                        defaultHospitalType={hospitalType}
-                        defaultAdditionalInfo={additionalInfo}
-                        defaultWritingStyle={writingStyle}
                       />
                     </div>
 
