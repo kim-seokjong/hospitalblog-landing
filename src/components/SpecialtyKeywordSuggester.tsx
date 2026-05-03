@@ -83,6 +83,7 @@ export default function SpecialtyKeywordSuggester({
         </div>
 
         <button
+          type="button"
           onClick={handleRecommend}
           disabled={isLoading || !specialty.trim()}
           className="flex-shrink-0 px-3 py-2 bg-[#4f6ef7] hover:bg-[#3d5ef0] active:bg-[#2d4ee0] disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 min-h-[36px]"
@@ -116,6 +117,7 @@ export default function SpecialtyKeywordSuggester({
             {keywords.map((kw) => (
               <button
                 key={kw}
+                type="button"
                 onClick={() => handleChipClick(kw)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all active:scale-95 ${
                   selected.has(kw)
