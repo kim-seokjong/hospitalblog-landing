@@ -210,6 +210,11 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                       alt={`이미지 ${image.id}`}
                       className="w-full h-full object-cover"
                     />
+                    {(style === 'photo') && (
+                      <div className="absolute top-2 right-2 bg-black/60 text-white text-[9px] font-bold px-2 py-0.5 rounded-md pointer-events-none">
+                        AI이미지
+                      </div>
+                    )}
                     {style === 'upload' && (
                       <div className="absolute bottom-2 left-0 right-0 flex justify-center">
                         <button

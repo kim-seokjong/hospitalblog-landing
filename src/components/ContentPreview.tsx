@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import type { BlogContent } from '@/types';
 
 interface ContentPreviewProps {
@@ -34,12 +34,25 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
     content.charCount >= 1500 && content.charCount <= 1800 ? 'text-emerald-400' :
     content.charCount >= 1200 ? 'text-amber-400' : 'text-red-400';
 
+  const violationWords = content.compliance.violations.map((v) => v.word);
+
+  const highlightViolations = (text: string): React.ReactNode => {
+    if (violationWords.length === 0) return text;
+    const pattern = new RegExp(`(${violationWords.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+    const parts = text.split(pattern);
+    return parts.map((part, idx) =>
+      violationWords.some((w) => w.toLowerCase() === part.toLowerCase())
+        ? <mark key={idx} className="bg-red-500/25 text-red-300 font-bold rounded px-0.5 not-italic">{part}</mark>
+        : part
+    );
+  };
+
   const renderBody = (text: string) => {
     return text.split('\n').map((line, i) => {
       if (line.startsWith('▶')) {
         return (
           <h3 key={i} className="text-sm font-semibold text-[#4f6ef7] mt-3 mb-1 pl-2 border-l-2 border-[#4f6ef7]/40">
-            {line.replace(/^▶\s*/, '')}
+            {highlightViolations(line.replace(/^▶\s*/, ''))}
           </h3>
         );
       }
@@ -54,11 +67,11 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
       if (line.trim().length >= 10 && line.trim().length <= 45 && !line.startsWith('[')) {
         const prevEmpty = i === 0 || text.split('\n')[i - 1]?.trim() === '';
         if (prevEmpty) {
-          return <h2 key={i} className="text-sm font-bold text-white mt-5 mb-2">{line}</h2>;
+          return <h2 key={i} className="text-sm font-bold text-white mt-5 mb-2">{highlightViolations(line)}</h2>;
         }
       }
       if (line.trim() === '') return <br key={i} />;
-      return <p key={i} className="text-[#c5caf0] leading-relaxed text-xs mb-1">{line}</p>;
+      return <p key={i} className="text-[#c5caf0] leading-relaxed text-xs mb-1">{highlightViolations(line)}</p>;
     });
   };
 
@@ -100,7 +113,10 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
       {/* 위반사항 */}
       {!content.compliance.isCompliant && (
         <div className="mx-5 mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-          <p className="text-xs font-bold text-red-300 mb-1.5">⚠️ 의료광고법 위반 감지</p>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs font-bold text-red-300">⚠️ 의료광고법 위반 감지</p>
+            <span className="text-[9px] text-red-400/70">아래 본문에서 빨간색으로 표시됨</span>
+          </div>
           <div className="space-y-1">
             {content.compliance.violations.map((v, i) => (
               <div key={i} className="flex items-center gap-2 text-[10px]">
@@ -109,8 +125,8 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
                   v.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-300' :
                   'bg-yellow-500/20 text-yellow-300'
                 }`}>{v.severity}</span>
-                <span className="font-bold text-red-300">{v.word}</span>
-                <span className="text-[#8891bd]">→ {v.suggestion}</span>
+                <mark className="bg-red-500/25 text-red-300 font-bold rounded px-0.5 not-italic">{v.word}</mark>
+                <span className="text-[#8891bd]">→ {v.suggestion}(으)로 수정 권장</span>
               </div>
             ))}
           </div>
