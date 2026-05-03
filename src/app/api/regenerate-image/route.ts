@@ -127,9 +127,7 @@ export async function POST(req: NextRequest) {
     const englishPrompt = isKorean ? await translateToFluxPrompt(prompt) : prompt;
 
     let url: string;
-    if (style === 'photo') {
-      url = await generatePexels(prompt);
-    } else if (provider === 'fal') {
+    if (style === 'cardnews' || provider === 'fal') {
       url = await generateWithFal(englishPrompt);
       logUsage({ feature: 'regenerate-image', api_provider: 'fal', image_count: 1 });
     } else {

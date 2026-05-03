@@ -303,11 +303,9 @@ export async function POST(req: NextRequest) {
 
     const imageCount = Math.min(Math.max(1, count), 8);
 
-    const { images, errors } = style === 'photo'
-      ? await generatePhotoImages(keyword, body, imageCount)
-      : style === 'fal'
-        ? await generateCardnewsImages(keyword, title, body, imageCount)
-        : await generateWithOpenAIImages(keyword, title, body, imageCount);
+    const { images, errors } = style === 'cardnews'
+      ? await generateCardnewsImages(keyword, title, body, imageCount)
+      : await generateWithOpenAIImages(keyword, title, body, imageCount);
 
     if (images.length === 0) {
       return NextResponse.json({ error: '이미지 생성에 실패했습니다.', details: errors }, { status: 500 });

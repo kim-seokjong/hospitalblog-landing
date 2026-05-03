@@ -168,8 +168,8 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
             <p className="text-[10px] font-bold text-[#8891bd] mb-2">이미지 스타일</p>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { val: 'photo' as const, icon: '📷', label: '실사 이미지', sub: '실제 의료 사진' },
-                { val: 'cardnews' as const, icon: '🎨', label: '카드뉴스', sub: 'AI 디자인 합성' },
+                { val: 'photo' as const, icon: '📷', label: '실사AI이미지', sub: 'AI 의료 실사' },
+                { val: 'cardnews' as const, icon: '🎨', label: 'AI이미지', sub: 'Flux.1 Pro' },
                 { val: 'upload' as const, icon: '📎', label: '직접 첨부', sub: '편집기로 꾸미기' },
               ].map(({ val, icon, label, sub }) => (
                 <button
