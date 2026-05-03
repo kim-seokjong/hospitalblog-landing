@@ -131,7 +131,15 @@ export async function POST(req: NextRequest) {
       url = await generateWithFal(englishPrompt);
       logUsage({ feature: 'regenerate-image', api_provider: 'fal', image_count: 1 });
     } else {
-      url = await generateWithOpenAI(englishPrompt);
+      // 같은 프롬프트 반복 시 다른 장면이 나오도록 변형 지시 추가
+      const sceneVariants = [
+        'Show a completely different scene with different subjects and setting.',
+        'Different moment, different angle, different background.',
+        'Alternative view: change the composition and subjects entirely.',
+        'New scene with different activity and environment.',
+      ];
+      const variant = sceneVariants[Math.floor(Math.random() * sceneVariants.length)];
+      url = await generateWithOpenAI(`${englishPrompt} ${variant}`);
       logUsage({ feature: 'regenerate-image', api_provider: 'openai', image_count: 1 });
     }
 

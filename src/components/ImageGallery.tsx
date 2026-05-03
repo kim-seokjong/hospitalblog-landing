@@ -139,9 +139,11 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
       const newImage: GeneratedImage = { ...data.image, id: image.id };
       if (onImagesUpdate) onImagesUpdate(images.map(img => img.id === image.id ? newImage : img));
 
+      composingRef.current.delete(image.id);
+      setComposited(prev => { const next = { ...prev }; delete next[image.id]; return next; });
+      setRegenCount(prev => ({ ...prev, [image.id]: (prev[image.id] || 0) + 1 }));
+
       if (style === 'cardnews') {
-        composingRef.current.delete(image.id);
-        setComposited(prev => { const next = { ...prev }; delete next[image.id]; return next; });
         setTimeout(() => compose(newImage), 100);
       }
     } catch {
@@ -203,6 +205,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                 {isReady && displayUrl && (
                   <>
                     <img
+                      key={`${image.id}-${regenCount[image.id] || 0}`}
                       src={displayUrl}
                       alt={`이미지 ${image.id}`}
                       className="w-full h-full object-cover"
