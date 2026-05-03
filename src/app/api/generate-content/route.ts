@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/lib/anthropic';
-import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance } from '@/lib/medical-compliance';
+import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/lib/medical-compliance';
 import { logUsage } from '@/lib/usage-logger';
 
 type TitleFormat = '질문형' | '정보형' | '가이드형' | '노하우형' | '숫자형' | string;
@@ -180,7 +180,7 @@ ${formatGuide}
 
     const rawBody = textContent.text;
     // 마크다운 기호 제거 (AI 감지 방지)
-    const body = rawBody
+    const mdCleaned = rawBody
       .replace(/^#{1,6}\s+/gm, '')           // # ## ### 헤더
       .replace(/\*\*(.+?)\*\*/gs, '$1')      // **볼드** (멀티라인 포함)
       .replace(/__(.+?)__/gs, '$1')          // __볼드__
@@ -194,6 +194,10 @@ ${formatGuide}
       .replace(/(?<!\[이미지[^\]]*)-{2,}/g, '') // 남은 -- --- 제거 (이미지 태그 제외)
       .replace(/\n{3,}/g, '\n\n')            // 3줄 이상 빈줄 → 2줄로
       .trim();
+
+    // 의료광고법 금지어 자동 교체 — Claude가 생성했더라도 100% 필터링
+    const { fixed: body, replaced: autoReplaced } = autoFix(mdCleaned);
+
     const bodyForCount = body.replace(/\[이미지\s*\d+:[^\]]*\]/g, '');
     const charCount = bodyForCount.length;
     const compliance = checkCompliance(body);
@@ -241,6 +245,7 @@ ${formatGuide}
       body,
       charCount,
       compliance,
+      autoReplaced: autoReplaced.length > 0 ? autoReplaced : undefined,
       imageGuidelines: {
         recommendedCount: Math.max(6, placementHints.length),
         placementHints,

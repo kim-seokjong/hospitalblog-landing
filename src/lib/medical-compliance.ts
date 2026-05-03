@@ -49,6 +49,19 @@ const WARNING_PATTERNS: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /할인|이벤트|특가|무료 상담/, message: '가격 할인 광고는 의료광고 심의 대상입니다.' },
 ];
 
+export function autoFix(content: string): { fixed: string; replaced: { word: string; suggestion: string }[] } {
+  let fixed = content;
+  const replaced: { word: string; suggestion: string }[] = [];
+  for (const { word, suggestion } of FORBIDDEN_WORDS) {
+    const regex = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    if (regex.test(fixed)) {
+      fixed = fixed.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), suggestion);
+      replaced.push({ word, suggestion });
+    }
+  }
+  return { fixed, replaced };
+}
+
 export function checkCompliance(content: string): ComplianceResult {
   const violations: ComplianceViolation[] = [];
   const warnings: string[] = [];

@@ -48,6 +48,7 @@ export interface BlogContent {
   body: string;
   charCount: number;
   compliance: ComplianceResult;
+  autoReplaced?: { word: string; suggestion: string }[];
   imageGuidelines: ImageGuidelines;
   seoAnalysis: {
     keywordCount: number;

@@ -110,7 +110,21 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
         </div>
       </div>
 
-      {/* 위반사항 */}
+      {/* 자동 교체 알림 */}
+      {content.autoReplaced && content.autoReplaced.length > 0 && (
+        <div className="mx-5 mt-4 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-amber-300 mb-1.5">🔄 의료광고법 위반 단어 자동 교체됨</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {content.autoReplaced.map((r, i) => (
+              <span key={i} className="text-[10px] text-amber-300/80">
+                <span className="line-through text-red-400 mr-1">{r.word}</span>→<span className="text-emerald-400 ml-1">{r.suggestion}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 위반사항 (자동교체 후에도 남은 경우) */}
       {!content.compliance.isCompliant && (
         <div className="mx-5 mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
           <div className="flex items-center justify-between mb-1.5">
