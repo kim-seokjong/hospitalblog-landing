@@ -15,7 +15,6 @@ export async function searchNaverBlogs(keyword: string, display = 5): Promise<Na
         'X-Naver-Client-Id': clientId,
         'X-Naver-Client-Secret': clientSecret,
       },
-      next: { revalidate: 3600 }, // 1시간 캐시
     });
     if (!res.ok) return [];
     const data = await res.json() as { items?: { title: string; description: string }[] };

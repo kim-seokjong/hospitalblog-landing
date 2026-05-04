@@ -188,12 +188,27 @@ ${formatGuide}
 본문만 작성 (제목 제외).`;
 
     const anthropic = getAnthropicClient();
-    const response = await anthropic.messages.create({
+
+    const createMessage = () => anthropic.messages.create({
       model: MODEL,
       max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     });
+
+    let response;
+    try {
+      response = await createMessage();
+    } catch (firstErr) {
+      const isServerError = firstErr instanceof Error &&
+        (firstErr.message.includes('Internal server error') || firstErr.message.includes('529') || firstErr.message.includes('500'));
+      if (isServerError) {
+        await new Promise((r) => setTimeout(r, 2000));
+        response = await createMessage();
+      } else {
+        throw firstErr;
+      }
+    }
 
     const textContent = response.content.find((b) => b.type === 'text');
     if (!textContent || textContent.type !== 'text') {
@@ -287,7 +302,12 @@ ${formatGuide}
     });
   } catch (error) {
     console.error('본문 생성 오류:', error);
-    const message = error instanceof Error ? error.message : '알 수 없는 오류';
-    return NextResponse.json({ error: `본문 생성 실패: ${message}` }, { status: 500 });
+    const raw = error instanceof Error ? error.message : '';
+    const userMessage = raw.includes('Internal server error') || raw.includes('500') || raw.includes('529')
+      ? 'AI 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요.'
+      : raw.includes('rate_limit') || raw.includes('429')
+        ? '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
+        : '본문 생성에 실패했습니다. 다시 시도해주세요.';
+    return NextResponse.json({ error: userMessage }, { status: 500 });
   }
 }
