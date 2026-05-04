@@ -10,15 +10,15 @@ export async function POST(req: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
   try {
-    const { userId, fullName, phone, hospitalName, hospitalAddress, position } = await req.json();
+    const { userId, fullName, phone, hospitalName, hospitalAddress, position, hospitalType } = await req.json();
 
-    if (!userId || !fullName || !phone || !hospitalName || !position) {
+    if (!userId || !fullName || !phone || !hospitalName || !position || !hospitalType) {
       return NextResponse.json({ error: '필수 항목이 누락되었습니다.' }, { status: 400 });
     }
 
     const { error } = await supabaseAdmin
       .from('profiles')
-      .update({ full_name: fullName, phone, hospital_name: hospitalName, hospital_address: hospitalAddress, position })
+      .update({ full_name: fullName, phone, hospital_name: hospitalName, hospital_address: hospitalAddress, position, hospital_type: hospitalType })
       .eq('id', userId);
 
     if (error) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { trackEvent } from '@/lib/meta-pixel';
 
@@ -8,18 +8,29 @@ interface AuthModalProps {
   onClose: () => void;
   onSuccess: () => void;
   initialMode?: 'login' | 'signup';
+  closable?: boolean;
 }
 
 type Mode = 'login' | 'signup';
 
 const POSITIONS = ['원장', '부원장', '간호사', '원무', '마케터', '기타'] as const;
 
-export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }: AuthModalProps) {
+const HOSPITAL_TYPES = [
+  '내과', '외과', '피부과', '성형외과', '정형외과', '안과',
+  '이비인후과', '치과', '한의원', '산부인과', '소아과', '신경과',
+  '정신건강의학과', '재활의학과', '가정의학과', '비뇨기과', '기타',
+] as const;
+
+const SAVED_EMAIL_KEY = 'dp_saved_email';
+const SAVED_PW_KEY = 'dp_saved_pw';
+
+export default function AuthModal({ onClose, onSuccess, initialMode = 'login', closable = true }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
 
   // 로그인 필드
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [saveCredentials, setSaveCredentials] = useState(false);
 
   // 회원가입 추가 필드
   const [fullName, setFullName] = useState('');
@@ -27,6 +38,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
   const [hospitalName, setHospitalName] = useState('');
   const [hospitalAddress, setHospitalAddress] = useState('');
   const [position, setPosition] = useState('');
+  const [hospitalType, setHospitalType] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -35,10 +47,18 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
 
   const supabase = createClient();
 
+  // 저장된 이메일/비밀번호 불러오기
+  useEffect(() => {
+    const savedEmail = localStorage.getItem(SAVED_EMAIL_KEY);
+    const savedPw = localStorage.getItem(SAVED_PW_KEY);
+    if (savedEmail) { setEmail(savedEmail); setSaveCredentials(true); }
+    if (savedPw) setPassword(savedPw);
+  }, []);
+
   const resetFields = () => {
     setEmail(''); setPassword(''); setFullName(''); setPhone('');
     setHospitalName(''); setHospitalAddress(''); setPosition('');
-    setConfirmPassword(''); setError(''); setMessage('');
+    setHospitalType(''); setConfirmPassword(''); setError(''); setMessage('');
   };
 
   const handleLogin = async () => {
@@ -48,13 +68,20 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
     if (error) {
       setError('이메일 또는 비밀번호가 올바르지 않습니다.');
     } else {
+      if (saveCredentials) {
+        localStorage.setItem(SAVED_EMAIL_KEY, email);
+        localStorage.setItem(SAVED_PW_KEY, password);
+      } else {
+        localStorage.removeItem(SAVED_EMAIL_KEY);
+        localStorage.removeItem(SAVED_PW_KEY);
+      }
       onSuccess(); onClose();
     }
     setLoading(false);
   };
 
   const handleSignup = async () => {
-    if (!fullName || !phone || !hospitalName || !position) {
+    if (!fullName || !phone || !hospitalName || !position || !hospitalType) {
       setError('필수 항목을 모두 입력해주세요.'); return;
     }
     if (!email) { setError('이메일을 입력해주세요.'); return; }
@@ -83,7 +110,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
       await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, fullName, phone, hospitalName, hospitalAddress, position }),
+        body: JSON.stringify({ userId, fullName, phone, hospitalName, hospitalAddress, position, hospitalType }),
       });
     }
 
@@ -96,7 +123,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
   const requiredMark = <span className="text-red-500 ml-0.5">*</span>;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden max-h-[90vh] flex flex-col">
         {/* 헤더 */}
         <div className="bg-blue-600 px-6 py-5 flex items-center justify-between shrink-0">
@@ -111,7 +138,9 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-white/70 hover:text-white text-2xl">×</button>
+          {closable && (
+            <button onClick={onClose} className="text-white/70 hover:text-white text-2xl">×</button>
+          )}
         </div>
 
         {/* 탭 */}
@@ -147,6 +176,15 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
                     placeholder="비밀번호 입력" className={inputClass}
                     onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
                 </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={saveCredentials}
+                    onChange={(e) => setSaveCredentials(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-gray-600">이메일 · 비밀번호 저장</span>
+                </label>
               </>
             ) : (
               <>
@@ -183,6 +221,16 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
                       {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
+                </div>
+
+                {/* 병원 유형 */}
+                <div className="space-y-2">
+                  <label className={labelClass}>병원 유형{requiredMark}</label>
+                  <select value={hospitalType} onChange={(e) => setHospitalType(e.target.value)} className={inputClass}>
+                    <option value="">선택</option>
+                    {HOSPITAL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <p className="text-[10px] text-gray-400">글 작성 시 이 유형으로 고정됩니다.</p>
                 </div>
 
                 {/* 병원 주소 */}

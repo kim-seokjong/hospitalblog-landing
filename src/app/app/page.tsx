@@ -63,7 +63,7 @@ export default function AppPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [userPlan, setUserPlan] = useState<{ plan: string; usage_count: number } | null>(null);
+  const [userPlan, setUserPlan] = useState<{ plan: string; usage_count: number; hospital_type?: string | null } | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -93,9 +93,11 @@ export default function AppPage() {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setAuthChecked(true);
+      if (!data.user) setShowAuthModal(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
+      if (!session?.user) setShowAuthModal(true);
     });
     return () => subscription.unsubscribe();
   }, [supabase]);
@@ -104,16 +106,22 @@ export default function AppPage() {
   useEffect(() => {
     if (!user) { setUserPlan(null); return; }
     supabase.from('profiles')
-      .select('plan, usage_count')
+      .select('plan, usage_count, hospital_type')
       .eq('id', user.id)
       .single()
-      .then(({ data }) => { if (data) setUserPlan(data as { plan: string; usage_count: number }); });
+      .then(({ data }) => {
+        if (data) {
+          const profile = data as { plan: string; usage_count: number; hospital_type?: string | null };
+          setUserPlan(profile);
+          if (profile.hospital_type) setHospitalType(profile.hospital_type);
+        }
+      });
   }, [user, supabase]);
 
   const refreshUsage = () => {
     if (!user) return;
-    supabase.from('profiles').select('plan, usage_count').eq('id', user.id).single()
-      .then(({ data }) => { if (data) setUserPlan(data as { plan: string; usage_count: number }); });
+    supabase.from('profiles').select('plan, usage_count, hospital_type').eq('id', user.id).single()
+      .then(({ data }) => { if (data) setUserPlan(data as { plan: string; usage_count: number; hospital_type?: string | null }); });
   };
 
   const handleLogout = async () => {
@@ -296,7 +304,11 @@ export default function AppPage() {
   return (
     <div className="min-h-screen bg-[#0b0d2b] text-white">
       {showAuthModal && (
-        <AuthModal onClose={() => setShowAuthModal(false)} onSuccess={() => setShowAuthModal(false)} />
+        <AuthModal
+          onClose={user ? () => setShowAuthModal(false) : () => {}}
+          onSuccess={() => setShowAuthModal(false)}
+          closable={!!user}
+        />
       )}
 
       {/* 헤더 */}
@@ -423,6 +435,7 @@ export default function AppPage() {
                       <KeywordInput
                         onSubmit={handleKeywordSubmit}
                         isLoading={loadingTitles}
+                        lockedHospitalType={userPlan?.hospital_type ?? undefined}
                       />
                     </div>
 

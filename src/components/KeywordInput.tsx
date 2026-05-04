@@ -11,6 +11,7 @@ interface KeywordInputProps {
   defaultHospitalType?: string;
   defaultAdditionalInfo?: string;
   defaultWritingStyle?: WritingStyle;
+  lockedHospitalType?: string;
 }
 
 const HOSPITAL_TYPES = [
@@ -25,9 +26,9 @@ const WRITING_STYLES: { value: WritingStyle; label: string; desc: string; icon: 
   { value: '사무장',  label: '사무장시점',  desc: '서비스·절차 중심', icon: '🏥' },
 ];
 
-export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle }: KeywordInputProps) {
+export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle, lockedHospitalType }: KeywordInputProps) {
   const [keyword, setKeyword] = useState(defaultKeyword ?? '');
-  const [hospitalType, setHospitalType] = useState(defaultHospitalType || '피부과');
+  const [hospitalType, setHospitalType] = useState(lockedHospitalType ?? defaultHospitalType ?? '피부과');
   const keywordInputRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState('');
   const [additionalInfo, setAdditionalInfo] = useState(defaultAdditionalInfo ?? '');
@@ -69,17 +70,26 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-[#8891bd] mb-1.5">병원 유형</label>
-          <select
-            value={hospitalType}
-            onChange={(e) => setHospitalType(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
-            disabled={isLoading}
-          >
-            {HOSPITAL_TYPES.map((type) => (
-              <option key={type} value={type} className="bg-[#12153d]">{type}</option>
-            ))}
-          </select>
+          <label className="block text-xs font-semibold text-[#8891bd] mb-1.5 flex items-center gap-1.5">
+            병원 유형
+            {lockedHospitalType && <span className="text-[9px] bg-[#2a2b6e] text-[#8891bd] px-1.5 py-0.5 rounded-full">🔒 가입 시 설정됨</span>}
+          </label>
+          {lockedHospitalType ? (
+            <div className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e]/60 text-[#8891bd] text-sm cursor-not-allowed">
+              {lockedHospitalType}
+            </div>
+          ) : (
+            <select
+              value={hospitalType}
+              onChange={(e) => setHospitalType(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
+              disabled={isLoading}
+            >
+              {HOSPITAL_TYPES.map((type) => (
+                <option key={type} value={type} className="bg-[#12153d]">{type}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div>
