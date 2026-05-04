@@ -124,7 +124,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden max-h-[90vh] flex flex-col">
         {/* 헤더 */}
         <div className="bg-blue-600 px-6 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
