@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import KeywordInput from '@/components/KeywordInput';
@@ -70,6 +71,7 @@ export default function AppPage() {
   const [profileRegion, setProfileRegion] = useState('');
 
   const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
 
   const [viewStep, setViewStep] = useState<ViewStep>('input');
   const [keyword, setKeyword] = useState<string>('');
@@ -149,10 +151,9 @@ export default function AppPage() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
     sessionStorage.removeItem(SESSION_FLAG);
-    setUser(null);
-    setUserPlan(null);
+    await supabase.auth.signOut();
+    router.push('/');
   };
 
   const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string) => {
