@@ -41,6 +41,9 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
   const [hospitalType, setHospitalType] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -58,7 +61,9 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
   const resetFields = () => {
     setEmail(''); setPassword(''); setFullName(''); setPhone('');
     setHospitalName(''); setHospitalAddress(''); setPosition('');
-    setHospitalType(''); setConfirmPassword(''); setError(''); setMessage('');
+    setHospitalType(''); setConfirmPassword('');
+    setAgreeTerms(false); setAgreePrivacy(false);
+    setError(''); setMessage('');
   };
 
   const handleLogin = async () => {
@@ -87,6 +92,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     if (!email) { setError('이메일을 입력해주세요.'); return; }
     if (password.length < 6) { setError('비밀번호는 최소 6자리입니다.'); return; }
     if (password !== confirmPassword) { setError('비밀번호가 일치하지 않습니다.'); return; }
+    if (!agreeTerms || !agreePrivacy) { setError('이용약관 및 개인정보처리방침에 동의해주세요.'); return; }
 
     setLoading(true); setError('');
 
@@ -264,6 +270,41 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
                     <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="동일하게 입력" className={inputClass} />
                   </div>
+                </div>
+
+                {/* 약관 동의 */}
+                <div className="border-t border-gray-100 pt-3 space-y-2.5">
+                  <label className="flex items-start gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={agreeTerms}
+                      onChange={(e) => setAgreeTerms(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                    />
+                    <span className="text-xs text-gray-600">
+                      (필수){' '}
+                      <a href="/terms" target="_blank" rel="noopener noreferrer"
+                        className="text-blue-600 underline hover:text-blue-700">이용약관</a>
+                      {' '}및{' '}
+                      <a href="/refund" target="_blank" rel="noopener noreferrer"
+                        className="text-blue-600 underline hover:text-blue-700">환불정책</a>
+                      에 동의합니다.
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={agreePrivacy}
+                      onChange={(e) => setAgreePrivacy(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                    />
+                    <span className="text-xs text-gray-600">
+                      (필수){' '}
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer"
+                        className="text-blue-600 underline hover:text-blue-700">개인정보처리방침</a>
+                      에 동의합니다.
+                    </span>
+                  </label>
                 </div>
               </>
             )}

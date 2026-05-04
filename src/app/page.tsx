@@ -347,6 +347,7 @@ export default function LandingPage() {
         <div className="flex justify-center gap-4">
           <a href="/terms" className="hover:text-gray-400 transition-colors">이용약관</a>
           <a href="/privacy" className="hover:text-gray-400 transition-colors">개인정보처리방침</a>
+          <a href="/refund" className="hover:text-gray-400 transition-colors">환불정책</a>
         </div>
       </footer>
     </div>
