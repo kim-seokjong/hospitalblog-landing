@@ -39,7 +39,7 @@ function AdBanner({ side }: { side: 'left' | 'right' }) {
   );
 }
 
-const GEN_STEPS = ['SEO 키워드 분석', '본문 초안 작성', '의료광고법 검토', '태그 최적화'];
+const GEN_STEPS = ['경쟁 블로그 분석', '구조·키워드 설계', '본문 초안 작성', '의료광고법 검토', '태그 최적화'];
 
 function GeneratingSpinner() {
   return (
@@ -66,6 +66,8 @@ export default function AppPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [userPlan, setUserPlan] = useState<{ plan: string; usage_count: number; hospital_type?: string | null } | null>(null);
+  const [hospitalName, setHospitalName] = useState('');
+  const [profileRegion, setProfileRegion] = useState('');
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -112,18 +114,28 @@ export default function AppPage() {
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  // 플랜/사용량 fetch
+  // 플랜/사용량/병원정보 fetch
   useEffect(() => {
-    if (!user) { setUserPlan(null); return; }
+    if (!user) { setUserPlan(null); setHospitalName(''); setProfileRegion(''); return; }
     supabase.from('profiles')
-      .select('plan, usage_count, hospital_type')
+      .select('plan, usage_count, hospital_type, hospital_name, hospital_address')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
         if (data) {
-          const profile = data as { plan: string; usage_count: number; hospital_type?: string | null };
-          setUserPlan(profile);
+          const profile = data as {
+            plan: string; usage_count: number; hospital_type?: string | null;
+            hospital_name?: string | null; hospital_address?: string | null;
+          };
+          setUserPlan({ plan: profile.plan, usage_count: profile.usage_count, hospital_type: profile.hospital_type });
           if (profile.hospital_type) setHospitalType(profile.hospital_type);
+          if (profile.hospital_name) setHospitalName(profile.hospital_name);
+          if (profile.hospital_address) {
+            const parts = profile.hospital_address.trim().split(/\s+/);
+            const gu = parts.find((p: string) => p.endsWith('구') || p.endsWith('군'));
+            const si = parts.find((p: string) => p.endsWith('시') && p !== '광역시');
+            setProfileRegion(gu || si || '');
+          }
         }
       });
   }, [user, supabase]);
@@ -131,7 +143,9 @@ export default function AppPage() {
   const refreshUsage = () => {
     if (!user) return;
     supabase.from('profiles').select('plan, usage_count, hospital_type').eq('id', user.id).single()
-      .then(({ data }) => { if (data) setUserPlan(data as { plan: string; usage_count: number; hospital_type?: string | null }); });
+      .then(({ data }) => {
+        if (data) setUserPlan(data as { plan: string; usage_count: number; hospital_type?: string | null });
+      });
   };
 
   const handleLogout = async () => {
@@ -141,7 +155,7 @@ export default function AppPage() {
     setUserPlan(null);
   };
 
-  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle) => {
+  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string) => {
     setKeyword(kw);
     setHospitalType(ht);
     setAdditionalInfo(ai);
@@ -156,11 +170,13 @@ export default function AppPage() {
     setViewStep('input');
     setLoadingTitles(true);
 
+    const effectiveRegion = inputRegion || profileRegion;
+
     try {
       const res = await fetch('/api/generate-titles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword: kw, hospitalType: ht }),
+        body: JSON.stringify({ keyword: kw, hospitalType: ht, region: effectiveRegion }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '제목 생성에 실패했습니다.');
@@ -185,6 +201,8 @@ export default function AppPage() {
     setLoadingContent(true);
 
     try {
+      const effectiveRegion = profileRegion;
+
       const [contentRes, tagRes] = await Promise.all([
         fetch('/api/generate-content', {
           method: 'POST',
@@ -192,6 +210,7 @@ export default function AppPage() {
           body: JSON.stringify({
             title: selectedTitle.title, keyword, hospitalType, additionalInfo,
             titleFormat: selectedTitle.seoDetails?.format, writingStyle,
+            region: effectiveRegion, hospitalName,
           }),
         }),
         fetch('/api/generate-tags', {
@@ -219,7 +238,7 @@ export default function AppPage() {
     const action = retryAction;
     setError(null);
     setRetryAction(null);
-    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle);
+    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion);
     else if (action === 'content') handleGenerateContent();
   };
 
@@ -447,6 +466,7 @@ export default function AppPage() {
                         onSubmit={handleKeywordSubmit}
                         isLoading={loadingTitles}
                         lockedHospitalType={userPlan?.hospital_type ?? undefined}
+                        defaultRegion={profileRegion}
                       />
                     </div>
 
@@ -461,7 +481,7 @@ export default function AppPage() {
                           isLoading={loadingContent}
                         />
                         <button
-                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle)}
+                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion)}
                           disabled={loadingTitles}
                           className="w-full py-2.5 text-xs text-[#8891bd] hover:text-white border border-[#2a2b6e] hover:border-[#4f6ef7]/40 bg-[#0b0d2b] hover:bg-[#191970]/30 rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
                         >

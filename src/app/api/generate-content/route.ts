@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/lib/anthropic';
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/lib/medical-compliance';
 import { logUsage } from '@/lib/usage-logger';
+import { searchNaverBlogs, buildCompetitorInsightText } from '@/lib/naver-search';
 
 type TitleFormat = '질문형' | '정보형' | '가이드형' | '노하우형' | '숫자형' | string;
 
@@ -66,11 +67,20 @@ function buildWritingStylePrompt(style: string): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, keyword, hospitalType, additionalInfo, titleFormat, writingStyle = '전문가' } = await req.json();
+    const {
+      title, keyword, hospitalType, additionalInfo, titleFormat,
+      writingStyle = '전문가', region = '', hospitalName = '',
+    } = await req.json();
 
     if (!title || !keyword) {
       return NextResponse.json({ error: '제목과 키워드를 입력해주세요.' }, { status: 400 });
     }
+
+    // 경쟁 블로그 분석 (병렬 실행)
+    const [competitorResults] = await Promise.all([
+      searchNaverBlogs(keyword, 5),
+    ]);
+    const competitorText = buildCompetitorInsightText(competitorResults);
 
     const format: TitleFormat = titleFormat || '정보형';
     const formatGuide = buildFormatSpecificStructure(format, keyword);
@@ -123,6 +133,18 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 
     const writingStyleLabel = writingStyle === '고객이해' ? '고객이해시점 (전문용어 없이 쉽게)' : writingStyle === '사무장' ? '사무장시점 (병원 서비스·프로세스 중심)' : '전문가시점 (의학적 전문성 강조)';
 
+    const competitorSection = competitorText
+      ? `\n【경쟁 블로그 분석 — 검색 의도 파악 후 차별화 필수】\n현재 네이버에서 "${keyword}"으로 상위 노출된 블로그들이 다루는 주제:\n${competitorText}\n→ 위 경쟁 글들이 공통으로 다루는 핵심 주제는 반드시 포함하되, 의학적 깊이와 구체성으로 차별화하세요.\n→ 경쟁 글에서 빠진 관점이나 더 구체적인 정보를 발굴하여 독자에게 추가 가치를 제공하세요.\n`
+      : '';
+
+    const regionSection = region
+      ? `\n【지역 SEO — 자연스럽게 2~3회 삽입】\n대상 지역: ${region}\n예시: "${region} 환자분들의 경우", "${region} 인근에서", "${region}에 위치한 병원에서는"\n소제목에 지역명 포함 금지 (부자연스러움). 본문 단락 안에만 자연스럽게 삽입.\n`
+      : '';
+
+    const hospitalSection = hospitalName
+      ? `\n【병원 개인화 — 최대 1회 자연스럽게】\n병원명: ${hospitalName}\n"저희 병원에서는" 또는 "내원하시면" 형태로 최대 1회만 언급. 직접 홍보 광고 느낌 금지.\n`
+      : '';
+
     const userPrompt = `아래 제목으로 네이버 블로그 본문을 작성해주세요. [글쓰기 시점: ${writingStyleLabel}]
 
 제목: "${title}"
@@ -130,7 +152,7 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 연관 롱테일 키워드 (본문 전체에 자연스럽게 분산 포함): ${longtailKeywords.join(', ')}
 병원 유형: ${hospitalType || '일반 병원'}
 추가 정보: ${additionalInfo || '없음'}
-
+${competitorSection}${regionSection}${hospitalSection}
 ${formatGuide}
 
 【네이버 SEO 키워드 배치 — 반드시 준수】

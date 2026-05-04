@@ -2,15 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/lib/anthropic';
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT } from '@/lib/medical-compliance';
 import { logUsage } from '@/lib/usage-logger';
+import { searchNaverBlogs, buildCompetitorInsightText } from '@/lib/naver-search';
 import type { BlogTitle } from '@/types';
 
 export async function POST(req: NextRequest) {
   try {
-    const { keyword, hospitalType } = await req.json();
+    const { keyword, hospitalType, region = '' } = await req.json();
 
     if (!keyword || typeof keyword !== 'string') {
       return NextResponse.json({ error: '키워드를 입력해주세요.' }, { status: 400 });
     }
+
+    // 경쟁 블로그 제목 분석
+    const competitorResults = await searchNaverBlogs(keyword, 5);
+    const competitorText = buildCompetitorInsightText(competitorResults);
 
     const systemPrompt = `당신은 네이버 블로그 SEO 및 의료 마케팅 전문가입니다.
 네이버 C-Rank와 D.I.A+ 알고리즘에 최적화된 병원 블로그 제목을 생성합니다.
@@ -25,10 +30,17 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 - 클릭 유도 요소 포함 (숫자, 방법, 이유, 특징, 비결, 가이드)
 - 롱테일 키워드 변형 활용으로 다양한 검색 커버`;
 
+    const competitorSection = competitorText
+      ? `\n【현재 네이버 상위 노출 경쟁 블로그 제목 분석】\n${competitorText}\n→ 위 제목들과 중복되지 않는 새로운 각도의 제목을 생성하세요. 경쟁 글이 놓친 검색 의도나 더 구체적인 관점을 발굴하세요.\n`
+      : '';
+
+    const regionHint = region ? `지역: ${region} (해당되는 경우 제목에 자연스럽게 포함 가능)\n` : '';
+
     const userPrompt = `다음 키워드로 네이버 상위노출에 최적화된 병원 블로그 제목 5개를 생성하세요.
 
 키워드: "${keyword}"
 병원 유형: ${hospitalType || '일반 병원'}
+${regionHint}${competitorSection}
 
 각 제목은 서로 다른 형식으로 작성하되, 제목이 약속하는 내용을 본문에서 완전히 충족할 수 있도록 명확한 검색 의도를 담을 것:
 
