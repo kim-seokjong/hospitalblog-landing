@@ -116,6 +116,16 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 - 각 주요 소제목(H2) 아래에 세부 소제목(H3)을 1~2개 작성할 것
   세부 소제목 형식: 반드시 ▶ 기호로 시작하는 독립 줄 (예: ▶ 디스크가 눌리는 정확한 위치)
 
+【GEO 최적화 — 생성형 AI(ChatGPT/Perplexity/Claude/Gemini) 인용 가능성】
+- 각 H2 첫 문장은 "정의문/단정문" 으로 시작 — 앞뒤 맥락 없이도 의미가 통하는 자족 문장
+  예시: "추간판 탈출증은 디스크 수핵이 섬유륜을 뚫고 나와 신경근을 압박하는 질환이다."
+  금지: "이번에는 ○○에 대해 살펴보겠습니다" 같은 도입문
+- 통계·수치·기간을 구체적으로 명시 — AI 검색엔진은 수치 데이터를 우선 인용
+  예시: "성인의 약 80%가 일생에 한 번 경험", "6주간 보존적 치료", "3개월 이상 지속되는 경우"
+- 권위 출처 표현을 1~2회 자연스럽게 삽입 — 직접 URL 링크 금지(네이버 SEO 감점)
+  허용 예시: "대한○○학회 가이드라인에 따르면", "임상 권고안에 의하면", "보건복지부 자료에 따르면", "임상 연구 결과"
+- 인용 가능한 자족 문장 위주로 작성 — AI가 한 문장만 발췌해도 정보 전달이 완결되도록
+
 【절대 금지 - 서식 규칙】
 - #, ##, ###, **텍스트**, *텍스트*, ---, ***, ~~~, == 등 마크다운 기호 절대 사용 금지
 - 볼드, 이탤릭 서식 기호 절대 사용 금지
@@ -172,12 +182,47 @@ ${formatGuide}
 - 예방·관리는 임상 근거가 있는 구체적 행동 지침으로 제시
 
 【작성 조건】
-- 총 1,500~1,800자 (공백 포함)
+- 본문 분량: 1,500~1,800자 (공백 포함, 요약 박스 + FAQ 제외)
 - 의료광고법 준수 (완치, 최고, 100% 등 표현 금지)
 - 핵심 키워드 "${keyword}" 4~6회 자연스럽게 포함
 - 각 소제목 아래 단락 2~3개 (2~4문장씩)
 - 이미지 위치는 [이미지 N: 설명] 형식으로 소제목 아래 표시 (총 5~6개)
-- 마지막 문장: "개인마다 차이가 있을 수 있으니, 전문의와 상담 후 결정하시길 권해드립니다."
+- 본문 마지막 문장: "개인마다 차이가 있을 수 있으니, 전문의와 상담 후 결정하시길 권해드립니다."
+
+【필수 부가 섹션 1 — 핵심 요약 박스 (TL;DR)】
+첫 번째 단락 직후, 첫 H2 시작 전에 아래 형식으로 정확히 삽입:
+
+[핵심 요약]
+${keyword}의 핵심 정의 또는 가장 중요한 사실 1줄 (자족 문장)
+가장 중요한 증상·원인·진단 기준 중 하나 1줄 (수치 포함 권장)
+치료·관리의 핵심 권고 1줄 (구체적 행동 지침)
+[/핵심 요약]
+
+규칙:
+- 정확히 [핵심 요약] 으로 시작, [/핵심 요약] 으로 종료
+- 정확히 3줄, 각 줄은 독립된 자족 문장 (불릿/번호/기호 사용 금지)
+- 각 줄은 50자 이내
+- 박스 앞뒤로 빈 줄
+
+【필수 부가 섹션 2 — 자주 묻는 질문 (FAQ)】
+본문 마지막 문장 ("개인마다 차이가...") 직후에 아래 형식으로 정확히 삽입:
+
+[자주 묻는 질문]
+Q1. (실제 환자가 검색할 법한 구체적 질문 1, ${keyword} 관련)
+A1. (의학적으로 정확한 답변 2~3문장, 자족 문장 위주, 수치 포함 권장)
+
+Q2. (질문 2 — Q1과 다른 관점, 예: 치료/비용/일상생활/예방)
+A2. (답변 2~3문장)
+
+Q3. (질문 3 — 임상 현장에서 자주 받는 질문)
+A3. (답변 2~3문장)
+[/자주 묻는 질문]
+
+규칙:
+- 정확히 [자주 묻는 질문] 으로 시작, [/자주 묻는 질문] 으로 종료
+- Q1./A1./Q2./A2./Q3./A3. 형식 그대로 사용
+- 각 답변은 인용 가능한 자족 문장 (앞뒤 맥락 없어도 의미 전달)
+- AI 검색엔진이 그대로 인용할 수 있도록 명확하고 단정적으로 서술
 
 【절대 쓰지 말 것】
 - "먼저", "또한", "따라서", "이처럼", "정리하자면", "중요한 것은", "결론적으로" 같은 AI 티 나는 표현
@@ -191,7 +236,7 @@ ${formatGuide}
 
     const createMessage = () => anthropic.messages.create({
       model: MODEL,
-      max_tokens: 4096,
+      max_tokens: 6144,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     });
@@ -239,12 +284,15 @@ ${formatGuide}
     const charCount = bodyForCount.length;
     const compliance = checkCompliance(body);
 
-    // SEO 분석
+    // SEO 분석은 본문 영역만 (TL;DR, FAQ 블록 제외)
+    const bodyForSeo = body
+      .replace(/\[핵심 요약\][\s\S]+?\[\/핵심 요약\]/g, '')
+      .replace(/\[자주 묻는 질문\][\s\S]+?\[\/자주 묻는 질문\]/g, '');
     // H2: 앞뒤 빈 줄로 둘러싸인 단독 줄 (15~45자, ▶ 시작 아님)
-    const h2Matches = body.match(/(?:^|\n\n)([^\n▶][^\n]{14,44})(?:\n\n|$)/g) || [];
+    const h2Matches = bodyForSeo.match(/(?:^|\n\n)([^\n▶][^\n]{14,44})(?:\n\n|$)/g) || [];
     const h2Count = h2Matches.length;
     // H3: ▶ 로 시작하는 줄
-    const h3Matches = body.match(/^▶.+/gm) || [];
+    const h3Matches = bodyForSeo.match(/^▶.+/gm) || [];
     const h3Count = h3Matches.length;
     const keywordCount = (body.toLowerCase().split(keyword.toLowerCase()).length - 1);
     // 첫 200자 키워드 포함 여부
@@ -261,6 +309,36 @@ ${formatGuide}
       (firstParaKeyword ? 10 : 0) +
       (subheadingWithKeyword >= 2 ? 10 : 5) +
       Math.min(longtailCoverage * 3, 15)
+    );
+
+    // GEO 분석 — 생성형 AI 인용 가능성 측정
+    const hasSummaryBox = /\[핵심 요약\][\s\S]+?\[\/핵심 요약\]/.test(body);
+    const faqBlockMatch = body.match(/\[자주 묻는 질문\]([\s\S]+?)\[\/자주 묻는 질문\]/);
+    const hasFaqSection = !!faqBlockMatch;
+    const faqCount = faqBlockMatch
+      ? (faqBlockMatch[1].match(/^Q\d+\./gm) || []).length
+      : 0;
+    // 단정문: "~이다", "~한다", "~된다", "~있다" 등 단정형 어미로 끝나는 문장
+    const definitiveStatementCount = (body.match(/[가-힣]+(?:이다|한다|된다|있다|없다|아니다)\.(?:\s|$)/g) || []).length;
+    // 수치 데이터: 숫자 + 단위(%, 일, 주, 개월, 년, 회, 명, 배 등)
+    const numericalDataCount = (body.match(/\d+(?:\.\d+)?\s*(?:%|일|주|개월|달|년|회|차|명|배|건|시간|분|초|cm|mm|kg|mg|ml)/g) || []).length;
+    // 권위 출처 시그널
+    const authoritySignals = [
+      '학회', '가이드라인', '권고안', '권고', '보건복지부',
+      '식품의약품안전처', '식약처', '질병관리청', '임상 연구',
+      '임상연구', '논문', '연구 결과', '연구결과', '의학적으로', '임상적으로',
+    ];
+    const authoritySignalCount = authoritySignals.reduce(
+      (sum, sig) => sum + (body.split(sig).length - 1),
+      0
+    );
+    const geoScore = Math.min(100,
+      (hasSummaryBox ? 25 : 0) +
+      (hasFaqSection ? 25 : 0) +
+      Math.min(faqCount * 5, 15) +
+      Math.min(definitiveStatementCount * 2, 15) +
+      Math.min(numericalDataCount * 2, 10) +
+      Math.min(authoritySignalCount * 2, 10)
     );
 
     // 이미지 가이드라인
@@ -298,6 +376,15 @@ ${formatGuide}
         subheadingWithKeyword,
         longtailCoverage,
         longtailTotal: longtailKeywords.length,
+      },
+      geoAnalysis: {
+        hasSummaryBox,
+        hasFaqSection,
+        faqCount,
+        definitiveStatementCount,
+        numericalDataCount,
+        authoritySignalCount,
+        geoScore,
       },
     });
   } catch (error) {

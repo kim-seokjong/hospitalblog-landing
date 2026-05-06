@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { BlogContent, TagResult, GeneratedImage } from '@/types';
+import { splitBodyByMarkers, toNaverFormat } from '@/lib/naver-format';
 
 interface NaverPublisherProps {
   title: string;
@@ -10,11 +11,11 @@ interface NaverPublisherProps {
   images: GeneratedImage[];
 }
 
-/** 본문에 이미지 자리표시자를 균등 삽입 */
-function buildBodyWithPlaceholders(body: string, imageCount: number): string {
-  if (imageCount === 0) return body;
-  const paragraphs = body.split(/\n{2,}/).filter((p) => p.trim());
-  if (paragraphs.length === 0) return body;
+/** 단일 텍스트 영역에 이미지 자리표시자를 균등 삽입 */
+function insertImagesEvenly(text: string, imageCount: number): string {
+  if (imageCount === 0 || !text.trim()) return text;
+  const paragraphs = text.split(/\n{2,}/).filter((p) => p.trim());
+  if (paragraphs.length === 0) return text;
 
   const result: string[] = [];
   let imgIdx = 1;
@@ -29,6 +30,24 @@ function buildBodyWithPlaceholders(body: string, imageCount: number): string {
     }
   }
   return result.join('\n\n');
+}
+
+/** 본문에 이미지 자리표시자를 균등 삽입 — TL;DR / FAQ 블록은 건너뛴다 */
+function buildBodyWithPlaceholders(body: string, imageCount: number): string {
+  if (imageCount === 0) return toNaverFormat(body);
+
+  const { intro, summaryBlock, middle, faqBlock } = splitBodyByMarkers(body);
+
+  // TL;DR / FAQ 가 없는 경우: 본문 전체에 이미지 분산
+  if (!summaryBlock && !faqBlock) {
+    return toNaverFormat(insertImagesEvenly(body, imageCount));
+  }
+
+  // TL;DR / FAQ 가 있는 경우: middle 영역에만 이미지 삽입 (intro 1단락은 그대로)
+  const middleWithImages = insertImagesEvenly(middle, imageCount);
+
+  const parts = [intro, summaryBlock, middleWithImages, faqBlock].filter(Boolean);
+  return toNaverFormat(parts.join('\n\n'));
 }
 
 async function copyText(text: string): Promise<boolean> {

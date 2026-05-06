@@ -61,6 +61,15 @@ export interface BlogContent {
     longtailCoverage: number;
     longtailTotal: number;
   };
+  geoAnalysis?: {
+    hasSummaryBox: boolean;
+    hasFaqSection: boolean;
+    faqCount: number;
+    definitiveStatementCount: number;
+    numericalDataCount: number;
+    authoritySignalCount: number;
+    geoScore: number;
+  };
 }
 
 export interface BlogTag {

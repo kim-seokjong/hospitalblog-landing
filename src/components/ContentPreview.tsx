@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import type { BlogContent } from '@/types';
+import { toNaverFormat } from '@/lib/naver-format';
 
 interface ContentPreviewProps {
   content: BlogContent;
@@ -24,7 +25,8 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
   const [editBody, setEditBody] = useState('');
 
   const handleCopy = async () => {
-    const fullText = `${content.title}\n\n${content.body}`;
+    const cleanBody = toNaverFormat(content.body);
+    const fullText = `${content.title}\n\n${cleanBody}`;
     await navigator.clipboard.writeText(fullText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -47,32 +49,161 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
     );
   };
 
-  const renderBody = (text: string) => {
-    return text.split('\n').map((line, i) => {
+  const renderSummaryBox = (lines: string[], keyPrefix: string): React.ReactNode => {
+    const items = lines.map((l) => l.trim()).filter(Boolean);
+    return (
+      <div
+        key={keyPrefix}
+        className="my-4 rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-emerald-500/5 p-3 sm:p-4"
+      >
+        <div className="flex items-center gap-1.5 mb-2">
+          <span className="text-base">💡</span>
+          <span className="text-xs sm:text-sm font-bold text-blue-300">핵심 요약</span>
+        </div>
+        <ul className="space-y-1.5">
+          {items.map((s, idx) => (
+            <li key={idx} className="text-xs sm:text-sm text-[#c5caf0] leading-relaxed flex items-start gap-1.5">
+              <span className="text-blue-400 mt-0.5 flex-shrink-0">•</span>
+              <span>{highlightViolations(s)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const renderFaqBox = (lines: string[], keyPrefix: string): React.ReactNode => {
+    const pairs: { q: string; a: string }[] = [];
+    let cur: { q: string; a: string } | null = null;
+    for (const raw of lines) {
+      const t = raw.trim();
+      if (!t) continue;
+      if (/^Q\d+\./.test(t)) {
+        if (cur) pairs.push(cur);
+        cur = { q: t, a: '' };
+      } else if (/^A\d+\./.test(t)) {
+        if (cur) cur.a = t;
+      } else if (cur && cur.a) {
+        cur.a += ' ' + t;
+      }
+    }
+    if (cur) pairs.push(cur);
+
+    return (
+      <div
+        key={keyPrefix}
+        className="my-4 rounded-xl border border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-purple-500/5 p-3 sm:p-4"
+      >
+        <div className="flex items-center gap-1.5 mb-3">
+          <span className="text-base">❓</span>
+          <span className="text-xs sm:text-sm font-bold text-indigo-300">자주 묻는 질문</span>
+        </div>
+        <div className="space-y-3">
+          {pairs.map((qa, idx) => (
+            <div key={idx} className="space-y-1">
+              <p className="text-xs sm:text-sm font-bold text-indigo-200">{highlightViolations(qa.q)}</p>
+              <p className="text-xs sm:text-sm text-[#c5caf0] leading-relaxed pl-3">{highlightViolations(qa.a)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderBody = (text: string): React.ReactNode[] => {
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let i = 0;
+    let key = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // TL;DR 블록
+      if (trimmed === '[핵심 요약]') {
+        const buf: string[] = [];
+        i++;
+        while (i < lines.length && lines[i].trim() !== '[/핵심 요약]') {
+          buf.push(lines[i]);
+          i++;
+        }
+        i++; // skip closing tag
+        elements.push(renderSummaryBox(buf, `summary-${key++}`));
+        continue;
+      }
+
+      // FAQ 블록
+      if (trimmed === '[자주 묻는 질문]') {
+        const buf: string[] = [];
+        i++;
+        while (i < lines.length && lines[i].trim() !== '[/자주 묻는 질문]') {
+          buf.push(lines[i]);
+          i++;
+        }
+        i++; // skip closing tag
+        elements.push(renderFaqBox(buf, `faq-${key++}`));
+        continue;
+      }
+
+      // 세부 소제목 (H3)
       if (line.startsWith('▶')) {
-        return (
-          <h3 key={i} className="text-sm font-semibold text-[#4f6ef7] mt-3 mb-1 pl-2 border-l-2 border-[#4f6ef7]/40">
+        elements.push(
+          <h3 key={`h3-${key++}`} className="text-sm font-semibold text-[#4f6ef7] mt-3 mb-1 pl-2 border-l-2 border-[#4f6ef7]/40">
             {highlightViolations(line.replace(/^▶\s*/, ''))}
           </h3>
         );
+        i++;
+        continue;
       }
+
+      // 이미지 자리표시자
       if (/^\[이미지\s*\d+:/.test(line)) {
-        return (
-          <div key={i} className="my-2 bg-[#191970]/30 border border-dashed border-[#4f6ef7]/30 rounded-lg px-3 py-2 flex items-center gap-2">
+        elements.push(
+          <div key={`img-${key++}`} className="my-2 bg-[#191970]/30 border border-dashed border-[#4f6ef7]/30 rounded-lg px-3 py-2 flex items-center gap-2">
             <span className="text-[#4f6ef7] text-sm">🖼</span>
             <span className="text-xs text-[#8891bd]">{line.replace(/[\[\]]/g, '')}</span>
           </div>
         );
+        i++;
+        continue;
       }
-      if (line.trim().length >= 10 && line.trim().length <= 45 && !line.startsWith('[')) {
-        const prevEmpty = i === 0 || text.split('\n')[i - 1]?.trim() === '';
+
+      // 주요 소제목 (H2): 앞이 빈 줄이고 길이 10~45자, 대괄호로 시작 안 함
+      if (
+        trimmed.length >= 10 &&
+        trimmed.length <= 45 &&
+        !trimmed.startsWith('[')
+      ) {
+        const prevEmpty = i === 0 || lines[i - 1]?.trim() === '';
         if (prevEmpty) {
-          return <h2 key={i} className="text-sm font-bold text-white mt-5 mb-2">{highlightViolations(line)}</h2>;
+          elements.push(
+            <h2 key={`h2-${key++}`} className="text-sm font-bold text-white mt-5 mb-2">
+              {highlightViolations(line)}
+            </h2>
+          );
+          i++;
+          continue;
         }
       }
-      if (line.trim() === '') return <br key={i} />;
-      return <p key={i} className="text-[#c5caf0] leading-relaxed text-xs mb-1">{highlightViolations(line)}</p>;
-    });
+
+      // 빈 줄
+      if (trimmed === '') {
+        elements.push(<br key={`br-${key++}`} />);
+        i++;
+        continue;
+      }
+
+      // 일반 단락
+      elements.push(
+        <p key={`p-${key++}`} className="text-[#c5caf0] leading-relaxed text-xs mb-1">
+          {highlightViolations(line)}
+        </p>
+      );
+      i++;
+    }
+
+    return elements;
   };
 
   return (
@@ -107,6 +238,18 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
           }`}>
             {content.compliance.isCompliant ? '✅ 광고법 준수' : `⚠ 위반 ${content.compliance.violations.length}건`}
           </span>
+          {content.geoAnalysis && (() => {
+            const score = content.geoAnalysis.geoScore;
+            const tone =
+              score >= 70 ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' :
+              score >= 50 ? 'bg-amber-500/10 text-amber-300 border-amber-500/20' :
+              'bg-red-500/10 text-red-300 border-red-500/20';
+            return (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tone}`}>
+                🤖 GEO {score}점
+              </span>
+            );
+          })()}
         </div>
       </div>
 
