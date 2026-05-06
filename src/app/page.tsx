@@ -225,6 +225,18 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+
+          {/* 사용법 시연 영상 */}
+          <div className="mt-8 w-full rounded-2xl overflow-hidden border border-white/10">
+            <video
+              src="/0503.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full aspect-video object-cover"
+            />
+          </div>
         </div>
       </section>
 
