@@ -94,31 +94,31 @@ export default function LandingPage() {
       {/* 헤더 */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b0f1a]/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <span className="text-white text-base">🏥</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="w-7 h-7 flex-shrink-0 bg-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <span className="text-white text-sm">🏥</span>
             </div>
-            <span className="font-bold text-white text-lg">닥터포스트</span>
+            <span className="font-bold text-white text-sm md:text-lg truncate">닥터포스트</span>
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm text-gray-400">
             <a href="#features" className="hover:text-white transition-colors">기능</a>
             <a href="#how" className="hover:text-white transition-colors">사용법</a>
             <a href="#pricing" className="hover:text-white transition-colors">요금제</a>
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {authChecked && (
               user ? (
                 <>
-                  <span className="text-sm text-gray-400 hidden md:block">{user.email}</span>
+                  <span className="text-xs text-gray-400 hidden md:block">{user.email}</span>
                   <button
                     onClick={() => router.push('/app')}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-bold rounded-lg transition-colors"
+                    className="px-3 py-1.5 md:px-4 md:py-2 bg-blue-500 hover:bg-blue-400 text-white text-xs md:text-sm font-bold rounded-lg transition-colors"
                   >
                     앱 열기
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="px-4 py-2 border border-white/20 text-gray-300 text-sm rounded-lg hover:bg-white/10 transition-colors"
+                    className="px-3 py-1.5 md:px-4 md:py-2 border border-white/20 text-gray-300 text-xs md:text-sm rounded-lg hover:bg-white/10 transition-colors"
                   >
                     로그아웃
                   </button>
@@ -127,13 +127,13 @@ export default function LandingPage() {
                 <>
                   <button
                     onClick={handleLogin}
-                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                    className="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm text-gray-400 hover:text-white transition-colors"
                   >
                     로그인
                   </button>
                   <button
                     onClick={handleStart}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-bold rounded-lg transition-colors shadow-lg shadow-blue-500/30"
+                    className="px-3 py-1.5 md:px-4 md:py-2 bg-blue-500 hover:bg-blue-400 text-white text-xs md:text-sm font-bold rounded-lg transition-colors shadow-lg shadow-blue-500/30"
                   >
                     회원가입하기
                   </button>
@@ -162,12 +162,13 @@ export default function LandingPage() {
             병원 블로그,<br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
               AI가 대신
-            </span>{' '}써드립니다
+            </span><br />
+            써드립니다.
           </h1>
 
           <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            키워드 하나만 입력하면 네이버 상위노출에 최적화된<br className="hidden md:block" />
-            블로그 글을 60초 안에 자동으로 작성해드립니다.
+            60초 안에<br />
+            자동으로 작성 해드립니다.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
@@ -186,15 +187,15 @@ export default function LandingPage() {
           </div>
 
           {/* 스탯 */}
-          <div className="mt-16 grid grid-cols-3 gap-6 max-w-2xl mx-auto">
+          <div className="mt-16 grid grid-cols-3 gap-4 max-w-2xl mx-auto">
             {[
-              { num: '60초', label: '블로그 1편 작성' },
-              { num: '9가지', label: 'SEO 자동 분석' },
-              { num: '100%', label: '의료광고법 준수' },
-            ].map(({ num, label }) => (
-              <div key={label} className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                <p className="text-2xl font-extrabold text-blue-400 mb-1">{num}</p>
-                <p className="text-xs text-gray-500">{label}</p>
+              { num: '60초', line1: '블로그', line2: '1편 작성' },
+              { num: '9가지', line1: 'SEO', line2: '자동분석' },
+              { num: '100%', line1: '의료광고법', line2: '준수' },
+            ].map(({ num, line1, line2 }) => (
+              <div key={num} className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 text-center">
+                <p className="text-xl md:text-2xl font-extrabold text-blue-400 mb-1">{num}</p>
+                <p className="text-xs text-gray-500 leading-snug">{line1}<br />{line2}</p>
               </div>
             ))}
           </div>
@@ -231,10 +232,10 @@ export default function LandingPage() {
       <section id="features" className="py-20 border-t border-white/5">
         <div className="max-w-5xl mx-auto px-6">
           <h2 className="text-3xl font-bold text-center text-white mb-4" style={{ letterSpacing: '-0.02em' }}>
-            블로그 운영에 필요한 모든 것
+            블로그 운영에 필요한<br />모든 것
           </h2>
           <p className="text-center text-gray-500 mb-14">
-            키워드 분석부터 발행까지, 병원 마케팅의 모든 과정을 자동화합니다.
+            병원 마케팅의<br />모든 과정을 자동화합니다.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
@@ -262,7 +263,7 @@ export default function LandingPage() {
             합리적인 요금제
           </h2>
           <p className="text-center text-gray-500 mb-14">
-            병원 규모에 맞게 선택하세요. 언제든지 변경 가능합니다.
+            병원 규모에 맞게 선택하세요<br />언제든지 변경 가능합니다.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
@@ -327,10 +328,12 @@ export default function LandingPage() {
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-blue-600/15 rounded-full blur-[100px]" />
         </div>
         <div className="relative max-w-2xl mx-auto px-6 text-center">
-          <h2 className="text-4xl font-extrabold text-white mb-4" style={{ letterSpacing: '-0.02em' }}>
+          <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4 whitespace-nowrap" style={{ letterSpacing: '-0.02em' }}>
             지금 바로 시작해보세요
           </h2>
-          <p className="text-gray-500 mb-8">병원 마케팅의 가장 큰 고민, AI가 해결해드립니다.</p>
+          <p className="text-gray-500 mb-8">
+            병원 마케팅의 가장 큰 고민<br />AI가 해결해 드립니다.
+          </p>
           <button
             onClick={handlePricingClick}
             className="px-10 py-4 bg-blue-500 hover:bg-blue-400 text-white font-bold text-lg rounded-xl transition-all shadow-2xl shadow-blue-500/30 hover:-translate-y-0.5"
