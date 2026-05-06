@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { BlogContent, TagResult, GeneratedImage } from '@/types';
 import { splitBodyByMarkers, toNaverFormat } from '@/lib/naver-format';
+import { downloadImageReliable } from '@/lib/download-image';
 
 interface NaverPublisherProps {
   title: string;
@@ -59,28 +60,6 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-async function downloadImage(url: string, filename: string): Promise<void> {
-  try {
-    if (url.startsWith('data:')) {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-    } else {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    }
-  } catch {
-    window.open(url, '_blank');
-  }
-}
-
 export default function NaverPublisher({ title, content, tags, images }: NaverPublisherProps) {
   const [titleCopied, setTitleCopied] = useState(false);
   const [bodyCopied, setBodyCopied] = useState(false);
@@ -109,8 +88,12 @@ export default function NaverPublisher({ title, content, tags, images }: NaverPu
 
   const handleDownloadOne = async (img: GeneratedImage, index: number) => {
     const safe = img.prompt.slice(0, 20).replace(/[^\w가-힣]/g, '_');
-    await downloadImage(img.url, `이미지${index + 1}_${safe}.png`);
-    setDownloaded((prev) => new Set([...prev, img.id]));
+    try {
+      await downloadImageReliable(img.url, `이미지${index + 1}_${safe}`);
+      setDownloaded((prev) => new Set([...prev, img.id]));
+    } catch {
+      // 실패 시 fallback이 새 탭을 열었으므로 추가 처리 없음
+    }
   };
 
   const handleDownloadAll = async () => {

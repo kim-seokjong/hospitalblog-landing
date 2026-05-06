@@ -4,7 +4,66 @@ import { OPENAI_IMAGE_MODEL } from '@/lib/openai';
 import { logUsage } from '@/lib/usage-logger';
 import type { GeneratedImage } from '@/types';
 
-export const maxDuration = 120;
+export const maxDuration = 180;
+
+const IMAGE_CONCURRENCY = 3;
+const IMAGE_MAX_RETRIES = 2;
+
+/** 콘텐츠 정책 위반 등 재시도해도 의미 없는 오류 패턴 */
+function isPermanentImageError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('content_policy') ||
+    lower.includes('content policy') ||
+    lower.includes('safety') ||
+    lower.includes('unauthorized') ||
+    lower.includes('invalid_api_key')
+  );
+}
+
+/** 일시적 오류(429/5xx/네트워크)에 대한 지수 백오프 재시도 */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = IMAGE_MAX_RETRIES): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isPermanentImageError(msg)) throw err;
+      if (attempt === maxRetries) throw err;
+      const delay = 1500 * Math.pow(2, attempt); // 1.5s, 3s, 6s
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr ?? new Error('재시도 실패');
+}
+
+/** 작업을 동시성 제한 안에서 실행 — 결과는 입력 순서대로 반환 */
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let cursor = 0;
+
+  async function next(): Promise<void> {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= items.length) return;
+      try {
+        results[idx] = { status: 'fulfilled', value: await worker(items[idx], idx) };
+      } catch (err) {
+        results[idx] = { status: 'rejected', reason: err };
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => next());
+  await Promise.all(workers);
+  return results;
+}
 
 // Flux.1 Pro (fal.ai) 로 이미지 1장 생성
 async function generateWithFal(prompt: string): Promise<string> {
@@ -184,21 +243,23 @@ async function generateWithOpenAIImages(
   const images: GeneratedImage[] = [];
   const errors: string[] = [];
 
-  await Promise.allSettled(
-    prompts.map(async (prompt, index) => {
-      try {
-        const url = await generateOneOpenAIImage(prompt);
-        images.push({
-          id: `img-${index + 1}`,
-          url,
-          prompt,
-          revised_prompt: (descriptions[index] || prompt).slice(0, 80),
-        });
-      } catch (err) {
-        errors.push(`img-${index + 1}: ${err instanceof Error ? err.message : '실패'}`);
-      }
-    })
+  const settled = await runWithConcurrency(prompts, IMAGE_CONCURRENCY, (prompt) =>
+    withRetry(() => generateOneOpenAIImage(prompt))
   );
+
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      images.push({
+        id: `img-${index + 1}`,
+        url: result.value,
+        prompt: prompts[index],
+        revised_prompt: (descriptions[index] || prompts[index]).slice(0, 80),
+      });
+    } else {
+      const reason = result.reason instanceof Error ? result.reason.message : '실패';
+      errors.push(`img-${index + 1}: ${reason}`);
+    }
+  });
 
   if (images.length > 0) {
     logUsage({ feature: 'generate-images', api_provider: 'openai', image_count: images.length });
@@ -219,21 +280,23 @@ async function generateCardnewsImages(
   const images: GeneratedImage[] = [];
   const errors: string[] = [];
 
-  await Promise.allSettled(
-    prompts.map(async (prompt, index) => {
-      try {
-        const url = await generateWithFal(prompt);
-        images.push({
-          id: `img-${index + 1}`,
-          url,
-          prompt,
-          revised_prompt: (descriptions[index] || prompt).slice(0, 80),
-        });
-      } catch (err) {
-        errors.push(`img-${index + 1}: ${err instanceof Error ? err.message : '실패'}`);
-      }
-    })
+  const settled = await runWithConcurrency(prompts, IMAGE_CONCURRENCY, (prompt) =>
+    withRetry(() => generateWithFal(prompt))
   );
+
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      images.push({
+        id: `img-${index + 1}`,
+        url: result.value,
+        prompt: prompts[index],
+        revised_prompt: (descriptions[index] || prompts[index]).slice(0, 80),
+      });
+    } else {
+      const reason = result.reason instanceof Error ? result.reason.message : '실패';
+      errors.push(`img-${index + 1}: ${reason}`);
+    }
+  });
 
   if (images.length > 0) {
     logUsage({

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { GeneratedImage } from '@/types';
 import ImageEditor from '@/components/ImageEditor';
+import { downloadImageReliable } from '@/lib/download-image';
 
 interface ImageGalleryProps {
   images: GeneratedImage[];
@@ -96,27 +97,19 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
   }, [images, compose, style]);
 
   const handleDownload = async (image: GeneratedImage) => {
-    if (style === 'upload') {
-      const link = document.createElement('a');
-      link.href = composited[image.id] || image.url;
-      link.download = `edited-${keyword}-${image.id}.png`;
-      link.click();
-    } else if (style === 'photo') {
-      const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(image.url)}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `photo-${keyword}-${image.id}.jpg`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } else {
-      const dataUrl = composited[image.id];
-      if (!dataUrl) return;
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `cardnews-${keyword}-${image.id}.png`;
-      link.click();
+    try {
+      if (style === 'upload') {
+        const url = composited[image.id] || image.url;
+        await downloadImageReliable(url, `edited-${keyword}-${image.id}`);
+      } else if (style === 'photo') {
+        await downloadImageReliable(image.url, `photo-${keyword}-${image.id}`);
+      } else {
+        const dataUrl = composited[image.id];
+        if (!dataUrl) return;
+        await downloadImageReliable(dataUrl, `cardnews-${keyword}-${image.id}`);
+      }
+    } catch {
+      // fallback은 헬퍼 내부에서 새 탭으로 열어줌
     }
   };
 
