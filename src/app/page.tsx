@@ -227,15 +227,42 @@ export default function LandingPage() {
           </div>
 
           {/* 사용법 시연 영상 */}
-          <div className="mt-8 w-full rounded-2xl overflow-hidden border border-white/10">
-            <video
-              src="/0503.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full aspect-video object-cover"
-            />
+          <div className="mt-12 relative">
+            {/* 배경 글로우 */}
+            <div className="absolute inset-0 bg-blue-600/10 rounded-3xl blur-2xl scale-105 pointer-events-none" />
+
+            <div className="relative rounded-2xl overflow-hidden border border-blue-500/30 shadow-2xl shadow-blue-500/20 bg-[#0d1120]">
+              {/* 브라우저 상단 바 */}
+              <div className="flex items-center gap-3 px-4 py-3 bg-white/5 border-b border-white/10">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-red-500/70" />
+                  <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
+                  <span className="w-3 h-3 rounded-full bg-green-500/70" />
+                </div>
+                <div className="flex-1 flex justify-center">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-md border border-white/10 text-xs text-gray-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    닥터포스트 · 실시간 시연
+                  </div>
+                </div>
+                <div className="w-16" />
+              </div>
+
+              {/* 영상 */}
+              <video
+                src="/0503.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full aspect-video object-cover"
+              />
+            </div>
+
+            {/* 하단 캡션 */}
+            <p className="mt-4 text-center text-xs text-gray-500">
+              실제 사용 화면입니다 · 키워드 입력부터 발행까지 60초
+            </p>
           </div>
         </div>
       </section>
