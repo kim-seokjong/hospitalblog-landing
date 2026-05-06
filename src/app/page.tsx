@@ -379,24 +379,18 @@ export default function LandingPage() {
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[200px] bg-cyan-600/10 rounded-full blur-[80px]" />
         </div>
         <div className="relative max-w-2xl mx-auto px-6 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-full text-xs font-semibold mb-6 border border-blue-500/20">
-            <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
-            지금 무료로 시작하세요
-          </div>
           <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4 whitespace-nowrap" style={{ letterSpacing: '-0.02em' }}>
             지금 바로 시작해보세요
           </h2>
-          <p className="text-gray-400 mb-2">
+          <p className="text-gray-400 mb-8">
             병원 마케팅의 가장 큰 고민<br />AI가 해결해 드립니다.
           </p>
-          <p className="text-xs text-gray-600 mb-8">무료 플랜으로 월 2건 무료 체험 가능</p>
           <button
             onClick={handlePricingClick}
             className="px-10 py-4 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white font-bold text-lg rounded-xl transition-all shadow-2xl shadow-blue-500/30 hover:-translate-y-0.5"
           >
-            무료로 시작하기 →
+            시작하기 →
           </button>
-          <p className="mt-4 text-xs text-gray-600">신용카드 불필요 · 언제든 해지 가능</p>
         </div>
       </section>
 
