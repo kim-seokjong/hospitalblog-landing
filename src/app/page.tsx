@@ -193,9 +193,10 @@ export default function LandingPage() {
               { num: '9가지', line1: 'SEO', line2: '자동분석' },
               { num: '100%', line1: '의료광고법', line2: '준수' },
             ].map(({ num, line1, line2 }) => (
-              <div key={num} className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 text-center">
-                <p className="text-xl md:text-2xl font-extrabold text-blue-400 mb-1">{num}</p>
-                <p className="text-xs text-gray-500 leading-snug">{line1}<br />{line2}</p>
+              <div key={num} className="relative bg-gradient-to-b from-blue-500/10 to-white/5 border border-blue-500/20 rounded-2xl p-4 md:p-5 text-center overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+                <p className="relative text-xl md:text-2xl font-extrabold text-blue-400 mb-1">{num}</p>
+                <p className="relative text-xs text-gray-400 leading-snug">{line1}<br />{line2}</p>
               </div>
             ))}
           </div>
@@ -205,21 +206,24 @@ export default function LandingPage() {
       {/* 사용법 */}
       <section id="how" className="py-20 border-t border-white/5">
         <div className="max-w-4xl mx-auto px-6">
+          <p className="text-center text-xs font-bold text-blue-400 tracking-widest mb-3 uppercase">How it works</p>
           <h2 className="text-3xl font-bold text-center text-white mb-4" style={{ letterSpacing: '-0.02em' }}>
             3단계로 끝납니다
           </h2>
           <p className="text-center text-gray-500 mb-14">복잡한 설정 없이 바로 사용하세요.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { step: '01', title: '키워드 입력', desc: '병원 시술명이나 질환명을 입력하세요. 예) 레이저 토닝, 허리디스크' },
-              { step: '02', title: 'AI 자동 작성', desc: 'Claude AI가 네이버 알고리즘에 맞춘 제목·본문·태그를 자동 생성합니다.' },
-              { step: '03', title: '복사 후 발행', desc: '생성된 글을 복사해서 네이버 블로그에 붙여넣기만 하면 끝입니다.' },
+              { step: '1', title: '키워드 입력', desc: '병원 시술명이나 질환명을 입력하세요. 예) 레이저 토닝, 허리디스크' },
+              { step: '2', title: 'AI 자동 작성', desc: 'Claude AI가 네이버 알고리즘에 맞춘 제목·본문·태그를 자동 생성합니다.' },
+              { step: '3', title: '복사 후 발행', desc: '생성된 글을 복사해서 네이버 블로그에 붙여넣기만 하면 끝입니다.' },
             ].map(({ step, title, desc }, i) => (
-              <div key={step} className="relative bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-blue-500/30 transition-colors">
+              <div key={step} className="relative bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-blue-500/40 hover:bg-white/[0.07] transition-all">
                 {i < 2 && (
-                  <div className="hidden md:block absolute top-1/2 -right-2 -translate-y-1/2 text-gray-700 text-lg z-10">→</div>
+                  <div className="hidden md:block absolute top-8 -right-3 text-blue-500/40 text-xl z-10">→</div>
                 )}
-                <p className="text-4xl font-black text-blue-500/20 mb-3">{step}</p>
+                <div className="w-9 h-9 rounded-full bg-blue-500/20 border border-blue-500/40 flex items-center justify-center mb-4">
+                  <span className="text-sm font-extrabold text-blue-400">{step}</span>
+                </div>
                 <h3 className="font-bold text-white mb-2">{title}</h3>
                 <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
               </div>
@@ -270,6 +274,7 @@ export default function LandingPage() {
       {/* 기능 섹션 */}
       <section id="features" className="py-20 border-t border-white/5">
         <div className="max-w-5xl mx-auto px-6">
+          <p className="text-center text-xs font-bold text-cyan-400 tracking-widest mb-3 uppercase">Features</p>
           <h2 className="text-3xl font-bold text-center text-white mb-4" style={{ letterSpacing: '-0.02em' }}>
             블로그 운영에 필요한<br />모든 것
           </h2>
@@ -278,15 +283,17 @@ export default function LandingPage() {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "Claude AI가 네이버 C-Rank · D.I.A+ 최적화 블로그 글을 자동으로 작성합니다.", color: "blue" },
-              { icon: "🖼️", title: "이미지 자동 생성", desc: "Flux.1 Pro AI로 병원 특화 카드뉴스와 실사 이미지를 자동 생성합니다.", color: "indigo" },
-              { icon: "🔍", title: "SEO 분석 최적화", desc: "9가지 SEO 체크리스트로 검색 최적화 점수를 실시간으로 분석합니다.", color: "cyan" },
-              { icon: "⚖️", title: "의료광고법 검수", desc: "의료법 제56조 기준으로 과장·허위 광고 문구를 자동 필터링합니다.", color: "emerald" },
-              { icon: "📊", title: "네이버 트렌드", desc: "DataLab 기반으로 실시간 키워드 검색 트렌드를 분석합니다.", color: "violet" },
-              { icon: "🎯", title: "독창성 검사", desc: "네이버 블로그 검색으로 중복 콘텐츠 여부를 자동으로 검사합니다.", color: "rose" },
-            ].map(({ icon, title, desc, color }) => (
-              <div key={title} className={`bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-${color}-500/30 hover:bg-white/[0.07] transition-all group`}>
-                <div className="text-3xl mb-4">{icon}</div>
+              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "Claude AI가 네이버 C-Rank · D.I.A+ 최적화 블로그 글을 자동으로 작성합니다.", iconBg: "bg-blue-500/20", iconBorder: "border-blue-500/30" },
+              { icon: "🖼️", title: "이미지 자동 생성", desc: "Flux.1 Pro AI로 병원 특화 카드뉴스와 실사 이미지를 자동 생성합니다.", iconBg: "bg-indigo-500/20", iconBorder: "border-indigo-500/30" },
+              { icon: "🔍", title: "SEO 분석 최적화", desc: "9가지 SEO 체크리스트로 검색 최적화 점수를 실시간으로 분석합니다.", iconBg: "bg-cyan-500/20", iconBorder: "border-cyan-500/30" },
+              { icon: "⚖️", title: "의료광고법 검수", desc: "의료법 제56조 기준으로 과장·허위 광고 문구를 자동 필터링합니다.", iconBg: "bg-emerald-500/20", iconBorder: "border-emerald-500/30" },
+              { icon: "📊", title: "네이버 트렌드", desc: "DataLab 기반으로 실시간 키워드 검색 트렌드를 분석합니다.", iconBg: "bg-violet-500/20", iconBorder: "border-violet-500/30" },
+              { icon: "🎯", title: "독창성 검사", desc: "네이버 블로그 검색으로 중복 콘텐츠 여부를 자동으로 검사합니다.", iconBg: "bg-rose-500/20", iconBorder: "border-rose-500/30" },
+            ].map(({ icon, title, desc, iconBg, iconBorder }) => (
+              <div key={title} className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-white/20 hover:bg-white/[0.07] transition-all group">
+                <div className={`w-11 h-11 rounded-xl ${iconBg} border ${iconBorder} flex items-center justify-center text-xl mb-4`}>
+                  {icon}
+                </div>
                 <h3 className="font-bold text-white mb-2 group-hover:text-blue-300 transition-colors">{title}</h3>
                 <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
               </div>
@@ -298,6 +305,7 @@ export default function LandingPage() {
       {/* 요금 섹션 */}
       <section id="pricing" className="py-20 border-t border-white/5">
         <div className="max-w-4xl mx-auto px-6">
+          <p className="text-center text-xs font-bold text-emerald-400 tracking-widest mb-3 uppercase">Pricing</p>
           <h2 className="text-3xl font-bold text-center text-white mb-4" style={{ letterSpacing: '-0.02em' }}>
             합리적인 요금제
           </h2>
@@ -324,13 +332,16 @@ export default function LandingPage() {
             ].map(({ name, price, desc, features, highlight }) => (
               <div key={name} className={`relative p-6 rounded-2xl border flex flex-col ${
                 highlight
-                  ? 'border-blue-500/50 bg-blue-500/10 shadow-2xl shadow-blue-500/10'
+                  ? 'border-blue-400/60 bg-gradient-to-b from-blue-500/15 to-blue-500/5 shadow-2xl shadow-blue-500/20'
                   : 'border-white/10 bg-white/5'
               }`}>
                 {highlight && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-bold text-white bg-blue-500 px-3 py-1 rounded-full">
-                    인기
-                  </span>
+                  <>
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-blue-400/5 to-transparent pointer-events-none" />
+                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-bold text-white bg-gradient-to-r from-blue-500 to-cyan-500 px-4 py-1 rounded-full shadow-lg shadow-blue-500/30">
+                      가장 인기
+                    </span>
+                  </>
                 )}
                 <h3 className="text-xl font-bold text-white mb-1">{name}</h3>
                 <p className="text-2xl font-extrabold text-white mt-1 mb-1">{price}<span className="text-sm font-normal text-gray-500"> / 월</span></p>
@@ -362,23 +373,30 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-20 border-t border-white/5 relative overflow-hidden">
+      <section className="py-24 border-t border-white/5 relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-blue-600/15 rounded-full blur-[100px]" />
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-blue-600/20 rounded-full blur-[120px]" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[200px] bg-cyan-600/10 rounded-full blur-[80px]" />
         </div>
         <div className="relative max-w-2xl mx-auto px-6 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-full text-xs font-semibold mb-6 border border-blue-500/20">
+            <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+            지금 무료로 시작하세요
+          </div>
           <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4 whitespace-nowrap" style={{ letterSpacing: '-0.02em' }}>
             지금 바로 시작해보세요
           </h2>
-          <p className="text-gray-500 mb-8">
+          <p className="text-gray-400 mb-2">
             병원 마케팅의 가장 큰 고민<br />AI가 해결해 드립니다.
           </p>
+          <p className="text-xs text-gray-600 mb-8">무료 플랜으로 월 2건 무료 체험 가능</p>
           <button
             onClick={handlePricingClick}
-            className="px-10 py-4 bg-blue-500 hover:bg-blue-400 text-white font-bold text-lg rounded-xl transition-all shadow-2xl shadow-blue-500/30 hover:-translate-y-0.5"
+            className="px-10 py-4 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white font-bold text-lg rounded-xl transition-all shadow-2xl shadow-blue-500/30 hover:-translate-y-0.5"
           >
-            시작하기 →
+            무료로 시작하기 →
           </button>
+          <p className="mt-4 text-xs text-gray-600">신용카드 불필요 · 언제든 해지 가능</p>
         </div>
       </section>
 
