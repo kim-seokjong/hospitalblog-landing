@@ -468,11 +468,17 @@ export default function AppPage() {
               href={KAKAO_CHANNEL_URL}
               target="_blank"
               rel="noopener noreferrer"
-              title="문의하기"
-              aria-label="문의하기"
-              className="w-9 h-9 flex items-center justify-center rounded-lg border border-[#2a2b6e] text-[#8891bd] hover:text-white hover:bg-[#191970] active:bg-[#191970] transition-colors"
+              title="카카오톡 채널 문의하기"
+              aria-label="카카오톡 채널 문의하기"
+              className="w-9 h-9 flex items-center justify-center rounded-lg transition-transform hover:scale-105 active:scale-95"
+              style={{ background: '#FEE500' }}
             >
-              <span className="text-base">💬</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path
+                  d="M12 3.5C6.7 3.5 2.4 6.9 2.4 11.1c0 2.7 1.8 5.1 4.6 6.5l-1.1 4c-.1.4.3.7.6.5l4.7-3.1c.3 0 .5 0 .8 0 5.3 0 9.6-3.4 9.6-7.6S17.3 3.5 12 3.5z"
+                  fill="#3C1E1E"
+                />
+              </svg>
             </a>
             {/* 사용량 표시 */}
             {userPlan && planLimit !== null && (
