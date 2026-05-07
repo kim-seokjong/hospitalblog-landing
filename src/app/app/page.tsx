@@ -376,9 +376,15 @@ export default function AppPage() {
     <div className="min-h-screen bg-[#0b0d2b] text-white">
       {showAuthModal && (
         <AuthModal
-          onClose={user ? () => setShowAuthModal(false) : () => {}}
+          onClose={() => {
+            if (user) {
+              setShowAuthModal(false);
+            } else {
+              router.push('/');
+            }
+          }}
           onSuccess={() => { sessionStorage.setItem(SESSION_FLAG, '1'); setShowAuthModal(false); }}
-          closable={!!user}
+          closable={true}
         />
       )}
 
