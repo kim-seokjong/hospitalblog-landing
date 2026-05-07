@@ -27,6 +27,50 @@ type ViewStep = 'input' | 'content';
 
 const PLAN_LIMITS: Record<string, number> = { free: 2, basic: 10, standard: 20, pro: 999 };
 
+const KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_xefMRX';
+const CONTACT_DISMISSED_KEY = 'dp_contact_dismissed';
+
+function ContactFloatingButton() {
+  const [dismissed, setDismissed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setDismissed(localStorage.getItem(CONTACT_DISMISSED_KEY) === '1');
+  }, []);
+
+  if (dismissed !== false) return null;
+
+  const handleDismiss = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    localStorage.setItem(CONTACT_DISMISSED_KEY, '1');
+    setDismissed(true);
+  };
+
+  return (
+    <a
+      href={KAKAO_CHANNEL_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-30 flex items-center gap-2 pl-4 pr-2 py-2.5 rounded-full text-sm font-bold no-underline shadow-2xl transition-transform hover:scale-105"
+      style={{
+        background: 'linear-gradient(135deg, #fee500, #ffd900)',
+        color: '#3c1e1e',
+        boxShadow: '0 8px 24px rgba(254, 229, 0, 0.35), 0 4px 12px rgba(0,0,0,0.25)',
+      }}
+    >
+      <span className="text-base">💬</span>
+      <span>문의하기</span>
+      <button
+        onClick={handleDismiss}
+        aria-label="문의하기 버튼 닫기"
+        className="ml-1 w-6 h-6 flex items-center justify-center rounded-full bg-black/15 hover:bg-black/25 transition-colors text-base leading-none"
+      >
+        ×
+      </button>
+    </a>
+  );
+}
+
 function HospitalMarketingBanner() {
   return (
     <a
@@ -419,6 +463,17 @@ export default function AppPage() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            {/* 문의하기 (카카오톡 채널) */}
+            <a
+              href={KAKAO_CHANNEL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="문의하기"
+              aria-label="문의하기"
+              className="w-9 h-9 flex items-center justify-center rounded-lg border border-[#2a2b6e] text-[#8891bd] hover:text-white hover:bg-[#191970] active:bg-[#191970] transition-colors"
+            >
+              <span className="text-base">💬</span>
+            </a>
             {/* 사용량 표시 */}
             {userPlan && planLimit !== null && (
               <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[#191970]/50 border border-[#2a2b6e]">
@@ -668,6 +723,8 @@ export default function AppPage() {
           <p className="text-[10px] text-[#555d8a] flex-shrink-0">닥터포스트 © 2026 · Claude AI · 네이버 C-Rank · D.I.A+ 최적화</p>
         </div>
       </footer>
+
+      <ContactFloatingButton />
     </div>
   );
 }
