@@ -25,8 +25,6 @@ import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, W
 
 type ViewStep = 'input' | 'content';
 
-const SESSION_FLAG = 'dp_authed';
-
 const PLAN_LIMITS: Record<string, number> = { free: 2, basic: 10, standard: 20, pro: 999 };
 
 function HospitalMarketingBanner() {
@@ -136,22 +134,15 @@ export default function AppPage() {
   const [retryAction, setRetryAction] = useState<'titles' | 'content' | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      const authedThisSession = sessionStorage.getItem(SESSION_FLAG);
-      if (data.user && !authedThisSession) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setAuthChecked(true);
-        setShowAuthModal(true);
-      } else {
-        setUser(data.user);
-        setAuthChecked(true);
-        if (!data.user) setShowAuthModal(true);
-      }
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setAuthChecked(true);
+      if (!data.user) setShowAuthModal(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
       if (!session?.user) setShowAuthModal(true);
+      else setShowAuthModal(false);
     });
     return () => subscription.unsubscribe();
   }, [supabase]);
@@ -191,7 +182,6 @@ export default function AppPage() {
   };
 
   const handleLogout = async () => {
-    sessionStorage.removeItem(SESSION_FLAG);
     await supabase.auth.signOut();
     router.push('/');
   };
@@ -383,7 +373,7 @@ export default function AppPage() {
               router.push('/');
             }
           }}
-          onSuccess={() => { sessionStorage.setItem(SESSION_FLAG, '1'); setShowAuthModal(false); }}
+          onSuccess={() => { setShowAuthModal(false); }}
           closable={true}
         />
       )}
