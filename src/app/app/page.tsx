@@ -29,11 +29,51 @@ const SESSION_FLAG = 'dp_authed';
 
 const PLAN_LIMITS: Record<string, number> = { free: 2, basic: 10, standard: 20, pro: 999 };
 
+function HospitalMarketingBanner() {
+  return (
+    <a
+      href="http://www.hospitalmarketing.kr/"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="ad-banner-hm relative flex flex-col rounded-xl no-underline cursor-pointer"
+      style={{ width: '160px', height: '250px' }}
+    >
+      <span className="ad-pulse-dot absolute top-2.5 right-2.5 w-1.5 h-1.5 rounded-full bg-red-500" />
+      <div className="flex-1 flex flex-col px-2.5 pt-3 pb-3">
+        <div className="text-white font-black leading-tight" style={{ fontSize: '18px', lineHeight: 1.25 }}>
+          이것만으로<br /><span className="text-[#2ecc71]">충분</span>하세요?
+        </div>
+        <div className="mt-1.5 mb-auto font-bold" style={{ fontSize: '10px', color: '#f59e0b' }}>
+          아직 안 하고 계신 것들 ↓
+        </div>
+        <div className="flex flex-col gap-1 mb-2">
+          {[
+            { icon: '📸', label: '인스타그램 · 숏폼' },
+            { icon: '🎬', label: '유튜브 · 영상광고' },
+            { icon: '📍', label: '네이버 스마트플레이스' },
+            { icon: '📺', label: '전광판 · LED' },
+            { icon: '🚌', label: '버스 · 택시 랩핑' },
+            { icon: '📦', label: '택배 광고' },
+          ].map(item => (
+            <div key={item.label} className="flex items-center gap-1.5 font-medium" style={{ fontSize: '10px', color: '#e2e8f0', lineHeight: 1.2 }}>
+              <span className="flex-shrink-0 text-center" style={{ fontSize: '11px', width: '14px' }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="ad-banner-hm-cta flex-shrink-0 flex items-center justify-center gap-1 text-white font-extrabold rounded-md whitespace-nowrap" style={{ fontSize: '11px', padding: '9px 6px' }}>
+          풀세팅 알아보기 <span className="ad-banner-hm-arrow">→</span>
+        </div>
+      </div>
+    </a>
+  );
+}
+
 function AdBanner({ side }: { side: 'left' | 'right' }) {
   return (
-    <div className={`hidden xl:flex flex-col w-36 flex-shrink-0 ${side === 'left' ? 'mr-4' : 'ml-4'}`}>
+    <div className={`hidden xl:flex flex-col flex-shrink-0 ${side === 'left' ? 'mr-4' : 'ml-4'}`} style={{ width: '160px' }}>
       <div className="sticky top-24 space-y-4">
-        <div className="w-full h-64" />
+        {side === 'left' ? <HospitalMarketingBanner /> : <div className="w-full h-64" />}
         <div className="w-full h-56" />
       </div>
     </div>
