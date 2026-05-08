@@ -38,11 +38,17 @@ export async function chargeWithBillingKey(params: {
       },
       body: JSON.stringify({
         storeId: getStoreId(),
-        billingKey: params.billingKey,
         orderName: params.orderName,
         amount: { total: params.amount },
         currency: 'KRW',
         customer: { email: params.customerEmail },
+        method: {
+          card: {
+            credential: {
+              billingKey: params.billingKey,
+            },
+          },
+        },
       }),
     },
   )
