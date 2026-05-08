@@ -55,13 +55,22 @@ export default function BillingButton({
         throw new Error('정기구독을 지원하지 않는 환경입니다.')
       }
 
+      const customerPayload: Record<string, unknown> = {
+        customerId: customer.customerId,
+        email: customer.email,
+        fullName: customer.fullName ?? '구매자',
+      }
+      if (customer.phoneNumber) {
+        customerPayload.phoneNumber = customer.phoneNumber
+      }
+
       const result = await window.PortOne.requestIssueBillingKey({
         storeId,
         channelKey,
         issueId: paymentId,
         issueName: orderName,
         billingKeyMethod: 'CARD',
-        customer: { customerId: customer.customerId, email: customer.email },
+        customer: customerPayload,
         locale: 'KO_KR',
       })
 

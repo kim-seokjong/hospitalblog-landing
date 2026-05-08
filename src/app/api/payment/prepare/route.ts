@@ -35,6 +35,16 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, phone')
+      .eq('id', user.id)
+      .single()
+
+    const fullName = profile?.full_name?.trim()
+      || (user.email ? user.email.split('@')[0] : null)
+      || '구매자'
+
     const planInfo = PLANS[plan]
     const paymentId = randomUUID()
 
@@ -52,7 +62,12 @@ export async function POST(req: NextRequest) {
       amount: planInfo.price,
       orderName: `닥터포스트 ${planInfo.name} 플랜 자동갱신 구독`,
       channelKey,
-      customer: { customerId, email: user.email ?? '' },
+      customer: {
+        customerId,
+        email: user.email ?? '',
+        fullName,
+        phoneNumber: profile?.phone ?? undefined,
+      },
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '서버 오류'
