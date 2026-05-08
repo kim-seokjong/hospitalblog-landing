@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       || '구매자'
 
     const planInfo = PLANS[plan]
-    const paymentId = randomUUID()
+    const paymentId = randomUUID().replace(/-/g, '')
 
     await createPendingPayment({
       id: paymentId,

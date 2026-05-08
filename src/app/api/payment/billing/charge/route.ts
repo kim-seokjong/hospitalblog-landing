@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     const profile = await getProfile(userId)
     const plan = PLANS[bk.plan as PlanId]
-    const paymentId = randomUUID()
+    const paymentId = randomUUID().replace(/-/g, '')
 
     await createPendingPayment({
       id: paymentId,
