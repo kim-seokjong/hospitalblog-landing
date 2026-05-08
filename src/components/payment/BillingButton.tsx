@@ -3,35 +3,34 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { PlanId } from '@/lib/payment/plans'
-import type { PaymentMethodType } from '@/lib/payment/channels'
 import { trackEvent } from '@/lib/meta-pixel'
 
 interface Props {
   plan: PlanId
-  paymentMethod?: PaymentMethodType
   label?: string
   className?: string
+  requestAgreement?: () => boolean
 }
 
 export default function BillingButton({
   plan,
-  paymentMethod = 'CARD',
   label = '자동 갱신 구독하기',
   className = '',
+  requestAgreement,
 }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   async function handleBilling() {
+    if (requestAgreement && !requestAgreement()) return
     setLoading(true)
     setError(null)
     try {
-      // 1. 서버에서 paymentId + channelKey + 고객정보 발급
       const prepRes = await fetch('/api/payment/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan, paymentMethod }),
+        body: JSON.stringify({ plan }),
       })
       if (!prepRes.ok) {
         const { error: msg } = await prepRes.json()
@@ -52,30 +51,23 @@ export default function BillingButton({
         currency: 'KRW',
       })
 
-      // 2. 빌링키 발급 (카드/카카오페이 등록, 결제는 서버에서)
       if (typeof window.PortOne.requestIssueBillingKey !== 'function') {
-        throw new Error('이 결제수단은 정기구독을 지원하지 않습니다.')
+        throw new Error('정기구독을 지원하지 않는 환경입니다.')
       }
 
-      const issueParams: Record<string, unknown> = {
+      const result = await window.PortOne.requestIssueBillingKey({
         storeId,
         channelKey,
         issueId: paymentId,
         issueName: orderName,
-        billingKeyMethod: paymentMethod === 'KAKAOPAY' ? 'EASY_PAY' : 'CARD',
+        billingKeyMethod: 'CARD',
         customer: { customerId: customer.customerId, email: customer.email },
         locale: 'KO_KR',
-      }
-      if (paymentMethod === 'KAKAOPAY') {
-        issueParams.easyPay = { easyPayProvider: 'KAKAOPAY' }
-      }
-
-      const result = await window.PortOne.requestIssueBillingKey(issueParams)
+      })
 
       if (result.code) throw new Error(result.message ?? '카드 등록이 취소되었습니다')
       if (!result.billingKey) throw new Error('빌링키 발급에 실패했습니다')
 
-      // 3. 서버에서 첫 결제 실행 + 빌링키 저장 + 플랜 활성화
       const confirmRes = await fetch('/api/payment/billing/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

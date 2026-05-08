@@ -1,20 +1,16 @@
 import type { Plan } from '@/lib/payment/plans'
-import type { PaymentMethodType } from '@/lib/payment/channels'
-import CheckoutButton from './CheckoutButton'
 import BillingButton from './BillingButton'
 
 interface Props {
   plan: Plan
   currentPlan?: string
-  billingMode?: 'single' | 'recurring'
-  paymentMethod?: PaymentMethodType
+  requestAgreement?: () => boolean
 }
 
 export default function PlanCard({
   plan,
   currentPlan,
-  billingMode = 'single',
-  paymentMethod = 'CARD',
+  requestAgreement,
 }: Props) {
   const isCurrentPlan = currentPlan === plan.id
   const recommended = plan.recommended
@@ -32,12 +28,13 @@ export default function PlanCard({
       )}
 
       <h3 className="text-lg font-bold text-white">{plan.name}</h3>
-      <div className="mt-3 mb-5">
+      <div className="mt-3 mb-1">
         <span className="text-3xl font-extrabold text-white">
           {plan.price.toLocaleString()}
         </span>
         <span className="text-gray-400 text-sm ml-1">원/월</span>
       </div>
+      <p className="text-xs text-blue-300/80 mb-5">매월 자동결제</p>
 
       <ul className="flex-1 space-y-2 mb-6">
         {plan.features.map((f) => (
@@ -54,23 +51,14 @@ export default function PlanCard({
         <div className="w-full py-3 text-center rounded-lg bg-gray-700 text-gray-400 text-sm font-medium">
           현재 사용 중
         </div>
-      ) : billingMode === 'recurring' ? (
+      ) : (
         <BillingButton
           plan={plan.id}
-          paymentMethod={paymentMethod}
-          label="자동 갱신 구독하기"
+          label="자동 갱신 구독 시작"
           className={recommended
             ? 'bg-blue-500 text-white'
             : 'bg-gray-700 text-white border border-gray-600'}
-        />
-      ) : (
-        <CheckoutButton
-          plan={plan.id}
-          paymentMethod={paymentMethod}
-          label="구독 시작하기"
-          className={recommended
-            ? 'bg-blue-500 text-white'
-            : 'bg-gray-700 text-white border border-gray-600'}
+          requestAgreement={requestAgreement}
         />
       )}
     </div>

@@ -6,11 +6,6 @@ import { PLANS, PAID_PLAN_IDS } from '@/lib/payment/plans'
 import { createPendingPayment } from '@/lib/payment/repository'
 import type { PlanId } from '@/lib/payment/plans'
 
-const CHANNEL_KEYS: Record<string, string | undefined> = {
-  CARD:     process.env.PORTONE_CHANNEL_KEY_GALAXIA,
-  KAKAOPAY: process.env.PORTONE_CHANNEL_KEY_KAKAOPAY,
-}
-
 export async function POST(req: NextRequest) {
   try {
     const cookieStore = cookies()
@@ -27,16 +22,15 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const plan = body.plan as PlanId
-    const paymentMethod: string = body.paymentMethod ?? 'CARD'
 
     if (!PAID_PLAN_IDS.includes(plan)) {
       return NextResponse.json({ error: '유효하지 않은 플랜입니다' }, { status: 400 })
     }
 
-    const channelKey = CHANNEL_KEYS[paymentMethod]
+    const channelKey = process.env.PORTONE_CHANNEL_KEY_KPN_BILLING
     if (!channelKey) {
       return NextResponse.json(
-        { error: `결제 채널키 미설정: ${paymentMethod}` },
+        { error: 'PORTONE_CHANNEL_KEY_KPN_BILLING 환경변수 미설정' },
         { status: 500 },
       )
     }
@@ -56,7 +50,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       paymentId,
       amount: planInfo.price,
-      orderName: `hospitalblog.kr ${planInfo.name} 플랜 1개월`,
+      orderName: `닥터포스트 ${planInfo.name} 플랜 자동갱신 구독`,
       channelKey,
       customer: { customerId, email: user.email ?? '' },
     })

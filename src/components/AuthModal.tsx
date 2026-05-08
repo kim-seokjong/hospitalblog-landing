@@ -99,7 +99,6 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${location.origin}/api/auth/callback` },
     });
 
     if (signUpError) {
@@ -109,18 +108,36 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     }
 
     trackEvent('CompleteRegistration', { content_name: 'signup', status: 'complete' });
-    trackEvent('Lead', { content_name: '무료체험', content_category: 'free_plan' });
+    trackEvent('Lead', { content_name: 'signup', content_category: 'subscribe_required' });
 
     const userId = data.user?.id;
-    if (userId) {
-      await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, fullName, phone, hospitalName, hospitalAddress, position, hospitalType }),
-      });
+    if (!userId) {
+      setError('가입 처리 중 오류가 발생했습니다.');
+      setLoading(false);
+      return;
     }
 
-    setMessage('가입 확인 이메일을 보냈습니다. 메일함을 확인해주세요.');
+    const registerRes = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, fullName, phone, hospitalName, hospitalAddress, position, hospitalType }),
+    });
+
+    if (!registerRes.ok) {
+      setError('프로필 저장에 실패했습니다. 다시 시도해주세요.');
+      setLoading(false);
+      return;
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) {
+      setError(`로그인 실패: ${signInError.message}`);
+      setLoading(false);
+      return;
+    }
+
+    onSuccess();
+    onClose();
     setLoading(false);
   };
 
@@ -253,7 +270,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
 
                 {/* 이메일 */}
                 <div className="space-y-2">
-                  <label className={labelClass}>이메일 (인증용){requiredMark}</label>
+                  <label className={labelClass}>이메일{requiredMark}</label>
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                     placeholder="example@email.com" className={inputClass} />
                 </div>

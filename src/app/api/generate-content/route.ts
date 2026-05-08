@@ -3,6 +3,7 @@ import { getAnthropicClient, MODEL } from '@/lib/anthropic';
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/lib/medical-compliance';
 import { logUsage } from '@/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/lib/naver-search';
+import { checkAndConsumeUsage, refundUsage } from '@/lib/payment/usage-guard';
 
 type TitleFormat = '질문형' | '정보형' | '가이드형' | '노하우형' | '숫자형' | string;
 
@@ -66,6 +67,7 @@ function buildWritingStylePrompt(style: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  let consumedUserId: string | null = null;
   try {
     const {
       title, keyword, hospitalType, additionalInfo, titleFormat,
@@ -75,6 +77,16 @@ export async function POST(req: NextRequest) {
     if (!title || !keyword) {
       return NextResponse.json({ error: '제목과 키워드를 입력해주세요.' }, { status: 400 });
     }
+
+    // 인증·플랜·사용량 체크 (원자적 1 증가 포함)
+    const guard = await checkAndConsumeUsage();
+    if (!guard.ok) {
+      return NextResponse.json(
+        { error: guard.message, reason: guard.reason },
+        { status: guard.status }
+      );
+    }
+    consumedUserId = guard.userId;
 
     // 경쟁 블로그 분석 (병렬 실행)
     const [competitorResults] = await Promise.all([
@@ -257,6 +269,7 @@ A3. (답변 2~3문장)
 
     const textContent = response.content.find((b) => b.type === 'text');
     if (!textContent || textContent.type !== 'text') {
+      if (consumedUserId) await refundUsage(consumedUserId);
       return NextResponse.json({ error: '본문 생성에 실패했습니다.' }, { status: 500 });
     }
 
@@ -389,6 +402,7 @@ A3. (답변 2~3문장)
     });
   } catch (error) {
     console.error('본문 생성 오류:', error);
+    if (consumedUserId) await refundUsage(consumedUserId);
     const raw = error instanceof Error ? error.message : '';
     const userMessage = raw.includes('Internal server error') || raw.includes('500') || raw.includes('529')
       ? 'AI 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요.'

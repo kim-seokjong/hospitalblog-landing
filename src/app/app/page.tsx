@@ -22,10 +22,26 @@ import AuthModal from '@/components/AuthModal';
 import SnsCopyPanel from '@/components/SnsCopyPanel';
 import SmsCopyPanel from '@/components/SmsCopyPanel';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle } from '@/types';
+import { PLANS, isPaidPlanId } from '@/lib/payment/plans';
 
 type ViewStep = 'input' | 'content';
 
-const PLAN_LIMITS: Record<string, number> = { free: 2, basic: 10, standard: 20, pro: 999 };
+const CLIENT_ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? 'terro6936@naver.com')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+function isClientAdmin(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return CLIENT_ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+function getPlanUsageLimit(plan: string | null | undefined, isAdminUser: boolean): number | null {
+  if (isAdminUser) return Infinity;
+  if (!isPaidPlanId(plan)) return 0;
+  const limit = PLANS[plan].usageLimit;
+  return limit === -1 ? Infinity : limit;
+}
 
 const KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_xefMRX';
 const CONTACT_DISMISSED_KEY = 'dp_contact_dismissed';
@@ -296,15 +312,22 @@ export default function AppPage() {
       ]);
 
       const [contentData, tagData] = await Promise.all([contentRes.json(), tagRes.json()]);
-      if (!contentRes.ok) throw new Error(contentData.error || '본문 생성에 실패했습니다.');
+      if (!contentRes.ok) {
+        const reason = contentData.reason as string | undefined;
+        const isBlocked = reason === 'plan_required' || reason === 'plan_expired' || reason === 'limit_exceeded';
+        const err = new Error(contentData.error || '본문 생성에 실패했습니다.');
+        if (isBlocked) (err as Error & { _blocked?: boolean })._blocked = true;
+        throw err;
+      }
       setContent(contentData);
       if (tagRes.ok) setTags(tagData);
       setViewStep('content');
-      refreshUsage();
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
-      setRetryAction('content');
+      const blocked = err instanceof Error && (err as Error & { _blocked?: boolean })._blocked === true;
+      setRetryAction(blocked ? null : 'content');
     } finally {
+      refreshUsage();
       setLoadingContent(false);
     }
   };
@@ -404,7 +427,8 @@ export default function AppPage() {
     '사무장': '🏥 사무장시점',
   };
 
-  const planLimit = userPlan ? (PLAN_LIMITS[userPlan.plan] ?? 2) : null;
+  const userIsAdmin = isClientAdmin(user?.email);
+  const planLimit = userPlan || userIsAdmin ? getPlanUsageLimit(userPlan?.plan, userIsAdmin) : null;
 
   return (
     <div className="min-h-screen bg-[#0b0d2b] text-white">
@@ -481,10 +505,10 @@ export default function AppPage() {
               </svg>
             </a>
             {/* 사용량 표시 */}
-            {userPlan && planLimit !== null && (
+            {planLimit !== null && (userPlan || userIsAdmin) && (
               <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[#191970]/50 border border-[#2a2b6e]">
-                <span className={`text-[10px] font-semibold ${userPlan.usage_count >= (planLimit === 999 ? Infinity : planLimit) ? 'text-red-400' : 'text-[#8891bd]'}`}>
-                  {userPlan.usage_count}/{planLimit === 999 ? '∞' : planLimit}회
+                <span className={`text-[10px] font-semibold ${!userIsAdmin && userPlan && userPlan.usage_count >= planLimit ? 'text-red-400' : 'text-[#8891bd]'}`}>
+                  {userIsAdmin ? '관리자 · ∞' : `${userPlan?.usage_count ?? 0}/${planLimit === Infinity ? '∞' : planLimit}회`}
                 </span>
               </div>
             )}

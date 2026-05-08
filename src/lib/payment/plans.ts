@@ -1,22 +1,15 @@
-export type PlanId = 'free' | 'basic' | 'standard' | 'pro'
+export type PlanId = 'basic' | 'standard' | 'pro'
 
 export interface Plan {
   id: PlanId
   name: string
-  price: number        // KRW 월 구독료 (0 = 무료)
+  price: number        // KRW 월 구독료
   usageLimit: number   // 월 AI 생성 건수 (-1 = 무제한)
   features: string[]
   recommended?: boolean
 }
 
 export const PLANS: Record<PlanId, Plan> = {
-  free: {
-    id: 'free',
-    name: '무료',
-    price: 0,
-    usageLimit: 2,
-    features: ['AI 블로그 월 2건', 'SEO 분석'],
-  },
   basic: {
     id: 'basic',
     name: '베이직',
@@ -62,8 +55,18 @@ export function getPlan(id: PlanId): Plan {
   return PLANS[id]
 }
 
-export function isActivePlan(plan: PlanId, expiresAt: string | null): boolean {
-  if (plan === 'free') return true
+/**
+ * 유효한 유료 플랜 ID인지 검사 (DB legacy 'free' / null 차단용)
+ */
+export function isPaidPlanId(value: string | null | undefined): value is PlanId {
+  return value === 'basic' || value === 'standard' || value === 'pro'
+}
+
+/**
+ * 만료일 기준 활성 여부 — 유료 플랜만 유효
+ */
+export function isActivePlan(plan: string | null | undefined, expiresAt: string | null): boolean {
+  if (!isPaidPlanId(plan)) return false
   if (!expiresAt) return false
   return new Date(expiresAt) > new Date()
 }

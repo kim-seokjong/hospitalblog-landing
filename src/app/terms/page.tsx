@@ -15,7 +15,7 @@ export default function TermsPage() {
             ← 홈으로
           </Link>
           <h1 className="text-3xl font-bold text-white mb-3">이용약관</h1>
-          <p className="text-sm text-gray-500">시행일: 2026년 5월 4일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 4일</p>
+          <p className="text-sm text-gray-500">시행일: 2026년 5월 8일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 8일</p>
         </div>
 
         <div className="space-y-10 text-sm leading-relaxed">
@@ -77,7 +77,6 @@ export default function TermsPage() {
                 </thead>
                 <tbody>
                   {[
-                    ['무료', '0원', '월 2건'],
                     ['베이직', '99,000원/월', '월 10건'],
                     ['스탠다드', '199,000원/월', '월 20건'],
                     ['프로', '399,000원/월', '무제한'],
@@ -93,14 +92,47 @@ export default function TermsPage() {
             </div>
             <ul className="list-disc list-inside space-y-2 text-gray-400 ml-2">
               <li>사용량은 콘텐츠 본문 생성 1회를 1건으로 계산합니다.</li>
-              <li>월 사용량은 매월 1일 00:00(KST) 기준으로 초기화됩니다.</li>
+              <li>월 사용량은 매월 결제일 기준으로 초기화됩니다.</li>
               <li>요금제 변경은 즉시 적용되며, 상위 플랜 전환 시 남은 사용량은 새 플랜 한도로 대체됩니다.</li>
             </ul>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">
-              제5조 (이용 제한 및 금지 행위)
+              제5조 (자동갱신 결제)
+            </h2>
+            <ul className="list-disc list-inside space-y-2 text-gray-400 ml-2">
+              <li>본 서비스는 매월 동일한 날짜에 자동 청구되는 <strong className="text-gray-200">자동갱신 구독 방식</strong>으로만 운영됩니다.</li>
+              <li>최초 결제 시 등록한 카드(빌링키)로 매월 결제일에 자동으로 요금이 청구됩니다.</li>
+              <li>다음 결제일 7일 전 등록된 이메일로 사전 안내를 발송합니다(방통위 「전자상거래법」 준수).</li>
+              <li>결제일에 카드 한도 초과·유효기간 만료 등으로 결제가 실패할 경우, 3일 후 1회 재시도 후에도 실패 시 구독이 자동 해지될 수 있습니다.</li>
+              <li>이용자는 마이페이지(<code className="text-blue-400">/app/subscription</code>)에서 언제든지 1클릭으로 해지할 수 있습니다.</li>
+              <li>해지하더라도 마지막 결제일로부터 1개월(이미 결제한 기간) 동안은 서비스를 계속 이용할 수 있습니다.</li>
+              <li>해지 후 다음 결제일이 도래하면 더 이상 청구되지 않습니다.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">
+              제6조 (청약철회 및 환불)
+            </h2>
+            <p className="text-gray-400 mb-3">
+              「전자상거래 등에서의 소비자보호에 관한 법률」에 따른 청약철회권 및 환불 정책을 준수합니다.
+            </p>
+            <ul className="list-disc list-inside space-y-2 text-gray-400 ml-2">
+              <li>최초 결제일로부터 <strong className="text-gray-200">7일 이내, 콘텐츠 생성을 1건도 사용하지 않은 경우</strong> 100% 환불됩니다.</li>
+              <li>1건 이상 콘텐츠를 생성한 경우 디지털 콘텐츠 사용으로 간주되어 환불이 제한될 수 있습니다(동법 제17조 제2항 제5호).</li>
+              <li>자동갱신 결제 후에도 마지막 결제일 기준 7일 이내 사용분이 없다면 동일 기준으로 환불 가능합니다.</li>
+              <li>구체적인 환불 절차와 기준은{' '}
+                <Link href="/refund" className="text-blue-400 underline hover:text-blue-300">환불정책</Link>{' '}
+                페이지를 따릅니다.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">
+              제7조 (이용 제한 및 금지 행위)
             </h2>
             <p className="text-gray-400 mb-3">다음 행위는 금지되며, 위반 시 서비스 이용이 즉시 제한될 수 있습니다.</p>
             <ul className="list-disc list-inside space-y-2 text-gray-400 ml-2">
@@ -114,7 +146,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">
-              제6조 (콘텐츠 책임)
+              제8조 (콘텐츠 책임)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-gray-400 ml-2">
               <li>AI가 생성한 콘텐츠는 참고용이며, 최종 게시 전 이용자가 직접 검토·확인해야 합니다.</li>
@@ -125,7 +157,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">
-              제7조 (지적재산권)
+              제9조 (지적재산권)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-gray-400 ml-2">
               <li>서비스의 소프트웨어, UI/UX 디자인, 알고리즘 등의 지적재산권은 회사에 귀속됩니다.</li>
@@ -136,7 +168,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">
-              제8조 (서비스 중단 및 변경)
+              제10조 (서비스 중단 및 변경)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-gray-400 ml-2">
               <li>회사는 시스템 점검, 장애, 천재지변 등의 사유로 서비스를 일시 중단할 수 있습니다.</li>
@@ -147,7 +179,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">
-              제9조 (면책조항)
+              제11조 (면책조항)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-gray-400 ml-2">
               <li>회사는 AI 생성 콘텐츠의 정확성, 완전성, 법적 적합성을 보증하지 않습니다.</li>
@@ -158,7 +190,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">
-              제10조 (분쟁 해결 및 준거법)
+              제12조 (분쟁 해결 및 준거법)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-gray-400 ml-2">
               <li>서비스 이용과 관련한 분쟁은 먼저 이메일(<a href="mailto:terro6936@gmail.com" className="text-blue-400 hover:text-blue-300 underline">terro6936@gmail.com</a>)로 협의를 시도합니다.</li>
@@ -167,7 +199,7 @@ export default function TermsPage() {
           </section>
 
           <p className="text-xs text-gray-600 pt-6 border-t border-gray-800">
-            본 약관은 2026년 5월 4일부터 적용됩니다.
+            본 약관은 2026년 5월 8일부터 적용됩니다.
           </p>
         </div>
       </div>

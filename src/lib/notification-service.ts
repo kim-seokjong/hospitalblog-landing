@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { PLANS } from '@/lib/payment/plans';
-import type { PlanId } from '@/lib/payment/plans';
+import { PLANS, isPaidPlanId } from '@/lib/payment/plans';
 
 export async function checkAndCreateUsageWarning(
   userId: string,
@@ -14,9 +13,10 @@ export async function checkAndCreateUsageWarning(
 
   if (profileError || !profile) return;
 
-  const planId = (profile.plan ?? 'free') as PlanId;
-  const plan = PLANS[planId];
+  // 유료 플랜만 사용량 경고 대상 (free/null은 가드에서 0건 차단)
+  if (!isPaidPlanId(profile.plan)) return;
 
+  const plan = PLANS[profile.plan];
   if (!plan) return;
 
   // pro 플랜(-1)은 무제한이므로 알림 없음
