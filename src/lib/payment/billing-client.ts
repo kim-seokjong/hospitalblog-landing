@@ -12,6 +12,24 @@ function getStoreId(): string {
   return id
 }
 
+async function getAccessToken(): Promise<string> {
+  const res = await fetch(`${PORTONE_API_BASE}/login/api-secret`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiSecret: getSecret() }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`PortOne 로그인 실패 [${res.status}]: ${body}`)
+  }
+  const data = await res.json()
+  const token = data?.accessToken ?? data?.access_token
+  if (!token) {
+    throw new Error(`PortOne 로그인 응답에 accessToken 없음: ${JSON.stringify(data)}`)
+  }
+  return token as string
+}
+
 export interface ChargeResult {
   status: string
   transactionId: string
@@ -38,12 +56,14 @@ export async function chargeWithBillingKey(params: {
     customer.phoneNumber = params.customerPhone
   }
 
+  const token = await getAccessToken()
+
   const res = await fetch(
     `${PORTONE_API_BASE}/payments/${encodeURIComponent(params.paymentId)}/billing-key`,
     {
       method: 'POST',
       headers: {
-        Authorization: `PortOne ${getSecret()}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -75,11 +95,12 @@ export async function chargeWithBillingKey(params: {
 }
 
 export async function deleteBillingKey(billingKey: string): Promise<void> {
+  const token = await getAccessToken()
   const res = await fetch(
     `${PORTONE_API_BASE}/billing-keys/${encodeURIComponent(billingKey)}`,
     {
       method: 'DELETE',
-      headers: { Authorization: `PortOne ${getSecret()}` },
+      headers: { Authorization: `Bearer ${token}` },
     },
   )
   if (!res.ok) {
