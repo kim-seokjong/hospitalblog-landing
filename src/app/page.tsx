@@ -18,24 +18,15 @@ export default function LandingPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setAuthChecked(true);
-        router.push('/app');
-        return;
-      }
       setUser(data.user);
       setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session?.user) {
-        router.push('/app');
-      } else {
-        setUser(null);
-        setAuthChecked(true);
-      }
+      setUser(session?.user ?? null);
+      setAuthChecked(true);
     });
     return () => subscription.unsubscribe();
-  }, [supabase, router]);
+  }, [supabase]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
