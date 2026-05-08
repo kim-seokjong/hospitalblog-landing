@@ -18,8 +18,15 @@ export async function POST(req: NextRequest) {
 
     const { error } = await supabaseAdmin
       .from('profiles')
-      .update({ full_name: fullName, phone, hospital_name: hospitalName, hospital_address: hospitalAddress, position, hospital_type: hospitalType })
-      .eq('id', userId);
+      .upsert({
+        id: userId,
+        full_name: fullName,
+        phone,
+        hospital_name: hospitalName,
+        hospital_address: hospitalAddress,
+        position,
+        hospital_type: hospitalType,
+      });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

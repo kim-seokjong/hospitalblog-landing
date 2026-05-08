@@ -192,6 +192,7 @@ export default function AppPage() {
   const [cardNewsData, setCardNewsData] = useState<CardNewsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryAction, setRetryAction] = useState<'titles' | 'content' | null>(null);
+  const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -324,8 +325,9 @@ export default function AppPage() {
       setViewStep('content');
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
-      const blocked = err instanceof Error && (err as Error & { _blocked?: boolean })._blocked === true;
-      setRetryAction(blocked ? null : 'content');
+      const isBlocked = err instanceof Error && (err as Error & { _blocked?: boolean })._blocked === true;
+      setBlocked(isBlocked);
+      setRetryAction(isBlocked ? null : 'content');
     } finally {
       refreshUsage();
       setLoadingContent(false);
@@ -336,8 +338,14 @@ export default function AppPage() {
     const action = retryAction;
     setError(null);
     setRetryAction(null);
+    setBlocked(false);
     if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion);
     else if (action === 'content') handleGenerateContent();
+  };
+
+  const dismissBlocked = () => {
+    setBlocked(false);
+    setError(null);
   };
 
   const handleGenerateTags = async () => {
@@ -449,12 +457,12 @@ export default function AppPage() {
       {/* 헤더 */}
       <header className="sticky top-0 z-40 border-b border-[#2a2b6e] bg-[#0b0d2b]/95 backdrop-blur-md">
         <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 h-13 sm:h-14 flex items-center justify-between gap-2 sm:gap-4" style={{ minHeight: '52px' }}>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <Link href="/" className="flex items-center gap-2 flex-shrink-0 hover:opacity-80 transition-opacity" title="홈으로">
             <div className="w-8 h-8 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center shadow-lg shadow-[#4f6ef7]/10">
               <span className="text-base">🏥</span>
             </div>
             <span className="font-bold text-white text-lg">닥터포스트</span>
-          </div>
+          </Link>
 
           <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-center">
             {viewStep === 'input' ? (
@@ -545,8 +553,50 @@ export default function AppPage() {
         </div>
       </header>
 
-      {/* 에러 */}
-      {error && (
+      {/* 구독 플랜 필요 알림 (한도 초과 / 미구독 / 만료) */}
+      {blocked && (
+        <div className="max-w-screen-2xl mx-auto px-4 pt-4">
+          <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/40 rounded-2xl p-5 sm:p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <span className="text-3xl flex-shrink-0">💎</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-white text-base sm:text-lg mb-1">구독 플랜이 필요합니다</p>
+                <p className="text-xs sm:text-sm text-blue-200">{error}</p>
+              </div>
+              <button
+                onClick={dismissBlocked}
+                className="text-blue-200 hover:text-white text-2xl leading-none flex-shrink-0"
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Link
+                href="/#pricing"
+                className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white text-sm font-bold rounded-xl text-center transition-colors flex items-center justify-center gap-2"
+              >
+                💎 구독 플랜 보기
+              </Link>
+              <Link
+                href="/app/subscription"
+                className="flex-1 py-3 bg-[#191970] hover:bg-[#22227a] text-white text-sm font-semibold rounded-xl text-center transition-colors border border-[#4f6ef7]/40 flex items-center justify-center gap-2"
+              >
+                ⚙️ 구독 관리
+              </Link>
+              <Link
+                href="/"
+                className="flex-1 py-3 bg-transparent hover:bg-[#191970]/50 text-[#8891bd] hover:text-white text-sm font-semibold rounded-xl text-center transition-colors border border-[#2a2b6e] flex items-center justify-center gap-2"
+              >
+                🏠 홈으로
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 일반 에러 */}
+      {error && !blocked && (
         <div className="max-w-screen-2xl mx-auto px-4 pt-4">
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-3">
             <span className="text-red-400 text-lg flex-shrink-0">❌</span>
