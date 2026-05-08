@@ -44,11 +44,14 @@ export async function POST(req: NextRequest) {
       amount: plan.price,
     })
 
+    const customerId = userId.replace(/-/g, '').slice(0, 20)
+
     const result = await chargeWithBillingKey({
       paymentId,
       billingKey: bk.billing_key,
-      orderName: `hospitalblog.kr ${plan.name} 플랜 1개월`,
+      orderName: `닥터포스트 ${plan.name} 플랜 1개월`,
       amount: plan.price,
+      customerId,
       customerEmail: profile?.email ?? '',
     })
 

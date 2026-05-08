@@ -26,8 +26,18 @@ export async function chargeWithBillingKey(params: {
   billingKey: string
   orderName: string
   amount: number
+  customerId: string
   customerEmail: string
+  customerPhone?: string
 }): Promise<ChargeResult> {
+  const customer: Record<string, unknown> = {
+    id: params.customerId,
+    email: params.customerEmail,
+  }
+  if (params.customerPhone) {
+    customer.phoneNumber = params.customerPhone
+  }
+
   const res = await fetch(
     `${PORTONE_API_BASE}/payments/${encodeURIComponent(params.paymentId)}/billing-key`,
     {
@@ -42,7 +52,7 @@ export async function chargeWithBillingKey(params: {
         orderName: params.orderName,
         amount: { total: params.amount },
         currency: 'KRW',
-        customer: { email: params.customerEmail },
+        customer,
       }),
     },
   )
@@ -51,13 +61,16 @@ export async function chargeWithBillingKey(params: {
     throw new Error(`포트원 빌링키 결제 실패 [${res.status}]: ${body}`)
   }
   const data = await res.json()
+  const payment = (data?.payment ?? data) as Record<string, unknown>
+  const method = payment.method as { card?: { name?: string } } | undefined
+  const channel = payment.channel as { pgProvider?: string } | undefined
   return {
-    status: data.status,
-    transactionId: data.transactionId ?? data.pgTxId ?? params.paymentId,
-    pgProvider: data.pgProvider ?? 'UNKNOWN',
-    receiptUrl: data.receiptUrl ?? null,
-    paidAt: data.paidAt ?? null,
-    cardName: data.method?.card?.name ?? null,
+    status: (payment.status as string) ?? 'PAID',
+    transactionId: (payment.transactionId as string) ?? (payment.pgTxId as string) ?? params.paymentId,
+    pgProvider: channel?.pgProvider ?? (payment.pgProvider as string) ?? 'KPN',
+    receiptUrl: (payment.receiptUrl as string) ?? null,
+    paidAt: (payment.paidAt as string) ?? new Date().toISOString(),
+    cardName: method?.card?.name ?? null,
   }
 }
 

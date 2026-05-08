@@ -58,6 +58,14 @@ export async function POST(req: NextRequest) {
 
     const plan = PLANS[dbPayment.plan as PlanId]
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('phone')
+      .eq('id', dbPayment.user_id)
+      .single()
+
+    const customerId = dbPayment.user_id.replace(/-/g, '').slice(0, 20)
+
     // 2. 빌링키로 첫 결제 (서버에서 직접 실행)
     let chargeResult
     try {
@@ -66,7 +74,9 @@ export async function POST(req: NextRequest) {
         billingKey,
         orderName: `닥터포스트 ${plan.name} 플랜 1개월`,
         amount: plan.price,
+        customerId,
         customerEmail: user.email ?? '',
+        customerPhone: profile?.phone ?? undefined,
       })
     } catch (e) {
       await markPaymentFailed(paymentId, e instanceof Error ? e.message : '빌링키 결제 실패')
