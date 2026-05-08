@@ -29,7 +29,7 @@ export async function chargeWithBillingKey(params: {
   customerEmail: string
 }): Promise<ChargeResult> {
   const res = await fetch(
-    `${PORTONE_API_BASE}/payments/${encodeURIComponent(params.paymentId)}/instant`,
+    `${PORTONE_API_BASE}/payments/${encodeURIComponent(params.paymentId)}/billing-key`,
     {
       method: 'POST',
       headers: {
@@ -38,17 +38,11 @@ export async function chargeWithBillingKey(params: {
       },
       body: JSON.stringify({
         storeId: getStoreId(),
+        billingKey: params.billingKey,
         orderName: params.orderName,
         amount: { total: params.amount },
         currency: 'KRW',
         customer: { email: params.customerEmail },
-        method: {
-          card: {
-            credential: {
-              billingKey: params.billingKey,
-            },
-          },
-        },
       }),
     },
   )
