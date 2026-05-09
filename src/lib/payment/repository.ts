@@ -70,6 +70,44 @@ export async function markPaymentFailed(paymentId: string, reason: string): Prom
     .eq('id', paymentId)
 }
 
+export async function markPaymentCancelled(params: {
+  paymentId: string
+  cancellationId: string | null
+  cancelledAt: string
+  reason: string | null
+}): Promise<void> {
+  const { error } = await getAdmin()
+    .from('payments')
+    .update({
+      status: 'CANCELLED',
+      cancellation_id: params.cancellationId,
+      cancelled_at: params.cancelledAt,
+      cancel_reason: params.reason,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', params.paymentId)
+  if (error) throw new Error(`결제 CANCELLED 업데이트 실패: ${error.message}`)
+}
+
+export async function expireUserPlan(userId: string): Promise<void> {
+  const { error } = await getAdmin()
+    .from('profiles')
+    .update({
+      plan_expires_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId)
+  if (error) throw new Error(`플랜 만료 처리 실패: ${error.message}`)
+}
+
+export async function cancelActiveBillingKeys(userId: string): Promise<void> {
+  await getAdmin()
+    .from('billing_keys')
+    .update({ status: 'CANCELLED', updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE')
+}
+
 export async function activateUserPlan(params: {
   userId: string
   plan: PlanId

@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyWebhookSignature } from '@/lib/payment/webhook-verify'
-import { verifyAndActivate } from '@/lib/payment/verify'
+import { verifyAndActivate, cancelAndDeactivate } from '@/lib/payment/verify'
 
 function getAdmin() {
   return createClient(
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     console.error('webhook_events upsert error:', upsertError)
   }
 
-  // Transaction.Paid 이벤트만 처리
+  // Transaction.Paid — 결제 활성화
   if (eventType === 'Transaction.Paid' && paymentId) {
     try {
       await verifyAndActivate(paymentId)
@@ -68,6 +68,33 @@ export async function POST(req: NextRequest) {
         .update({ error: msg })
         .match({ provider: 'portone', event_type: eventType, payment_id: paymentId, signature })
       console.error('webhook verifyAndActivate error:', msg)
+    }
+  }
+
+  // Transaction.Cancelled / PartialCancelled — 결제 취소·환불 처리
+  // 포트원 V2 웹훅: data.cancellationId 포함 (PartialCancelled도 동일 경로로 처리해
+  // 사용자 플랜은 즉시 만료시킨다. SaaS 단건 구독 모델에서는 부분 환불도 사실상
+  // 서비스 종료로 간주한다.)
+  if (
+    (eventType === 'Transaction.Cancelled' || eventType === 'Transaction.PartialCancelled') &&
+    paymentId
+  ) {
+    try {
+      const data = (payload.data ?? {}) as Record<string, unknown>
+      const cancellationId =
+        typeof data.cancellationId === 'string' ? data.cancellationId : null
+      await cancelAndDeactivate(paymentId, { cancellationId })
+      await admin
+        .from('webhook_events')
+        .update({ processed: true, processed_at: new Date().toISOString() })
+        .match({ provider: 'portone', event_type: eventType, payment_id: paymentId, signature })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      await admin
+        .from('webhook_events')
+        .update({ error: msg })
+        .match({ provider: 'portone', event_type: eventType, payment_id: paymentId, signature })
+      console.error('webhook cancelAndDeactivate error:', msg)
     }
   }
 

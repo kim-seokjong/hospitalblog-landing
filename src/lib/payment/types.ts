@@ -44,6 +44,9 @@ export interface Payment {
   receipt_url: string | null
   failure_reason: string | null
   paid_at: string | null
+  cancellation_id: string | null
+  cancelled_at: string | null
+  cancel_reason: string | null
   created_at: string
   updated_at: string
 }
