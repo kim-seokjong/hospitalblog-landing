@@ -18,9 +18,19 @@ export async function verifyWebhookSignature(
   if (Math.abs(now - ts) > 300) return false
 
   const signedContent = `${webhookId}.${webhookTimestamp}.${rawBody}`
+
+  // 'whsec_' 접두사 제거 후 base64 디코딩 (Standard Webhooks 스펙)
+  const base64Secret = secret.startsWith('whsec_') ? secret.slice(6) : secret
+  let rawSecret: Uint8Array
+  try {
+    rawSecret = Uint8Array.from(atob(base64Secret), (c) => c.charCodeAt(0))
+  } catch {
+    return false
+  }
+
   const key = await crypto.subtle.importKey(
     'raw',
-    new TextEncoder().encode(secret),
+    rawSecret.buffer as ArrayBuffer,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign'],
