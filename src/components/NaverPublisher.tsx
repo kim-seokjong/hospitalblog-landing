@@ -4,12 +4,14 @@ import { useState } from 'react';
 import type { BlogContent, TagResult, GeneratedImage } from '@/types';
 import { splitBodyByMarkers, toNaverFormat } from '@/lib/naver-format';
 import { downloadImageReliable } from '@/lib/download-image';
+import { composeImageWithAILabel } from '@/lib/ai-image-label';
 
 interface NaverPublisherProps {
   title: string;
   content: BlogContent;
   tags: TagResult | null;
   images: GeneratedImage[];
+  imageStyle?: 'photo' | 'cardnews' | 'upload';
 }
 
 /** 단일 텍스트 영역에 이미지 자리표시자를 균등 삽입 */
@@ -60,7 +62,8 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export default function NaverPublisher({ title, content, tags, images }: NaverPublisherProps) {
+export default function NaverPublisher({ title, content, tags, images, imageStyle = 'cardnews' }: NaverPublisherProps) {
+  const isAIGenerated = imageStyle === 'photo' || imageStyle === 'cardnews';
   const [titleCopied, setTitleCopied] = useState(false);
   const [bodyCopied, setBodyCopied] = useState(false);
   const [tagsCopied, setTagsCopied] = useState(false);
@@ -89,7 +92,12 @@ export default function NaverPublisher({ title, content, tags, images }: NaverPu
   const handleDownloadOne = async (img: GeneratedImage, index: number) => {
     const safe = img.prompt.slice(0, 20).replace(/[^\w가-힣]/g, '_');
     try {
-      await downloadImageReliable(img.url, `이미지${index + 1}_${safe}`);
+      // AI 생성 이미지(photo/cardnews)는 라벨 박아서 다운로드,
+      // 사용자 업로드(upload)는 원본 그대로
+      const url = isAIGenerated
+        ? await composeImageWithAILabel(img.url)
+        : img.url;
+      await downloadImageReliable(url, `이미지${index + 1}_${safe}`);
       setDownloaded((prev) => new Set([...prev, img.id]));
     } catch {
       // 실패 시 fallback이 새 탭을 열었으므로 추가 처리 없음

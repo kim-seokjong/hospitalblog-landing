@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { GeneratedImage } from '@/types';
 import ImageEditor from '@/components/ImageEditor';
 import { downloadImageReliable } from '@/lib/download-image';
+import { drawAILabel, loadImageForCanvas, composeImageWithAILabel } from '@/lib/ai-image-label';
 
 interface ImageGalleryProps {
   images: GeneratedImage[];
@@ -13,47 +14,6 @@ interface ImageGalleryProps {
   onRegenerate?: () => void;
   isLoading?: boolean;
   onImagesUpdate?: (images: GeneratedImage[]) => void;
-}
-
-/**
- * 캔버스 우상단에 "AI 이미지" 라벨을 흰 글자 + 검은 그림자로 그린다.
- * 박스 없음 — 어떤 배경에서도 가독성 확보를 위해 강한 drop shadow 사용.
- */
-function drawAILabel(ctx: CanvasRenderingContext2D, canvasWidth: number, scale: number = 1): void {
-  const label = 'AI 이미지';
-  const fontSize = Math.round(28 * scale);
-  const margin = Math.round(24 * scale);
-
-  ctx.save();
-  ctx.font = `bold ${fontSize}px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'top';
-
-  // 검은 그림자(여러 번 겹쳐 그려서 진하게)
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
-  ctx.shadowBlur = Math.round(10 * scale);
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = Math.round(2 * scale);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(label, canvasWidth - margin, margin);
-  // 한번 더 그려서 그림자 강조
-  ctx.shadowBlur = Math.round(4 * scale);
-  ctx.fillText(label, canvasWidth - margin, margin);
-
-  ctx.restore();
-}
-
-async function loadImageForCanvas(srcUrl: string): Promise<HTMLImageElement> {
-  const proxyUrl = srcUrl.startsWith('data:')
-    ? srcUrl
-    : `/api/proxy-image?url=${encodeURIComponent(srcUrl)}`;
-  const img = new window.Image();
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = reject;
-    img.src = proxyUrl;
-  });
-  return img;
 }
 
 async function renderCardNews(image: GeneratedImage, canvas: HTMLCanvasElement): Promise<void> {
@@ -69,26 +29,6 @@ async function renderCardNews(image: GeneratedImage, canvas: HTMLCanvasElement):
   ctx.drawImage(img, (SIZE - dw) / 2, (SIZE - dh) / 2, dw, dh);
 
   drawAILabel(ctx, SIZE, 1);
-}
-
-/**
- * Photo 스타일 이미지에 "AI 이미지" 라벨을 박아서 dataUrl 반환.
- * 다운로드용 — 원본 비율 유지, 라벨만 추가.
- */
-async function composePhotoWithLabel(srcUrl: string): Promise<string> {
-  const img = await loadImageForCanvas(srcUrl);
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas context unavailable');
-  ctx.drawImage(img, 0, 0);
-
-  // 1024 기준 폰트 크기를 실제 이미지 크기에 비례
-  const labelScale = canvas.width / 1024;
-  drawAILabel(ctx, canvas.width, labelScale);
-
-  return canvas.toDataURL('image/png');
 }
 
 export default function ImageGallery({ images, keyword, title, style = 'cardnews', onRegenerate, isLoading, onImagesUpdate }: ImageGalleryProps) {
@@ -141,7 +81,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
         await downloadImageReliable(url, `edited-${keyword}-${image.id}`);
       } else if (style === 'photo') {
         // AI 이미지 라벨을 캔버스로 박아서 다운로드
-        const dataUrl = await composePhotoWithLabel(image.url);
+        const dataUrl = await composeImageWithAILabel(image.url);
         await downloadImageReliable(dataUrl, `photo-${keyword}-${image.id}`);
       } else {
         const dataUrl = composited[image.id];

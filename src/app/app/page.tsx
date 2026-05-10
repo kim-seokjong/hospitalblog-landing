@@ -742,6 +742,7 @@ export default function AppPage() {
                         content={content}
                         tags={tags}
                         images={images}
+                        imageStyle={imageStyle}
                       />
                     )}
 
