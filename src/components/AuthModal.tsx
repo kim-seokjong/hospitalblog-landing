@@ -80,6 +80,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
         localStorage.removeItem(SAVED_EMAIL_KEY);
         localStorage.removeItem(SAVED_PW_KEY);
       }
+      localStorage.removeItem('dp_contact_dismissed');
       onSuccess(); onClose();
     }
     setLoading(false);
