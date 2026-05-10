@@ -32,6 +32,13 @@ body {
   transform: translateY(-3px);
   box-shadow: 0 0 24px rgba(46, 204, 113, 0.4), 0 14px 44px rgba(10, 22, 40, 0.65);
 }
+.ad-banner-hm-img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
 
 @keyframes analysis-glow {
   0%, 100% {

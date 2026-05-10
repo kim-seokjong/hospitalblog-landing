@@ -106,7 +106,9 @@ function HospitalMarketingBanner() {
       <img
         src="/ads/hospitalmarketing-banner.png"
         alt="병원 마케팅 풀세팅 — 인스타그램·유튜브·네이버 스마트플레이스·전광판·버스 택시 랩핑·택배 광고"
-        className="block w-full h-auto"
+        width={989}
+        height={1590}
+        className="ad-banner-hm-img block w-full h-auto"
         loading="lazy"
         decoding="async"
       />
@@ -116,10 +118,10 @@ function HospitalMarketingBanner() {
 
 function AdBanner({ side }: { side: 'left' | 'right' }) {
   return (
-    <div className={`hidden xl:flex flex-col flex-shrink-0 ${side === 'left' ? 'mr-4' : 'ml-4'}`} style={{ width: '240px' }}>
+    <div className={`hidden xl:flex flex-col flex-shrink-0 ${side === 'left' ? 'mr-4' : 'ml-4'}`} style={{ width: '320px' }}>
       <div className="sticky top-24 space-y-4">
-        {side === 'left' ? <HospitalMarketingBanner /> : <div className="w-full" style={{ height: '310px' }} />}
-        <div className="w-full" style={{ height: '310px' }} />
+        {side === 'left' ? <HospitalMarketingBanner /> : <div className="w-full" style={{ height: '410px' }} />}
+        <div className="w-full" style={{ height: '410px' }} />
       </div>
     </div>
   );
