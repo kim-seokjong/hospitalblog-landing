@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/lib/anthropic';
 import { OPENAI_IMAGE_MODEL } from '@/lib/openai';
 import { logUsage } from '@/lib/usage-logger';
+import { findProcedureCues } from '@/lib/procedure-visual-cues';
 import type { GeneratedImage } from '@/types';
 
 export const maxDuration = 180;
@@ -115,6 +116,11 @@ async function buildFluxPrompts(
   const targets = [...descriptions];
   while (targets.length < count) targets.push(`${keyword} 관련 의료 장면 ${targets.length + 1}`);
 
+  const cues = findProcedureCues(keyword);
+  const cuesSection = cues.length > 0
+    ? `\n【시술 시각 단서 — 반드시 활용 (Procedure Visual Reference)】\n${cues.map((c, i) => `(${i + 1}) ${c}`).join('\n')}\n위 단서들은 "${keyword}" 시술/주제를 시각적으로 즉시 식별 가능하게 만드는 핵심 요소입니다. 각 이미지 프롬프트마다 이 단서 중 적절한 것을 자연스럽게 녹여 시술 자체가 화면의 주인공이 되게 작성하세요.\n`
+    : `\n【시술 시각 단서】\n사전 매칭되지 않은 키워드입니다. 키워드 "${keyword}"의 의미를 정확히 파악하여, 보는 사람이 1초 안에 "이거 ${keyword}구나" 알 수 있는 도구·부위·동작·설정을 명확히 묘사하세요.\n`;
+
   const res = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 2048,
@@ -136,20 +142,26 @@ async function buildFluxPrompts(
 
 제목: ${title}
 키워드: ${keyword}
-
+${cuesSection}
 이미지 설명:
 ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
 
-프롬프트 구조 (각 이미지마다 아래 순서로 작성):
-1. 장면: 촬영 방식 + 인물/상황 설명 (ultra-realistic photo / close-up portrait / medium shot 중 구도 순환)
-2. 인물: Korean people, East Asian appearance, Korean patient/doctor/medical staff
-3. 조명: natural indoor lighting, soft diffused daylight, true-to-life colors, accurate white balance (cinematic light, studio light 절대 금지)
-4. 피부 실사 섹션 반드시 포함: "Skin realism focus: visible pores, fine micro-texture, organic acne marks (non-repeating), uneven pigmentation, subtle redness, natural oil sheen only on high points, visible peach fuzz and very fine vellus hair. No symmetry correction."
-5. 카메라: phone camera realism, subtle sensor grain, slight edge softness
-6. 금지: "No retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"
+【최우선 규칙 — 키워드 식별성】
+- 각 이미지는 키워드 "${keyword}"를 보는 사람이 1초 안에 알아볼 수 있어야 함
+- "병원 분위기" 이미지 금지 — "${keyword}" 시술/주제 자체가 주인공인 구도
+- ${count}장 모두 다른 구도/단계로 분산: close-up procedure detail / medium shot of staff with patient / before-after split frame / tools-and-equipment focus / patient consultation / post-procedure recovery 등에서 골고루 선택
 
-- 영어로만 출력, 각 프롬프트 80~120단어
-- 의료 현장의 실제 모습 (병원 인테리어, 의료진, 장비, 환자 치료)`,
+프롬프트 구조 (각 이미지마다 아래 순서로 작성):
+1. 장면 도입: ultra-realistic photograph / clinical close-up / medium shot / before-after split frame 중 하나 명시
+2. 시술 식별 단서: 위 Procedure Visual Reference의 핵심 요소(도구, 부위, 단계, before-after 등)를 자연스럽게 녹여 작성
+3. 인물: Korean people, East Asian appearance, Korean patient / doctor / medical staff (동양적 얼굴 비율 명시)
+4. 조명: natural indoor lighting, soft diffused daylight, true-to-life colors, accurate white balance (cinematic light, studio light 절대 금지)
+5. 피부 실사 섹션 반드시 포함: "Skin realism focus: visible pores, fine micro-texture, organic acne marks (non-repeating), uneven pigmentation, subtle redness, natural oil sheen only on high points, visible peach fuzz and very fine vellus hair. No symmetry correction."
+6. 카메라: phone camera realism, subtle sensor grain, slight edge softness, candid composition
+7. 금지: "No retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"
+
+- 영어로만 출력, 각 프롬프트 100~150단어 (시술 단서 포함으로 약간 길게)
+- 의료 현장의 실제 모습 (병원 인테리어, 의료진, 장비, 환자 치료, 시술 도구)`,
     }],
   });
 
