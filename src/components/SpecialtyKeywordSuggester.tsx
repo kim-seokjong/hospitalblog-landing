@@ -9,7 +9,8 @@ interface SpecialtyKeywordSuggesterProps {
 }
 
 interface RecommendResponse {
-  keywords?: string[];
+  headKeywords?: string[];
+  subKeywords?: string[];
   error?: string;
 }
 
@@ -18,7 +19,8 @@ export default function SpecialtyKeywordSuggester({
   region,
   onSelect,
 }: SpecialtyKeywordSuggesterProps) {
-  const [keywords, setKeywords] = useState<string[]>([]);
+  const [headKeywords, setHeadKeywords] = useState<string[]>([]);
+  const [subKeywords, setSubKeywords] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -31,7 +33,8 @@ export default function SpecialtyKeywordSuggester({
 
     setIsLoading(true);
     setError(null);
-    setKeywords([]);
+    setHeadKeywords([]);
+    setSubKeywords([]);
     setSelected(new Set());
 
     try {
@@ -47,7 +50,8 @@ export default function SpecialtyKeywordSuggester({
         throw new Error(data.error ?? '키워드 추천에 실패했습니다.');
       }
 
-      setKeywords(data.keywords ?? []);
+      setHeadKeywords(data.headKeywords ?? []);
+      setSubKeywords(data.subKeywords ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
     } finally {
@@ -69,6 +73,9 @@ export default function SpecialtyKeywordSuggester({
     onSelect(keyword, willBeSelected);
   };
 
+  const totalCount = headKeywords.length + subKeywords.length;
+  const hasResults = totalCount > 0;
+
   return (
     <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 mb-4">
@@ -78,7 +85,7 @@ export default function SpecialtyKeywordSuggester({
           </div>
           <div>
             <h3 className="text-sm font-bold text-white">진료과목별 키워드 추천</h3>
-            <p className="text-[10px] text-[#8891bd]">AI가 SEO 키워드를 추천해 드립니다</p>
+            <p className="text-[10px] text-[#8891bd]">고관여 + 서브(증상) 2종으로 추천</p>
           </div>
         </div>
 
@@ -108,31 +115,65 @@ export default function SpecialtyKeywordSuggester({
         </div>
       )}
 
-      {keywords.length > 0 && (
-        <div>
-          <p className="text-[10px] text-[#8891bd] mb-2">
-            키워드를 클릭하면 입력창에 추가됩니다 ({keywords.length}개)
+      {hasResults && (
+        <div className="space-y-4">
+          <p className="text-[10px] text-[#8891bd]">
+            키워드를 클릭하면 입력창에 추가됩니다 (총 {totalCount}개)
           </p>
-          <div className="flex flex-wrap gap-2">
-            {keywords.map((kw) => (
-              <button
-                key={kw}
-                type="button"
-                onClick={() => handleChipClick(kw)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all active:scale-95 ${
-                  selected.has(kw)
-                    ? 'bg-[#4f6ef7] border-[#4f6ef7] text-white'
-                    : 'bg-[#0b0d2b] border-[#2a2b6e] text-[#8891bd] hover:border-[#4f6ef7]/50 hover:text-white'
-                }`}
-              >
-                {kw}
-              </button>
-            ))}
-          </div>
+
+          {headKeywords.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-[11px] font-bold text-[#4f6ef7]">🎯 고관여 키워드</span>
+                <span className="text-[9px] text-[#555d8a]">진료과목 직접 검색</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {headKeywords.map((kw) => (
+                  <button
+                    key={kw}
+                    type="button"
+                    onClick={() => handleChipClick(kw)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all active:scale-95 ${
+                      selected.has(kw)
+                        ? 'bg-[#4f6ef7] border-[#4f6ef7] text-white'
+                        : 'bg-[#0b0d2b] border-[#2a2b6e] text-[#8891bd] hover:border-[#4f6ef7]/50 hover:text-white'
+                    }`}
+                  >
+                    {kw}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {subKeywords.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-[11px] font-bold text-emerald-400">🩹 서브 키워드</span>
+                <span className="text-[9px] text-[#555d8a]">환자 증상·상태 검색</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {subKeywords.map((kw) => (
+                  <button
+                    key={kw}
+                    type="button"
+                    onClick={() => handleChipClick(kw)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all active:scale-95 ${
+                      selected.has(kw)
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : 'bg-[#0b0d2b] border-[#2a2b6e] text-[#8891bd] hover:border-emerald-400/50 hover:text-white'
+                    }`}
+                  >
+                    {kw}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {keywords.length === 0 && !isLoading && !error && (
+      {!hasResults && !isLoading && !error && (
         <p className="text-xs text-[#555d8a] text-center py-2">
           &quot;키워드 추천 받기&quot; 버튼을 눌러 추천을 받아보세요
         </p>

@@ -8,20 +8,15 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import KeywordInput from '@/components/KeywordInput';
-import KeywordTrend from '@/components/KeywordTrend';
 import TitleSelector from '@/components/TitleSelector';
 import ContentPreview from '@/components/ContentPreview';
 import ImageGallery from '@/components/ImageGallery';
 import CardNewsDesigner from '@/components/CardNewsDesigner';
-import SeoAnalysis from '@/components/SeoAnalysis';
-import OriginalityChecker from '@/components/OriginalityChecker';
+import AnalysisModal from '@/components/AnalysisModal';
 import TagPanel from '@/components/TagPanel';
-import NaverPreview from '@/components/NaverPreview';
 import NaverPublisher from '@/components/NaverPublisher';
 import AuthModal from '@/components/AuthModal';
-import SnsCopyPanel from '@/components/SnsCopyPanel';
-import SmsCopyPanel from '@/components/SmsCopyPanel';
-import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle } from '@/types';
+import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode } from '@/types';
 import { PLANS, isPaidPlanId } from '@/lib/payment/plans';
 
 type ViewStep = 'input' | 'content';
@@ -188,11 +183,13 @@ export default function AppPage() {
   const [hospitalType, setHospitalType] = useState<string>('피부과');
   const [additionalInfo, setAdditionalInfo] = useState<string>('');
   const [writingStyle, setWritingStyle] = useState<WritingStyle>('전문가');
+  const [optimizationMode, setOptimizationMode] = useState<OptimizationMode>('seo+geo');
   const [titles, setTitles] = useState<BlogTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>(null);
   const [content, setContent] = useState<BlogContent | null>(null);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [tags, setTags] = useState<TagResult | null>(null);
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   const [loadingTitles, setLoadingTitles] = useState(false);
   const [loadingContent, setLoadingContent] = useState(false);
@@ -259,11 +256,12 @@ export default function AppPage() {
     router.push('/');
   };
 
-  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string) => {
+  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode) => {
     setKeyword(kw);
     setHospitalType(ht);
     setAdditionalInfo(ai);
     setWritingStyle(ws);
+    setOptimizationMode(om);
     setTitles([]);
     setSelectedTitle(null);
     setContent(null);
@@ -314,7 +312,7 @@ export default function AppPage() {
           body: JSON.stringify({
             title: selectedTitle.title, keyword, hospitalType, additionalInfo,
             titleFormat: selectedTitle.seoDetails?.format, writingStyle,
-            region: effectiveRegion, hospitalName,
+            region: effectiveRegion, hospitalName, optimizationMode,
           }),
         }),
         fetch('/api/generate-tags', {
@@ -351,7 +349,7 @@ export default function AppPage() {
     setError(null);
     setRetryAction(null);
     setBlocked(false);
-    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion);
+    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode);
     else if (action === 'content') handleGenerateContent();
   };
 
@@ -656,7 +654,6 @@ export default function AppPage() {
 
                     {titles.length > 0 && (
                       <div className="space-y-4">
-                        {keyword && <KeywordTrend mainKeyword={keyword} />}
                         <TitleSelector
                           titles={titles}
                           selectedTitle={selectedTitle}
@@ -665,7 +662,7 @@ export default function AppPage() {
                           isLoading={loadingContent}
                         />
                         <button
-                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion)}
+                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode)}
                           disabled={loadingTitles}
                           className="w-full py-2.5 text-xs text-[#8891bd] hover:text-white border border-[#2a2b6e] hover:border-[#4f6ef7]/40 bg-[#0b0d2b] hover:bg-[#191970]/30 rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
                         >
@@ -705,98 +702,74 @@ export default function AppPage() {
                 {loadingContent && <GeneratingSpinner />}
 
                 {content && !loadingContent && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-                    <div className="space-y-5">
-                      <ContentPreview
-                        content={content}
-                        onGenerateImages={handleGenerateImages}
-                        onImagesUploaded={handleImagesUploaded}
-                        isLoadingImages={loadingImages}
-                        imageStyle={imageStyle}
-                        onImageStyleChange={setImageStyle}
-                        onGenerateSlides={handleGenerateSlides}
-                        isLoadingSlides={loadingSlides}
-                        onContentChange={handleContentChange}
+                  <div className="space-y-5">
+                    <ContentPreview
+                      content={content}
+                      onGenerateImages={handleGenerateImages}
+                      onImagesUploaded={handleImagesUploaded}
+                      isLoadingImages={loadingImages}
+                      imageStyle={imageStyle}
+                      onImageStyleChange={setImageStyle}
+                      onGenerateSlides={handleGenerateSlides}
+                      isLoadingSlides={loadingSlides}
+                      onContentChange={handleContentChange}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAnalysis(true)}
+                      className="w-full py-3 sm:py-3.5 rounded-xl border border-[#2a2b6e] bg-[#12153d] hover:bg-[#191970]/50 text-white text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>📊</span>
+                      <span>상세 분석 보기</span>
+                      <span className="text-[10px] text-[#8891bd] font-normal hidden sm:inline">(SEO · 독창성 · 네이버 검색 미리보기)</span>
+                    </button>
+
+                    {tags && (
+                      <TagPanel
+                        tags={tags}
+                        onRegenerate={handleGenerateTags}
+                        isLoading={loadingTags}
                       />
-                      <SeoAnalysis content={content} />
-                      <OriginalityChecker
-                        title={content.title}
-                        body={content.body}
+                    )}
+
+                    {images.length > 0 && (
+                      <ImageGallery
+                        images={images}
                         keyword={keyword}
+                        title={selectedTitle?.title || keyword}
+                        style={imageStyle}
+                        onRegenerate={() => handleGenerateImages(lastImageCount)}
+                        isLoading={loadingImages}
+                        onImagesUpdate={setImages}
                       />
-                    </div>
+                    )}
 
-                    <div className="space-y-5">
-                      {selectedTitle && (
-                        <NaverPreview
-                          title={selectedTitle.title}
-                          body={content.body}
-                          keyword={keyword}
-                        />
-                      )}
+                    {cardNewsData && (
+                      <CardNewsDesigner data={cardNewsData} keyword={keyword} />
+                    )}
 
-                      {tags && (
-                        <TagPanel
-                          tags={tags}
-                          onRegenerate={handleGenerateTags}
-                          isLoading={loadingTags}
-                        />
-                      )}
+                    {user && selectedTitle && (
+                      <NaverPublisher
+                        title={selectedTitle.title}
+                        content={content}
+                        tags={tags}
+                        images={images}
+                      />
+                    )}
 
-                      {images.length > 0 && (
-                        <ImageGallery
-                          images={images}
-                          keyword={keyword}
-                          title={selectedTitle?.title || keyword}
-                          style={imageStyle}
-                          onRegenerate={() => handleGenerateImages(lastImageCount)}
-                          isLoading={loadingImages}
-                          onImagesUpdate={setImages}
-                        />
-                      )}
-
-                      {cardNewsData && (
-                        <CardNewsDesigner data={cardNewsData} keyword={keyword} />
-                      )}
-
-                      {user && selectedTitle && (
-                        <NaverPublisher
-                          title={selectedTitle.title}
-                          content={content}
-                          tags={tags}
-                          images={images}
-                        />
-                      )}
-
-                      {!user && authChecked && (
-                        <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-5 text-center">
-                          <p className="text-sm font-semibold text-white mb-1">발행 도우미는 로그인 후 사용 가능합니다</p>
-                          <p className="text-xs text-[#8891bd] mb-4">로그인하고 네이버 블로그에 바로 발행하세요</p>
-                          <button
-                            onClick={() => setShowAuthModal(true)}
-                            className="px-5 py-2 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-sm font-bold rounded-xl transition-colors"
-                          >
-                            로그인 / 회원가입
-                          </button>
-                        </div>
-                      )}
-
-                      {selectedTitle && content && (
-                        <SnsCopyPanel
-                          title={selectedTitle.title}
-                          content={content.body}
-                          keyword={keyword}
-                        />
-                      )}
-
-                      {selectedTitle && content && (
-                        <SmsCopyPanel
-                          title={selectedTitle.title}
-                          content={content.body}
-                          keyword={keyword}
-                        />
-                      )}
-                    </div>
+                    {!user && authChecked && (
+                      <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-5 text-center">
+                        <p className="text-sm font-semibold text-white mb-1">발행 도우미는 로그인 후 사용 가능합니다</p>
+                        <p className="text-xs text-[#8891bd] mb-4">로그인하고 네이버 블로그에 바로 발행하세요</p>
+                        <button
+                          onClick={() => setShowAuthModal(true)}
+                          className="px-5 py-2 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-sm font-bold rounded-xl transition-colors"
+                        >
+                          로그인 / 회원가입
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </>
@@ -815,6 +788,16 @@ export default function AppPage() {
           <p className="text-[10px] text-[#555d8a] flex-shrink-0">닥터포스트 © 2026 · Claude AI · 네이버 C-Rank · D.I.A+ 최적화</p>
         </div>
       </footer>
+
+      {content && selectedTitle && (
+        <AnalysisModal
+          open={showAnalysis}
+          onClose={() => setShowAnalysis(false)}
+          content={content}
+          title={selectedTitle.title}
+          keyword={keyword}
+        />
+      )}
 
       <ContactFloatingButton />
     </div>
