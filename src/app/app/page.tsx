@@ -51,6 +51,18 @@ function ContactFloatingButton() {
 
   useEffect(() => {
     setDismissed(localStorage.getItem(CONTACT_DISMISSED_KEY) === '1');
+
+    const supabase = createClient();
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        localStorage.removeItem(CONTACT_DISMISSED_KEY);
+        setDismissed(false);
+      }
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   if (dismissed !== false) return null;
