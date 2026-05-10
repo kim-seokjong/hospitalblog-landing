@@ -15,6 +15,47 @@ interface ImageGalleryProps {
   onImagesUpdate?: (images: GeneratedImage[]) => void;
 }
 
+/**
+ * 캔버스 우상단에 "AI 이미지" 라벨을 흰 글자 + 검은 그림자로 그린다.
+ * 박스 없음 — 어떤 배경에서도 가독성 확보를 위해 강한 drop shadow 사용.
+ */
+function drawAILabel(ctx: CanvasRenderingContext2D, canvasWidth: number, scale: number = 1): void {
+  const label = 'AI 이미지';
+  const fontSize = Math.round(28 * scale);
+  const margin = Math.round(24 * scale);
+
+  ctx.save();
+  ctx.font = `bold ${fontSize}px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+
+  // 검은 그림자(여러 번 겹쳐 그려서 진하게)
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+  ctx.shadowBlur = Math.round(10 * scale);
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = Math.round(2 * scale);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(label, canvasWidth - margin, margin);
+  // 한번 더 그려서 그림자 강조
+  ctx.shadowBlur = Math.round(4 * scale);
+  ctx.fillText(label, canvasWidth - margin, margin);
+
+  ctx.restore();
+}
+
+async function loadImageForCanvas(srcUrl: string): Promise<HTMLImageElement> {
+  const proxyUrl = srcUrl.startsWith('data:')
+    ? srcUrl
+    : `/api/proxy-image?url=${encodeURIComponent(srcUrl)}`;
+  const img = new window.Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = proxyUrl;
+  });
+  return img;
+}
+
 async function renderCardNews(image: GeneratedImage, canvas: HTMLCanvasElement): Promise<void> {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -22,35 +63,32 @@ async function renderCardNews(image: GeneratedImage, canvas: HTMLCanvasElement):
   canvas.width = SIZE;
   canvas.height = SIZE;
 
-  const proxyUrl = image.url.startsWith('data:')
-    ? image.url
-    : `/api/proxy-image?url=${encodeURIComponent(image.url)}`;
-  const img = new window.Image();
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = reject;
-    img.src = proxyUrl;
-  });
-
+  const img = await loadImageForCanvas(image.url);
   const scale = Math.max(SIZE / img.width, SIZE / img.height);
   const dw = img.width * scale, dh = img.height * scale;
   ctx.drawImage(img, (SIZE - dw) / 2, (SIZE - dh) / 2, dw, dh);
 
-  const label = 'AI 이미지';
-  ctx.font = 'bold 22px "Malgun Gothic", sans-serif';
-  const textWidth = ctx.measureText(label).width;
-  const bw = textWidth + 32, bh = 38;
-  const bx = SIZE - bw - 20, by = 20;
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(bx, by, bw, bh, 8);
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fill();
-  ctx.restore();
-  ctx.fillStyle = '#ffffff';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, bx + bw / 2, by + bh / 2);
+  drawAILabel(ctx, SIZE, 1);
+}
+
+/**
+ * Photo 스타일 이미지에 "AI 이미지" 라벨을 박아서 dataUrl 반환.
+ * 다운로드용 — 원본 비율 유지, 라벨만 추가.
+ */
+async function composePhotoWithLabel(srcUrl: string): Promise<string> {
+  const img = await loadImageForCanvas(srcUrl);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas context unavailable');
+  ctx.drawImage(img, 0, 0);
+
+  // 1024 기준 폰트 크기를 실제 이미지 크기에 비례
+  const labelScale = canvas.width / 1024;
+  drawAILabel(ctx, canvas.width, labelScale);
+
+  return canvas.toDataURL('image/png');
 }
 
 export default function ImageGallery({ images, keyword, title, style = 'cardnews', onRegenerate, isLoading, onImagesUpdate }: ImageGalleryProps) {
@@ -102,7 +140,9 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
         const url = composited[image.id] || image.url;
         await downloadImageReliable(url, `edited-${keyword}-${image.id}`);
       } else if (style === 'photo') {
-        await downloadImageReliable(image.url, `photo-${keyword}-${image.id}`);
+        // AI 이미지 라벨을 캔버스로 박아서 다운로드
+        const dataUrl = await composePhotoWithLabel(image.url);
+        await downloadImageReliable(dataUrl, `photo-${keyword}-${image.id}`);
       } else {
         const dataUrl = composited[image.id];
         if (!dataUrl) return;
@@ -203,11 +243,15 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                       alt={`이미지 ${image.id}`}
                       className="w-full h-full object-cover"
                     />
-                    {(style === 'photo') && (
-                      <div className="absolute top-2 right-2 bg-black/60 text-white text-[9px] font-bold px-2 py-0.5 rounded-md pointer-events-none">
-                        AI이미지
+                    {style === 'photo' && (
+                      <div
+                        className="absolute top-2 right-2 text-white text-[10px] sm:text-[11px] font-extrabold pointer-events-none tracking-wide"
+                        style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.9)' }}
+                      >
+                        AI 이미지
                       </div>
                     )}
+                    {/* cardnews는 캔버스에 라벨이 이미 박혀있어 CSS 오버레이 불필요 */}
                     {style === 'upload' && (
                       <div className="absolute bottom-2 left-0 right-0 flex justify-center">
                         <button
@@ -311,11 +355,21 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
             className="bg-[#12153d] border border-[#2a2b6e] rounded-t-2xl sm:rounded-2xl overflow-hidden w-full sm:max-w-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <img
-              src={isRawStyle ? (composited[selected.id] || selected.url) : composited[selected.id]}
-              alt="이미지 확대"
-              className={`w-full object-cover ${style === 'photo' ? 'aspect-video' : 'aspect-square'} max-h-[70vh]`}
-            />
+            <div className="relative">
+              <img
+                src={isRawStyle ? (composited[selected.id] || selected.url) : composited[selected.id]}
+                alt="이미지 확대"
+                className={`w-full object-cover ${style === 'photo' ? 'aspect-video' : 'aspect-square'} max-h-[70vh]`}
+              />
+              {style === 'photo' && (
+                <div
+                  className="absolute top-3 right-4 text-white text-sm font-extrabold pointer-events-none tracking-wide"
+                  style={{ textShadow: '0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.9)' }}
+                >
+                  AI 이미지
+                </div>
+              )}
+            </div>
             <div className="p-4 flex items-center justify-between gap-2">
               <p className="text-xs text-[#8891bd] truncate">#{keyword}</p>
               <div className="flex gap-2 flex-shrink-0">
