@@ -39,3 +39,29 @@ body {
 .ad-banner-hm-cta {
   background: linear-gradient(135deg, #2ecc71, #27ae60);
 }
+
+@keyframes analysis-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 rgba(34, 211, 238, 0.45),
+      0 0 18px rgba(34, 211, 238, 0.25),
+      0 0 36px rgba(16, 185, 129, 0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px rgba(34, 211, 238, 0),
+      0 0 28px rgba(34, 211, 238, 0.5),
+      0 0 56px rgba(16, 185, 129, 0.3);
+  }
+}
+.analysis-cta {
+  animation: analysis-glow 2.4s ease-in-out infinite;
+}
+.analysis-cta:hover {
+  animation-play-state: paused;
+  box-shadow:
+    0 0 0 4px rgba(34, 211, 238, 0.2),
+    0 0 32px rgba(34, 211, 238, 0.55),
+    0 0 64px rgba(16, 185, 129, 0.35);
+  transform: translateY(-1px);
+}
