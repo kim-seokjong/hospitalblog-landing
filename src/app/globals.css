@@ -25,19 +25,12 @@ body {
 .ad-pulse-dot { animation: ad-pulse-dot 2s ease-in-out infinite; }
 
 .ad-banner-hm {
-  background: linear-gradient(170deg, #0a1628 0%, #132238 100%);
   box-shadow: 0 8px 32px rgba(10, 22, 40, 0.5);
-  border: 2px solid #2ecc71;
   transition: transform 0.3s, box-shadow 0.3s;
 }
 .ad-banner-hm:hover {
   transform: translateY(-3px);
-  box-shadow: 0 0 20px rgba(46, 204, 113, 0.3), 0 14px 44px rgba(10, 22, 40, 0.65);
-}
-.ad-banner-hm:hover .ad-banner-hm-arrow { transform: translateX(3px); }
-.ad-banner-hm-arrow { transition: transform 0.3s; }
-.ad-banner-hm-cta {
-  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  box-shadow: 0 0 24px rgba(46, 204, 113, 0.4), 0 14px 44px rgba(10, 22, 40, 0.65);
 }
 
 @keyframes analysis-glow {

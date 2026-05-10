@@ -100,36 +100,16 @@ function HospitalMarketingBanner() {
       href="http://www.hospitalmarketing.kr/"
       target="_blank"
       rel="noopener noreferrer"
-      className="ad-banner-hm relative flex flex-col rounded-2xl no-underline cursor-pointer w-full"
-      style={{ height: '310px' }}
+      className="ad-banner-hm relative block w-full rounded-2xl overflow-hidden no-underline cursor-pointer"
     >
-      <span className="ad-pulse-dot absolute top-3 right-3 w-2 h-2 rounded-full bg-red-500" />
-      <div className="flex-1 flex flex-col px-4 pt-4 pb-4">
-        <div className="text-white font-black leading-tight" style={{ fontSize: '24px', lineHeight: 1.2 }}>
-          이것만으로<br /><span className="text-[#2ecc71]">충분</span>하세요?
-        </div>
-        <div className="mt-2 mb-auto font-bold" style={{ fontSize: '12px', color: '#f59e0b' }}>
-          아직 안 하고 계신 것들 ↓
-        </div>
-        <div className="flex flex-col gap-1.5 mb-3">
-          {[
-            { icon: '📸', label: '인스타그램 · 숏폼' },
-            { icon: '🎬', label: '유튜브 · 영상광고' },
-            { icon: '📍', label: '네이버 스마트플레이스' },
-            { icon: '📺', label: '전광판 · LED' },
-            { icon: '🚌', label: '버스 · 택시 랩핑' },
-            { icon: '📦', label: '택배 광고' },
-          ].map(item => (
-            <div key={item.label} className="flex items-center gap-2 font-medium" style={{ fontSize: '12px', color: '#e2e8f0', lineHeight: 1.25 }}>
-              <span className="flex-shrink-0 text-center" style={{ fontSize: '14px', width: '18px' }}>{item.icon}</span>
-              <span>{item.label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="ad-banner-hm-cta flex-shrink-0 flex items-center justify-center gap-1.5 text-white font-extrabold rounded-lg whitespace-nowrap" style={{ fontSize: '14px', padding: '11px 8px' }}>
-          풀세팅 알아보기 <span className="ad-banner-hm-arrow">→</span>
-        </div>
-      </div>
+      <span className="ad-pulse-dot absolute top-3 right-3 w-2 h-2 rounded-full bg-red-500 z-10" />
+      <img
+        src="/ads/hospitalmarketing-banner.png"
+        alt="병원 마케팅 풀세팅 — 인스타그램·유튜브·네이버 스마트플레이스·전광판·버스 택시 랩핑·택배 광고"
+        className="block w-full h-auto"
+        loading="lazy"
+        decoding="async"
+      />
     </a>
   );
 }
