@@ -149,19 +149,27 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
 【최우선 규칙 — 키워드 식별성】
 - 각 이미지는 키워드 "${keyword}"를 보는 사람이 1초 안에 알아볼 수 있어야 함
 - "병원 분위기" 이미지 금지 — "${keyword}" 시술/주제 자체가 주인공인 구도
-- ${count}장 모두 다른 구도/단계로 분산: close-up procedure detail / medium shot of staff with patient / before-after split frame / tools-and-equipment focus / patient consultation / post-procedure recovery 등에서 골고루 선택
+- ${count}장 모두 다른 구도/단계로 분산: close-up procedure detail / medium shot of staff with patient / tools-and-equipment focus / patient consultation / post-procedure recovery / clinical environment overview 등에서 골고루 선택
+
+【🚨 의료광고법(의료법 제56조) — 절대 금지 (Compliance Hard Rules)】
+- before-after / before/after / split frame / side-by-side comparison / before vs after / "fading X" 표현 절대 금지
+- 시술 효과를 보장·과장하는 표현 금지: "miraculous", "dramatic transformation", "perfect result", "completely smooth", "flawless", "guaranteed" 등
+- 수치 결과 암시 금지: "70% improvement", "5x better", "instant results" 등
+- 실제 환자 후기·간증처럼 보이는 구도 금지
+- 위 표현이 영문 프롬프트에 들어가면 의료법 위반 — 전부 제거하고 시술 진행 장면(도구·부위·의료진 동작·임상 환경)으로만 작성
 
 프롬프트 구조 (각 이미지마다 아래 순서로 작성):
-1. 장면 도입: ultra-realistic photograph / clinical close-up / medium shot / before-after split frame 중 하나 명시
-2. 시술 식별 단서: 위 Procedure Visual Reference의 핵심 요소(도구, 부위, 단계, before-after 등)를 자연스럽게 녹여 작성
+1. 장면 도입: ultra-realistic photograph / clinical close-up / medium shot / equipment-focused shot 중 하나 명시
+2. 시술 식별 단서: 위 Procedure Visual Reference의 핵심 요소(도구, 부위, 시술 단계, 의료진 동작 등)를 자연스럽게 녹여 작성. before-after 비교 형식은 사용 금지
 3. 인물: Korean people, East Asian appearance, Korean patient / doctor / medical staff (동양적 얼굴 비율 명시)
 4. 조명: natural indoor lighting, soft diffused daylight, true-to-life colors, accurate white balance (cinematic light, studio light 절대 금지)
 5. 피부 실사 섹션 반드시 포함: "Skin realism focus: visible pores, fine micro-texture, organic acne marks (non-repeating), uneven pigmentation, subtle redness, natural oil sheen only on high points, visible peach fuzz and very fine vellus hair. No symmetry correction."
 6. 카메라: phone camera realism, subtle sensor grain, slight edge softness, candid composition
-7. 금지: "No retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"
+7. 금지(영문 negative 포함): "No before-after comparison, no split frame, no side-by-side comparison, no dramatic transformation, no retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"
 
 - 영어로만 출력, 각 프롬프트 100~150단어 (시술 단서 포함으로 약간 길게)
-- 의료 현장의 실제 모습 (병원 인테리어, 의료진, 장비, 환자 치료, 시술 도구)`,
+- 의료 현장의 실제 모습 (병원 인테리어, 의료진, 장비, 환자 치료, 시술 도구)
+- "before", "after", "comparison", "split frame", "vs" 같은 단어가 프롬프트에 절대 들어가서는 안 됨`,
     }],
   });
 
