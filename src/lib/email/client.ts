@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 
 const FROM_ADDRESS = '닥터포스트 <noreply@hospitalblog.kr>'
-const REPLY_TO = 'support@hospitalblog.kr'
+const REPLY_TO = 'terro6936@naver.com'
 
 interface SendEmailParams {
   to: string

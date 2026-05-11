@@ -38,7 +38,7 @@ export function renderLayout({ preheader, bodyHtml }: LayoutParams): string {
           <tr>
             <td style="padding:24px 40px;background-color:#f9fafb;border-top:1px solid ${BORDER_COLOR};font-size:12px;color:${MUTED_COLOR};">
               <p style="margin:0 0 8px 0;">본 메일은 닥터포스트 구독 서비스 이용에 따른 자동 안내입니다.</p>
-              <p style="margin:0 0 8px 0;">문의: <a href="mailto:support@hospitalblog.kr" style="color:${BRAND_COLOR};text-decoration:none;">support@hospitalblog.kr</a> · 카카오톡 채널 <a href="https://pf.kakao.com/_xefMRX" style="color:${BRAND_COLOR};text-decoration:none;">광고진정성</a></p>
+              <p style="margin:0 0 8px 0;">문의: <a href="mailto:terro6936@naver.com" style="color:${BRAND_COLOR};text-decoration:none;">terro6936@naver.com</a> · 카카오톡 채널 <a href="https://pf.kakao.com/_xefMRX" style="color:${BRAND_COLOR};text-decoration:none;">광고진정성</a></p>
               <p style="margin:0;">구독 관리: <a href="https://hospitalblog.kr/subscription" style="color:${BRAND_COLOR};text-decoration:none;">hospitalblog.kr/subscription</a></p>
             </td>
           </tr>
