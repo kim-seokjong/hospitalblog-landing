@@ -3,8 +3,20 @@
     "app/api/publish-naver/route.ts": {
       "maxDuration": 300
     },
-    "app/api/generate-images/route.ts": {
+    "app/api/generate-content/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/generate-titles/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/generate-tags/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/generate-cardnews-slides/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/generate-images/route.ts": {
+      "maxDuration": 180
     },
     "app/api/regenerate-image/route.ts": {
       "maxDuration": 60

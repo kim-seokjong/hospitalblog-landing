@@ -137,17 +137,6 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   return data as Profile
 }
 
-export async function incrementUsage(userId: string): Promise<void> {
-  const { error } = await getAdmin().rpc('increment_usage', { user_id: userId })
-  if (error) {
-    // fallback: 직접 업데이트
-    await getAdmin()
-      .from('profiles')
-      .update({ usage_count: getAdmin().rpc('coalesce_usage', {}) })
-      .eq('id', userId)
-  }
-}
-
 export async function getUserPayments(userId: string): Promise<Payment[]> {
   const { data, error } = await getAdmin()
     .from('payments')

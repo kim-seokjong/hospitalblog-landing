@@ -3,6 +3,8 @@ import { getAnthropicClient, MODEL } from '@/lib/anthropic';
 import { logUsage } from '@/lib/usage-logger';
 import type { TagResult } from '@/types';
 
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   try {
     const { keyword, title, hospitalType } = await req.json();

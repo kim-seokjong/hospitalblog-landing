@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies, headers } from 'next/headers'
 import { verifyAndActivate } from '@/lib/payment/verify'
+import { findPaymentById } from '@/lib/payment/repository'
 import { PLANS } from '@/lib/payment/plans'
 import { sendCAPIEvent } from '@/lib/meta-capi'
 
@@ -22,6 +23,14 @@ export async function POST(req: NextRequest) {
     const { paymentId } = await req.json()
     if (!paymentId || typeof paymentId !== 'string') {
       return NextResponse.json({ error: 'paymentId가 필요합니다' }, { status: 400 })
+    }
+
+    const dbPayment = await findPaymentById(paymentId)
+    if (!dbPayment) {
+      return NextResponse.json({ error: '결제 레코드를 찾을 수 없습니다' }, { status: 404 })
+    }
+    if (dbPayment.user_id !== user.id) {
+      return NextResponse.json({ error: '결제 권한이 없습니다' }, { status: 403 })
     }
 
     const result = await verifyAndActivate(paymentId)

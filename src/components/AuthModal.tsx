@@ -22,7 +22,7 @@ const HOSPITAL_TYPES = [
 ] as const;
 
 const SAVED_EMAIL_KEY = 'dp_saved_email';
-const SAVED_PW_KEY = 'dp_saved_pw';
+const LEGACY_SAVED_PW_KEY = 'dp_saved_pw';
 
 export default function AuthModal({ onClose, onSuccess, initialMode = 'login', closable = true }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -50,12 +50,11 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
 
   const supabase = createClient();
 
-  // 저장된 이메일/비밀번호 불러오기
+  // 저장된 이메일 불러오기 + 레거시 평문 비밀번호 정리
   useEffect(() => {
+    localStorage.removeItem(LEGACY_SAVED_PW_KEY);
     const savedEmail = localStorage.getItem(SAVED_EMAIL_KEY);
-    const savedPw = localStorage.getItem(SAVED_PW_KEY);
     if (savedEmail) { setEmail(savedEmail); setSaveCredentials(true); }
-    if (savedPw) setPassword(savedPw);
   }, []);
 
   const resetFields = () => {
@@ -75,11 +74,10 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     } else {
       if (saveCredentials) {
         localStorage.setItem(SAVED_EMAIL_KEY, email);
-        localStorage.setItem(SAVED_PW_KEY, password);
       } else {
         localStorage.removeItem(SAVED_EMAIL_KEY);
-        localStorage.removeItem(SAVED_PW_KEY);
       }
+      localStorage.removeItem(LEGACY_SAVED_PW_KEY);
       localStorage.removeItem('dp_contact_dismissed');
       onSuccess(); onClose();
     }
@@ -207,7 +205,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
                     onChange={(e) => setSaveCredentials(e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-xs text-gray-600">이메일 · 비밀번호 저장</span>
+                  <span className="text-xs text-gray-600">이메일 저장</span>
                 </label>
               </>
             ) : (

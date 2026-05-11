@@ -5,6 +5,8 @@ import { logUsage } from '@/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/lib/naver-search';
 import { checkAndConsumeUsage, refundUsage } from '@/lib/payment/usage-guard';
 
+export const maxDuration = 120;
+
 type TitleFormat = '질문형' | '정보형' | '가이드형' | '노하우형' | '숫자형' | string;
 
 function buildFormatSpecificStructure(format: TitleFormat, keyword: string): string {

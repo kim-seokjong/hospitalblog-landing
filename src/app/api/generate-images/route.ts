@@ -3,6 +3,7 @@ import { getAnthropicClient, MODEL } from '@/lib/anthropic';
 import { OPENAI_IMAGE_MODEL } from '@/lib/openai';
 import { logUsage } from '@/lib/usage-logger';
 import { findProcedureCues } from '@/lib/procedure-visual-cues';
+import { requirePaidPlan } from '@/lib/payment/usage-guard';
 import type { GeneratedImage } from '@/types';
 
 export const maxDuration = 180;
@@ -18,8 +19,35 @@ function isPermanentImageError(message: string): boolean {
     lower.includes('content policy') ||
     lower.includes('safety') ||
     lower.includes('unauthorized') ||
-    lower.includes('invalid_api_key')
+    lower.includes('invalid_api_key') ||
+    lower.includes('billing_hard_limit') ||
+    lower.includes('insufficient_quota') ||
+    lower.includes('payment required')
   );
+}
+
+/**
+ * 외부 이미지 API 에러 메시지를 사용자에게 안전한 문구로 변환.
+ * 원본 메시지는 서버 로그에만 남기고, 응답에는 카테고리 라벨만 노출.
+ */
+function safeImageErrorMessage(rawMessage: string): string {
+  const lower = rawMessage.toLowerCase();
+  if (
+    lower.includes('billing') ||
+    lower.includes('insufficient_quota') ||
+    lower.includes('hard_limit') ||
+    lower.includes('payment required') ||
+    lower.includes('402')
+  ) {
+    return '이미지 생성 한도에 도달했습니다. 잠시 후 다시 시도하거나 관리자에게 문의해주세요.';
+  }
+  if (lower.includes('content_policy') || lower.includes('content policy') || lower.includes('safety')) {
+    return '이미지 콘텐츠 정책으로 생성이 거부되었습니다. 키워드를 조정해 다시 시도해주세요.';
+  }
+  if (lower.includes('rate_limit') || lower.includes('rate limit') || lower.includes('429')) {
+    return '이미지 생성 요청이 일시적으로 많아 실패했습니다. 잠시 후 다시 시도해주세요.';
+  }
+  return '이미지 생성에 실패했습니다.';
 }
 
 /** 일시적 오류(429/5xx/네트워크)에 대한 지수 백오프 재시도 */
@@ -90,7 +118,8 @@ async function generateWithFal(prompt: string): Promise<string> {
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`fal.ai 요청 실패: ${err}`);
+    console.error('[fal.ai] image generation failed:', res.status, err);
+    throw new Error(`fal.ai status=${res.status}`);
   }
 
   const data = await res.json();
@@ -241,7 +270,18 @@ async function generateOneOpenAIImage(prompt: string): Promise<string> {
     }),
   });
 
-  if (!res.ok) throw new Error(`OpenAI 이미지 생성 실패: ${await res.text()}`);
+  if (!res.ok) {
+    const raw = await res.text();
+    console.error('[openai] image generation failed:', res.status, raw);
+    const lower = raw.toLowerCase();
+    if (lower.includes('billing_hard_limit') || lower.includes('insufficient_quota')) {
+      throw new Error('openai billing_hard_limit');
+    }
+    if (lower.includes('content_policy') || lower.includes('safety')) {
+      throw new Error('openai content_policy');
+    }
+    throw new Error(`openai status=${res.status}`);
+  }
   const data = await res.json();
   const item = data.data?.[0];
   if (!item) throw new Error('OpenAI 응답이 없습니다.');
@@ -378,6 +418,11 @@ async function generatePhotoImages(
 
 export async function POST(req: NextRequest) {
   try {
+    const gate = await requirePaidPlan();
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
+    }
+
     const { keyword, title, body = '', count = 4, style = 'cardnews' } = await req.json();
 
     if (!keyword || !title) {
@@ -391,7 +436,8 @@ export async function POST(req: NextRequest) {
       : await generateWithOpenAIImages(keyword, title, body, imageCount);
 
     if (images.length === 0) {
-      return NextResponse.json({ error: '이미지 생성에 실패했습니다.', details: errors }, { status: 500 });
+      const sample = errors[0] ?? '';
+      return NextResponse.json({ error: safeImageErrorMessage(sample) }, { status: 500 });
     }
 
     images.sort((a, b) => {
@@ -399,10 +445,10 @@ export async function POST(req: NextRequest) {
       const numB = parseInt(b.id.replace('img-', ''), 10);
       return numA - numB;
     });
-    return NextResponse.json({ images, errors: errors.length > 0 ? errors : undefined });
+    return NextResponse.json({ images });
   } catch (error) {
     console.error('이미지 생성 오류:', error);
     const message = error instanceof Error ? error.message : '알 수 없는 오류';
-    return NextResponse.json({ error: `이미지 생성 실패: ${message}` }, { status: 500 });
+    return NextResponse.json({ error: safeImageErrorMessage(message) }, { status: 500 });
   }
 }

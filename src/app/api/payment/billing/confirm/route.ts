@@ -50,6 +50,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '결제 레코드를 찾을 수 없습니다' }, { status: 404 })
     }
 
+    if (dbPayment.user_id !== user.id) {
+      return NextResponse.json({ error: '결제 권한이 없습니다' }, { status: 403 })
+    }
+
     // 멱등 처리: 이미 완료된 결제
     if (dbPayment.status === 'PAID') {
       const expiresAt = addOneMonth(dbPayment.paid_at ?? new Date().toISOString())

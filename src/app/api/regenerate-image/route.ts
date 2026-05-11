@@ -1,10 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-export const maxDuration = 60;
 import { getAnthropicClient, MODEL } from '@/lib/anthropic';
 import { OPENAI_IMAGE_MODEL } from '@/lib/openai';
 import { logUsage } from '@/lib/usage-logger';
+import { requirePaidPlan } from '@/lib/payment/usage-guard';
 import type { GeneratedImage } from '@/types';
+
+export const maxDuration = 60;
+
+function safeImageErrorMessage(rawMessage: string): string {
+  const lower = rawMessage.toLowerCase();
+  if (
+    lower.includes('billing') ||
+    lower.includes('insufficient_quota') ||
+    lower.includes('hard_limit') ||
+    lower.includes('payment required') ||
+    lower.includes('402')
+  ) {
+    return '이미지 생성 한도에 도달했습니다. 잠시 후 다시 시도하거나 관리자에게 문의해주세요.';
+  }
+  if (lower.includes('content_policy') || lower.includes('content policy') || lower.includes('safety')) {
+    return '이미지 콘텐츠 정책으로 생성이 거부되었습니다. 프롬프트를 조정해 다시 시도해주세요.';
+  }
+  if (lower.includes('rate_limit') || lower.includes('rate limit') || lower.includes('429')) {
+    return '이미지 생성 요청이 일시적으로 많아 실패했습니다. 잠시 후 다시 시도해주세요.';
+  }
+  return '이미지 재생성에 실패했습니다.';
+}
 
 function hasKorean(text: string): boolean {
   return /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(text);
@@ -55,7 +76,18 @@ async function generateWithOpenAI(prompt: string): Promise<string> {
     }),
   });
 
-  if (!res.ok) throw new Error(`OpenAI 이미지 생성 실패: ${await res.text()}`);
+  if (!res.ok) {
+    const raw = await res.text();
+    console.error('[openai] regenerate failed:', res.status, raw);
+    const lower = raw.toLowerCase();
+    if (lower.includes('billing_hard_limit') || lower.includes('insufficient_quota')) {
+      throw new Error('openai billing_hard_limit');
+    }
+    if (lower.includes('content_policy') || lower.includes('safety')) {
+      throw new Error('openai content_policy');
+    }
+    throw new Error(`openai status=${res.status}`);
+  }
   const data = await res.json();
   const item = data.data?.[0];
   if (!item) throw new Error('OpenAI 응답이 없습니다.');
@@ -83,7 +115,11 @@ async function generateWithFal(prompt: string): Promise<string> {
     }),
   });
 
-  if (!res.ok) throw new Error(`fal.ai 요청 실패: ${await res.text()}`);
+  if (!res.ok) {
+    const raw = await res.text();
+    console.error('[fal.ai] regenerate failed:', res.status, raw);
+    throw new Error(`fal.ai status=${res.status}`);
+  }
   const data = await res.json();
   const url = data.images?.[0]?.url;
   if (!url) throw new Error('fal.ai 응답에 이미지 URL이 없습니다.');
@@ -118,6 +154,11 @@ async function generatePexels(query: string): Promise<string> {
 
 export async function POST(req: NextRequest) {
   try {
+    const gate = await requirePaidPlan();
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
+    }
+
     const { imageId, prompt, style = 'cardnews', provider = 'openai' } = await req.json();
 
     if (!prompt) return NextResponse.json({ error: '프롬프트를 입력해주세요.' }, { status: 400 });
@@ -152,7 +193,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ image, translatedPrompt: isKorean ? englishPrompt : undefined });
   } catch (error) {
+    console.error('이미지 재생성 오류:', error);
     const message = error instanceof Error ? error.message : '알 수 없는 오류';
-    return NextResponse.json({ error: `이미지 재생성 실패: ${message}` }, { status: 500 });
+    return NextResponse.json({ error: safeImageErrorMessage(message) }, { status: 500 });
   }
 }

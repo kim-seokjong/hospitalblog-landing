@@ -5,6 +5,8 @@ import { logUsage } from '@/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/lib/naver-search';
 import type { BlogTitle } from '@/types';
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const { keyword, hospitalType, region = '' } = await req.json();

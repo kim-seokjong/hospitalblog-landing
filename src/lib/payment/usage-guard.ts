@@ -161,3 +161,75 @@ export async function refundUsage(userId: string): Promise<void> {
     // 롤백 실패는 조용히 무시 (사용자에게는 이미 에러를 반환한 상태)
   }
 }
+
+export type PlanGateFailReason = 'unauthenticated' | 'no_profile' | 'plan_required' | 'plan_expired'
+
+export interface PlanGateSuccess {
+  ok: true
+  userId: string
+  isAdmin: boolean
+}
+
+export interface PlanGateFailure {
+  ok: false
+  reason: PlanGateFailReason
+  message: string
+  status: number
+}
+
+export type PlanGateResult = PlanGateSuccess | PlanGateFailure
+
+/**
+ * 사용량 차감 없이 인증·유료플랜·만료만 검사한다. 본문 생성과 함께 호출되는
+ * 이미지 라우트(generate-images, regenerate-image)처럼 차감 책임이 다른 라우트에
+ * 있는 경우에 사용한다. 비인증·비결제 사용자의 외부 API 비용 발생을 차단한다.
+ */
+export async function requirePaidPlan(): Promise<PlanGateResult> {
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { ok: false, reason: 'unauthenticated', message: '로그인이 필요합니다.', status: 401 }
+  }
+
+  const userIsAdmin = isAdmin(user.email)
+  if (userIsAdmin) {
+    return { ok: true, userId: user.id, isAdmin: true }
+  }
+
+  const admin = createAdminClient()
+  const { data: profile, error } = await admin
+    .from('profiles')
+    .select('plan, plan_expires_at')
+    .eq('id', user.id)
+    .single()
+
+  if (error || !profile) {
+    return {
+      ok: false,
+      reason: 'no_profile',
+      message: '프로필 정보를 불러올 수 없습니다.',
+      status: 403,
+    }
+  }
+
+  if (!isPaidPlanId(profile.plan)) {
+    return {
+      ok: false,
+      reason: 'plan_required',
+      message: '구독 플랜이 필요합니다. 요금제 페이지에서 결제 후 이용해주세요.',
+      status: 402,
+    }
+  }
+
+  if (!profile.plan_expires_at || new Date(profile.plan_expires_at) <= new Date()) {
+    return {
+      ok: false,
+      reason: 'plan_expired',
+      message: '구독이 만료되었습니다. 요금제 페이지에서 갱신해주세요.',
+      status: 402,
+    }
+  }
+
+  return { ok: true, userId: user.id, isAdmin: false }
+}
