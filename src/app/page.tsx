@@ -386,10 +386,13 @@ export default function LandingPage() {
       </section>
 
       {/* 푸터 */}
-      <footer className="border-t border-white/5 py-8 text-center text-xs text-gray-600">
-        <p className="mb-1">© 2026 광고, 진정성 · 대표: 김석종 · 대구광역시 수성구 청호로422 2층</p>
-        <p className="mb-3">사업자등록번호: 570-60-00560 · contact@hospitalblog.kr · 010-2558-1115</p>
-        <div className="flex justify-center gap-4">
+      <footer className="border-t border-white/5 py-8 text-center text-xs text-gray-600 leading-relaxed px-4">
+        <p className="mb-1">© 2026 광고진정성. All rights reserved.</p>
+        <p className="mb-1">상호: 광고진정성 · 대표: 김석종 · 사업자등록번호: 570-60-00560</p>
+        <p className="mb-1">주소: 대구광역시 수성구 청호로422 2층</p>
+        <p className="mb-1">통신판매업 신고번호: 제2026-대구수성구-0497호</p>
+        <p className="mb-3">연락처: 010-2558-1115 · 이메일: contact@hospitalblog.kr</p>
+        <div className="flex flex-wrap justify-center gap-4">
           <a href="/terms" className="hover:text-gray-400 transition-colors">이용약관</a>
           <a href="/privacy" className="hover:text-gray-400 transition-colors">개인정보처리방침</a>
           <a href="/refund" className="hover:text-gray-400 transition-colors">환불정책</a>
