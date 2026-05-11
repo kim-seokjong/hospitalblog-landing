@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import UserList from '@/components/admin/UserList';
 
 const PLAN_LABEL: Record<string, string> = {
   free: '무료',
@@ -206,6 +207,10 @@ export default function AdminPage() {
           </div>
 
         </div>
+
+        {/* 회원 목록 */}
+        <UserList />
+
       </div>
     </main>
   );
