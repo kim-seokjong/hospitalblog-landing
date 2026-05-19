@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { getActiveBillingKey, cancelBillingKeyById } from '@/lib/payment/repository'
+import { getActiveBillingKey, cancelBillingKeyById } from '@/payment/lib/repository'
 
 export const dynamic = 'force-dynamic'
 

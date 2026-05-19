@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import UserList from '@/components/admin/UserList';
+import UserList from '@/hr/components/UserList';
 
 const PLAN_LABEL: Record<string, string> = {
   free: '무료',

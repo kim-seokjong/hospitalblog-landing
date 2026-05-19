@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 
 type MemberRole = 'admin' | 'member';

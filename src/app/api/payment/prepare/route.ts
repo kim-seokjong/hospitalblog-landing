@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { randomUUID } from 'crypto'
-import { PLANS, PAID_PLAN_IDS } from '@/lib/payment/plans'
-import { createPendingPayment } from '@/lib/payment/repository'
-import type { PlanId } from '@/lib/payment/plans'
+import { PLANS, PAID_PLAN_IDS } from '@/payment/lib/plans'
+import { createPendingPayment } from '@/payment/lib/repository'
+import type { PlanId } from '@/payment/lib/plans'
 
 export async function POST(req: NextRequest) {
   try {

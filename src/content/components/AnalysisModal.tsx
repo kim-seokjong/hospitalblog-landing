@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import SeoAnalysis from '@/components/SeoAnalysis';
-import OriginalityChecker from '@/components/OriginalityChecker';
-import NaverPreview from '@/components/NaverPreview';
+import SeoAnalysis from '@/content/components/SeoAnalysis';
+import OriginalityChecker from '@/content/components/OriginalityChecker';
+import NaverPreview from '@/content/components/NaverPreview';
 import type { BlogContent } from '@/types';
 
 interface AnalysisModalProps {

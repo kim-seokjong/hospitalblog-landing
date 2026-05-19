@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { isAdmin } from '@/lib/admin'
-import { cancelAndDeactivate } from '@/lib/payment/verify'
+import { createServerSupabaseClient } from '@/dev/lib/supabase/server'
+import { isAdmin } from '@/hr/lib/admin'
+import { cancelAndDeactivate } from '@/payment/lib/verify'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'

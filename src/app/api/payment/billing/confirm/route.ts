@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { chargeWithBillingKey } from '@/lib/payment/billing-client'
+import { chargeWithBillingKey } from '@/payment/lib/billing-client'
 import {
   findPaymentById,
   markPaymentPaid,
   markPaymentFailed,
   activateUserPlan,
   createBillingKey,
-} from '@/lib/payment/repository'
-import { PLANS } from '@/lib/payment/plans'
-import type { PlanId } from '@/lib/payment/plans'
-import { sendCAPIEvent } from '@/lib/meta-capi'
+} from '@/payment/lib/repository'
+import { PLANS } from '@/payment/lib/plans'
+import type { PlanId } from '@/payment/lib/plans'
+import { sendCAPIEvent } from '@/dev/lib/meta-capi'
 import { headers } from 'next/headers'
 
 function addOneMonth(isoDate: string): string {

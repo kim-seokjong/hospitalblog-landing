@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import type { BlogContent } from '@/types';
-import { toNaverFormat } from '@/lib/naver-format';
+import { toNaverFormat } from '@/content/lib/naver-format';
 
 interface ContentPreviewProps {
   content: BlogContent;

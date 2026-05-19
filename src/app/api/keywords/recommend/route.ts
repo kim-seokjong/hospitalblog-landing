@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, MODEL } from '@/lib/anthropic';
+import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 
 const HEAD_KEYWORDS: Record<string, string[]> = {
   피부과: ['피부과 추천', '여드름 치료', '피부 관리', '레이저 시술', '미백', '보톡스', '필러', '색소 치료'],

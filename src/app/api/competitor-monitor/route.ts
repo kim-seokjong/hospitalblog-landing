@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { getAnthropicClient, MODEL } from '@/lib/anthropic';
+import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 
 interface NaverPost {
   title: string;

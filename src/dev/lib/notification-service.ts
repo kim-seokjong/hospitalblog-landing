@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { PLANS, isPaidPlanId } from '@/lib/payment/plans';
+import { PLANS, isPaidPlanId } from '@/payment/lib/plans';
 
 export async function checkAndCreateUsageWarning(
   userId: string,

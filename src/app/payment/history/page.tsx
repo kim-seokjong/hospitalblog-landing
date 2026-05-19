@@ -3,11 +3,11 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
-import type { Payment, PaymentStatus } from '@/lib/payment/types';
-import type { PlanId } from '@/lib/payment/plans';
-import { PLANS } from '@/lib/payment/plans';
+import type { Payment, PaymentStatus } from '@/payment/lib/types';
+import type { PlanId } from '@/payment/lib/plans';
+import { PLANS } from '@/payment/lib/plans';
 
 const STATUS_LABELS: Record<PaymentStatus, string> = {
   PAID: '결제 완료',

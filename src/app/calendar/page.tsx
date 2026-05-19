@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/dev/lib/supabase/client';
 import type { SavedPost } from '@/types';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────

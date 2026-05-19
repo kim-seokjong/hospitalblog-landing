@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/dev/lib/supabase/server';
 
 export type FeatureType =
   | 'generate-titles'

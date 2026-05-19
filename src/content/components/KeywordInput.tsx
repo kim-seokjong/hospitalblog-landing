@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import type { WritingStyle, OptimizationMode } from '@/types';
-import SpecialtyKeywordSuggester from '@/components/SpecialtyKeywordSuggester';
+import SpecialtyKeywordSuggester from '@/content/components/SpecialtyKeywordSuggester';
 
 interface KeywordInputProps {
   onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle, region: string, optimizationMode: OptimizationMode) => void;

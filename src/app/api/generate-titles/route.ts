@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, MODEL } from '@/lib/anthropic';
-import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT } from '@/lib/medical-compliance';
-import { logUsage } from '@/lib/usage-logger';
-import { searchNaverBlogs, buildCompetitorInsightText } from '@/lib/naver-search';
+import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
+import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT } from '@/content/lib/medical-compliance';
+import { logUsage } from '@/dev/lib/usage-logger';
+import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
 import type { BlogTitle } from '@/types';
 
 export const maxDuration = 60;

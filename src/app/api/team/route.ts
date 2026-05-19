@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient, createAdminClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
 
 type MemberRole = 'admin' | 'member';
 

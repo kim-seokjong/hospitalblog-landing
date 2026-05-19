@@ -1,4 +1,4 @@
-import type { Plan } from '@/lib/payment/plans'
+import type { Plan } from '@/payment/lib/plans'
 import BillingButton from './BillingButton'
 
 interface Props {

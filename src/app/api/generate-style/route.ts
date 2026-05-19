@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, MODEL } from '@/lib/anthropic';
+import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 import type { SlideStyleConfig } from '@/types';
 
 function hexToRgb(hex: string): string {

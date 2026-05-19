@@ -1,6 +1,6 @@
 import Script from 'next/script'
-import PricingSection from '@/components/payment/PricingSection'
-import PricingTracker from '@/components/PricingTracker'
+import PricingSection from '@/payment/components/PricingSection'
+import PricingTracker from '@/dev/components/PricingTracker'
 
 export default function PricingPage() {
   return (

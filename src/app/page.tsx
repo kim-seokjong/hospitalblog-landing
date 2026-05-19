@@ -4,9 +4,9 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
-import AuthModal from '@/components/AuthModal';
+import AuthModal from '@/hr/components/AuthModal';
 
 export default function LandingPage() {
   const [user, setUser] = useState<User | null>(null);

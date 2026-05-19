@@ -2,13 +2,13 @@
 // 빌링키 CANCELLED + 해지 통지 메일
 
 import { NextRequest, NextResponse } from 'next/server'
-import { isAuthorizedCron } from '@/lib/cron-auth'
-import { findKeysForCancel, cancelBillingKey } from '@/lib/payment/dunning-repository'
-import { getProfile } from '@/lib/payment/repository'
-import { PLANS, isPaidPlanId } from '@/lib/payment/plans'
-import { deleteBillingKey } from '@/lib/payment/billing-client'
-import { sendEmail } from '@/lib/email/client'
-import { subscriptionCancelledEmail } from '@/lib/email/templates'
+import { isAuthorizedCron } from '@/dev/lib/cron-auth'
+import { findKeysForCancel, cancelBillingKey } from '@/payment/lib/dunning-repository'
+import { getProfile } from '@/payment/lib/repository'
+import { PLANS, isPaidPlanId } from '@/payment/lib/plans'
+import { deleteBillingKey } from '@/payment/lib/billing-client'
+import { sendEmail } from '@/payment/email/client'
+import { subscriptionCancelledEmail } from '@/payment/email/templates'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120

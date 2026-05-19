@@ -1,5 +1,5 @@
-import { createAdminClient, createServerSupabaseClient } from '@/lib/supabase/server'
-import { isAdmin } from '@/lib/admin'
+import { createAdminClient, createServerSupabaseClient } from '@/dev/lib/supabase/server'
+import { isAdmin } from '@/hr/lib/admin'
 import { PLANS, isPaidPlanId } from './plans'
 
 export type UsageGuardFailReason =

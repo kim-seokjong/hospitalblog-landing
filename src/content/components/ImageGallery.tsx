@@ -2,9 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { GeneratedImage } from '@/types';
-import ImageEditor from '@/components/ImageEditor';
-import { downloadImageReliable } from '@/lib/download-image';
-import { drawAILabel, loadImageForCanvas, composeImageWithAILabel } from '@/lib/ai-image-label';
+import ImageEditor from '@/content/components/ImageEditor';
+import { downloadImageReliable } from '@/content/lib/download-image';
+import { drawAILabel, loadImageForCanvas, composeImageWithAILabel } from '@/content/lib/ai-image-label';
 
 interface ImageGalleryProps {
   images: GeneratedImage[];

@@ -1,5 +1,5 @@
-import { createAdminClient } from '@/lib/supabase/server';
-import { decrypt } from '@/lib/crypto';
+import { createAdminClient } from '@/dev/lib/supabase/server';
+import { decrypt } from '@/dev/lib/crypto';
 
 export interface DecryptedCredentials {
   naverId: string;

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, MODEL } from '@/lib/anthropic';
-import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/lib/medical-compliance';
-import { logUsage } from '@/lib/usage-logger';
-import { searchNaverBlogs, buildCompetitorInsightText } from '@/lib/naver-search';
-import { checkAndConsumeUsage, refundUsage } from '@/lib/payment/usage-guard';
+import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
+import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/content/lib/medical-compliance';
+import { logUsage } from '@/dev/lib/usage-logger';
+import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
+import { checkAndConsumeUsage, refundUsage } from '@/payment/lib/usage-guard';
 
 export const maxDuration = 120;
 

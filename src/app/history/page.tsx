@@ -4,8 +4,8 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import PostEditor from '@/components/PostEditor';
+import { createClient } from '@/dev/lib/supabase/client';
+import PostEditor from '@/content/components/PostEditor';
 import type { SavedPost } from '@/types';
 
 type FetchState = 'loading' | 'ready' | 'error';

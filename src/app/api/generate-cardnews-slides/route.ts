@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, MODEL } from '@/lib/anthropic';
-import { logUsage } from '@/lib/usage-logger';
+import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
+import { logUsage } from '@/dev/lib/usage-logger';
 import type { CardNewsData } from '@/types';
 
 export const maxDuration = 60;

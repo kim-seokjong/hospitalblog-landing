@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient, createServerSupabaseClient } from '@/lib/supabase/server';
-import { encrypt, decrypt } from '@/lib/crypto';
+import { createAdminClient, createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { encrypt, decrypt } from '@/dev/lib/crypto';
 
 async function getAuthUser() {
   const supabase = await createServerSupabaseClient();

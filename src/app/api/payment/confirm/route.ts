@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies, headers } from 'next/headers'
-import { verifyAndActivate } from '@/lib/payment/verify'
-import { findPaymentById } from '@/lib/payment/repository'
-import { PLANS } from '@/lib/payment/plans'
-import { sendCAPIEvent } from '@/lib/meta-capi'
+import { verifyAndActivate } from '@/payment/lib/verify'
+import { findPaymentById } from '@/payment/lib/repository'
+import { PLANS } from '@/payment/lib/plans'
+import { sendCAPIEvent } from '@/dev/lib/meta-capi'
 
 export async function POST(req: NextRequest) {
   try {

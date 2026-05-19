@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import './globals.css';
-import MetaPixel from '@/components/MetaPixel';
-import NotificationBell from '@/components/NotificationBell';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import MetaPixel from '@/dev/components/MetaPixel';
+import NotificationBell from '@/hr/components/NotificationBell';
+import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 
 export const metadata: Metadata = {
   title: '닥터포스트',

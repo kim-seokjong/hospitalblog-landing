@@ -2,12 +2,12 @@
 // 방통위 자동결제 가이드라인 의무 사항
 
 import { NextRequest, NextResponse } from 'next/server'
-import { isAuthorizedCron } from '@/lib/cron-auth'
-import { findKeysForBillingNotify, markNotifySent } from '@/lib/payment/dunning-repository'
-import { getProfile } from '@/lib/payment/repository'
-import { PLANS, isPaidPlanId } from '@/lib/payment/plans'
-import { sendEmail } from '@/lib/email/client'
-import { billingNotifyEmail } from '@/lib/email/templates'
+import { isAuthorizedCron } from '@/dev/lib/cron-auth'
+import { findKeysForBillingNotify, markNotifySent } from '@/payment/lib/dunning-repository'
+import { getProfile } from '@/payment/lib/repository'
+import { PLANS, isPaidPlanId } from '@/payment/lib/plans'
+import { sendEmail } from '@/payment/email/client'
+import { billingNotifyEmail } from '@/payment/email/templates'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60

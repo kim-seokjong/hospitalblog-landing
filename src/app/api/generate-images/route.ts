@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, MODEL } from '@/lib/anthropic';
-import { OPENAI_IMAGE_MODEL } from '@/lib/openai';
-import { logUsage } from '@/lib/usage-logger';
-import { findProcedureCues } from '@/lib/procedure-visual-cues';
-import { requirePaidPlan } from '@/lib/payment/usage-guard';
+import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
+import { OPENAI_IMAGE_MODEL } from '@/content/lib/openai';
+import { logUsage } from '@/dev/lib/usage-logger';
+import { findProcedureCues } from '@/content/lib/procedure-visual-cues';
+import { requirePaidPlan } from '@/payment/lib/usage-guard';
 import type { GeneratedImage } from '@/types';
 
 export const maxDuration = 180;

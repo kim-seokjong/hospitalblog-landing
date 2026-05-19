@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import type { BlogContent, TagResult, GeneratedImage } from '@/types';
-import { splitBodyByMarkers, toNaverFormat } from '@/lib/naver-format';
-import { downloadImageReliable } from '@/lib/download-image';
-import { composeImageWithAILabel } from '@/lib/ai-image-label';
+import { splitBodyByMarkers, toNaverFormat } from '@/content/lib/naver-format';
+import { downloadImageReliable } from '@/content/lib/download-image';
+import { composeImageWithAILabel } from '@/content/lib/ai-image-label';
 
 interface NaverPublisherProps {
   title: string;

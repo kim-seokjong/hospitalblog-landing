@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { getDecryptedCredentials } from '@/lib/credentials';
+import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { getDecryptedCredentials } from '@/publish/lib/credentials';
 
 export const maxDuration = 300;
 

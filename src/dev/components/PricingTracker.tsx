@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { trackEvent } from '@/lib/meta-pixel';
+import { trackEvent } from '@/dev/lib/meta-pixel';
 
 export default function PricingTracker() {
   useEffect(() => {

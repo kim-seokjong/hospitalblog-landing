@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import { PLANS } from '@/lib/payment/plans'
+import { PLANS } from '@/payment/lib/plans'
 import PlanCard from './PlanCard'
 
 export default function PricingSection() {

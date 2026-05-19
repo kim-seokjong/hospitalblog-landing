@@ -1,5 +1,5 @@
 // Meta Pixel 이벤트 발송 유틸리티
-// 사용법: import { trackEvent } from '@/lib/meta-pixel';
+// 사용법: import { trackEvent } from '@/dev/lib/meta-pixel';
 
 type MetaPixelEvent =
   | 'ViewContent'

@@ -3,19 +3,19 @@
 // 실패 시: failure_count=2, 재시도 실패 메일 (4일 후 자동 해지 예고)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { isAuthorizedCron } from '@/lib/cron-auth'
-import { findKeysForRetry, recordChargeAttempt } from '@/lib/payment/dunning-repository'
+import { isAuthorizedCron } from '@/dev/lib/cron-auth'
+import { findKeysForRetry, recordChargeAttempt } from '@/payment/lib/dunning-repository'
 import {
   getProfile,
   createPendingPayment,
   markPaymentPaid,
   markPaymentFailed,
   activateUserPlan,
-} from '@/lib/payment/repository'
-import { chargeWithBillingKey } from '@/lib/payment/billing-client'
-import { PLANS, PAID_PLAN_IDS, type PlanId } from '@/lib/payment/plans'
-import { sendEmail } from '@/lib/email/client'
-import { paymentSuccessEmail, paymentRetryFailedEmail } from '@/lib/email/templates'
+} from '@/payment/lib/repository'
+import { chargeWithBillingKey } from '@/payment/lib/billing-client'
+import { PLANS, PAID_PLAN_IDS, type PlanId } from '@/payment/lib/plans'
+import { sendEmail } from '@/payment/email/client'
+import { paymentSuccessEmail, paymentRetryFailedEmail } from '@/payment/email/templates'
 import { randomUUID } from 'crypto'
 
 export const dynamic = 'force-dynamic'

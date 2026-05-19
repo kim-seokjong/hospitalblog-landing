@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { PlanId } from '@/lib/payment/plans'
-import { trackEvent } from '@/lib/meta-pixel'
+import type { PlanId } from '@/payment/lib/plans'
+import { trackEvent } from '@/dev/lib/meta-pixel'
 
 interface Props {
   plan: PlanId

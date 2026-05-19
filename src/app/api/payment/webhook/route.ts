@@ -3,8 +3,8 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { verifyWebhookSignature } from '@/lib/payment/webhook-verify'
-import { verifyAndActivate, cancelAndDeactivate } from '@/lib/payment/verify'
+import { verifyWebhookSignature } from '@/payment/lib/webhook-verify'
+import { verifyAndActivate, cancelAndDeactivate } from '@/payment/lib/verify'
 
 function getAdmin() {
   return createClient(

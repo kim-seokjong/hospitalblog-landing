@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { getUserPayments } from '@/lib/payment/repository'
+import { getUserPayments } from '@/payment/lib/repository'
 
 export async function GET(req: NextRequest) {
   try {

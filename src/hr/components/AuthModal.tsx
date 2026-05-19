@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { trackEvent } from '@/lib/meta-pixel';
+import { createClient } from '@/dev/lib/supabase/client';
+import { trackEvent } from '@/dev/lib/meta-pixel';
 
 interface AuthModalProps {
   onClose: () => void;
