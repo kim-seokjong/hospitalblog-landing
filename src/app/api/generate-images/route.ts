@@ -6,10 +6,10 @@ import { findProcedureCues } from '@/content/lib/procedure-visual-cues';
 import { requirePaidPlan } from '@/payment/lib/usage-guard';
 import type { GeneratedImage } from '@/types';
 
-export const maxDuration = 180;
+export const maxDuration = 300;
 
-const IMAGE_CONCURRENCY = 2;
-const IMAGE_MAX_RETRIES = 3;
+const IMAGE_CONCURRENCY = 3;
+const IMAGE_MAX_RETRIES = 2;
 const IMAGE_BACKFILL_PASSES = 1;
 
 /** 콘텐츠 정책 위반·인증·요청 오류 등 재시도해도 의미 없는 오류 패턴 */
