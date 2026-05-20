@@ -75,6 +75,21 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
     if (style === 'cardnews') images.forEach(img => compose(img));
   }, [images, compose, style]);
 
+  // 라이트박스가 열려 있을 때만 ESC 닫기 + body 스크롤 잠금
+  // (AnalysisModal 과 동일 패턴 — 단순 state 토글이라 라우팅·history 변경 없음)
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [selected]);
+
   const handleDownload = async (image: GeneratedImage) => {
     try {
       if (style === 'upload') {
@@ -212,12 +227,21 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                         </button>
                       </div>
                     )}
-                    {/* 데스크탑 hover 버튼 */}
+                    {/* 데스크탑 hover 버튼: 사진 위에서도 가독성 확보 — 각 버튼을 다크 pill chip 으로 분리 */}
                     <div className="hidden sm:flex absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors items-center justify-center opacity-0 group-hover:opacity-100">
                       <div className="flex gap-1.5">
-                        <button onClick={(e) => { e.stopPropagation(); setSelected(image); }} className="bg-white text-gray-800 text-[10px] font-bold px-2.5 py-1.5 rounded-lg">확대</button>
-                        <button onClick={(e) => { e.stopPropagation(); setEditing(image); }} className="bg-purple-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg">편집</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDownload(image); }} className="bg-indigo-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg">저장</button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelected(image); }}
+                          className="bg-[#12153d]/95 text-white text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 ring-white/15 shadow-lg hover:bg-[#191970] transition-colors"
+                        >확대</button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditing(image); }}
+                          className="bg-[#12153d]/95 text-white text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 ring-white/15 shadow-lg hover:bg-[#191970] transition-colors"
+                        >편집</button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDownload(image); }}
+                          className="bg-[#12153d]/95 text-white text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 ring-white/15 shadow-lg hover:bg-[#191970] transition-colors"
+                        >저장</button>
                       </div>
                     </div>
                   </>
@@ -300,11 +324,26 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
       )}
 
       {selected && (isRawStyle || composited[selected.id]) && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setSelected(null)}>
+        <div
+          className="fixed inset-0 bg-black/85 backdrop-blur-md z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 isolate"
+          onClick={() => setSelected(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="이미지 확대"
+        >
           <div
-            className="bg-[#12153d] border border-[#2a2b6e] rounded-t-2xl sm:rounded-2xl overflow-hidden w-full sm:max-w-2xl shadow-2xl"
+            className="relative bg-[#12153d] border border-[#2a2b6e] rounded-t-2xl sm:rounded-2xl overflow-hidden w-full sm:max-w-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* 우상단 X 닫기 버튼 — 44×44 터치영역, 다크 배경 대비 흰 X */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setSelected(null); }}
+              aria-label="닫기"
+              className="absolute top-2 right-2 sm:top-3 sm:right-3 z-20 w-11 h-11 flex items-center justify-center rounded-full bg-[#0b0d2b]/85 hover:bg-red-500/80 text-white text-2xl leading-none font-bold border border-white/20 hover:border-red-500 backdrop-blur-sm shadow-lg transition-colors"
+            >
+              ×
+            </button>
             <div className="relative">
               <img
                 src={isRawStyle ? (composited[selected.id] || selected.url) : composited[selected.id]}
@@ -313,7 +352,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
               />
               {style === 'photo' && (
                 <div
-                  className="absolute top-3 right-4 text-white text-sm font-extrabold pointer-events-none tracking-wide"
+                  className="absolute top-3 left-4 text-white text-sm font-extrabold pointer-events-none tracking-wide"
                   style={{ textShadow: '0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.9)' }}
                 >
                   AI 이미지
