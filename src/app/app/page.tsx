@@ -12,7 +12,6 @@ import TitleSelector from '@/content/components/TitleSelector';
 import ContentPreview from '@/content/components/ContentPreview';
 import ImageGallery from '@/content/components/ImageGallery';
 import CardNewsDesigner from '@/content/components/CardNewsDesigner';
-import AnalysisModal from '@/content/components/AnalysisModal';
 import TagPanel from '@/content/components/TagPanel';
 import NaverPublisher from '@/publish/components/NaverPublisher';
 import AuthModal from '@/hr/components/AuthModal';
@@ -171,7 +170,6 @@ export default function AppPage() {
   const [content, setContent] = useState<BlogContent | null>(null);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [tags, setTags] = useState<TagResult | null>(null);
-  const [showAnalysis, setShowAnalysis] = useState(false);
 
   const [loadingTitles, setLoadingTitles] = useState(false);
   const [loadingContent, setLoadingContent] = useState(false);
@@ -699,7 +697,18 @@ export default function AppPage() {
 
                     <button
                       type="button"
-                      onClick={() => setShowAnalysis(true)}
+                      onClick={() => {
+                        if (!content || !selectedTitle) return;
+                        localStorage.setItem(
+                          'dp_analysis_data',
+                          JSON.stringify({
+                            content,
+                            title: selectedTitle.title,
+                            keyword,
+                          })
+                        );
+                        window.open('/app/analysis', '_blank', 'noopener,noreferrer');
+                      }}
                       className="group analysis-cta relative w-full py-3.5 sm:py-4 rounded-xl border-2 border-cyan-400/70 hover:border-cyan-300 bg-gradient-to-r from-cyan-500/15 via-emerald-500/15 to-cyan-500/15 hover:from-cyan-500/25 hover:via-emerald-500/25 hover:to-cyan-500/25 text-white text-sm sm:text-base font-bold transition-all flex items-center justify-center gap-2.5"
                     >
                       <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 flex h-2.5 w-2.5">
@@ -709,7 +718,7 @@ export default function AppPage() {
                       <span className="text-lg">📊</span>
                       <span className="bg-gradient-to-r from-cyan-200 to-emerald-200 bg-clip-text text-transparent">상세 분석 보기</span>
                       <span className="text-[10px] sm:text-[11px] text-cyan-300/80 font-medium hidden sm:inline">(SEO · 독창성 · 네이버 검색 미리보기)</span>
-                      <span className="text-cyan-300 group-hover:translate-x-1 transition-transform text-base font-extrabold">→</span>
+                      <span className="text-cyan-300 group-hover:translate-x-1 transition-transform text-base font-extrabold">→ <span className="text-[10px] font-medium opacity-80">(새 창)</span></span>
                     </button>
 
                     {tags && (
@@ -776,16 +785,6 @@ export default function AppPage() {
           <p className="text-[10px] text-[#555d8a] flex-shrink-0">닥터포스트 © 2026 · Claude AI · 네이버 C-Rank · D.I.A+ 최적화</p>
         </div>
       </footer>
-
-      {content && selectedTitle && (
-        <AnalysisModal
-          open={showAnalysis}
-          onClose={() => setShowAnalysis(false)}
-          content={content}
-          title={selectedTitle.title}
-          keyword={keyword}
-        />
-      )}
 
       <ContactFloatingButton />
     </div>

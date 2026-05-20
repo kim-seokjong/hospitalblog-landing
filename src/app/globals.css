@@ -65,3 +65,27 @@ body {
     0 0 64px rgba(16, 185, 129, 0.35);
   transform: translateY(-1px);
 }
+
+/* AuthModal 입력 가독성 — 페이지 root text-white 상속 차단 */
+.auth-modal-light {
+  color: #111827;
+}
+.auth-modal-light input,
+.auth-modal-light select,
+.auth-modal-light textarea {
+  color: #111827 !important;
+  background-color: #ffffff !important;
+  caret-color: #2563eb !important;
+}
+.auth-modal-light input::placeholder,
+.auth-modal-light textarea::placeholder {
+  color: #9ca3af !important;
+  opacity: 1 !important;
+}
+.auth-modal-light label,
+.auth-modal-light h1,
+.auth-modal-light h2,
+.auth-modal-light h3,
+.auth-modal-light h4 {
+  color: #111827 !important;
+}

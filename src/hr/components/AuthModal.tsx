@@ -140,13 +140,16 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     setLoading(false);
   };
 
-  const inputClass = 'w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400';
-  const labelClass = 'text-xs font-semibold text-gray-700';
+  const inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white !text-gray-900 placeholder:!text-gray-400 caret-blue-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500';
+  const labelClass = 'text-xs font-bold !text-gray-900';
   const requiredMark = <span className="text-red-500 ml-0.5">*</span>;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden max-h-[90vh] flex flex-col">
+      <div
+        className="auth-modal-light bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-sm mx-auto overflow-hidden max-h-[90vh] flex flex-col"
+        style={{ colorScheme: 'light' }}
+      >
         {/* 헤더 */}
         <div className="bg-blue-600 px-6 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">

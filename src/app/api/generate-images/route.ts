@@ -8,8 +8,9 @@ import type { GeneratedImage } from '@/types';
 
 export const maxDuration = 180;
 
-const IMAGE_CONCURRENCY = 3;
-const IMAGE_MAX_RETRIES = 2;
+const IMAGE_CONCURRENCY = 2;
+const IMAGE_MAX_RETRIES = 3;
+const IMAGE_BACKFILL_PASSES = 1;
 
 /** 콘텐츠 정책 위반 등 재시도해도 의미 없는 오류 패턴 */
 function isPermanentImageError(message: string): boolean {
@@ -51,7 +52,11 @@ function safeImageErrorMessage(rawMessage: string): string {
 }
 
 /** 일시적 오류(429/5xx/네트워크)에 대한 지수 백오프 재시도 */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = IMAGE_MAX_RETRIES): Promise<T> {
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = IMAGE_MAX_RETRIES,
+  baseDelayMs: number = 1500,
+): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -61,7 +66,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = IMAGE_MAX
       const msg = err instanceof Error ? err.message : String(err);
       if (isPermanentImageError(msg)) throw err;
       if (attempt === maxRetries) throw err;
-      const delay = 1500 * Math.pow(2, attempt); // 1.5s, 3s, 6s
+      const delay = baseDelayMs * Math.pow(2, attempt);
       await new Promise((r) => setTimeout(r, delay));
     }
   }
@@ -302,6 +307,17 @@ async function generateWithOpenAIImages(
 
   const images: GeneratedImage[] = [];
   const errors: string[] = [];
+  const filled = new Set<number>();
+
+  const pushImage = (index: number, url: string) => {
+    images.push({
+      id: `img-${index + 1}`,
+      url,
+      prompt: prompts[index],
+      revised_prompt: (descriptions[index] || prompts[index]).slice(0, 80),
+    });
+    filled.add(index);
+  };
 
   const settled = await runWithConcurrency(prompts, IMAGE_CONCURRENCY, (prompt) =>
     withRetry(() => generateOneOpenAIImage(prompt))
@@ -309,17 +325,28 @@ async function generateWithOpenAIImages(
 
   settled.forEach((result, index) => {
     if (result.status === 'fulfilled') {
-      images.push({
-        id: `img-${index + 1}`,
-        url: result.value,
-        prompt: prompts[index],
-        revised_prompt: (descriptions[index] || prompts[index]).slice(0, 80),
-      });
+      pushImage(index, result.value);
     } else {
       const reason = result.reason instanceof Error ? result.reason.message : '실패';
       errors.push(`img-${index + 1}: ${reason}`);
     }
   });
+
+  // 실패 슬롯 자동 backfill — 동시성 1 + 긴 backoff 로 6장 강제 채움
+  for (let pass = 0; pass < IMAGE_BACKFILL_PASSES && filled.size < imageCount; pass++) {
+    const missing: number[] = [];
+    for (let i = 0; i < imageCount; i++) if (!filled.has(i)) missing.push(i);
+    if (missing.length === 0) break;
+
+    const backfill = await runWithConcurrency(missing, 1, (index) =>
+      withRetry(() => generateOneOpenAIImage(prompts[index]), IMAGE_MAX_RETRIES, 3000)
+    );
+
+    backfill.forEach((result, k) => {
+      const index = missing[k];
+      if (result.status === 'fulfilled') pushImage(index, result.value);
+    });
+  }
 
   if (images.length > 0) {
     logUsage({ feature: 'generate-images', api_provider: 'openai', image_count: images.length });
@@ -339,6 +366,17 @@ async function generateCardnewsImages(
 
   const images: GeneratedImage[] = [];
   const errors: string[] = [];
+  const filled = new Set<number>();
+
+  const pushImage = (index: number, url: string) => {
+    images.push({
+      id: `img-${index + 1}`,
+      url,
+      prompt: prompts[index],
+      revised_prompt: (descriptions[index] || prompts[index]).slice(0, 80),
+    });
+    filled.add(index);
+  };
 
   const settled = await runWithConcurrency(prompts, IMAGE_CONCURRENCY, (prompt) =>
     withRetry(() => generateWithFal(prompt))
@@ -346,17 +384,28 @@ async function generateCardnewsImages(
 
   settled.forEach((result, index) => {
     if (result.status === 'fulfilled') {
-      images.push({
-        id: `img-${index + 1}`,
-        url: result.value,
-        prompt: prompts[index],
-        revised_prompt: (descriptions[index] || prompts[index]).slice(0, 80),
-      });
+      pushImage(index, result.value);
     } else {
       const reason = result.reason instanceof Error ? result.reason.message : '실패';
       errors.push(`img-${index + 1}: ${reason}`);
     }
   });
+
+  // 실패 슬롯 자동 backfill — 동시성 1 + 긴 backoff 로 6장 강제 채움
+  for (let pass = 0; pass < IMAGE_BACKFILL_PASSES && filled.size < imageCount; pass++) {
+    const missing: number[] = [];
+    for (let i = 0; i < imageCount; i++) if (!filled.has(i)) missing.push(i);
+    if (missing.length === 0) break;
+
+    const backfill = await runWithConcurrency(missing, 1, (index) =>
+      withRetry(() => generateWithFal(prompts[index]), IMAGE_MAX_RETRIES, 3000)
+    );
+
+    backfill.forEach((result, k) => {
+      const index = missing[k];
+      if (result.status === 'fulfilled') pushImage(index, result.value);
+    });
+  }
 
   if (images.length > 0) {
     logUsage({

@@ -14,7 +14,7 @@ export default function NaverPreview({ title, body, keyword }: NaverPreviewProps
     const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
     return parts.map((part, i) =>
       part.toLowerCase() === keyword.toLowerCase()
-        ? <mark key={i} className="bg-transparent text-blue-700 font-bold not-italic">{part}</mark>
+        ? <mark key={i} className="bg-yellow-200 text-red-700 font-extrabold not-italic rounded px-0.5">{part}</mark>
         : part
     );
   };
@@ -28,13 +28,13 @@ export default function NaverPreview({ title, body, keyword }: NaverPreviewProps
     : `${title}에 대해 알아보겠습니다. 전문의와 상담 후 결정하시기 바랍니다.`;
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-      <div className="bg-gradient-to-r from-gray-700 to-gray-800 p-5">
+    <div className="bg-[#12153d] rounded-2xl shadow-xl border border-[#2a2b6e] overflow-hidden">
+      <div className="bg-slate-900 p-4 sm:p-5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
         <h3 className="text-white font-bold text-base">네이버 검색 미리보기</h3>
-        <p className="text-gray-400 text-xs mt-0.5">실제 검색 결과 화면 시뮬레이션</p>
+        <p className="text-slate-200 text-xs mt-0.5">실제 검색 결과 화면 시뮬레이션</p>
       </div>
 
-      <div className="p-5">
+      <div className="p-4 sm:p-5 bg-[#12153d]">
         {/* 검색창 시뮬레이션 */}
         <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 mb-4">
           <span className="text-green-600 font-black text-lg">N</span>
@@ -85,7 +85,7 @@ export default function NaverPreview({ title, body, keyword }: NaverPreviewProps
 
         {/* 제목 분석 */}
         <div className="mt-4 space-y-2">
-          <h4 className="text-xs font-bold text-gray-600">제목 분석</h4>
+          <h4 className="text-xs font-bold text-white">제목 분석</h4>
           <div className="grid grid-cols-3 gap-2">
             {[
               {
@@ -107,10 +107,10 @@ export default function NaverPreview({ title, body, keyword }: NaverPreviewProps
                 hint: '앞 10자 내 배치'
               },
             ].map(({ label, value, ok, hint }) => (
-              <div key={label} className={`rounded-lg p-2 text-center ${ok ? 'bg-green-50' : 'bg-amber-50'}`}>
-                <p className="text-xs text-gray-500">{label}</p>
-                <p className={`text-xs font-bold mt-0.5 ${ok ? 'text-green-700' : 'text-amber-600'}`}>{value}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{hint}</p>
+              <div key={label} className={`rounded-lg p-2 text-center border ${ok ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
+                <p className="text-xs text-[#c5caf0]">{label}</p>
+                <p className={`text-xs font-bold mt-0.5 ${ok ? 'text-emerald-300' : 'text-amber-300'}`}>{value}</p>
+                <p className="text-[10px] text-[#8891bd] mt-0.5">{hint}</p>
               </div>
             ))}
           </div>

@@ -54,16 +54,16 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
     return (
       <div
         key={keyPrefix}
-        className="my-4 rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-emerald-500/5 p-3 sm:p-4"
+        className="my-4 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-emerald-50 p-3 sm:p-4"
       >
         <div className="flex items-center gap-1.5 mb-2">
           <span className="text-base">💡</span>
-          <span className="text-xs sm:text-sm font-bold text-blue-300">핵심 요약</span>
+          <span className="text-xs sm:text-sm font-bold text-blue-700">핵심 요약</span>
         </div>
         <ul className="space-y-1.5">
           {items.map((s, idx) => (
-            <li key={idx} className="text-xs sm:text-sm text-[#c5caf0] leading-relaxed flex items-start gap-1.5">
-              <span className="text-blue-400 mt-0.5 flex-shrink-0">•</span>
+            <li key={idx} className="text-xs sm:text-sm text-gray-800 leading-relaxed flex items-start gap-1.5">
+              <span className="text-blue-500 mt-0.5 flex-shrink-0">•</span>
               <span>{highlightViolations(s)}</span>
             </li>
           ))}
@@ -92,17 +92,17 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
     return (
       <div
         key={keyPrefix}
-        className="my-4 rounded-xl border border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-purple-500/5 p-3 sm:p-4"
+        className="my-4 rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 p-3 sm:p-4"
       >
         <div className="flex items-center gap-1.5 mb-3">
           <span className="text-base">❓</span>
-          <span className="text-xs sm:text-sm font-bold text-indigo-300">자주 묻는 질문</span>
+          <span className="text-xs sm:text-sm font-bold text-indigo-700">자주 묻는 질문</span>
         </div>
         <div className="space-y-3">
           {pairs.map((qa, idx) => (
             <div key={idx} className="space-y-1">
-              <p className="text-xs sm:text-sm font-bold text-indigo-200">{highlightViolations(qa.q)}</p>
-              <p className="text-xs sm:text-sm text-[#c5caf0] leading-relaxed pl-3">{highlightViolations(qa.a)}</p>
+              <p className="text-xs sm:text-sm font-bold text-indigo-800">{highlightViolations(qa.q)}</p>
+              <p className="text-xs sm:text-sm text-gray-800 leading-relaxed pl-3">{highlightViolations(qa.a)}</p>
             </div>
           ))}
         </div>
@@ -160,9 +160,9 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
       // 이미지 자리표시자
       if (/^\[이미지\s*\d+:/.test(line)) {
         elements.push(
-          <div key={`img-${key++}`} className="my-2 bg-[#191970]/30 border border-dashed border-[#4f6ef7]/30 rounded-lg px-3 py-2 flex items-center gap-2">
-            <span className="text-[#4f6ef7] text-sm">🖼</span>
-            <span className="text-xs text-[#8891bd]">{line.replace(/[\[\]]/g, '')}</span>
+          <div key={`img-${key++}`} className="my-2 bg-blue-50 border border-dashed border-blue-300 rounded-lg px-3 py-2 flex items-center gap-2">
+            <span className="text-blue-600 text-sm">🖼</span>
+            <span className="text-xs text-blue-700">{line.replace(/[\[\]]/g, '')}</span>
           </div>
         );
         i++;
@@ -178,7 +178,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
         const prevEmpty = i === 0 || lines[i - 1]?.trim() === '';
         if (prevEmpty) {
           elements.push(
-            <h2 key={`h2-${key++}`} className="text-sm font-bold text-white mt-5 mb-2">
+            <h2 key={`h2-${key++}`} className="text-sm font-bold text-gray-900 mt-5 mb-2">
               {highlightViolations(line)}
             </h2>
           );
@@ -196,7 +196,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
 
       // 일반 단락
       elements.push(
-        <p key={`p-${key++}`} className="text-[#c5caf0] leading-relaxed text-xs mb-1">
+        <p key={`p-${key++}`} className="text-gray-800 leading-relaxed text-xs mb-1">
           {highlightViolations(line)}
         </p>
       );
@@ -336,9 +336,12 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
             </div>
           </div>
         ) : (
-          <div className="bg-[#0b0d2b] rounded-xl p-3 sm:p-4 border border-[#2a2b6e] max-h-72 sm:max-h-80 overflow-y-auto">
-            <h1 className="text-sm font-bold text-white mb-3 pb-3 border-b border-[#2a2b6e]">{content.title}</h1>
-            <div>{renderBody(content.body)}</div>
+          <div
+            className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200 max-h-72 sm:max-h-80 overflow-y-auto text-gray-800 [&_p]:!text-gray-800 [&_li]:!text-gray-800 [&_h1]:!text-gray-900 [&_h2]:!text-gray-900 [&_strong]:!text-gray-900"
+            style={{ colorScheme: 'light', color: '#1f2937' }}
+          >
+            <h1 className="text-sm font-bold !text-gray-900 mb-3 pb-3 border-b border-gray-200">{content.title}</h1>
+            <div className="!text-gray-800">{renderBody(content.body)}</div>
           </div>
         )}
       </div>
@@ -437,7 +440,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
           {imageStyle === 'upload' ? (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm border-2 border-white/60"
             >
               <span>📎</span> 이미지 파일 선택하기
             </button>
@@ -445,7 +448,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
             <button
               onClick={() => onGenerateImages(imageCount, imageStyle)}
               disabled={isLoadingImages}
-              className="w-full py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20 min-h-[48px]"
+              className="w-full py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20 min-h-[48px] border-2 border-white/60"
             >
               {isLoadingImages ? (
                 <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 이미지 생성 중... ({imageCount}장)</>
@@ -461,7 +464,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
               <button
                 onClick={onGenerateSlides}
                 disabled={isLoadingSlides}
-                className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+                className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm border-2 border-white/60"
               >
                 {isLoadingSlides ? (
                   <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 슬라이드 생성 중...</>

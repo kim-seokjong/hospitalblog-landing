@@ -193,10 +193,10 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
           </div>
         </div>
 
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+        <div className="bg-amber-500/15 border border-amber-500/40 rounded-xl p-3">
           <div className="flex items-start gap-2">
-            <span className="text-amber-400 text-sm flex-shrink-0">⚠️</span>
-            <p className="text-[10px] text-amber-300/80 leading-relaxed">
+            <span className="text-amber-300 text-sm flex-shrink-0">⚠️</span>
+            <p className="text-[11px] font-semibold text-amber-100 leading-relaxed">
               의료법 제56조 금지어 필터링 자동 적용 (완치, 최고, 100% 등 금지)
             </p>
           </div>
