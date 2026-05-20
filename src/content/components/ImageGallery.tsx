@@ -5,6 +5,7 @@ import type { GeneratedImage } from '@/types';
 import ImageEditor from '@/content/components/ImageEditor';
 import { downloadImageReliable } from '@/content/lib/download-image';
 import { drawAILabel, loadImageForCanvas, composeImageWithAILabel } from '@/content/lib/ai-image-label';
+import { safeFetchJson } from '@/content/lib/safe-fetch';
 
 interface ImageGalleryProps {
   images: GeneratedImage[];
@@ -101,15 +102,23 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
     const provider = 'openai';
 
     try {
-      const res = await fetch('/api/regenerate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageId: image.id, prompt, style, provider }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      // safeFetchJson 으로 감싸 Vercel HTML 504/500 같은 비-JSON 응답이 와도
+      // JSON.parse 예외 ("Unexpected token 'A', \"An error o\"...") 가 컴포넌트로
+      // 전파되지 않게 한다.
+      const result = await safeFetchJson<{ image: GeneratedImage; translatedPrompt?: string }>(
+        '/api/regenerate-image',
+        {
+          method: 'POST',
+          body: JSON.stringify({ imageId: image.id, prompt, style, provider }),
+        }
+      );
+      if (!result.ok) {
+        // 사용자에게 표시할 채널이 없는 컴포넌트라 콘솔로만 남기고 조용히 종료
+        console.error('[ImageGallery] regenerate failed:', result.error);
+        return;
+      }
 
-      const newImage: GeneratedImage = { ...data.image, id: image.id };
+      const newImage: GeneratedImage = { ...result.data.image, id: image.id };
       if (onImagesUpdate) onImagesUpdate(images.map(img => img.id === image.id ? newImage : img));
 
       composingRef.current.delete(image.id);
@@ -119,8 +128,9 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
       if (style === 'cardnews') {
         setTimeout(() => compose(newImage), 100);
       }
-    } catch {
-      // silent — user can retry
+    } catch (err) {
+      // 네트워크 단절 등 — silent — user can retry
+      console.error('[ImageGallery] regenerate threw:', err);
     } finally {
       setRegenLoading(prev => ({ ...prev, [image.id]: false }));
     }

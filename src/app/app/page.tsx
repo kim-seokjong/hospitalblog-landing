@@ -17,6 +17,7 @@ import NaverPublisher from '@/publish/components/NaverPublisher';
 import AuthModal from '@/hr/components/AuthModal';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode } from '@/types';
 import { PLANS, isPaidPlanId } from '@/payment/lib/plans';
+import { safeFetchJson } from '@/content/lib/safe-fetch';
 
 type ViewStep = 'input' | 'content';
 
@@ -363,14 +364,21 @@ export default function AppPage() {
     setError(null);
     setLoadingImages(true);
     try {
-      const res = await fetch('/api/generate-images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword, title: selectedTitle.title, body: content?.body ?? '', count, style: activeStyle }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '이미지 생성에 실패했습니다.');
-      setImages(data.images);
+      // safeFetchJson 으로 감싸 Vercel HTML 504/500 같은 비-JSON 응답이 와도
+      // JSON.parse 예외 ("Unexpected token 'A', \"An error o\"...") 가 컴포넌트로
+      // 새지 않게 한다.
+      const result = await safeFetchJson<{ images: GeneratedImage[] }>(
+        '/api/generate-images',
+        {
+          method: 'POST',
+          body: JSON.stringify({ keyword, title: selectedTitle.title, body: content?.body ?? '', count, style: activeStyle }),
+        }
+      );
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setImages(result.data.images);
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
     } finally {
