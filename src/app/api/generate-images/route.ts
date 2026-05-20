@@ -12,18 +12,25 @@ const IMAGE_CONCURRENCY = 2;
 const IMAGE_MAX_RETRIES = 3;
 const IMAGE_BACKFILL_PASSES = 1;
 
-/** 콘텐츠 정책 위반 등 재시도해도 의미 없는 오류 패턴 */
+/** 콘텐츠 정책 위반·인증·요청 오류 등 재시도해도 의미 없는 오류 패턴 */
 function isPermanentImageError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     lower.includes('content_policy') ||
     lower.includes('content policy') ||
     lower.includes('safety') ||
+    lower.includes('moderation_blocked') ||
     lower.includes('unauthorized') ||
     lower.includes('invalid_api_key') ||
+    lower.includes('invalid_request_error') ||
     lower.includes('billing_hard_limit') ||
     lower.includes('insufficient_quota') ||
-    lower.includes('payment required')
+    lower.includes('payment required') ||
+    lower.includes('verify_organization') ||
+    lower.includes('must be verified') ||
+    lower.includes('model_not_found') ||
+    // 4xx HTTP 상태 (rate-limit 429 제외 — 일시적이므로 재시도)
+    /status=4(?!29)\d{2}/.test(lower)
   );
 }
 
@@ -40,15 +47,27 @@ function safeImageErrorMessage(rawMessage: string): string {
     lower.includes('payment required') ||
     lower.includes('402')
   ) {
-    return '이미지 생성 한도에 도달했습니다. 잠시 후 다시 시도하거나 관리자에게 문의해주세요.';
+    return '이미지 생성 한도에 도달했습니다. OpenAI 결제·잔액을 확인해주세요.';
   }
-  if (lower.includes('content_policy') || lower.includes('content policy') || lower.includes('safety')) {
+  if (lower.includes('content_policy') || lower.includes('content policy') || lower.includes('safety') || lower.includes('moderation_blocked')) {
     return '이미지 콘텐츠 정책으로 생성이 거부되었습니다. 키워드를 조정해 다시 시도해주세요.';
   }
   if (lower.includes('rate_limit') || lower.includes('rate limit') || lower.includes('429')) {
     return '이미지 생성 요청이 일시적으로 많아 실패했습니다. 잠시 후 다시 시도해주세요.';
   }
-  return '이미지 생성에 실패했습니다.';
+  if (lower.includes('verify_organization') || lower.includes('must be verified') || lower.includes('status=403')) {
+    return '이미지 모델 접근 권한이 없습니다. OpenAI 조직 인증(verify_organization) 상태를 확인해주세요.';
+  }
+  if (lower.includes('model_not_found') || lower.includes('status=404')) {
+    return '이미지 모델을 찾을 수 없습니다. 서버 OPENAI_IMAGE_MODEL 설정을 확인해주세요.';
+  }
+  if (lower.includes('invalid_api_key') || lower.includes('unauthorized') || lower.includes('status=401')) {
+    return '이미지 생성용 API 키가 잘못되었거나 만료되었습니다. 서버 환경변수(OPENAI_API_KEY)를 확인해주세요.';
+  }
+  if (lower.includes('invalid_request_error') || lower.includes('status=400')) {
+    return '이미지 요청 파라미터가 올바르지 않습니다. (서버 로그 확인 필요)';
+  }
+  return '이미지 생성에 실패했습니다. 잠시 후 다시 시도해주세요.';
 }
 
 /** 일시적 오류(429/5xx/네트워크)에 대한 지수 백오프 재시도 */
@@ -282,8 +301,20 @@ async function generateOneOpenAIImage(prompt: string): Promise<string> {
     if (lower.includes('billing_hard_limit') || lower.includes('insufficient_quota')) {
       throw new Error('openai billing_hard_limit');
     }
-    if (lower.includes('content_policy') || lower.includes('safety')) {
+    if (lower.includes('content_policy') || lower.includes('safety') || lower.includes('moderation_blocked')) {
       throw new Error('openai content_policy');
+    }
+    if (lower.includes('verify_organization') || lower.includes('must be verified')) {
+      throw new Error('openai verify_organization');
+    }
+    if (lower.includes('model_not_found') || lower.includes('does not exist')) {
+      throw new Error('openai model_not_found');
+    }
+    if (lower.includes('invalid_api_key') || lower.includes('incorrect api key')) {
+      throw new Error('openai invalid_api_key');
+    }
+    if (lower.includes('invalid_request_error')) {
+      throw new Error(`openai invalid_request_error status=${res.status}`);
     }
     throw new Error(`openai status=${res.status}`);
   }
