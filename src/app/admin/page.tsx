@@ -1,216 +1,279 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
+import { isAdmin } from '@/hr/lib/admin';
+import KpiDashboard from '@/components/admin/KpiDashboard';
+import MemberTable from '@/components/admin/MemberTable';
+import type {
+  DashboardData,
+  MemberRow,
+  MonthlyMRR,
+  PaymentRow,
+  PlanDistribution,
+  PlanType,
+  ProfileRow,
+  RecentPayment,
+  RegionTarget,
+  SpecialtyCount,
+} from '@/types/admin';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import UserList from '@/hr/components/UserList';
-
-const PLAN_LABEL: Record<string, string> = {
-  free: '무료',
-  basic: '베이직',
-  standard: '스탠다드',
-  pro: '프로',
+const PLAN_PRICES: Record<PlanType, number> = {
+  free: 0,
+  basic: 19900,
+  standard: 49000,
+  pro: 119000,
 };
 
-const PLAN_COLOR: Record<string, string> = {
-  free: 'text-gray-400',
-  basic: 'text-blue-400',
-  standard: 'text-purple-400',
-  pro: 'text-yellow-400',
-};
+const REGION_GOALS: { region: string; target: number }[] = [
+  { region: '대구', target: 20 },
+  { region: '서울', target: 50 },
+  { region: '부산', target: 20 },
+  { region: '경기', target: 40 },
+  { region: '광주', target: 15 },
+  { region: '기타', target: 108 },
+];
 
-interface Stats {
-  totalUsers: number;
-  newUsersThisMonth: number;
-  planCounts: Record<string, number>;
-  totalRevenue: number;
-  monthlyRevenue: number;
-  recentPayments: {
-    id: string;
-    plan: string;
-    amount: number;
-    paid_at: string;
-    card_name: string | null;
-    pg_provider: string;
-    receipt_url: string | null;
-  }[];
-  topUsers: { email: string; plan: string; usage_count: number }[];
-}
+const TOTAL_GOAL = 253;
+const KNOWN_REGIONS = new Set(REGION_GOALS.map((r) => r.region).filter((r) => r !== '기타'));
 
-function formatKRW(n: number) {
-  return n.toLocaleString('ko-KR') + '원';
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('ko-KR', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-export default function AdminPage() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const router = useRouter();
-
-  const fetchStats = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/admin/stats');
-      if (res.status === 403) {
-        router.replace('/');
-        return;
-      }
-      if (!res.ok) throw new Error('데이터 로딩 실패');
-      const data = await res.json() as Stats;
-      setStats(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '오류 발생');
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
-  useEffect(() => { fetchStats(); }, [fetchStats]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center text-red-400">
-        {error}
-      </div>
-    );
-  }
-
-  if (!stats) return null;
-
+function buildDashboardData(
+  profiles: ProfileRow[],
+  payments: PaymentRow[]
+): DashboardData {
   const now = new Date();
-  const monthLabel = `${now.getFullYear()}년 ${now.getMonth() + 1}월`;
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  // 활성 구독: plan != 'free' AND plan_expires_at > now()
+  const isActiveProfile = (p: ProfileRow): boolean => {
+    if (!p.plan || p.plan === 'free') return false;
+    if (!p.plan_expires_at) return false;
+    return new Date(p.plan_expires_at) > now;
+  };
+
+  // 결제는 PAID만 사용
+  const paidPayments = payments.filter((p) => p.status === 'PAID');
+
+  // ----- MRR -----
+  const mrr = paidPayments
+    .filter((p) => new Date(p.created_at) >= monthStart)
+    .reduce((s, p) => s + (p.amount || 0), 0);
+
+  const mrrPrev = paidPayments
+    .filter((p) => {
+      const d = new Date(p.created_at);
+      return d >= prevMonthStart && d < monthStart;
+    })
+    .reduce((s, p) => s + (p.amount || 0), 0);
+
+  const mrrChangeMoM = mrrPrev > 0 ? ((mrr - mrrPrev) / mrrPrev) * 100 : 0;
+
+  // ----- 활성/신규 -----
+  const activeSubs = profiles.filter(isActiveProfile).length;
+  const newSubsThisMonth = profiles.filter(
+    (p) =>
+      new Date(p.created_at) >= monthStart && p.plan && p.plan !== 'free'
+  ).length;
+
+  // ----- 목표 달성률 -----
+  const goalRate = TOTAL_GOAL > 0 ? (activeSubs / TOTAL_GOAL) * 100 : 0;
+
+  // ----- 해지율 (TODO: 추적 미구현, 근사치 0) -----
+  const churnRate = 0;
+
+  // ----- ARPU -----
+  const arpu = activeSubs > 0 ? Math.round(mrr / activeSubs) : 0;
+  const arpuPrev =
+    activeSubs > 0 && mrrPrev > 0 ? Math.round(mrrPrev / activeSubs) : 0;
+  const arpuChangeMoM =
+    arpuPrev > 0 ? ((arpu - arpuPrev) / arpuPrev) * 100 : 0;
+
+  // ----- 월별 MRR (12개월) -----
+  const monthlyMap = new Map<string, number>();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${String(d.getFullYear()).slice(2)}.${d.getMonth() + 1}월`;
+    monthlyMap.set(key, 0);
+  }
+  for (const p of paidPayments) {
+    const d = new Date(p.created_at);
+    const key = `${String(d.getFullYear()).slice(2)}.${d.getMonth() + 1}월`;
+    if (monthlyMap.has(key)) {
+      monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + (p.amount || 0));
+    }
+  }
+  const monthlyMRR: MonthlyMRR[] = Array.from(monthlyMap.entries()).map(
+    ([month, value]) => ({ month, mrr: value })
+  );
+
+  // ----- 플랜 분포 (basic/standard/pro만, free 제외) -----
+  const activeProfiles = profiles.filter(isActiveProfile);
+  const planCountMap: Record<PlanType, number> = {
+    free: 0,
+    basic: 0,
+    standard: 0,
+    pro: 0,
+  };
+  for (const p of activeProfiles) {
+    if (p.plan && p.plan !== 'free') {
+      planCountMap[p.plan as PlanType] =
+        (planCountMap[p.plan as PlanType] ?? 0) + 1;
+    }
+  }
+  const planDist: PlanDistribution[] = (
+    ['basic', 'standard', 'pro'] as PlanType[]
+  ).map((plan) => ({ plan, count: planCountMap[plan] }));
+
+  // ----- 진료과별 (활성만) -----
+  const specialtyMap = new Map<string, number>();
+  for (const p of activeProfiles) {
+    const s = (p.specialty ?? '').trim();
+    if (!s) continue;
+    specialtyMap.set(s, (specialtyMap.get(s) ?? 0) + 1);
+  }
+  const specialtyCounts: SpecialtyCount[] = Array.from(
+    specialtyMap.entries()
+  ).map(([specialty, count]) => ({ specialty, count }));
+
+  // ----- 지역 진척률 (활성 기준) -----
+  const regionMap = new Map<string, number>();
+  for (const p of activeProfiles) {
+    const region = (p.region ?? '').trim();
+    if (!region) {
+      regionMap.set('기타', (regionMap.get('기타') ?? 0) + 1);
+      continue;
+    }
+    if (KNOWN_REGIONS.has(region)) {
+      regionMap.set(region, (regionMap.get(region) ?? 0) + 1);
+    } else {
+      regionMap.set('기타', (regionMap.get('기타') ?? 0) + 1);
+    }
+  }
+  const regionTargets: RegionTarget[] = REGION_GOALS.map((g) => ({
+    region: g.region,
+    current: regionMap.get(g.region) ?? 0,
+    target: g.target,
+  }));
+
+  // ----- 최근 결제 10건 (created_at desc) -----
+  const profileEmailMap = new Map<string, string | null>();
+  for (const p of profiles) {
+    profileEmailMap.set(p.id, p.email);
+  }
+  const recentPayments: RecentPayment[] = [...paidPayments]
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+    .slice(0, 10)
+    .map((p) => ({
+      plan: p.plan ?? '-',
+      email: profileEmailMap.get(p.user_id) ?? null,
+      amount: p.amount,
+      created_at: p.created_at,
+    }));
+
+  // ----- 회원 (MemberRow) -----
+  const expiringThreshold = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const members: MemberRow[] = profiles
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+    .map((p) => {
+      const active = isActiveProfile(p);
+      const expSoon =
+        active &&
+        !!p.plan_expires_at &&
+        new Date(p.plan_expires_at) <= expiringThreshold;
+      return {
+        ...p,
+        isActive: active,
+        isExpiringSoon: expSoon,
+      };
+    });
+
+  return {
+    metric: {
+      mrr,
+      mrrPrev,
+      mrrChangeMoM,
+      activeSubs,
+      newSubsThisMonth,
+      goalRate,
+      churnRate,
+      arpu,
+      arpuChangeMoM,
+    },
+    monthlyMRR,
+    planDist,
+    specialtyCounts,
+    regionTargets,
+    recentPayments,
+    members,
+  };
+}
+
+export default async function AdminPage() {
+  // ----- 인증/권한 -----
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user || !isAdmin(user.email)) {
+    redirect('/');
+  }
+
+  // ----- 데이터 fetch (Service Role) -----
+  const admin = createAdminClient();
+  const [profilesRes, paymentsRes] = await Promise.all([
+    admin
+      .from('profiles')
+      .select(
+        'id,email,full_name,hospital_name,specialty,region,plan,plan_expires_at,usage_count,created_at'
+      )
+      .order('created_at', { ascending: false }),
+    admin
+      .from('payments')
+      .select('id,user_id,plan,amount,status,created_at,paid_at')
+      .order('created_at', { ascending: false }),
+  ]);
+
+  if (profilesRes.error) {
+    throw new Error(`profiles fetch failed: ${profilesRes.error.message}`);
+  }
+  if (paymentsRes.error) {
+    throw new Error(`payments fetch failed: ${paymentsRes.error.message}`);
+  }
+
+  const profiles = (profilesRes.data ?? []) as ProfileRow[];
+  const payments = (paymentsRes.data ?? []) as PaymentRow[];
+
+  const data = buildDashboardData(profiles, payments);
+
+  // ----- 페이지 헤더 -----
+  const now = new Date();
+  const headerSub = `${now.getFullYear()}년 ${now.getMonth() + 1}월 기준`;
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-300 p-6 md:p-10">
-      <div className="max-w-6xl mx-auto space-y-8">
-
-        {/* 헤더 */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">관리자 대시보드</h1>
-            <p className="text-sm text-gray-500 mt-1">닥터포스트 운영 현황</p>
-          </div>
-          <button
-            onClick={fetchStats}
-            className="text-xs px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
-          >
-            새로고침
-          </button>
+    <main className="min-h-screen bg-gray-950 text-gray-100 p-6 md:p-10">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold text-gray-100">
+            hospitalblog.kr · 닥터포스트
+          </h1>
+          <p className="text-sm text-gray-400">
+            SaaS KPI 대시보드 · {headerSub}
+          </p>
         </div>
 
-        {/* 핵심 지표 카드 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: '총 가입자', value: `${stats.totalUsers}명`, sub: '전체' },
-            { label: `${monthLabel} 신규`, value: `${stats.newUsersThisMonth}명`, sub: '이번달 가입' },
-            { label: `${monthLabel} 매출`, value: formatKRW(stats.monthlyRevenue), sub: '결제 완료 기준' },
-            { label: '누적 매출', value: formatKRW(stats.totalRevenue), sub: '전체 기간' },
-          ].map(({ label, value, sub }) => (
-            <div key={label} className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
-              <p className="text-xs text-gray-500 mb-1">{label}</p>
-              <p className="text-2xl font-bold text-white">{value}</p>
-              <p className="text-xs text-gray-600 mt-1">{sub}</p>
-            </div>
-          ))}
-        </div>
+        <KpiDashboard data={data} />
 
-        {/* 플랜별 분포 */}
-        <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
-          <h2 className="text-sm font-semibold text-white mb-4">플랜별 가입자</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {['free', 'basic', 'standard', 'pro'].map(plan => (
-              <div key={plan} className="text-center">
-                <p className={`text-3xl font-bold ${PLAN_COLOR[plan]}`}>
-                  {stats.planCounts[plan] ?? 0}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">{PLAN_LABEL[plan]}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-
-          {/* 최근 결제 */}
-          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
-            <h2 className="text-sm font-semibold text-white mb-4">최근 결제 내역</h2>
-            {stats.recentPayments.length === 0 ? (
-              <p className="text-sm text-gray-600">결제 내역이 없습니다.</p>
-            ) : (
-              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                {stats.recentPayments.map(p => (
-                  <div key={p.id} className="flex items-center justify-between py-2 border-b border-gray-800 last:border-0">
-                    <div>
-                      <p className={`text-xs font-semibold ${PLAN_COLOR[p.plan] ?? 'text-gray-300'}`}>
-                        {PLAN_LABEL[p.plan] ?? p.plan} 플랜
-                      </p>
-                      <p className="text-[11px] text-gray-500 mt-0.5">
-                        {p.card_name ?? p.pg_provider} · {formatDate(p.paid_at)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-white">{formatKRW(p.amount)}</p>
-                      {p.receipt_url && (
-                        <a
-                          href={p.receipt_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] text-blue-400 hover:text-blue-300"
-                        >
-                          영수증
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 사용량 상위 유저 */}
-          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
-            <h2 className="text-sm font-semibold text-white mb-4">사용량 상위 유저</h2>
-            {stats.topUsers.length === 0 ? (
-              <p className="text-sm text-gray-600">사용 내역이 없습니다.</p>
-            ) : (
-              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                {stats.topUsers.map((u, i) => (
-                  <div key={u.email} className="flex items-center gap-3 py-2 border-b border-gray-800 last:border-0">
-                    <span className="text-xs text-gray-600 w-5 text-right">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-300 truncate">{u.email}</p>
-                      <p className={`text-[11px] mt-0.5 ${PLAN_COLOR[u.plan] ?? 'text-gray-500'}`}>
-                        {PLAN_LABEL[u.plan] ?? u.plan}
-                      </p>
-                    </div>
-                    <span className="text-sm font-bold text-white">{u.usage_count}회</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-        </div>
-
-        {/* 회원 목록 */}
-        <UserList />
-
+        <MemberTable members={data.members} />
       </div>
     </main>
   );
