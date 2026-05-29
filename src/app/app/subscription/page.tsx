@@ -48,6 +48,8 @@ export default async function SubscriptionPage() {
 
   const planInfo = isPaidPlanId(profile?.plan) ? PLANS[profile!.plan] : null
   const isActiveSubscription = billingKey?.status === 'ACTIVE'
+  const isInTrial =
+    !!billingKey?.trial_until && new Date(billingKey.trial_until) > new Date()
 
   return (
     <main className="min-h-screen bg-gray-950 text-gray-200">
@@ -77,13 +79,30 @@ export default async function SubscriptionPage() {
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-semibold text-white">현재 구독</h2>
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-              isActiveSubscription
-                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                : 'bg-gray-700 text-gray-400'}`
+              isInTrial
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                : isActiveSubscription
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                  : 'bg-gray-700 text-gray-400'}`
             }>
-              {isActiveSubscription ? '자동갱신 중' : '비활성'}
+              {isInTrial ? '🎁 무료 체험 중' : isActiveSubscription ? '자동갱신 중' : '비활성'}
             </span>
           </div>
+
+          {isInTrial && billingKey?.trial_until && (
+            <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3">
+              <p className="text-sm text-emerald-200 font-semibold">
+                🎁 첫 달 무료 체험 진행 중
+              </p>
+              <p className="text-xs text-emerald-100/80 mt-1">
+                첫 정상 결제일: <strong>{formatDate(billingKey.trial_until)}</strong>
+                {planInfo && <> · 결제 예정 금액 {formatAmount(planInfo.price)}</>}
+              </p>
+              <p className="text-[11px] text-emerald-100/60 mt-1">
+                무료 기간 중 해지 시 청구 없이 즉시 종료됩니다.
+              </p>
+            </div>
+          )}
 
           {planInfo ? (
             <div className="space-y-4">
@@ -113,8 +132,9 @@ export default async function SubscriptionPage() {
               {isActiveSubscription && (
                 <div className="pt-4 border-t border-gray-800">
                   <p className="text-xs text-gray-400 mb-3">
-                    해지 시 다음 결제일부터 자동 청구가 중단되며,
-                    이미 결제한 기간({formatDate(billingKey?.next_billing_at ?? null)} 까지)은 정상 이용할 수 있습니다.
+                    {isInTrial
+                      ? '무료 체험 중 해지 시 청구 없이 즉시 종료됩니다.'
+                      : `해지 시 다음 결제일부터 자동 청구가 중단되며, 이미 결제한 기간(${formatDate(billingKey?.next_billing_at ?? null)} 까지)은 정상 이용할 수 있습니다.`}
                   </p>
                   <CancelButton />
                 </div>

@@ -8,6 +8,8 @@ import {
   markPaymentFailed,
   activateUserPlan,
   createBillingKey,
+  hasAnyBillingKeyHistory,
+  markPaymentTrialActivated,
 } from '@/payment/lib/repository'
 import { PLANS } from '@/payment/lib/plans'
 import type { PlanId } from '@/payment/lib/plans'
@@ -70,62 +72,92 @@ export async function POST(req: NextRequest) {
 
     const customerId = dbPayment.user_id.replace(/-/g, '').slice(0, 20)
 
-    // 2. 빌링키로 첫 결제 (서버에서 직접 실행)
-    let chargeResult
-    try {
-      chargeResult = await chargeWithBillingKey({
-        paymentId,
-        billingKey,
-        orderName: `닥터포스트 ${plan.name} 플랜 1개월`,
-        amount: plan.price,
-        customerId,
-        customerEmail: user.email ?? '',
-        customerPhone: profile?.phone ?? undefined,
+    // 무료 체험 자격: 빌링키 이력이 0건인 신규 가입자
+    const isTrialEligible = !(await hasAnyBillingKeyHistory(dbPayment.user_id))
+
+    let paidAt: string
+    let expiresAt: string
+    let chargeResult: Awaited<ReturnType<typeof chargeWithBillingKey>> | null = null
+
+    if (isTrialEligible) {
+      // 신규 가입자: PortOne 결제 호출 없이 빌링키만 발급 + 30일 후 첫 정상 결제
+      paidAt = new Date().toISOString()
+      expiresAt = addOneMonth(paidAt)
+
+      // 결제 레코드를 0원 PAID로 갱신 (회계 추적)
+      await markPaymentTrialActivated({ paymentId, paidAt })
+
+      // 플랜 활성화 (30일 무료 이용 가능)
+      await activateUserPlan({
+        userId: dbPayment.user_id,
+        plan: dbPayment.plan,
+        expiresAt,
       })
-    } catch (e) {
-      await markPaymentFailed(paymentId, e instanceof Error ? e.message : '빌링키 결제 실패')
-      throw e
+
+      // 빌링키 저장 (trial_until=30일 후, next_billing_at=30일 후 첫 정상 결제일)
+      await createBillingKey({
+        userId: dbPayment.user_id,
+        billingKey,
+        plan: dbPayment.plan,
+        cardName: null,
+        cardLast4: null,
+        nextBillingAt: expiresAt,
+        trialUntil: expiresAt,
+      })
+    } else {
+      // 기존 회원 (해지 후 재구독 등): 기존 즉시 결제 흐름 유지
+      try {
+        chargeResult = await chargeWithBillingKey({
+          paymentId,
+          billingKey,
+          orderName: `닥터포스트 ${plan.name} 플랜 1개월`,
+          amount: plan.price,
+          customerId,
+          customerEmail: user.email ?? '',
+          customerPhone: profile?.phone ?? undefined,
+        })
+      } catch (e) {
+        await markPaymentFailed(paymentId, e instanceof Error ? e.message : '빌링키 결제 실패')
+        throw e
+      }
+
+      if (chargeResult.status !== 'PAID') {
+        await markPaymentFailed(paymentId, `결제 상태: ${chargeResult.status}`)
+        return NextResponse.json(
+          { error: `결제가 완료되지 않았습니다 (상태: ${chargeResult.status})` },
+          { status: 400 },
+        )
+      }
+
+      paidAt = chargeResult.paidAt ?? new Date().toISOString()
+      expiresAt = addOneMonth(paidAt)
+
+      await markPaymentPaid({
+        paymentId,
+        pgTxId: chargeResult.transactionId,
+        pgProvider: chargeResult.pgProvider,
+        paymentMethod: 'CARD',
+        cardName: chargeResult.cardName,
+        receiptUrl: chargeResult.receiptUrl,
+        paidAt,
+        rawResponse: chargeResult,
+      })
+
+      await activateUserPlan({
+        userId: dbPayment.user_id,
+        plan: dbPayment.plan,
+        expiresAt,
+      })
+
+      await createBillingKey({
+        userId: dbPayment.user_id,
+        billingKey,
+        plan: dbPayment.plan,
+        cardName: chargeResult.cardName,
+        cardLast4: null,
+        nextBillingAt: expiresAt,
+      })
     }
-
-    if (chargeResult.status !== 'PAID') {
-      await markPaymentFailed(paymentId, `결제 상태: ${chargeResult.status}`)
-      return NextResponse.json(
-        { error: `결제가 완료되지 않았습니다 (상태: ${chargeResult.status})` },
-        { status: 400 },
-      )
-    }
-
-    const paidAt = chargeResult.paidAt ?? new Date().toISOString()
-    const expiresAt = addOneMonth(paidAt)
-
-    // 3. 결제 완료 기록
-    await markPaymentPaid({
-      paymentId,
-      pgTxId: chargeResult.transactionId,
-      pgProvider: chargeResult.pgProvider,
-      paymentMethod: 'CARD',
-      cardName: chargeResult.cardName,
-      receiptUrl: chargeResult.receiptUrl,
-      paidAt,
-      rawResponse: chargeResult,
-    })
-
-    // 4. 플랜 활성화
-    await activateUserPlan({
-      userId: dbPayment.user_id,
-      plan: dbPayment.plan,
-      expiresAt,
-    })
-
-    // 5. 빌링키 저장
-    await createBillingKey({
-      userId: dbPayment.user_id,
-      billingKey,
-      plan: dbPayment.plan,
-      cardName: chargeResult.cardName,
-      cardLast4: null,
-      nextBillingAt: expiresAt,
-    })
 
     // Meta CAPI
     const headersList = await headers()
@@ -143,7 +175,12 @@ export async function POST(req: NextRequest) {
       },
     }).catch(err => console.error('[CAPI] Subscribe(billing) event failed:', err))
 
-    return NextResponse.json({ success: true, plan: dbPayment.plan, expiresAt })
+    return NextResponse.json({
+      success: true,
+      plan: dbPayment.plan,
+      expiresAt,
+      trial: isTrialEligible,
+    })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '결제 처리 실패'
     return NextResponse.json({ error: msg }, { status: 400 })

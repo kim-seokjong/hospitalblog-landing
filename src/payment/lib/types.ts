@@ -11,6 +11,7 @@ export interface BillingKey {
   card_last4: string | null
   status: BillingKeyStatus
   next_billing_at: string | null
+  trial_until: string | null
   created_at: string
   updated_at: string
 }

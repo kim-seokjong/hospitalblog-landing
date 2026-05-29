@@ -157,6 +157,7 @@ export async function createBillingKey(params: {
   cardName: string | null
   cardLast4: string | null
   nextBillingAt: string
+  trialUntil?: string | null
 }): Promise<void> {
   // 기존 활성 빌링키 비활성화
   await getAdmin()
@@ -175,8 +176,38 @@ export async function createBillingKey(params: {
       card_last4: params.cardLast4,
       status: 'ACTIVE',
       next_billing_at: params.nextBillingAt,
+      trial_until: params.trialUntil ?? null,
     })
   if (error) throw new Error(`빌링키 저장 실패: ${error.message}`)
+}
+
+// 무료 체험 자격 판별: 빌링키 이력이 단 1건도 없으면 신규 가입자
+export async function hasAnyBillingKeyHistory(userId: string): Promise<boolean> {
+  const { count, error } = await getAdmin()
+    .from('billing_keys')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+  if (error) return true // 안전 기본값: 이력 있다고 보고 무료 체험 차단
+  return (count ?? 0) > 0
+}
+
+// 무료 체험 시작 기록 (0원 PAID 결제 레코드)
+export async function markPaymentTrialActivated(params: {
+  paymentId: string
+  paidAt: string
+}): Promise<void> {
+  const { error } = await getAdmin()
+    .from('payments')
+    .update({
+      status: 'PAID',
+      amount: 0,
+      pg_provider: 'TRIAL',
+      payment_method: 'TRIAL',
+      paid_at: params.paidAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', params.paymentId)
+  if (error) throw new Error(`무료 체험 결제 레코드 갱신 실패: ${error.message}`)
 }
 
 export async function getActiveBillingKey(userId: string): Promise<BillingKey | null> {

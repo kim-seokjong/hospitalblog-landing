@@ -213,6 +213,16 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
               </>
             ) : (
               <>
+                {/* 첫 달 0원 무료 체험 안내 */}
+                <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-lg px-4 py-3">
+                  <p className="text-sm font-bold text-emerald-700">
+                    🎁 첫 달 0원 무료 체험
+                  </p>
+                  <p className="text-[11px] text-emerald-700/80 mt-1 leading-relaxed">
+                    가입 후 30일 동안 무료 이용 · <strong>30일 후부터</strong> 선택한 플랜 금액으로 매월 자동결제됩니다. 무료 기간 중 해지 시 청구 없이 즉시 종료.
+                  </p>
+                </div>
+
                 {/* 안내 문구 */}
                 <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs text-blue-700">
                   병원 관계자 확인을 위한 정보를 입력해주세요. <span className="text-red-500">*</span> 표시는 필수 항목입니다.

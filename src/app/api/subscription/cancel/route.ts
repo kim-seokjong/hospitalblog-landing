@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import { getActiveBillingKey, cancelBillingKeyById } from '@/payment/lib/repository'
 
 export const dynamic = 'force-dynamic'
@@ -24,7 +25,32 @@ export async function POST() {
       return NextResponse.json({ error: '활성 구독이 없습니다' }, { status: 404 })
     }
 
+    const isInTrial =
+      !!billingKey.trial_until && new Date(billingKey.trial_until) > new Date()
+
     await cancelBillingKeyById(billingKey.id)
+
+    // 무료 체험 중 해지: 플랜 즉시 만료 (청구 없음)
+    if (isInTrial) {
+      const admin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { persistSession: false } },
+      )
+      await admin
+        .from('profiles')
+        .update({
+          plan_expires_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+
+      return NextResponse.json({
+        success: true,
+        trialCancelled: true,
+        usableUntil: null,
+      })
+    }
 
     const usableUntil = billingKey.next_billing_at
       ? new Date(billingKey.next_billing_at).toLocaleDateString('ko-KR', {
