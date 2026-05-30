@@ -147,7 +147,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div
-        className="auth-modal-light bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-sm mx-auto overflow-hidden max-h-[90vh] flex flex-col"
+        className="auth-modal-light bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-sm mx-auto overflow-hidden max-h-[92dvh] flex flex-col"
         style={{ colorScheme: 'light' }}
       >
         {/* 헤더 */}
@@ -184,8 +184,8 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
         </div>
 
         {/* 스크롤 영역 */}
-        <div className="overflow-y-auto flex-1">
-          <div className="px-6 py-5 space-y-4">
+        <div className="overflow-y-auto flex-1 min-h-0">
+          <div className="px-6 py-5 space-y-3">
 
             {mode === 'login' ? (
               <>
@@ -214,7 +214,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
             ) : (
               <>
                 {/* 첫 달 0원 무료 체험 안내 */}
-                <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-lg px-4 py-3">
+                <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-lg px-4 py-2.5">
                   <p className="text-sm font-bold text-emerald-700">
                     🎁 첫 달 0원 무료 체험
                   </p>
@@ -224,7 +224,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
                 </div>
 
                 {/* 안내 문구 */}
-                <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs text-blue-700">
+                <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5 text-xs text-blue-700">
                   병원 관계자 확인을 위한 정보를 입력해주세요. <span className="text-red-500">*</span> 표시는 필수 항목입니다.
                 </div>
 
@@ -301,54 +301,60 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
                   </div>
                 </div>
 
-                {/* 약관 동의 */}
-                <div className="border-t border-gray-100 pt-3 space-y-2.5">
-                  <label className="flex items-start gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={agreeTerms}
-                      onChange={(e) => setAgreeTerms(e.target.checked)}
-                      className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
-                    />
-                    <span className="text-xs text-gray-600">
-                      (필수){' '}
-                      <a href="/terms" target="_blank" rel="noopener noreferrer"
-                        className="text-blue-600 underline hover:text-blue-700">이용약관</a>
-                      {' '}및{' '}
-                      <a href="/refund" target="_blank" rel="noopener noreferrer"
-                        className="text-blue-600 underline hover:text-blue-700">환불정책</a>
-                      에 동의합니다.
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={agreePrivacy}
-                      onChange={(e) => setAgreePrivacy(e.target.checked)}
-                      className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
-                    />
-                    <span className="text-xs text-gray-600">
-                      (필수){' '}
-                      <a href="/privacy" target="_blank" rel="noopener noreferrer"
-                        className="text-blue-600 underline hover:text-blue-700">개인정보처리방침</a>
-                      에 동의합니다.
-                    </span>
-                  </label>
-                </div>
               </>
             )}
 
-            {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-            {message && <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg">{message}</p>}
-
-            <button
-              onClick={mode === 'login' ? handleLogin : handleSignup}
-              disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold rounded-xl text-sm transition-colors"
-            >
-              {loading ? '처리 중...' : mode === 'login' ? '로그인' : '가입 신청하기'}
-            </button>
           </div>
+        </div>
+
+        {/* 하단 고정 푸터 */}
+        <div className="shrink-0 border-t border-gray-200 px-6 py-4 space-y-3">
+          {mode === 'signup' && (
+            <div className="space-y-2.5">
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={agreeTerms}
+                  onChange={(e) => setAgreeTerms(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                />
+                <span className="text-xs text-gray-600">
+                  (필수){' '}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer"
+                    className="text-blue-600 underline hover:text-blue-700">이용약관</a>
+                  {' '}및{' '}
+                  <a href="/refund" target="_blank" rel="noopener noreferrer"
+                    className="text-blue-600 underline hover:text-blue-700">환불정책</a>
+                  에 동의합니다.
+                </span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={agreePrivacy}
+                  onChange={(e) => setAgreePrivacy(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                />
+                <span className="text-xs text-gray-600">
+                  (필수){' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer"
+                    className="text-blue-600 underline hover:text-blue-700">개인정보처리방침</a>
+                  에 동의합니다.
+                </span>
+              </label>
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+          {message && <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg">{message}</p>}
+
+          <button
+            onClick={mode === 'login' ? handleLogin : handleSignup}
+            disabled={loading}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold rounded-xl text-sm transition-colors"
+          >
+            {loading ? '처리 중...' : mode === 'login' ? '로그인' : '가입 신청하기'}
+          </button>
         </div>
       </div>
     </div>
