@@ -4,6 +4,7 @@ export interface Plan {
   id: PlanId
   name: string
   price: number        // KRW 월 구독료
+  trialPrice?: number  // 첫 달 적용 가격, KRW (미설정 시 0원 무료)
   usageLimit: number   // 월 AI 생성 건수 (-1 = 무제한)
   features: string[]
   recommended?: boolean
@@ -14,6 +15,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'basic',
     name: '베이직',
     price: 99000,
+    trialPrice: 0,
     usageLimit: 10,
     features: ['AI 블로그 월 10건', 'SEO 분석', '네이버 검색 트렌드'],
   },
@@ -21,6 +23,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'standard',
     name: '스탠다드',
     price: 199000,
+    trialPrice: 0,
     usageLimit: 20,
     features: [
       'AI 블로그 월 20건',
@@ -36,6 +39,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'pro',
     name: '프로',
     price: 399000,
+    trialPrice: 199000,
     usageLimit: -1,
     features: [
       '전 기능 무제한',

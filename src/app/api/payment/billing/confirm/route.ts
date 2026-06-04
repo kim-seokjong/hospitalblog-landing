@@ -80,30 +80,92 @@ export async function POST(req: NextRequest) {
     let chargeResult: Awaited<ReturnType<typeof chargeWithBillingKey>> | null = null
 
     if (isTrialEligible) {
-      // 신규 가입자: PortOne 결제 호출 없이 빌링키만 발급 + 30일 후 첫 정상 결제
-      paidAt = new Date().toISOString()
-      expiresAt = addOneMonth(paidAt)
+      // 신규 가입자: 첫 달 가격은 plan.trialPrice 로 결정
+      //  - trialAmount === 0 (베이직/스탠다드): 0원 무료 체험 (PortOne 호출 없음)
+      //  - trialAmount  > 0 (프로): 첫 달 50% 할인가 실제 결제, 둘째 달부터 정상가
+      const trialAmount = plan.trialPrice ?? 0
 
-      // 결제 레코드를 0원 PAID로 갱신 (회계 추적)
-      await markPaymentTrialActivated({ paymentId, paidAt })
+      if (trialAmount > 0) {
+        // 프로: 첫 달 50% 할인가 실제 결제 (기존 회원 분기와 동일 패턴)
+        try {
+          chargeResult = await chargeWithBillingKey({
+            paymentId,
+            billingKey,
+            orderName: `닥터포스트 ${plan.name} 플랜 1개월 (첫 달 50% 할인)`,
+            amount: trialAmount,
+            customerId,
+            customerEmail: user.email ?? '',
+            customerPhone: profile?.phone ?? undefined,
+          })
+        } catch (e) {
+          await markPaymentFailed(paymentId, e instanceof Error ? e.message : '빌링키 결제 실패')
+          throw e
+        }
 
-      // 플랜 활성화 (30일 무료 이용 가능)
-      await activateUserPlan({
-        userId: dbPayment.user_id,
-        plan: dbPayment.plan,
-        expiresAt,
-      })
+        if (chargeResult.status !== 'PAID') {
+          await markPaymentFailed(paymentId, `결제 상태: ${chargeResult.status}`)
+          return NextResponse.json(
+            { error: `결제가 완료되지 않았습니다 (상태: ${chargeResult.status})` },
+            { status: 400 },
+          )
+        }
 
-      // 빌링키 저장 (trial_until=30일 후, next_billing_at=30일 후 첫 정상 결제일)
-      await createBillingKey({
-        userId: dbPayment.user_id,
-        billingKey,
-        plan: dbPayment.plan,
-        cardName: null,
-        cardLast4: null,
-        nextBillingAt: expiresAt,
-        trialUntil: expiresAt,
-      })
+        paidAt = chargeResult.paidAt ?? new Date().toISOString()
+        expiresAt = addOneMonth(paidAt)
+
+        await markPaymentPaid({
+          paymentId,
+          pgTxId: chargeResult.transactionId,
+          pgProvider: chargeResult.pgProvider,
+          paymentMethod: 'CARD',
+          cardName: chargeResult.cardName,
+          receiptUrl: chargeResult.receiptUrl,
+          paidAt,
+          rawResponse: chargeResult,
+        })
+
+        await activateUserPlan({
+          userId: dbPayment.user_id,
+          plan: dbPayment.plan,
+          expiresAt,
+        })
+
+        // 빌링키 저장 (next_billing_at=30일 후 둘째 달 = cron이 정상가 청구)
+        // trial_until 미설정: 무료체험이 아니라 할인 결제이므로
+        await createBillingKey({
+          userId: dbPayment.user_id,
+          billingKey,
+          plan: dbPayment.plan,
+          cardName: chargeResult.cardName,
+          cardLast4: null,
+          nextBillingAt: expiresAt,
+        })
+      } else {
+        // 베이직/스탠다드: PortOne 결제 호출 없이 빌링키만 발급 + 30일 후 첫 정상 결제
+        paidAt = new Date().toISOString()
+        expiresAt = addOneMonth(paidAt)
+
+        // 결제 레코드를 0원 PAID로 갱신 (회계 추적)
+        await markPaymentTrialActivated({ paymentId, paidAt })
+
+        // 플랜 활성화 (30일 무료 이용 가능)
+        await activateUserPlan({
+          userId: dbPayment.user_id,
+          plan: dbPayment.plan,
+          expiresAt,
+        })
+
+        // 빌링키 저장 (trial_until=30일 후, next_billing_at=30일 후 첫 정상 결제일)
+        await createBillingKey({
+          userId: dbPayment.user_id,
+          billingKey,
+          plan: dbPayment.plan,
+          cardName: null,
+          cardLast4: null,
+          nextBillingAt: expiresAt,
+          trialUntil: expiresAt,
+        })
+      }
     } else {
       // 기존 회원 (해지 후 재구독 등): 기존 즉시 결제 흐름 유지
       try {

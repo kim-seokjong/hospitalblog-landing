@@ -7,19 +7,23 @@ import PlanCard from './PlanCard'
 export default function PricingSection() {
   const [agreed, setAgreed] = useState(false)
   const [showAgreementError, setShowAgreementError] = useState(false)
-  // 초기값 true: 미로그인·랜딩 SEO 우선 → fetch 후 기존 회원이면 false로 갱신
-  const [trialEligible, setTrialEligible] = useState(true)
+  // 초기값 false(비로그인): 미로그인·랜딩 SEO 우선 → 프로모션 표시
+  // fetch 후 로그인 회원이면 true로 갱신해 정상가만 노출
+  const [loggedIn, setLoggedIn] = useState(false)
   const agreementRef = useRef<HTMLDivElement | null>(null)
   const plans = [PLANS.basic, PLANS.standard, PLANS.pro]
+
+  // 프로모션(취소선·할인라벨) 게이팅: 비로그인 방문자에게만 노출
+  const showPromo = !loggedIn
 
   useEffect(() => {
     let cancelled = false
     fetch('/api/payment/trial-eligibility', { cache: 'no-store' })
-      .then((res) => res.ok ? res.json() : { eligible: true })
+      .then((res) => res.ok ? res.json() : { loggedIn: false })
       .then((data) => {
-        if (!cancelled) setTrialEligible(Boolean(data?.eligible))
+        if (!cancelled) setLoggedIn(Boolean(data?.loggedIn))
       })
-      .catch(() => { /* 안전 기본값: 표시 유지 */ })
+      .catch(() => { /* 안전 기본값: 프로모션 표시 유지 */ })
     return () => { cancelled = true }
   }, [])
 
@@ -46,26 +50,26 @@ export default function PricingSection() {
           병원 규모에 맞는 플랜을 선택하세요
         </p>
 
-        {trialEligible && (
+        {showPromo && (
           <div className="mx-auto max-w-2xl bg-gradient-to-r from-emerald-500/15 to-blue-500/15 border border-emerald-400/40 rounded-xl px-4 py-3.5 mb-4 text-center">
             <p className="text-base sm:text-lg text-emerald-200 font-bold">
-              🎉 모든 플랜 첫 달 0원 · 부담 없이 시작하세요
+              🎉 베이직·스탠다드 첫 달 0원 · 프로 첫 달 50% 할인
             </p>
             <p className="text-xs sm:text-sm text-emerald-100/80 mt-1.5">
-              가입 후 30일 동안 무료 이용 · <strong>30일 후부터</strong> 매월 자동결제
+              지금 시작하면 첫 달 혜택 · <strong>둘째 달부터</strong> 매월 자동결제
             </p>
           </div>
         )}
 
         <div className="mx-auto max-w-2xl bg-blue-950/40 border border-blue-900 rounded-xl px-4 py-3 mb-8 text-center">
           <p className="text-sm text-blue-200 font-semibold">
-            {trialEligible
-              ? '🔒 30일 후부터 매월 자동결제 · 언제든 해지 가능'
+            {showPromo
+              ? '🔒 둘째 달부터 매월 자동결제 · 언제든 해지 가능'
               : '🔒 매월 자동결제 · 언제든 해지 가능'}
           </p>
           <p className="text-xs text-blue-300/80 mt-1">
-            {trialEligible
-              ? '카드 등록 후 30일은 0원, 이후 매월 같은 날 자동 청구됩니다. 결제 7일 전 안내 메일을 보내드립니다.'
+            {showPromo
+              ? '베이직·스탠다드는 첫 달 0원, 프로는 첫 달 50% 할인가가 청구되며, 둘째 달부터 매월 같은 날 정상가로 자동 청구됩니다. 결제 7일 전 안내 메일을 보내드립니다.'
               : '카드 등록 후 즉시 결제되며, 이후 매월 같은 날 자동 청구됩니다. 결제 7일 전 안내 메일을 보내드립니다.'}
           </p>
         </div>
@@ -76,7 +80,7 @@ export default function PricingSection() {
               key={plan.id}
               plan={plan}
               requestAgreement={requestAgreement}
-              showTrialBadge={trialEligible}
+              showPromo={showPromo}
             />
           ))}
         </div>
@@ -98,7 +102,7 @@ export default function PricingSection() {
             />
             <span className="text-sm leading-relaxed text-gray-200">
               <strong className="text-white">
-                {trialEligible ? '첫 달 0원, 30일 후부터 매월 자동결제' : '매월 자동결제'}
+                {showPromo ? '첫 달 혜택(베이직·스탠다드 0원 / 프로 50% 할인), 둘째 달부터 매월 자동결제' : '매월 자동결제'}
               </strong>에 동의하며,{' '}
               <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">이용약관</a>
               {', '}
@@ -116,8 +120,8 @@ export default function PricingSection() {
         </div>
 
         <p className="text-center text-gray-500 text-xs sm:text-sm mt-6 sm:mt-8 px-2">
-          {trialEligible
-            ? '해지는 마이페이지에서 1클릭으로 가능합니다. 무료 체험 중 해지 시 청구 없이 즉시 종료되며, 유료 기간 해지 시 다음 결제일까지 이용할 수 있습니다.'
+          {showPromo
+            ? '해지는 마이페이지에서 1클릭으로 가능합니다. 베이직·스탠다드 무료 체험 중 해지 시 청구 없이 즉시 종료되며, 유료 기간 해지 시 다음 결제일까지 이용할 수 있습니다.'
             : '해지는 마이페이지에서 1클릭으로 가능하며, 다음 결제일까지 이용할 수 있습니다.'}
         </p>
       </div>
