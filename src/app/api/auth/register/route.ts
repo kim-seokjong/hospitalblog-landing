@@ -32,24 +32,27 @@ export async function POST(req: NextRequest) {
 
     const { data: existing } = await supabaseAdmin
       .from('profiles')
-      .select('id')
+      .select('id, full_name')
       .eq('id', userId)
       .maybeSingle();
-    if (existing) {
+    if (existing?.full_name) {
       return NextResponse.json({ error: '이미 등록된 프로필입니다.' }, { status: 409 });
     }
 
     const { error } = await supabaseAdmin
       .from('profiles')
-      .insert({
-        id: userId,
-        full_name: fullName,
-        phone,
-        hospital_name: hospitalName,
-        hospital_address: hospitalAddress,
-        position,
-        hospital_type: hospitalType,
-      });
+      .upsert(
+        {
+          id: userId,
+          full_name: fullName,
+          phone,
+          hospital_name: hospitalName,
+          hospital_address: hospitalAddress,
+          position,
+          hospital_type: hospitalType,
+        },
+        { onConflict: 'id' },
+      );
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

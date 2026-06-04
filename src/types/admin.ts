@@ -4,6 +4,10 @@ export interface ProfileRow {
   id: string;
   email: string | null;
   full_name: string | null;
+  phone: string | null;
+  position: string | null;
+  hospital_type: string | null;
+  hospital_address: string | null;
   hospital_name: string | null;
   specialty: string | null;
   region: string | null;

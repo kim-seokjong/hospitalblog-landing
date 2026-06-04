@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { MemberRow, PlanType } from '@/types/admin';
 
 type FilterKey = 'all' | 'basic' | 'standard' | 'pro' | 'expired';
@@ -44,6 +44,10 @@ function formatDate(iso: string | null): string {
 export default function MemberTable({ members }: MemberTableProps) {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const toggleExpand = (id: string) =>
+    setExpandedId((prev) => (prev === id ? null : id));
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -130,20 +134,32 @@ export default function MemberTable({ members }: MemberTableProps) {
             ) : (
               filtered.map((m) => {
                 const plan = (m.plan ?? 'free') as PlanType;
+                const isExpanded = expandedId === m.id;
                 const rowBg = m.isExpiringSoon
                   ? 'bg-amber-900/20'
                   : 'hover:bg-gray-800/40';
                 return (
+                  <Fragment key={m.id}>
                   <tr
-                    key={m.id}
-                    className={`border-t border-gray-800 ${rowBg}`}
+                    onClick={() => toggleExpand(m.id)}
+                    className={`border-t border-gray-800 cursor-pointer ${rowBg}`}
                   >
                     <td className="px-4 py-3 text-gray-100">
-                      <div className="font-medium">
-                        {m.hospital_name ?? '-'}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {m.full_name ?? '-'}
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-gray-500 text-xs select-none"
+                          aria-hidden="true"
+                        >
+                          {isExpanded ? '▲' : '▼'}
+                        </span>
+                        <div>
+                          <div className="font-medium">
+                            {m.hospital_name ?? '-'}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {m.full_name ?? '-'}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -178,6 +194,47 @@ export default function MemberTable({ members }: MemberTableProps) {
                       </span>
                     </td>
                   </tr>
+                  {isExpanded && (
+                    <tr className="border-t border-gray-800 bg-gray-800/30">
+                      <td colSpan={8} className="px-4 py-4">
+                        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                          <div>
+                            <dt className="text-xs uppercase text-gray-500">
+                              연락처
+                            </dt>
+                            <dd className="mt-0.5 text-gray-200 break-words">
+                              {m.phone ?? '-'}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs uppercase text-gray-500">
+                              직책
+                            </dt>
+                            <dd className="mt-0.5 text-gray-200 break-words">
+                              {m.position ?? '-'}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs uppercase text-gray-500">
+                              병원유형
+                            </dt>
+                            <dd className="mt-0.5 text-gray-200 break-words">
+                              {m.hospital_type ?? '-'}
+                            </dd>
+                          </div>
+                          <div className="sm:col-span-2 lg:col-span-1">
+                            <dt className="text-xs uppercase text-gray-500">
+                              주소
+                            </dt>
+                            <dd className="mt-0.5 text-gray-200 break-words">
+                              {m.hospital_address ?? '-'}
+                            </dd>
+                          </div>
+                        </dl>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })
             )}

@@ -234,7 +234,7 @@ export default async function AdminPage() {
     admin
       .from('profiles')
       .select(
-        'id,email,full_name,hospital_name,specialty,region,plan,plan_expires_at,usage_count,created_at'
+        'id,email,full_name,phone,position,hospital_type,hospital_address,hospital_name,specialty,region,plan,plan_expires_at,usage_count,created_at'
       )
       .order('created_at', { ascending: false }),
     admin
