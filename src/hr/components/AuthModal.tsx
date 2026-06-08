@@ -106,12 +106,21 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
       return;
     }
 
+    // 이미 가입된 이메일로 재가입 시 Supabase는 보안상(이메일 열거 방지) 에러 대신
+    // identities가 빈 배열인 더미 user를 반환한다. 신규 가입이면 길이 >= 1.
+    const identities = data.user?.identities;
+    if (data.user && Array.isArray(identities) && identities.length === 0) {
+      setError('이미 가입된 이메일입니다. 로그인해 주세요.');
+      setLoading(false);
+      return;
+    }
+
     trackEvent('CompleteRegistration', { content_name: 'signup', status: 'complete' });
     trackEvent('Lead', { content_name: 'signup', content_category: 'subscribe_required' });
 
     const userId = data.user?.id;
     if (!userId) {
-      setError('가입 처리 중 오류가 발생했습니다.');
+      setError('가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
       setLoading(false);
       return;
     }
