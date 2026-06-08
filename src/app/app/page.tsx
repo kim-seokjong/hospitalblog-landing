@@ -220,13 +220,16 @@ export default function AppPage() {
 
         // 필수 프로필 컬럼(성함/연락처/병원명/직책/병원유형)이 모두 채워졌는지 검사.
         // 하나라도 비면 유령/미완성 계정 → 서비스 진입 차단 후 가입 모달 노출.
+        // 단, 관리자는 특정 병원이 아니라 진료과목(hospital_type)을 비워둬야 하므로
+        // 프로필 완성도 게이팅에서 예외 처리(항상 진입 가능).
         const incomplete =
-          !profile ||
-          !profile.full_name ||
-          !profile.phone ||
-          !profile.hospital_name ||
-          !profile.position ||
-          !profile.hospital_type;
+          !isClientAdmin(user.email) &&
+          (!profile ||
+            !profile.full_name ||
+            !profile.phone ||
+            !profile.hospital_name ||
+            !profile.position ||
+            !profile.hospital_type);
         setProfileIncomplete(incomplete);
         if (incomplete) setShowAuthModal(true);
 
