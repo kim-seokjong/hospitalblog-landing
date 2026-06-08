@@ -123,7 +123,11 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     });
 
     if (!registerRes.ok) {
-      setError('프로필 저장에 실패했습니다. 다시 시도해주세요.');
+      // 서버가 프로필 저장 실패 시 방금 만든 auth 계정을 롤백 삭제하므로,
+      // 사용자에게 "가입이 완료되지 않았음"을 명확히 안내한다.
+      const detail = await registerRes.json().catch(() => null);
+      const serverMsg = detail && typeof detail.error === 'string' ? detail.error : null;
+      setError(serverMsg ?? '가입에 실패했습니다. 처음부터 다시 시도해주세요.');
       setLoading(false);
       return;
     }

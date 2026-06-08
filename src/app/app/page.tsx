@@ -156,6 +156,8 @@ export default function AppPage() {
   const [userPlan, setUserPlan] = useState<{ plan: string; usage_count: number; hospital_type?: string | null } | null>(null);
   const [hospitalName, setHospitalName] = useState('');
   const [profileRegion, setProfileRegion] = useState('');
+  // 프로필 완성도 게이팅: 필수 컬럼이 비면 유령 계정으로 보고 서비스 진입 차단
+  const [profileIncomplete, setProfileIncomplete] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -198,19 +200,37 @@ export default function AppPage() {
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  // 플랜/사용량/병원정보 fetch
+  // 플랜/사용량/병원정보 fetch + 프로필 완성도 게이팅
   useEffect(() => {
-    if (!user) { setUserPlan(null); setHospitalName(''); setProfileRegion(''); return; }
+    if (!user) {
+      setUserPlan(null); setHospitalName(''); setProfileRegion('');
+      setProfileIncomplete(false);
+      return;
+    }
     supabase.from('profiles')
-      .select('plan, usage_count, hospital_type, hospital_name, hospital_address')
+      .select('plan, usage_count, hospital_type, hospital_name, hospital_address, full_name, phone, position')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
-        if (data) {
-          const profile = data as {
-            plan: string; usage_count: number; hospital_type?: string | null;
-            hospital_name?: string | null; hospital_address?: string | null;
-          };
+        const profile = data as {
+          plan: string; usage_count: number; hospital_type?: string | null;
+          hospital_name?: string | null; hospital_address?: string | null;
+          full_name?: string | null; phone?: string | null; position?: string | null;
+        } | null;
+
+        // 필수 프로필 컬럼(성함/연락처/병원명/직책/병원유형)이 모두 채워졌는지 검사.
+        // 하나라도 비면 유령/미완성 계정 → 서비스 진입 차단 후 가입 모달 노출.
+        const incomplete =
+          !profile ||
+          !profile.full_name ||
+          !profile.phone ||
+          !profile.hospital_name ||
+          !profile.position ||
+          !profile.hospital_type;
+        setProfileIncomplete(incomplete);
+        if (incomplete) setShowAuthModal(true);
+
+        if (profile) {
           setUserPlan({ plan: profile.plan, usage_count: profile.usage_count, hospital_type: profile.hospital_type });
           if (profile.hospital_type) setHospitalType(profile.hospital_type);
           if (profile.hospital_name) setHospitalName(profile.hospital_name);
@@ -440,14 +460,21 @@ export default function AppPage() {
     <div className="min-h-screen bg-[#0b0d2b] text-white">
       {showAuthModal && (
         <AuthModal
+          // 프로필 미완성(유령 계정) 또는 비로그인 상태면 회원가입 탭으로 유도
+          initialMode={profileIncomplete ? 'signup' : 'login'}
           onClose={() => {
-            if (user) {
+            // 로그인했더라도 프로필이 미완성이면 서비스로 들어가지 못하게 홈으로 보낸다.
+            if (user && !profileIncomplete) {
               setShowAuthModal(false);
             } else {
               router.push('/');
             }
           }}
-          onSuccess={() => { setShowAuthModal(false); }}
+          onSuccess={() => {
+            // 가입/로그인 성공 시 게이트 해제 (프로필 재검증은 user 변경 effect가 수행)
+            setProfileIncomplete(false);
+            setShowAuthModal(false);
+          }}
           closable={true}
         />
       )}

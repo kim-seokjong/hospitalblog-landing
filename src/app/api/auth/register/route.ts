@@ -9,7 +9,8 @@ export async function POST(req: NextRequest) {
   try {
     const { userId, fullName, phone, hospitalName, hospitalAddress, position, hospitalType } = await req.json();
 
-    if (!userId || !fullName || !phone || !hospitalName || !position || !hospitalType) {
+    // userId 자체가 없으면 정리할 대상도 없으므로 즉시 400 반환
+    if (!userId) {
       return NextResponse.json({ error: '필수 항목이 누락되었습니다.' }, { status: 400 });
     }
 
@@ -18,6 +19,13 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
+
+    // 필수 프로필 필드(성함/연락처/병원명/직책/병원유형) 검증 — 시스템 경계(서버)에서 최종 차단.
+    // 빈값이면 방금 생성된 auth 계정을 롤백 삭제해 유령 계정이 남지 않게 한다.
+    if (!fullName || !phone || !hospitalName || !position || !hospitalType) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return NextResponse.json({ error: '필수 항목이 누락되었습니다.' }, { status: 400 });
+    }
 
     const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.getUserById(userId);
     if (userErr || !userData?.user) {
@@ -55,7 +63,13 @@ export async function POST(req: NextRequest) {
       );
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      // 프로필 저장 실패 시 방금 만든 auth 계정을 삭제해 가입을 원자적으로 롤백한다.
+      // (유령 계정 방지 — 프로필 없는 계정이 로그인으로 진입하지 못하게)
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return NextResponse.json(
+        { error: '프로필 저장에 실패했습니다. 다시 시도해주세요.' },
+        { status: 500 },
+      );
     }
 
     if (!targetUser.email_confirmed_at) {
