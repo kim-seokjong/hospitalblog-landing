@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import AuthModal from '@/hr/components/AuthModal';
+import { PLANS } from '@/payment/lib/plans';
 
 export default function LandingPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -306,22 +307,25 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               {
-                name: "베이직", price: "99,000원", desc: "블로그 자동 작성 시작",
+                plan: PLANS.basic, desc: "블로그 자동 작성 시작",
                 features: ["AI 블로그 작성 월 10건", "SEO 분석", "네이버 트렌드"],
                 highlight: false,
               },
               {
-                name: "스탠다드", price: "199,000원", desc: "이미지까지 한번에",
+                plan: PLANS.standard, desc: "이미지까지 한번에",
                 features: ["AI 블로그 작성 월 20건", "카드뉴스·이미지 자동 생성", "독창성 검사", "의료광고법 검수"],
                 highlight: true,
               },
               {
-                name: "프로", price: "399,000원", desc: "모든 기능 무제한",
+                plan: PLANS.pro, desc: "모든 기능 무제한",
                 features: ["AI 블로그 작성 무제한", "이미지 생성 무제한", "독창성 검사 무제한", "의료광고법 검수", "우선 고객 지원"],
                 highlight: false,
               },
-            ].map(({ name, price, desc, features, highlight }) => (
-              <div key={name} className={`relative p-6 rounded-2xl border flex flex-col ${
+            ].map(({ plan, desc, features, highlight }) => {
+              // 첫 달 할인 결제 플랜(프로): trialPrice > 0, 그 외(베이직/스탠다드): 첫 달 무료
+              const isDiscountPlan = (plan.trialPrice ?? 0) > 0;
+              return (
+              <div key={plan.id} className={`relative p-6 rounded-2xl border flex flex-col ${
                 highlight
                   ? 'border-blue-400/60 bg-gradient-to-b from-blue-500/15 to-blue-500/5 shadow-2xl shadow-blue-500/20'
                   : 'border-white/10 bg-white/5'
@@ -334,8 +338,42 @@ export default function LandingPage() {
                     </span>
                   </>
                 )}
-                <h3 className="text-xl font-bold text-white mb-1">{name}</h3>
-                <p className="text-2xl font-extrabold text-white mt-1 mb-1">{price}<span className="text-sm font-normal text-gray-500"> / 월</span></p>
+                <h3 className="text-xl font-bold text-white mb-1">{plan.name}</h3>
+                <div className="mt-1 mb-1 inline-flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-full self-start">
+                  {isDiscountPlan ? '🎁 첫 달 50% 할인' : '🎁 첫 달 무료'}
+                </div>
+                {isDiscountPlan ? (
+                  // 프로: 정상가 취소선 + 첫 달 할인가 강조
+                  <>
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="text-base sm:text-lg font-semibold text-gray-500 line-through">
+                        {plan.price.toLocaleString('ko-KR')}원
+                      </span>
+                      <span className="text-gray-500 text-xs sm:text-sm">/ 월</span>
+                    </div>
+                    <p className="mb-1 flex flex-wrap items-baseline gap-x-1">
+                      <span className="text-2xl sm:text-3xl font-extrabold text-emerald-300">
+                        {(plan.trialPrice ?? 0).toLocaleString('ko-KR')}
+                      </span>
+                      <span className="text-emerald-300/90 text-sm">원</span>
+                      <span className="text-gray-400 text-xs sm:text-sm">/ 첫 달</span>
+                    </p>
+                  </>
+                ) : (
+                  // 베이직/스탠다드: 정상가 취소선 + "첫 달 무료" 강조
+                  <>
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="text-base sm:text-lg font-semibold text-gray-500 line-through">
+                        {plan.price.toLocaleString('ko-KR')}원
+                      </span>
+                      <span className="text-gray-500 text-xs sm:text-sm">/ 월</span>
+                    </div>
+                    <p className="mt-1 mb-1 text-2xl sm:text-3xl font-extrabold text-emerald-300">첫 달 무료</p>
+                  </>
+                )}
+                <p className="text-[11px] text-gray-500 mb-1">
+                  둘째 달부터 매월 {plan.price.toLocaleString('ko-KR')}원 자동결제
+                </p>
                 <p className="text-sm text-gray-500 mb-5">{desc}</p>
                 <ul className="space-y-2.5 mb-8 flex-1">
                   {features.map((f) => (
@@ -355,7 +393,8 @@ export default function LandingPage() {
                   시작하기
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
           <p className="text-center text-xs text-gray-600 mt-6">
             모든 플랜은 월 단위 구독이며, 언제든지 해지 가능합니다.
