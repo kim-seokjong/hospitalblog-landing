@@ -13,11 +13,18 @@
 --       (app/page.tsx)이 차단하므로 "필수항목 미입력 가입 차단" 목표는 유지된다.
 --       (DB NOT NULL 은 literal NULL 방어, 빈값 방어는 앱 계층이 담당)
 --
+-- 주의: position 컬럼은 004 에서 CHECK (position in ('원장','부원장','간호사',
+--       '원무','마케터','기타')) 제약이 걸려 있어 '' 를 기본값으로 줄 수 없다
+--       ('' 는 허용 목록에 없어 트리거의 profiles insert 가 CHECK 위반 → 가입 실패).
+--       따라서 position 만 허용값 '기타' 를 기본값으로 사용한다. 나머지는 ''.
+--       (gating 은 full_name 등 다른 빈 컬럼으로 미완성 프로필을 차단하므로
+--        position 기본값이 '기타' 여도 미완성 가입 차단 목표는 유지됨)
+--
 -- 멱등성: SET DEFAULT 는 재실행 안전.
 -- ============================================================================
 
 alter table public.profiles alter column full_name     set default '';
 alter table public.profiles alter column phone         set default '';
 alter table public.profiles alter column hospital_name set default '';
-alter table public.profiles alter column "position"    set default '';
+alter table public.profiles alter column "position"    set default '기타';
 alter table public.profiles alter column hospital_type set default '';
