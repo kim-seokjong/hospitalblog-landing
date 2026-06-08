@@ -36,11 +36,26 @@ export async function verifyAndActivate(paymentId: string): Promise<ConfirmRespo
     throw new Error(`결제가 완료되지 않았습니다 (상태: ${pgPayment.status})`)
   }
 
-  // 금액 검증 — 서버 DB 기준 금액과 포트원 응답 금액 일치 확인
-  const expectedAmount = PLANS[dbPayment.plan as PlanId].price
+  // 금액 검증 — 서버가 정한 허용 금액(정상가 + 프로 첫달 할인가) 중 하나와 일치하는지 확인.
+  //
+  // Why 허용 금액 집합인가:
+  //  - 프로 첫달은 trialPrice(50% 할인가)로 빌링키 결제되며, 이 결제 역시 포트원에서
+  //    Transaction.Paid 웹훅을 발생시킨다. 웹훅이 billing/confirm 보다 먼저 도착하면
+  //    payments 레코드는 아직 PENDING + amount=정상가(prepare 시점 값) 상태이므로,
+  //    정상가 단일 비교나 DB amount 단일 비교 모두 trialPrice 결제를 "금액 불일치"로 오탐한다.
+  //  - PLANS[plan].price 와 trialPrice 는 모두 서버 상수(클라이언트 변경 불가)이므로,
+  //    허용 집합으로 비교해도 보안은 약화되지 않는다 — 우리가 정의하지 않은 금액은 여전히 거부된다.
+  const planInfo = PLANS[dbPayment.plan as PlanId]
+  const allowedAmounts =
+    planInfo.trialPrice != null && planInfo.trialPrice > 0
+      ? [planInfo.price, planInfo.trialPrice]
+      : [planInfo.price]
   const actualAmount = pgPayment.amount.total
-  if (actualAmount !== expectedAmount) {
-    await markPaymentFailed(paymentId, `금액 불일치: 예상 ${expectedAmount}, 실제 ${actualAmount}`)
+  if (!allowedAmounts.includes(actualAmount)) {
+    await markPaymentFailed(
+      paymentId,
+      `금액 불일치: 허용 ${allowedAmounts.join('/')}, 실제 ${actualAmount}`,
+    )
     throw new Error('결제 금액이 일치하지 않습니다')
   }
 

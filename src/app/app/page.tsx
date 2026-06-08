@@ -552,7 +552,7 @@ export default function AppPage() {
               user ? (
                 <>
                   <span className="text-xs text-[#8891bd] hidden lg:block max-w-[120px] truncate">{user.email}</span>
-                  {user.email === 'terro6936@naver.com' && (
+                  {isClientAdmin(user.email) && (
                     <Link
                       href="/admin"
                       className="px-2.5 sm:px-3 py-1.5 text-xs border border-yellow-500/40 rounded-lg text-yellow-400 hover:bg-yellow-500/10 transition-colors min-h-[36px] flex items-center gap-1"
