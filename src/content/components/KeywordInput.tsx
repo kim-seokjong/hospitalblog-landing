@@ -42,10 +42,12 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
   const [writingStyle, setWritingStyle] = useState<WritingStyle>(defaultWritingStyle || '전문가');
   const [optimizationMode, setOptimizationMode] = useState<OptimizationMode>(defaultOptimizationMode || 'seo+geo');
 
+  const effectiveHospitalType = lockedHospitalType ?? hospitalType;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyword.trim()) return;
-    onSubmit(keyword.trim(), hospitalType, additionalInfo.trim(), writingStyle, region.trim(), optimizationMode);
+    onSubmit(keyword.trim(), effectiveHospitalType, additionalInfo.trim(), writingStyle, region.trim(), optimizationMode);
   };
 
   return (
@@ -116,7 +118,7 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
         </div>
 
         <SpecialtyKeywordSuggester
-          specialty={hospitalType}
+          specialty={effectiveHospitalType}
           region={region}
           onSelect={(kw, isSelected) => {
             if (isSelected) {
