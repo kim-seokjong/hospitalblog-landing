@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
+import { requirePaidPlan } from '@/payment/lib/usage-guard';
 
 export const maxDuration = 30;
 
@@ -112,6 +113,11 @@ ${region.trim() ? `- "${region}" 지역 키워드 1개 이상 포함` : ''}
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePaidPlan();
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
+  }
+
   try {
     const body = await req.json() as { specialty?: string; region?: string };
     const { specialty, region } = body;

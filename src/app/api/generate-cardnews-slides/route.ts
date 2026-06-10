@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 import { logUsage } from '@/dev/lib/usage-logger';
+import { requirePaidPlan } from '@/payment/lib/usage-guard';
 import type { CardNewsData } from '@/types';
 
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePaidPlan();
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
+  }
+
   try {
     const { keyword, title, body, hospitalType } = await req.json();
 
@@ -109,7 +115,7 @@ ${body ? body.slice(0, 2000) : ''}
       api_provider: 'anthropic',
       input_tokens: res.usage.input_tokens,
       output_tokens: res.usage.output_tokens,
-      user_id: null,
+      user_id: gate.userId,
       user_agent: req.headers.get('user-agent') ?? null,
     });
 

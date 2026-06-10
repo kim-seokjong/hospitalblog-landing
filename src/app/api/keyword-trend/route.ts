@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requirePaidPlan } from '@/payment/lib/usage-guard';
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePaidPlan();
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
+  }
+
   try {
     const { keywords } = await req.json() as { keywords?: unknown };
     if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {

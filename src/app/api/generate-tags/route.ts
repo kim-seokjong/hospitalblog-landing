@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 import { logUsage } from '@/dev/lib/usage-logger';
+import { requirePaidPlan } from '@/payment/lib/usage-guard';
 import type { TagResult } from '@/types';
 
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePaidPlan();
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
+  }
+
   try {
     const { keyword, title, hospitalType } = await req.json();
 
@@ -66,7 +72,7 @@ searchVolume은 높음/중간/낮음 중 하나.`;
       api_provider: 'anthropic',
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
-      user_id: null,
+      user_id: gate.userId,
       user_agent: req.headers.get('user-agent') ?? null,
     });
 

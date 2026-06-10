@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 import { logUsage } from '@/dev/lib/usage-logger';
+import { requirePaidPlan } from '@/payment/lib/usage-guard';
 
 interface NaverBlogItem {
   title: string;
@@ -62,6 +63,11 @@ function extractKeySentences(body: string): string[] {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePaidPlan();
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
+  }
+
   try {
     const { title, body, keyword } = await req.json();
     if (!title || !body || !keyword) {
@@ -159,7 +165,7 @@ originalityScore 기준: 80이상=통과, 60~79=수정권장, 60미만=재작성
       api_provider: 'anthropic',
       input_tokens: analysisRes.usage.input_tokens,
       output_tokens: analysisRes.usage.output_tokens,
-      user_id: null,
+      user_id: gate.userId,
       user_agent: req.headers.get('user-agent') ?? null,
     });
 

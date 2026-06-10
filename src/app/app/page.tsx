@@ -279,8 +279,22 @@ export default function AppPage() {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
-      const draft = JSON.parse(raw) as DraftData;
-      if (draft.keyword || draft.content) setDraftToRestore(draft);
+      const parsed = JSON.parse(raw) as Partial<DraftData>;
+      // 필수 필드 검증 후 안전하게 기본값으로 채워서 복원
+      const draft: DraftData = {
+        keyword: typeof parsed.keyword === 'string' ? parsed.keyword : '',
+        hospitalType: typeof parsed.hospitalType === 'string' ? parsed.hospitalType : '',
+        additionalInfo: typeof parsed.additionalInfo === 'string' ? parsed.additionalInfo : '',
+        writingStyle: parsed.writingStyle ?? '전문가',
+        optimizationMode: parsed.optimizationMode ?? 'seo+geo',
+        titles: Array.isArray(parsed.titles) ? parsed.titles : [],
+        selectedTitle: parsed.selectedTitle ?? null,
+        content: parsed.content ?? null,
+        tags: parsed.tags ?? null,
+        viewStep: (parsed.viewStep === 'input' || parsed.viewStep === 'content') ? parsed.viewStep : 'input',
+        savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : new Date().toISOString(),
+      };
+      if (draft.keyword || draft.content || draft.titles.length > 0) setDraftToRestore(draft);
     } catch {
       localStorage.removeItem(DRAFT_KEY);
     }
@@ -390,24 +404,18 @@ export default function AppPage() {
     try {
       const effectiveRegion = profileRegion;
 
-      const [contentRes, tagRes] = await Promise.all([
-        fetch('/api/generate-content', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: selectedTitle.title, keyword, hospitalType, additionalInfo,
-            titleFormat: selectedTitle.seoDetails?.format, writingStyle,
-            region: effectiveRegion, hospitalName, optimizationMode,
-          }),
+      // 1. generate-content 먼저 실행 (사용량 차감 포함)
+      const contentRes = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: selectedTitle.title, keyword, hospitalType, additionalInfo,
+          titleFormat: selectedTitle.seoDetails?.format, writingStyle,
+          region: effectiveRegion, hospitalName, optimizationMode,
         }),
-        fetch('/api/generate-tags', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keyword, title: selectedTitle.title, hospitalType }),
-        }),
-      ]);
+      });
 
-      const [contentData, tagData] = await Promise.all([contentRes.json(), tagRes.json()]);
+      const contentData = await contentRes.json();
       if (!contentRes.ok) {
         const reason = contentData.reason as string | undefined;
         const isBlocked = reason === 'plan_required' || reason === 'plan_expired' || reason === 'limit_exceeded';
@@ -416,8 +424,22 @@ export default function AppPage() {
         throw err;
       }
       setContent(contentData);
-      if (tagRes.ok) setTags(tagData);
       setViewStep('content');
+
+      // 2. generate-tags 별도 실행 (실패해도 content는 보존)
+      try {
+        const tagRes = await fetch('/api/generate-tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyword, title: selectedTitle.title, hospitalType }),
+        });
+        if (tagRes.ok) {
+          const tagData = await tagRes.json();
+          setTags(tagData);
+        }
+      } catch {
+        // 태그 생성 실패는 무시 (content는 이미 저장됨)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
       const isBlocked = err instanceof Error && (err as Error & { _blocked?: boolean })._blocked === true;
@@ -543,7 +565,7 @@ export default function AppPage() {
   };
 
   const userIsAdmin = isClientAdmin(user?.email);
-  const planLimit = userPlan || userIsAdmin ? getPlanUsageLimit(userPlan?.plan, userIsAdmin) : null;
+  const planLimit = (userPlan !== null || userIsAdmin) ? getPlanUsageLimit(userPlan?.plan, userIsAdmin) : null;
 
   return (
     <div className="min-h-screen bg-[#0b0d2b] text-white">

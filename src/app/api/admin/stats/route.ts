@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
-import { createAdminClient } from '@/dev/lib/supabase/server';
+import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
+import { isAdmin } from '@/hr/lib/admin';
 
 export const dynamic = 'force-dynamic';
-
-function isAdmin(email: string): boolean {
-  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim());
-  return adminEmails.includes(email);
-}
 
 export async function GET() {
   try {
@@ -27,8 +22,14 @@ export async function GET() {
       .from('profiles')
       .select('id, email, plan, usage_count, plan_expires_at, created_at');
 
-    // 결제 내역 조회 (PAID만)
-    const { data: payments } = await admin
+    // 집계용 결제 조회 (limit 없음 — 전체 매출 정확 집계)
+    const { data: allPayments } = await admin
+      .from('payments')
+      .select('amount, paid_at')
+      .eq('status', 'PAID');
+
+    // 목록용 결제 조회 (최근 20건)
+    const { data: recentPayments } = await admin
       .from('payments')
       .select('id, user_id, plan, amount, paid_at, card_name, pg_provider, receipt_url')
       .eq('status', 'PAID')
@@ -49,9 +50,9 @@ export async function GET() {
       p => p.created_at && p.created_at >= monthStart
     ).length;
 
-    // 총 매출 & 이번달 매출
-    const totalRevenue = (payments ?? []).reduce((sum, p) => sum + (p.amount ?? 0), 0);
-    const monthlyRevenue = (payments ?? [])
+    // 총 매출 & 이번달 매출 (집계용 전체 데이터 기준)
+    const totalRevenue = (allPayments ?? []).reduce((sum, p) => sum + (p.amount ?? 0), 0);
+    const monthlyRevenue = (allPayments ?? [])
       .filter(p => p.paid_at && p.paid_at >= monthStart)
       .reduce((sum, p) => sum + (p.amount ?? 0), 0);
 
@@ -68,7 +69,7 @@ export async function GET() {
       planCounts,
       totalRevenue,
       monthlyRevenue,
-      recentPayments: payments ?? [],
+      recentPayments: recentPayments ?? [],
       topUsers,
     });
   } catch (e) {

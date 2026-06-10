@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT } from '@/content/lib/medical-compliance';
 import { logUsage } from '@/dev/lib/usage-logger';
+import { requirePaidPlan } from '@/payment/lib/usage-guard';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
 import type { BlogTitle } from '@/types';
 
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePaidPlan();
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
+  }
+
   try {
     const { keyword, hospitalType, region = '' } = await req.json();
 
@@ -104,7 +110,7 @@ ${regionHint}${competitorSection}
       api_provider: 'anthropic',
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
-      user_id: null,
+      user_id: gate.userId,
       user_agent: req.headers.get('user-agent') ?? null,
     });
 
