@@ -35,7 +35,7 @@ const OPTIMIZATION_MODES: { value: OptimizationMode; label: string; desc: string
 
 export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle, defaultOptimizationMode, lockedHospitalType, defaultRegion }: KeywordInputProps) {
   const [keyword, setKeyword] = useState(defaultKeyword ?? '');
-  const [hospitalType, setHospitalType] = useState(lockedHospitalType ?? defaultHospitalType ?? '피부과');
+  const [hospitalType, setHospitalType] = useState(lockedHospitalType || defaultHospitalType || '피부과');
   const keywordInputRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState(defaultRegion ?? '');
   const [additionalInfo, setAdditionalInfo] = useState(defaultAdditionalInfo ?? '');
