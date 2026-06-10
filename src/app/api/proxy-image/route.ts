@@ -26,12 +26,16 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!response.ok) {
       return NextResponse.json({ error: '이미지를 가져올 수 없습니다.' }, { status: 502 });
     }
 
-    const contentType = response.headers.get('content-type') || 'image/png';
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) {
+      return NextResponse.json({ error: '이미지 파일이 아닙니다.' }, { status: 400 });
+    }
+
     const buffer = await response.arrayBuffer();
 
     return new NextResponse(buffer, {
@@ -41,6 +45,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      return NextResponse.json({ error: '이미지 로딩 시간이 초과됐습니다.' }, { status: 504 });
+    }
     console.error('이미지 프록시 실패:', err);
     return NextResponse.json({ error: '이미지 프록시 실패' }, { status: 500 });
   }

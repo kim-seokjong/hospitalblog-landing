@@ -93,10 +93,13 @@ export async function POST(req: NextRequest) {
     }
     consumedUserId = guard.userId;
 
-    // 경쟁 블로그 분석 (병렬 실행)
-    const [competitorResults] = await Promise.all([
-      searchNaverBlogs(keyword, 5),
-    ]);
+    // 경쟁 블로그 분석 — 실패해도 본문 생성은 계속 진행 (사용량 보호)
+    let competitorResults: Awaited<ReturnType<typeof searchNaverBlogs>> = [];
+    try {
+      competitorResults = await searchNaverBlogs(keyword, 5);
+    } catch {
+      // 네이버 검색 실패는 선택적 기능이므로 무시하고 빈 배열로 대체
+    }
     const competitorText = buildCompetitorInsightText(competitorResults);
 
     const format: TitleFormat = titleFormat || '정보형';

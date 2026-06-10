@@ -3,7 +3,8 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies, headers } from 'next/headers'
 import { verifyAndActivate } from '@/payment/lib/verify'
 import { findPaymentById } from '@/payment/lib/repository'
-import { PLANS } from '@/payment/lib/plans'
+import { PLANS, isPaidPlanId } from '@/payment/lib/plans'
+import type { PlanId } from '@/payment/lib/plans'
 import { sendCAPIEvent } from '@/dev/lib/meta-capi'
 
 export async function POST(req: NextRequest) {
@@ -35,21 +36,24 @@ export async function POST(req: NextRequest) {
 
     const result = await verifyAndActivate(paymentId)
 
-    // CAPI: Subscribe 이벤트 서버사이드 전송
+    // CAPI: Subscribe 이벤트 서버사이드 전송 (plan이 유효할 때만)
     const headersList = await headers();
-    sendCAPIEvent({
-      eventName: 'Subscribe',
-      eventSourceUrl: 'https://hospitalblog.kr/pricing',
-      userData: {
-        clientIpAddress: headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || '',
-        clientUserAgent: headersList.get('user-agent') || '',
-      },
-      customData: {
-        currency: 'KRW',
-        value: PLANS[result.plan].price,
-        predicted_ltv: PLANS[result.plan].price * 12,
-      },
-    }).catch(err => console.error('[CAPI] Subscribe event failed:', err));
+    if (isPaidPlanId(result.plan)) {
+      const planData = PLANS[result.plan as PlanId]
+      sendCAPIEvent({
+        eventName: 'Subscribe',
+        eventSourceUrl: 'https://hospitalblog.kr/pricing',
+        userData: {
+          clientIpAddress: headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || '',
+          clientUserAgent: headersList.get('user-agent') || '',
+        },
+        customData: {
+          currency: 'KRW',
+          value: planData.price,
+          predicted_ltv: planData.price * 12,
+        },
+      }).catch(err => console.error('[CAPI] Subscribe event failed:', err))
+    }
 
     return NextResponse.json(result)
   } catch (e) {

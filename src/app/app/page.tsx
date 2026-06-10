@@ -517,7 +517,7 @@ export default function AppPage() {
   };
 
   const handleImagesUploaded = (files: File[]) => {
-    const readers = files.map(file => new Promise<GeneratedImage>(resolve => {
+    const readers = files.map(file => new Promise<GeneratedImage>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = e => resolve({
         id: `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -525,6 +525,7 @@ export default function AppPage() {
         prompt: file.name,
         revised_prompt: file.name,
       });
+      reader.onerror = () => reject(new Error(`${file.name} 파일을 읽을 수 없습니다.`));
       reader.readAsDataURL(file);
     }));
     Promise.all(readers)
@@ -630,7 +631,7 @@ export default function AppPage() {
               </svg>
             </a>
             {/* 사용량 표시 */}
-            {planLimit !== null && (userPlan || userIsAdmin) && (
+            {planLimit !== null && planLimit !== 0 && (userPlan || userIsAdmin) && (
               <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[#191970]/50 border border-[#2a2b6e]">
                 <span className={`text-[10px] font-semibold ${!userIsAdmin && userPlan && userPlan.usage_count >= planLimit ? 'text-red-400' : 'text-[#8891bd]'}`}>
                   {userIsAdmin ? '관리자 · ∞' : `${userPlan?.usage_count ?? 0}/${planLimit === Infinity ? '∞' : planLimit}회`}

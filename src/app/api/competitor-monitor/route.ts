@@ -107,8 +107,8 @@ ${postList}
     ],
   });
 
-  const rawText =
-    message.content[0].type === 'text' ? message.content[0].text : '';
+  const textBlock = message.content.find(b => b.type === 'text');
+  const rawText = textBlock?.type === 'text' ? textBlock.text : '';
 
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {

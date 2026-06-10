@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 import { getActiveBillingKey, cancelBillingKeyById } from '@/payment/lib/repository'
+import { deleteBillingKey } from '@/payment/lib/billing-client'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +30,10 @@ export async function POST() {
       !!billingKey.trial_until && new Date(billingKey.trial_until) > new Date()
 
     await cancelBillingKeyById(billingKey.id)
+    // PG에서도 빌링키 삭제 (실패해도 DB 취소는 이미 완료됐으므로 무시)
+    deleteBillingKey(billingKey.billing_key).catch(err =>
+      console.error('[cancel] PG 빌링키 삭제 실패 (무시):', err)
+    )
 
     // 무료 체험 중 해지: 플랜 즉시 만료 (청구 없음)
     if (isInTrial) {

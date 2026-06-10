@@ -119,17 +119,12 @@ export async function recordChargeAttempt(params: {
     update.notify_sent_at = null // 다음 사이클 사전고지 재발송 가능하도록
   }
 
-  if (params.status === 'FAILED' && !params.resetFailureCount) {
-    // failure_count 증가는 RPC가 없으므로 fetch-then-update
-    const { data } = await getAdmin()
-      .from('billing_keys')
-      .select('failure_count')
-      .eq('id', params.billingKeyId)
-      .single()
-    update.failure_count = (data?.failure_count ?? 0) + 1
-  }
-
   await getAdmin().from('billing_keys').update(update).eq('id', params.billingKeyId)
+
+  // failure_count는 원자적 RPC로 별도 증가 (race condition 방지)
+  if (params.status === 'FAILED' && !params.resetFailureCount) {
+    await getAdmin().rpc('increment_billing_failure_count', { p_key_id: params.billingKeyId })
+  }
 }
 
 export async function cancelBillingKey(billingKeyId: string): Promise<void> {
