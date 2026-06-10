@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
         'x-api-key': process.env.PUBLISH_API_KEY ?? '',
       },
       body: JSON.stringify({ naverId, naverCookie, naverSes, title, body, tags, category }),
+      signal: AbortSignal.timeout(60_000),
     });
 
     const data = await response.json() as { error?: string; url?: string; message?: string };
@@ -66,6 +67,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data);
 
   } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      return NextResponse.json(
+        { error: '발행 서버 응답 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.' },
+        { status: 504 }
+      );
+    }
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       { error: `발행 서버 연결 오류: ${message}` },

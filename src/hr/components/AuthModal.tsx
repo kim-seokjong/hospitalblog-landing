@@ -143,7 +143,10 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
 
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     if (signInError) {
-      setError(`로그인 실패: ${signInError.message}`);
+      // 가입은 완료됐지만 자동 로그인 실패 → 로그인 탭으로 안내
+      setMode('login');
+      setPassword('');
+      setError('가입이 완료됐습니다. 아래에서 로그인해주세요.');
       setLoading(false);
       return;
     }

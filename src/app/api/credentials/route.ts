@@ -36,7 +36,7 @@ export async function GET() {
       naverId = decrypt({ enc: data.naver_id_enc, iv: data.iv, tag: data.tag });
       maskedId = naverId.slice(0, 2) + '***' + naverId.slice(-1);
     } catch { /* keep default */ }
-    return NextResponse.json({ exists, maskedId, naverId, blogCategory });
+    return NextResponse.json({ exists, maskedId, blogCategory });
   }
 
   // 컬럼 없음 에러(42703)이면 blog_category 없이 재조회
@@ -54,7 +54,7 @@ export async function GET() {
         naverId2 = decrypt({ enc: data2.naver_id_enc, iv: data2.iv, tag: data2.tag });
         maskedId = naverId2.slice(0, 2) + '***' + naverId2.slice(-1);
       } catch { /* keep default */ }
-      return NextResponse.json({ exists, maskedId, naverId: naverId2, blogCategory: '' });
+      return NextResponse.json({ exists, maskedId, blogCategory: '' });
     }
   }
 

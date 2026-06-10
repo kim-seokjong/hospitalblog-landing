@@ -92,7 +92,12 @@ ${regionHint}${competitorSection}
       return NextResponse.json({ error: 'JSON 형식 응답을 찾을 수 없습니다.' }, { status: 500 });
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as { titles: BlogTitle[] };
+    let parsed: { titles: BlogTitle[] };
+    try {
+      parsed = JSON.parse(jsonMatch[0]) as { titles: BlogTitle[] };
+    } catch {
+      return NextResponse.json({ error: '제목 생성 응답을 파싱할 수 없습니다. 다시 시도해주세요.' }, { status: 500 });
+    }
 
     logUsage({
       feature: 'generate-titles',
