@@ -42,7 +42,7 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
   const [writingStyle, setWritingStyle] = useState<WritingStyle>(defaultWritingStyle || '전문가');
   const [optimizationMode, setOptimizationMode] = useState<OptimizationMode>(defaultOptimizationMode || 'seo+geo');
 
-  const effectiveHospitalType = lockedHospitalType ?? hospitalType;
+  const effectiveHospitalType = lockedHospitalType || hospitalType;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
