@@ -46,6 +46,41 @@ export default function MemberTable({ members }: MemberTableProps) {
   const [query, setQuery] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // 사용량 조정 상태
+  const [deltaInputs, setDeltaInputs] = useState<Record<string, string>>({});
+  const [adjusting, setAdjusting] = useState<Record<string, boolean>>({});
+  const [adjustResults, setAdjustResults] = useState<Record<string, { newCount: number; delta: number } | null>>({});
+  const [adjustErrors, setAdjustErrors] = useState<Record<string, string | null>>({});
+
+  const handleAdjust = async (userId: string) => {
+    const rawDelta = parseInt(deltaInputs[userId] ?? '', 10);
+    if (Number.isNaN(rawDelta) || rawDelta === 0) {
+      setAdjustErrors((prev) => ({ ...prev, [userId]: '0이 아닌 정수를 입력하세요.' }));
+      return;
+    }
+    setAdjusting((prev) => ({ ...prev, [userId]: true }));
+    setAdjustErrors((prev) => ({ ...prev, [userId]: null }));
+    setAdjustResults((prev) => ({ ...prev, [userId]: null }));
+    try {
+      const res = await fetch('/api/admin/adjust-usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, delta: rawDelta }),
+      });
+      const data = await res.json() as { newCount?: number; delta?: number; error?: string };
+      if (!res.ok) {
+        setAdjustErrors((prev) => ({ ...prev, [userId]: data.error ?? '오류가 발생했습니다.' }));
+      } else {
+        setAdjustResults((prev) => ({ ...prev, [userId]: { newCount: data.newCount!, delta: data.delta! } }));
+        setDeltaInputs((prev) => ({ ...prev, [userId]: '' }));
+      }
+    } catch {
+      setAdjustErrors((prev) => ({ ...prev, [userId]: '네트워크 오류가 발생했습니다.' }));
+    } finally {
+      setAdjusting((prev) => ({ ...prev, [userId]: false }));
+    }
+  };
+
   const toggleExpand = (id: string) =>
     setExpandedId((prev) => (prev === id ? null : id));
 
@@ -179,7 +214,7 @@ export default function MemberTable({ members }: MemberTableProps) {
                       {formatDate(m.created_at)}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-300">
-                      {(m.usage_count ?? 0).toLocaleString('ko-KR')}
+                      {(adjustResults[m.id]?.newCount ?? m.usage_count ?? 0).toLocaleString('ko-KR')}
                     </td>
                     <td className="px-4 py-3 text-gray-400">
                       {formatDate(m.plan_expires_at)}
@@ -197,40 +232,78 @@ export default function MemberTable({ members }: MemberTableProps) {
                   {isExpanded && (
                     <tr className="border-t border-gray-800 bg-gray-800/30">
                       <td colSpan={8} className="px-4 py-4">
-                        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-                          <div>
-                            <dt className="text-xs uppercase text-gray-500">
-                              연락처
-                            </dt>
-                            <dd className="mt-0.5 text-gray-200 break-words">
-                              {m.phone ?? '-'}
-                            </dd>
+                        <div className="space-y-4">
+                          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                            <div>
+                              <dt className="text-xs uppercase text-gray-500">연락처</dt>
+                              <dd className="mt-0.5 text-gray-200 break-words">{m.phone ?? '-'}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase text-gray-500">직책</dt>
+                              <dd className="mt-0.5 text-gray-200 break-words">{m.position ?? '-'}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs uppercase text-gray-500">병원유형</dt>
+                              <dd className="mt-0.5 text-gray-200 break-words">{m.hospital_type ?? '-'}</dd>
+                            </div>
+                            <div className="sm:col-span-2 lg:col-span-1">
+                              <dt className="text-xs uppercase text-gray-500">주소</dt>
+                              <dd className="mt-0.5 text-gray-200 break-words">{m.hospital_address ?? '-'}</dd>
+                            </div>
+                          </dl>
+
+                          {/* 사용량 조정 */}
+                          <div className="border-t border-gray-700 pt-3">
+                            <p className="text-xs font-semibold text-gray-400 mb-2">사용량 조정</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-gray-400">
+                                현재:{' '}
+                                <span className="text-gray-200 font-bold">
+                                  {(adjustResults[m.id]?.newCount ?? m.usage_count ?? 0).toLocaleString('ko-KR')}회
+                                </span>
+                              </span>
+                              {/* 빠른 조정 버튼 */}
+                              {[-5, -2, -1, +1, +2, +5].map((v) => (
+                                <button
+                                  key={v}
+                                  onClick={() => setDeltaInputs((prev) => ({ ...prev, [m.id]: String(v) }))}
+                                  className={`px-2 py-1 rounded text-xs font-bold transition-colors ${
+                                    v < 0
+                                      ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/40'
+                                      : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/40'
+                                  }`}
+                                >
+                                  {v > 0 ? `+${v}` : v}
+                                </button>
+                              ))}
+                              <input
+                                type="number"
+                                value={deltaInputs[m.id] ?? ''}
+                                onChange={(e) =>
+                                  setDeltaInputs((prev) => ({ ...prev, [m.id]: e.target.value }))
+                                }
+                                placeholder="직접입력"
+                                className="w-24 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-emerald-500 text-center"
+                              />
+                              <button
+                                onClick={() => handleAdjust(m.id)}
+                                disabled={adjusting[m.id] || !deltaInputs[m.id]}
+                                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-xs font-bold rounded transition-colors"
+                              >
+                                {adjusting[m.id] ? '처리 중...' : '적용'}
+                              </button>
+                            </div>
+                            {adjustResults[m.id] && (
+                              <p className="mt-1.5 text-xs text-emerald-400">
+                                ✓ 조정 완료 — {adjustResults[m.id]!.delta > 0 ? '+' : ''}{adjustResults[m.id]!.delta}회 적용,
+                                현재 {adjustResults[m.id]!.newCount.toLocaleString('ko-KR')}회
+                              </p>
+                            )}
+                            {adjustErrors[m.id] && (
+                              <p className="mt-1.5 text-xs text-rose-400">✕ {adjustErrors[m.id]}</p>
+                            )}
                           </div>
-                          <div>
-                            <dt className="text-xs uppercase text-gray-500">
-                              직책
-                            </dt>
-                            <dd className="mt-0.5 text-gray-200 break-words">
-                              {m.position ?? '-'}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs uppercase text-gray-500">
-                              병원유형
-                            </dt>
-                            <dd className="mt-0.5 text-gray-200 break-words">
-                              {m.hospital_type ?? '-'}
-                            </dd>
-                          </div>
-                          <div className="sm:col-span-2 lg:col-span-1">
-                            <dt className="text-xs uppercase text-gray-500">
-                              주소
-                            </dt>
-                            <dd className="mt-0.5 text-gray-200 break-words">
-                              {m.hospital_address ?? '-'}
-                            </dd>
-                          </div>
-                        </dl>
+                        </div>
                       </td>
                     </tr>
                   )}

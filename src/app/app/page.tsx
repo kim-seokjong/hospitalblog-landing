@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
@@ -185,17 +185,26 @@ export default function AppPage() {
   const [error, setError] = useState<string | null>(null);
   const [retryAction, setRetryAction] = useState<'titles' | 'content' | null>(null);
   const [blocked, setBlocked] = useState(false);
+  // 세션 갱신 중 일시적 null → 홈 리다이렉트 방지용 (한 번이라도 로그인됐으면 true)
+  const wasEverLoggedInRef = useRef(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setAuthChecked(true);
-      if (!data.user) setShowAuthModal(true);
+      if (data.user) wasEverLoggedInRef.current = true;
+      else setShowAuthModal(true);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-      if (!session?.user) setShowAuthModal(true);
-      else setShowAuthModal(false);
+      // TOKEN_REFRESHED / INITIAL_SESSION 등 갱신 이벤트에선 모달 상태를 바꾸지 않는다.
+      // SIGNED_OUT 이벤트일 때만 로그인 모달을 열어 세션 갱신 중 오탐 리다이렉트를 방지한다.
+      if (event === 'SIGNED_OUT') {
+        setShowAuthModal(true);
+      } else if (session?.user) {
+        wasEverLoggedInRef.current = true;
+        setShowAuthModal(false);
+      }
     });
     return () => subscription.unsubscribe();
   }, [supabase]);
@@ -415,14 +424,18 @@ export default function AppPage() {
     setError(null);
     setLoadingSlides(true);
     try {
-      const res = await fetch('/api/generate-cardnews-slides', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword, title: selectedTitle.title, body: content.body, hospitalType }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '카드뉴스 생성에 실패했습니다.');
-      setCardNewsData(data);
+      const result = await safeFetchJson<CardNewsData>(
+        '/api/generate-cardnews-slides',
+        {
+          method: 'POST',
+          body: JSON.stringify({ keyword, title: selectedTitle.title, body: content.body, hospitalType }),
+        }
+      );
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setCardNewsData(result.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
     } finally {
@@ -466,10 +479,13 @@ export default function AppPage() {
           // 프로필 미완성(유령 계정) 또는 비로그인 상태면 회원가입 탭으로 유도
           initialMode={profileIncomplete ? 'signup' : 'login'}
           onClose={() => {
-            // 로그인했더라도 프로필이 미완성이면 서비스로 들어가지 못하게 홈으로 보낸다.
             if (user && !profileIncomplete) {
               setShowAuthModal(false);
+            } else if (wasEverLoggedInRef.current) {
+              // 세션 갱신 중 일시적 null일 수 있으므로 홈 리다이렉트 하지 않음
+              setShowAuthModal(false);
             } else {
+              // 한 번도 로그인된 적 없으면 홈으로
               router.push('/');
             }
           }}
