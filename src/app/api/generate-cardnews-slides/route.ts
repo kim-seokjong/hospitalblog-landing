@@ -109,6 +109,8 @@ ${body ? body.slice(0, 2000) : ''}
       api_provider: 'anthropic',
       input_tokens: res.usage.input_tokens,
       output_tokens: res.usage.output_tokens,
+      user_id: null,
+      user_agent: req.headers.get('user-agent') ?? null,
     });
 
     return NextResponse.json(data);

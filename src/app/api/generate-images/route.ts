@@ -163,7 +163,9 @@ async function buildFluxPrompts(
   descriptions: string[],
   keyword: string,
   title: string,
-  count: number
+  count: number,
+  userId?: string | null,
+  userAgent?: string | null,
 ): Promise<string[]> {
   const anthropic = getAnthropicClient();
   const targets = [...descriptions];
@@ -231,6 +233,8 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
     api_provider: 'anthropic',
     input_tokens: res.usage.input_tokens,
     output_tokens: res.usage.output_tokens,
+    user_id: userId ?? null,
+    user_agent: userAgent ?? null,
   });
 
   const toolUse = res.content.find(b => b.type === 'tool_use');
@@ -331,10 +335,12 @@ async function generateWithOpenAIImages(
   keyword: string,
   title: string,
   body: string,
-  imageCount: number
+  imageCount: number,
+  userId?: string | null,
+  userAgent?: string | null,
 ): Promise<{ images: GeneratedImage[]; errors: string[] }> {
   const descriptions = extractImageDescriptions(body);
-  const prompts = await buildFluxPrompts(descriptions, keyword, title, imageCount);
+  const prompts = await buildFluxPrompts(descriptions, keyword, title, imageCount, userId, userAgent);
 
   const images: GeneratedImage[] = [];
   const errors: string[] = [];
@@ -380,7 +386,7 @@ async function generateWithOpenAIImages(
   }
 
   if (images.length > 0) {
-    logUsage({ feature: 'generate-images', api_provider: 'openai', image_count: images.length });
+    logUsage({ feature: 'generate-images', api_provider: 'openai', image_count: images.length, user_id: userId ?? null, user_agent: userAgent ?? null });
   }
 
   return { images, errors };
@@ -390,10 +396,12 @@ async function generateCardnewsImages(
   keyword: string,
   title: string,
   body: string,
-  imageCount: number
+  imageCount: number,
+  userId?: string | null,
+  userAgent?: string | null,
 ): Promise<{ images: GeneratedImage[]; errors: string[] }> {
   const descriptions = extractImageDescriptions(body);
-  const prompts = await buildFluxPrompts(descriptions, keyword, title, imageCount);
+  const prompts = await buildFluxPrompts(descriptions, keyword, title, imageCount, userId, userAgent);
 
   const images: GeneratedImage[] = [];
   const errors: string[] = [];
@@ -443,6 +451,8 @@ async function generateCardnewsImages(
       feature: 'generate-images',
       api_provider: 'fal',
       image_count: images.length,
+      user_id: userId ?? null,
+      user_agent: userAgent ?? null,
     });
   }
 
@@ -503,6 +513,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
     }
 
+    const userId = gate.ok ? gate.userId : null;
+    const userAgent = req.headers.get('user-agent') ?? null;
+
     const { keyword, title, body = '', count = 4, style = 'cardnews' } = await req.json();
 
     if (!keyword || !title) {
@@ -512,8 +525,8 @@ export async function POST(req: NextRequest) {
     const imageCount = Math.min(Math.max(1, count), 8);
 
     const { images, errors } = style === 'cardnews'
-      ? await generateCardnewsImages(keyword, title, body, imageCount)
-      : await generateWithOpenAIImages(keyword, title, body, imageCount);
+      ? await generateCardnewsImages(keyword, title, body, imageCount, userId, userAgent)
+      : await generateWithOpenAIImages(keyword, title, body, imageCount, userId, userAgent);
 
     if (images.length === 0) {
       const sample = errors[0] ?? '';

@@ -23,6 +23,7 @@ export interface UsageEntry {
   output_tokens?: number;
   image_count?: number;
   user_id?: string | null;
+  user_agent?: string | null;
 }
 
 export function calcCost(entry: UsageEntry): number {
@@ -54,6 +55,7 @@ export function logUsage(entry: UsageEntry): void {
         image_count: entry.image_count ?? 0,
         cost_usd,
         user_id: entry.user_id ?? null,
+        user_agent: entry.user_agent ?? null,
       });
     } catch (err) {
       console.error('[usage-logger] 저장 실패:', err);

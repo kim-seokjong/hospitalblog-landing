@@ -99,6 +99,8 @@ ${regionHint}${competitorSection}
       api_provider: 'anthropic',
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
+      user_id: null,
+      user_agent: req.headers.get('user-agent') ?? null,
     });
 
     return NextResponse.json(parsed);

@@ -159,6 +159,8 @@ originalityScore 기준: 80이상=통과, 60~79=수정권장, 60미만=재작성
       api_provider: 'anthropic',
       input_tokens: analysisRes.usage.input_tokens,
       output_tokens: analysisRes.usage.output_tokens,
+      user_id: null,
+      user_agent: req.headers.get('user-agent') ?? null,
     });
 
     return NextResponse.json({
