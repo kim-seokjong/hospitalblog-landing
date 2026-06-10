@@ -40,6 +40,21 @@ function getPlanUsageLimit(plan: string | null | undefined, isAdminUser: boolean
 
 const KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_xefMRX';
 const CONTACT_DISMISSED_KEY = 'dp_contact_dismissed';
+const DRAFT_KEY = 'dp_draft_v1';
+
+type DraftData = {
+  keyword: string;
+  hospitalType: string;
+  additionalInfo: string;
+  writingStyle: WritingStyle;
+  optimizationMode: OptimizationMode;
+  titles: BlogTitle[];
+  selectedTitle: BlogTitle | null;
+  content: BlogContent | null;
+  tags: TagResult | null;
+  viewStep: ViewStep;
+  savedAt: string;
+};
 
 function ContactFloatingButton() {
   const [dismissed, setDismissed] = useState<boolean | null>(null);
@@ -187,6 +202,10 @@ export default function AppPage() {
   const [blocked, setBlocked] = useState(false);
   // 세션 갱신 중 일시적 null → 홈 리다이렉트 방지용 (한 번이라도 로그인됐으면 true)
   const wasEverLoggedInRef = useRef(false);
+  // 자동저장 디바운스 타이머
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 복원할 초안 (마운트 시 localStorage에서 감지)
+  const [draftToRestore, setDraftToRestore] = useState<DraftData | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -256,6 +275,57 @@ export default function AppPage() {
       });
   }, [user, supabase]);
 
+  // 마운트 시 저장된 초안 감지
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as DraftData;
+      if (draft.keyword || draft.content) setDraftToRestore(draft);
+    } catch {
+      localStorage.removeItem(DRAFT_KEY);
+    }
+  }, []);
+
+  // 2초 디바운스 자동저장 (의미있는 상태가 있을 때만)
+  useEffect(() => {
+    if (!keyword && !content && titles.length === 0) return;
+    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    draftSaveTimerRef.current = setTimeout(() => {
+      try {
+        const draft: DraftData = {
+          keyword, hospitalType, additionalInfo, writingStyle, optimizationMode,
+          titles, selectedTitle, content, tags, viewStep,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch { /* 저장 실패 무시 */ }
+    }, 2000);
+    return () => {
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    };
+  }, [keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, titles, selectedTitle, content, tags, viewStep]);
+
+  const restoreDraft = () => {
+    if (!draftToRestore) return;
+    setKeyword(draftToRestore.keyword);
+    setHospitalType(draftToRestore.hospitalType);
+    setAdditionalInfo(draftToRestore.additionalInfo);
+    setWritingStyle(draftToRestore.writingStyle);
+    setOptimizationMode(draftToRestore.optimizationMode);
+    setTitles(draftToRestore.titles);
+    setSelectedTitle(draftToRestore.selectedTitle);
+    setContent(draftToRestore.content);
+    setTags(draftToRestore.tags);
+    setViewStep(draftToRestore.viewStep);
+    setDraftToRestore(null);
+  };
+
+  const dismissDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setDraftToRestore(null);
+  };
+
   const refreshUsage = () => {
     if (!user) return;
     supabase.from('profiles').select('plan, usage_count, hospital_type').eq('id', user.id).single()
@@ -270,6 +340,9 @@ export default function AppPage() {
   };
 
   const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode) => {
+    // 새 작업 시작 시 저장된 초안 삭제
+    localStorage.removeItem(DRAFT_KEY);
+    setDraftToRestore(null);
     setKeyword(kw);
     setHospitalType(ht);
     setAdditionalInfo(ai);
@@ -596,6 +669,42 @@ export default function AppPage() {
           </div>
         </div>
       </header>
+
+      {/* 저장된 초안 복원 배너 */}
+      {draftToRestore && (
+        <div className="max-w-screen-2xl mx-auto px-4 pt-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-[#191970]/60 border border-[#4f6ef7]/40 rounded-xl px-4 py-3">
+            <span className="text-xl flex-shrink-0">📋</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white">
+                이전에 작성하던 내용이 있습니다
+                <span className="ml-2 text-[10px] font-normal text-[#8891bd]">
+                  {new Date(draftToRestore.savedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 저장
+                </span>
+              </p>
+              <p className="text-xs text-[#8891bd] mt-0.5 truncate">
+                키워드: {draftToRestore.keyword || '(없음)'}
+                {draftToRestore.content && ' · 본문 작성됨'}
+                {draftToRestore.titles.length > 0 && ` · 제목 ${draftToRestore.titles.length}개`}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <button
+                onClick={restoreDraft}
+                className="px-3 py-1.5 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-xs font-bold rounded-lg transition-colors min-h-[34px]"
+              >
+                복원하기
+              </button>
+              <button
+                onClick={dismissDraft}
+                className="px-3 py-1.5 border border-[#2a2b6e] text-[#8891bd] hover:text-white hover:border-[#4f6ef7]/40 text-xs rounded-lg transition-colors min-h-[34px]"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 구독 플랜 필요 알림 (한도 초과 / 미구독 / 만료) */}
       {blocked && (
