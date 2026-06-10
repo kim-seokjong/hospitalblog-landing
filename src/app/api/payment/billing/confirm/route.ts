@@ -59,10 +59,18 @@ export async function POST(req: NextRequest) {
     // 멱등 처리: 이미 완료된 결제
     if (dbPayment.status === 'PAID') {
       const expiresAt = addOneMonth(dbPayment.paid_at ?? new Date().toISOString())
+      // BUG-06: activateUserPlan이 이전에 실패했을 수 있으므로 재시도 (멱등 safe)
+      await activateUserPlan({ userId: dbPayment.user_id, plan: dbPayment.plan, expiresAt })
+        .catch(err => console.error('[billing/confirm] 멱등 activateUserPlan 재시도 실패:', err, { paymentId }))
       return NextResponse.json({ success: true, plan: dbPayment.plan, expiresAt })
     }
 
+    // BUG-02: 유효하지 않은 plan ID 방어 (DB 오염·마이그레이션 오류 대비)
     const plan = PLANS[dbPayment.plan as PlanId]
+    if (!plan) {
+      await markPaymentFailed(paymentId, `알 수 없는 플랜: ${dbPayment.plan}`)
+      return NextResponse.json({ error: `처리할 수 없는 플랜입니다: ${dbPayment.plan}` }, { status: 400 })
+    }
 
     const { data: profile } = await supabase
       .from('profiles')

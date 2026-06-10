@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   // 멱등 처리 — 동일 이벤트 중복 수신 차단
   const admin = getAdmin()
-  const { error: upsertError } = await admin.from('webhook_events').upsert(
+  const { data: upsertData, error: upsertError } = await admin.from('webhook_events').upsert(
     {
       provider: 'portone',
       event_type: eventType,
@@ -46,11 +46,15 @@ export async function POST(req: NextRequest) {
       processed: false,
     },
     { onConflict: 'provider,event_type,payment_id,signature', ignoreDuplicates: true },
-  )
+  ).select('id')
 
-  // 중복 이벤트는 무시하고 200 반환
   if (upsertError && upsertError.code !== '23505') {
     console.error('webhook_events upsert error:', upsertError)
+  }
+
+  // BUG-03: ignoreDuplicates=true 에서 중복이면 data가 빈 배열 → 이미 처리됐으므로 재처리 방지
+  if (!upsertError && (!upsertData || upsertData.length === 0)) {
+    return NextResponse.json({ ok: true })
   }
 
   // Transaction.Paid — 결제 활성화
