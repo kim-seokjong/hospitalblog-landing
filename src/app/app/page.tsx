@@ -18,6 +18,7 @@ import AuthModal from '@/hr/components/AuthModal';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode, TargetSite } from '@/types';
 import { PLANS, isPaidPlanId } from '@/payment/lib/plans';
 import { safeFetchJson } from '@/content/lib/safe-fetch';
+import { checkCompliance } from '@/content/lib/medical-compliance';
 
 type ViewStep = 'input' | 'content';
 
@@ -561,7 +562,11 @@ export default function AppPage() {
   };
 
   const handleContentChange = (newBody: string) => {
-    setContent(prev => prev ? { ...prev, body: newBody } : prev);
+    // 글자수 재계산 — generate-content API와 동일한 방식 (이미지 자리표시자 제외, 공백 포함)
+    const charCount = newBody.replace(/\[이미지\s*\d+:[^\]]*\]/g, '').length;
+    // 의료광고법 재검사 — 편집으로 위반 표현이 추가/제거돼도 즉시 반영
+    const compliance = checkCompliance(newBody);
+    setContent(prev => prev ? { ...prev, body: newBody, charCount, compliance } : prev);
   };
 
   const STYLE_LABEL: Record<WritingStyle, string> = {
