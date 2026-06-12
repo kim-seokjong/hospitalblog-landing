@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy, target_site } = body;
+    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy, target_site, status } = body;
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
       return NextResponse.json({ error: '제목은 필수입니다.' }, { status: 400 });
@@ -56,6 +56,12 @@ export async function POST(req: NextRequest) {
     if (!content || typeof content !== 'string' || content.trim() === '') {
       return NextResponse.json({ error: '본문은 필수입니다.' }, { status: 400 });
     }
+
+    // status는 생성 시 'draft'(기본) 또는 'published'(복사=발행 간주)만 허용
+    if (status !== undefined && status !== 'draft' && status !== 'published') {
+      return NextResponse.json({ error: '유효하지 않은 상태값입니다.' }, { status: 400 });
+    }
+    const validStatus: 'draft' | 'published' = status === 'published' ? 'published' : 'draft';
 
     // target_site는 마이그레이션 018 적용 후에만 클라이언트가 전송 (미전송 시 컬럼 자체를 insert에서 제외해 하위 호환 유지)
     const validTargetSite =
@@ -74,7 +80,7 @@ export async function POST(req: NextRequest) {
         image_urls: Array.isArray(image_urls) ? image_urls : null,
         sns_copy: sns_copy ?? null,
         sms_copy: sms_copy ?? null,
-        status: 'draft',
+        status: validStatus,
         ...(validTargetSite ? { target_site: validTargetSite } : {}),
       })
       .select()

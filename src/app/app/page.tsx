@@ -209,6 +209,10 @@ export default function AppPage() {
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 복원할 초안 (마운트 시 localStorage에서 감지)
   const [draftToRestore, setDraftToRestore] = useState<DraftData | null>(null);
+  // 복사 시 보관함 자동 저장: 첫 복사 후 글 id 보관 → 재복사는 PATCH로 갱신 (중복 insert 방지)
+  const savedPostIdRef = useRef<string | null>(null);
+  // 연속 복사 시 POST 중복 실행 방지용 직렬화 큐
+  const copySaveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -338,6 +342,8 @@ export default function AppPage() {
     setTags(draftToRestore.tags);
     setViewStep(draftToRestore.viewStep);
     setDraftToRestore(null);
+    // 복원된 초안은 다른 글이므로 복사-저장 id 리셋
+    savedPostIdRef.current = null;
   };
 
   const dismissDraft = () => {
@@ -377,6 +383,8 @@ export default function AppPage() {
     setRetryAction(null);
     setViewStep('input');
     setLoadingTitles(true);
+    // 새 글 시작 → 복사-저장 id 리셋 (다음 복사는 새 글로 insert)
+    savedPostIdRef.current = null;
 
     const effectiveRegion = inputRegion || profileRegion;
 
@@ -407,6 +415,8 @@ export default function AppPage() {
     setError(null);
     setRetryAction(null);
     setLoadingContent(true);
+    // 제목 변경/본문 재생성 → 새 글이므로 복사-저장 id 리셋
+    savedPostIdRef.current = null;
 
     try {
       const effectiveRegion = profileRegion;
@@ -567,6 +577,54 @@ export default function AppPage() {
     // 의료광고법 재검사 — 편집으로 위반 표현이 추가/제거돼도 즉시 반영
     const compliance = checkCompliance(newBody);
     setContent(prev => prev ? { ...prev, body: newBody, charCount, compliance } : prev);
+  };
+
+  // 복사 = 발행 간주 → 보관함(saved_posts)에 published 상태로 백그라운드 자동 저장.
+  // 첫 복사는 POST(insert), 같은 글 재복사는 PATCH(갱신)로 중복 저장을 방지한다.
+  // 저장 실패는 복사 UX를 막지 않도록 조용히 무시한다 (초안은 LocalStorage에 별도 보존됨).
+  const handleContentCopied = () => {
+    if (!user || !content) return;
+    const payload = {
+      title: content.title,
+      body: content.body, // 직접 편집 반영본
+      keyword,
+      targetSite,
+    };
+    copySaveQueueRef.current = copySaveQueueRef.current.then(async () => {
+      try {
+        const existingId = savedPostIdRef.current;
+        if (existingId) {
+          await fetch(`/api/posts/${existingId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: payload.title,
+              content: payload.body,
+              keyword: payload.keyword,
+              status: 'published',
+            }),
+          });
+          return;
+        }
+        const res = await fetch('/api/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: payload.title,
+            content: payload.body,
+            keyword: payload.keyword,
+            target_site: payload.targetSite,
+            status: 'published',
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json() as { post?: { id?: string } };
+          if (typeof json.post?.id === 'string') savedPostIdRef.current = json.post.id;
+        }
+      } catch {
+        // 백그라운드 저장 실패 무시 — 복사 자체는 이미 성공했고 UX를 막지 않는다
+      }
+    });
   };
 
   const STYLE_LABEL: Record<WritingStyle, string> = {
@@ -897,6 +955,7 @@ export default function AppPage() {
                       onGenerateSlides={handleGenerateSlides}
                       isLoadingSlides={loadingSlides}
                       onContentChange={handleContentChange}
+                      onCopied={handleContentCopied}
                     />
 
                     <button
@@ -956,6 +1015,7 @@ export default function AppPage() {
                         tags={tags}
                         images={images}
                         imageStyle={imageStyle}
+                        onBodyCopied={handleContentCopied}
                       />
                     )}
 

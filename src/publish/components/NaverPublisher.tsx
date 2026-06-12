@@ -12,6 +12,8 @@ interface NaverPublisherProps {
   tags: TagResult | null;
   images: GeneratedImage[];
   imageStyle?: 'photo' | 'cardnews' | 'upload';
+  /** 본문 복사 성공 시 호출 (보관함 자동 저장 등 부가 동작은 부모가 처리) */
+  onBodyCopied?: () => void;
 }
 
 /** 단일 텍스트 영역에 이미지 자리표시자를 균등 삽입 */
@@ -62,7 +64,7 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export default function NaverPublisher({ title, content, tags, images, imageStyle = 'cardnews' }: NaverPublisherProps) {
+export default function NaverPublisher({ title, content, tags, images, imageStyle = 'cardnews', onBodyCopied }: NaverPublisherProps) {
   const isAIGenerated = imageStyle === 'photo' || imageStyle === 'cardnews';
   const [titleCopied, setTitleCopied] = useState(false);
   const [bodyCopied, setBodyCopied] = useState(false);
@@ -81,7 +83,10 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
 
   const handleCopyBody = async () => {
     const bodyText = buildBodyWithPlaceholders(content.body, images.length);
-    if (await copyText(bodyText)) flash(setBodyCopied);
+    if (await copyText(bodyText)) {
+      flash(setBodyCopied);
+      onBodyCopied?.();
+    }
   };
 
   const handleCopyTags = async () => {

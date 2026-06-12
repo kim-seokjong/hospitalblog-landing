@@ -14,9 +14,11 @@ interface ContentPreviewProps {
   onGenerateSlides?: () => void;
   isLoadingSlides?: boolean;
   onContentChange?: (newBody: string) => void;
+  /** 클립보드 복사 성공 시 호출 (보관함 자동 저장 등 부가 동작은 부모가 처리) */
+  onCopied?: () => void;
 }
 
-export default function ContentPreview({ content, onGenerateImages, onImagesUploaded, isLoadingImages, imageStyle, onImageStyleChange, onGenerateSlides, isLoadingSlides, onContentChange }: ContentPreviewProps) {
+export default function ContentPreview({ content, onGenerateImages, onImagesUploaded, isLoadingImages, imageStyle, onImageStyleChange, onGenerateSlides, isLoadingSlides, onContentChange, onCopied }: ContentPreviewProps) {
   const [imageCount, setImageCount] = useState(6);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
@@ -27,9 +29,15 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
   const handleCopy = async () => {
     const cleanBody = toNaverFormat(content.body);
     const fullText = `${content.title}\n\n${cleanBody}`;
-    await navigator.clipboard.writeText(fullText);
+    try {
+      await navigator.clipboard.writeText(fullText);
+    } catch {
+      // 클립보드 권한 거부 등 — 복사 실패 시 완료 표시/콜백 모두 생략
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    onCopied?.();
   };
 
   const charColor =

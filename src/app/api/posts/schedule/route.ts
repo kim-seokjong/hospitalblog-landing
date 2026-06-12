@@ -15,10 +15,15 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 });
     }
 
-    const { id, scheduled_at } = body as Record<string, unknown>;
+    const { id, scheduled_at, target_site } = body as Record<string, unknown>;
 
     if (typeof id !== 'string' || id.trim() === '') {
       return NextResponse.json({ error: 'id는 필수입니다.' }, { status: 400 });
+    }
+
+    // target_site는 선택적 — 호출처에 게시 사이트 컨텍스트가 있을 때만 전달됨
+    if (target_site !== undefined && target_site !== null && target_site !== 'naver' && target_site !== 'google') {
+      return NextResponse.json({ error: 'target_site는 naver 또는 google이어야 합니다.' }, { status: 400 });
     }
 
     if (scheduled_at !== null && typeof scheduled_at !== 'string') {
@@ -40,6 +45,8 @@ export async function PATCH(req: NextRequest) {
         scheduled_at: scheduled_at ?? null,
         status: newStatus,
         updated_at: new Date().toISOString(),
+        // 미전송(undefined) 시 기존 값 유지 — 명시적으로 'naver'/'google'이 올 때만 갱신
+        ...(target_site === 'naver' || target_site === 'google' ? { target_site } : {}),
       })
       .eq('id', id.trim())
       .eq('user_id', user.id)
