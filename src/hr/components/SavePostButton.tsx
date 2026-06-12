@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { TargetSite } from '@/types';
 
 interface SavePostButtonProps {
   title: string;
@@ -8,6 +9,8 @@ interface SavePostButtonProps {
   keyword: string;
   tags: string[];
   seoScore: number;
+  /** 게시 사이트 ('naver' | 'google') — 미전달 시 body에서 생략되어 target_site는 null로 저장됨 */
+  targetSite?: TargetSite;
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -18,6 +21,7 @@ export default function SavePostButton({
   keyword,
   tags,
   seoScore,
+  targetSite,
 }: SavePostButtonProps) {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
@@ -32,7 +36,14 @@ export default function SavePostButton({
       const res = await fetch('/api/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, keyword, tags, seo_score: seoScore }),
+        body: JSON.stringify({
+          title,
+          content,
+          keyword,
+          tags,
+          seo_score: seoScore,
+          ...(targetSite ? { target_site: targetSite } : {}),
+        }),
       });
 
       if (!res.ok) {
