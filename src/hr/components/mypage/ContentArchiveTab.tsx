@@ -148,8 +148,8 @@ export default function ContentArchiveTab() {
         const json = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(json.error ?? '목록을 불러오지 못했습니다.');
       }
-      const json = await res.json() as { posts: SavedPost[] };
-      setPosts(json.posts);
+      const json = await res.json() as { posts: SavedPost[] | null };
+      setPosts(json.posts ?? []);
       setFetchState('ready');
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : '목록을 불러오지 못했습니다.');

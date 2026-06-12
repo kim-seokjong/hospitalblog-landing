@@ -73,7 +73,12 @@ export default function ProfileTab() {
       const res = await fetch('/api/profile');
       if (!res.ok) throw new Error('프로필 조회 실패');
       const json = await res.json() as { profile: Partial<ProfileData> };
-      setProfile({ ...DEFAULT_PROFILE, ...json.profile });
+      // DB의 null 값(미설정 hospital_keywords 등)이 기본값을 덮어쓰면 렌더링 중 크래시 발생
+      // (null.length) — null/undefined 필드는 제거하고 DEFAULT_PROFILE 기본값을 유지한다.
+      const incoming = Object.fromEntries(
+        Object.entries(json.profile ?? {}).filter(([, v]) => v !== null && v !== undefined)
+      ) as Partial<ProfileData>;
+      setProfile({ ...DEFAULT_PROFILE, ...incoming });
     } catch {
       setProfile(DEFAULT_PROFILE);
     } finally {
