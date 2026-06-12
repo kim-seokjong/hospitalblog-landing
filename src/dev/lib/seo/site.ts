@@ -23,6 +23,24 @@ export const SITE_KEYWORDS = [
   '닥터포스트',
 ] as const
 
+/**
+ * 쉼표 구분 verification 코드 env 파싱.
+ * 네이버 서치어드바이저는 속성(non-www/www)마다 다른 코드를 발급하므로 다중 코드를 지원한다.
+ * - 빈 값/공백만 있는 env → undefined (meta 태그 미출력)
+ * - 코드 1개 → 문자열, 2개 이상 → 배열 (Next Metadata verification 타입 호환)
+ */
+export function parseVerificationCodes(
+  raw: string | undefined
+): string | string[] | undefined {
+  if (!raw) return undefined
+  const codes = raw
+    .split(',')
+    .map((code) => code.trim())
+    .filter((code) => code.length > 0)
+  if (codes.length === 0) return undefined
+  return codes.length === 1 ? codes[0] : codes
+}
+
 /** 검색 노출 대상 공개 페이지 경로 */
 export const PUBLIC_PATHS = ['/', '/pricing', '/terms', '/privacy', '/refund'] as const
 

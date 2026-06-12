@@ -6,12 +6,13 @@ import NotificationBell from '@/hr/components/NotificationBell';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildOrganizationJsonLd, buildSoftwareApplicationJsonLd } from '@/dev/lib/seo/schemas';
-import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, SITE_URL } from '@/dev/lib/seo/site';
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, SITE_URL, parseVerificationCodes } from '@/dev/lib/seo/site';
 
 // 네이버 서치어드바이저 / 구글 서치 콘솔 verification 코드 (미설정 시 meta 태그 미출력)
+// 쉼표 구분 다중 코드 지원: 네이버는 속성(non-www/www)마다 다른 코드를 발급하므로 코드별 meta 태그를 각각 출력
 // env 없는 쪽 키는 객체에 아예 넣지 않아 빈/undefined 메타 태그가 생기지 않도록 조건부 spread로 합성
-const naverVerification = process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION;
-const googleVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
+const naverVerification = parseVerificationCodes(process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION);
+const googleVerification = parseVerificationCodes(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION);
 const verification = {
   ...(googleVerification ? { google: googleVerification } : {}),
   ...(naverVerification ? { other: { 'naver-site-verification': naverVerification } } : {}),
