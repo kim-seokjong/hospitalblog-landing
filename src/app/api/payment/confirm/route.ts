@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       const planData = PLANS[result.plan as PlanId]
       sendCAPIEvent({
         eventName: 'Subscribe',
-        eventSourceUrl: 'https://hospitalblog.kr/pricing',
+        eventSourceUrl: 'https://www.hospitalblog.kr/pricing',
         userData: {
           clientIpAddress: headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || '',
           clientUserAgent: headersList.get('user-agent') || '',

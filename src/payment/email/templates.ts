@@ -15,7 +15,7 @@ import {
   formatPrice,
 } from './layout'
 
-const SUBSCRIPTION_URL = 'https://hospitalblog.kr/subscription'
+const SUBSCRIPTION_URL = 'https://www.hospitalblog.kr/subscription'
 
 interface BillingNotifyParams {
   planName: string
@@ -141,7 +141,7 @@ export function subscriptionCancelledEmail(params: SubscriptionCancelledParams):
     <h1 style="font-size:20px;font-weight:700;margin:0 0 16px 0;">구독이 해지되었습니다</h1>
     <p style="margin:0 0 16px 0;">${escapeHtml(params.planName)} 플랜 ${reasonText}</p>
     <p style="margin:0 0 16px 0;">언제든 다시 가입하실 수 있으며, 새로운 결제 수단으로 즉시 이용 재개가 가능합니다.</p>
-    <div style="text-align:center;margin:24px 0;">${button('https://hospitalblog.kr/pricing', '플랜 다시 보기')}</div>
+    <div style="text-align:center;margin:24px 0;">${button('https://www.hospitalblog.kr/pricing', '플랜 다시 보기')}</div>
     <p style="margin:0;font-size:13px;color:#6b7280;">이용해 주셔서 감사합니다. 더 좋은 서비스로 다시 만나뵙겠습니다.</p>
   `
   return { subject, html: renderLayout({ preheader: '구독이 해지되었습니다.', bodyHtml: body }) }

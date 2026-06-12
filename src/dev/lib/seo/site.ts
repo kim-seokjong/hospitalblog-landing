@@ -2,7 +2,7 @@
 // 프로덕션 도메인: hospitalblog.kr (이메일 템플릿·관리자 페이지에서 사용 중인 도메인과 동일)
 
 export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hospitalblog.kr'
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.hospitalblog.kr'
 
 export const SITE_NAME = '닥터포스트'
 

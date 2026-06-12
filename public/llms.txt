@@ -22,11 +22,11 @@
 
 ## 페이지
 
-- [홈](https://hospitalblog.kr/): 서비스 소개 및 회원가입
-- [요금제](https://hospitalblog.kr/pricing): 요금제 상세 및 결제
-- [이용약관](https://hospitalblog.kr/terms)
-- [개인정보처리방침](https://hospitalblog.kr/privacy)
-- [환불정책](https://hospitalblog.kr/refund)
+- [홈](https://www.hospitalblog.kr/): 서비스 소개 및 회원가입
+- [요금제](https://www.hospitalblog.kr/pricing): 요금제 상세 및 결제
+- [이용약관](https://www.hospitalblog.kr/terms)
+- [개인정보처리방침](https://www.hospitalblog.kr/privacy)
+- [환불정책](https://www.hospitalblog.kr/refund)
 
 ## 참고
 
