@@ -156,6 +156,8 @@ export interface SavedPost {
   status: 'draft' | 'scheduled' | 'published'
   scheduled_at: string | null
   published_at: string | null
+  /** 게시 사이트 — 마이그레이션 018 적용 전 행/구버전 행은 null (네이버로 간주) */
+  target_site?: TargetSite | null
   created_at: string
   updated_at: string
 }

@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy } = body;
+    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy, target_site } = body;
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
       return NextResponse.json({ error: '제목은 필수입니다.' }, { status: 400 });
@@ -56,6 +56,10 @@ export async function POST(req: NextRequest) {
     if (!content || typeof content !== 'string' || content.trim() === '') {
       return NextResponse.json({ error: '본문은 필수입니다.' }, { status: 400 });
     }
+
+    // target_site는 마이그레이션 018 적용 후에만 클라이언트가 전송 (미전송 시 컬럼 자체를 insert에서 제외해 하위 호환 유지)
+    const validTargetSite =
+      target_site === 'naver' || target_site === 'google' ? target_site : null;
 
     const { data, error } = await supabase
       .from('saved_posts')
@@ -71,6 +75,7 @@ export async function POST(req: NextRequest) {
         sns_copy: sns_copy ?? null,
         sms_copy: sms_copy ?? null,
         status: 'draft',
+        ...(validTargetSite ? { target_site: validTargetSite } : {}),
       })
       .select()
       .single();

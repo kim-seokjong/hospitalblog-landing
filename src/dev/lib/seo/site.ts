@@ -50,6 +50,7 @@ export const PRIVATE_PATHS = [
   '/api',
   '/app',
   '/settings',
+  '/mypage',
   '/payment',
   '/usage',
   '/history',

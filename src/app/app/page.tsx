@@ -669,6 +669,14 @@ export default function AppPage() {
               user ? (
                 <>
                   <span className="text-xs text-[#8891bd] hidden lg:block max-w-[120px] truncate">{user.email}</span>
+                  <Link
+                    href="/mypage"
+                    title="마이페이지"
+                    className="px-2.5 sm:px-3 py-1.5 text-xs border border-[#2a2b6e] rounded-lg text-[#8891bd] hover:bg-[#191970] hover:text-white active:bg-[#191970] transition-colors min-h-[36px] flex items-center gap-1"
+                  >
+                    <span>👤</span>
+                    <span className="hidden sm:inline">마이페이지</span>
+                  </Link>
                   {isClientAdmin(user.email) && (
                     <Link
                       href="/admin"
