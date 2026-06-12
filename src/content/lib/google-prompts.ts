@@ -207,6 +207,8 @@ export interface GoogleTitlesPromptParams {
   hospitalType: string;
   region: string;
   competitorText: string;
+  /** 기존 발행 주제 회피 컨텍스트 (사전 빌드된 섹션 문자열, 없으면 프롬프트 무변화) */
+  recentTopicsText?: string;
 }
 
 export function buildGoogleTitlesSystemPrompt(): string {
@@ -226,11 +228,14 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 }
 
 export function buildGoogleTitlesUserPrompt(params: GoogleTitlesPromptParams): string {
-  const { keyword, hospitalType, region, competitorText } = params;
+  const { keyword, hospitalType, region, competitorText, recentTopicsText } = params;
 
   const competitorSection = competitorText
     ? `\n【현재 상위 노출 경쟁 블로그 제목 분석】\n${competitorText}\n→ 위 제목들과 중복되지 않는 새로운 각도의 제목을 생성하세요. 경쟁 글이 놓친 검색 의도나 더 구체적인 관점을 발굴하세요.\n`
     : '';
+
+  // 기존 발행 주제 회피 컨텍스트 — 빈 값이면 기존 프롬프트와 완전 동일 (회귀 방지)
+  const recentTopicsSection = recentTopicsText ?? '';
 
   const regionHint = region ? `지역: ${region} (해당되는 경우 제목에 자연스럽게 포함 가능)\n` : '';
 
@@ -238,7 +243,7 @@ export function buildGoogleTitlesUserPrompt(params: GoogleTitlesPromptParams): s
 
 키워드: "${keyword}"
 병원 유형: ${hospitalType || '일반 병원'}
-${regionHint}${competitorSection}
+${regionHint}${competitorSection}${recentTopicsSection}
 각 제목은 서로 다른 형식으로 작성하되, 검색 의도를 명확히 반영하고 제목이 약속하는 내용을 본문에서 완전히 충족할 수 있어야 합니다:
 
 1. 질문형: "~는 왜? / ~는 무엇?" — 검색자가 실제 입력할 법한 질문 그대로, AI 검색 인용에 유리
