@@ -67,6 +67,27 @@ export function buildSoftwareApplicationJsonLd(): JsonLdData {
   }
 }
 
+export interface FaqEntry {
+  question: string
+  answer: string
+}
+
+/** FAQPage 스키마 — 화면에 노출되는 FAQ와 동일한 데이터만 전달할 것 */
+export function buildFaqPageJsonLd(faqs: readonly FaqEntry[]): JsonLdData {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((faq) => ({
+      '@type': 'Question',
+      name: faq.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: faq.answer,
+      },
+    })),
+  }
+}
+
 /** 요금제 페이지 Product + Offer 스키마 */
 export function buildPricingJsonLd(): JsonLdData {
   return {
