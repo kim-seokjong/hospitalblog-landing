@@ -15,7 +15,7 @@ import CardNewsDesigner from '@/content/components/CardNewsDesigner';
 import TagPanel from '@/content/components/TagPanel';
 import NaverPublisher from '@/publish/components/NaverPublisher';
 import AuthModal from '@/hr/components/AuthModal';
-import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode } from '@/types';
+import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode, TargetSite } from '@/types';
 import { PLANS, isPaidPlanId } from '@/payment/lib/plans';
 import { safeFetchJson } from '@/content/lib/safe-fetch';
 
@@ -48,6 +48,7 @@ type DraftData = {
   additionalInfo: string;
   writingStyle: WritingStyle;
   optimizationMode: OptimizationMode;
+  targetSite: TargetSite;
   titles: BlogTitle[];
   selectedTitle: BlogTitle | null;
   content: BlogContent | null;
@@ -183,6 +184,7 @@ export default function AppPage() {
   const [additionalInfo, setAdditionalInfo] = useState<string>('');
   const [writingStyle, setWritingStyle] = useState<WritingStyle>('전문가');
   const [optimizationMode, setOptimizationMode] = useState<OptimizationMode>('seo+geo');
+  const [targetSite, setTargetSite] = useState<TargetSite>('naver');
   const [titles, setTitles] = useState<BlogTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>(null);
   const [content, setContent] = useState<BlogContent | null>(null);
@@ -287,6 +289,8 @@ export default function AppPage() {
         additionalInfo: typeof parsed.additionalInfo === 'string' ? parsed.additionalInfo : '',
         writingStyle: parsed.writingStyle ?? '전문가',
         optimizationMode: parsed.optimizationMode ?? 'seo+geo',
+        // 구버전 초안에는 targetSite가 없으므로 'naver' 기본값으로 하위 호환
+        targetSite: parsed.targetSite === 'google' ? 'google' : 'naver',
         titles: Array.isArray(parsed.titles) ? parsed.titles : [],
         selectedTitle: parsed.selectedTitle ?? null,
         content: parsed.content ?? null,
@@ -307,7 +311,7 @@ export default function AppPage() {
     draftSaveTimerRef.current = setTimeout(() => {
       try {
         const draft: DraftData = {
-          keyword, hospitalType, additionalInfo, writingStyle, optimizationMode,
+          keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite,
           titles, selectedTitle, content, tags, viewStep,
           savedAt: new Date().toISOString(),
         };
@@ -317,7 +321,7 @@ export default function AppPage() {
     return () => {
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
     };
-  }, [keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, titles, selectedTitle, content, tags, viewStep]);
+  }, [keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, titles, selectedTitle, content, tags, viewStep]);
 
   const restoreDraft = () => {
     if (!draftToRestore) return;
@@ -326,6 +330,7 @@ export default function AppPage() {
     setAdditionalInfo(draftToRestore.additionalInfo);
     setWritingStyle(draftToRestore.writingStyle);
     setOptimizationMode(draftToRestore.optimizationMode);
+    setTargetSite(draftToRestore.targetSite);
     setTitles(draftToRestore.titles);
     setSelectedTitle(draftToRestore.selectedTitle);
     setContent(draftToRestore.content);
@@ -352,7 +357,7 @@ export default function AppPage() {
     router.push('/');
   };
 
-  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode) => {
+  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode, ts: TargetSite) => {
     // 새 작업 시작 시 저장된 초안 삭제
     localStorage.removeItem(DRAFT_KEY);
     setDraftToRestore(null);
@@ -361,6 +366,7 @@ export default function AppPage() {
     setAdditionalInfo(ai);
     setWritingStyle(ws);
     setOptimizationMode(om);
+    setTargetSite(ts);
     setTitles([]);
     setSelectedTitle(null);
     setContent(null);
@@ -377,7 +383,7 @@ export default function AppPage() {
       const res = await fetch('/api/generate-titles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword: kw, hospitalType: ht, region: effectiveRegion }),
+        body: JSON.stringify({ keyword: kw, hospitalType: ht, region: effectiveRegion, targetSite: ts }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '제목 생성에 실패했습니다.');
@@ -411,7 +417,7 @@ export default function AppPage() {
         body: JSON.stringify({
           title: selectedTitle.title, keyword, hospitalType, additionalInfo,
           titleFormat: selectedTitle.seoDetails?.format, writingStyle,
-          region: effectiveRegion, hospitalName, optimizationMode,
+          region: effectiveRegion, hospitalName, optimizationMode, targetSite,
         }),
       });
 
@@ -456,7 +462,7 @@ export default function AppPage() {
     setError(null);
     setRetryAction(null);
     setBlocked(false);
-    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode);
+    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite);
     else if (action === 'content') handleGenerateContent();
   };
 
@@ -827,7 +833,7 @@ export default function AppPage() {
                           isLoading={loadingContent}
                         />
                         <button
-                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode)}
+                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite)}
                           disabled={loadingTitles}
                           className="w-full py-2.5 text-xs text-[#8891bd] hover:text-white border border-[#2a2b6e] hover:border-[#4f6ef7]/40 bg-[#0b0d2b] hover:bg-[#191970]/30 rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
                         >

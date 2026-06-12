@@ -4,7 +4,8 @@ import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT } from '@/content/lib/medical-complian
 import { logUsage } from '@/dev/lib/usage-logger';
 import { requirePaidPlan } from '@/payment/lib/usage-guard';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
-import type { BlogTitle } from '@/types';
+import { buildGoogleTitlesSystemPrompt, buildGoogleTitlesUserPrompt } from '@/content/lib/google-prompts';
+import type { BlogTitle, TargetSite } from '@/types';
 
 export const maxDuration = 60;
 
@@ -15,17 +16,22 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { keyword, hospitalType, region = '' } = await req.json();
+    const { keyword, hospitalType, region = '', targetSite: rawTargetSite } = await req.json();
 
     if (!keyword || typeof keyword !== 'string') {
       return NextResponse.json({ error: '키워드를 입력해주세요.' }, { status: 400 });
     }
 
+    // 게시 사이트 검증 — 미지정·잘못된 값은 'naver' 기본값 (하위 호환)
+    const targetSite: TargetSite = rawTargetSite === 'google' ? 'google' : 'naver';
+    const isGoogle = targetSite === 'google';
+
     // 경쟁 블로그 제목 분석
     const competitorResults = await searchNaverBlogs(keyword, 5);
     const competitorText = buildCompetitorInsightText(competitorResults);
 
-    const systemPrompt = `당신은 네이버 블로그 SEO 및 의료 마케팅 전문가입니다.
+    // 게시 사이트별 프롬프트 분기 — 네이버 프롬프트는 기존 그대로 유지 (품질 회귀 방지)
+    const systemPrompt = isGoogle ? buildGoogleTitlesSystemPrompt() : `당신은 네이버 블로그 SEO 및 의료 마케팅 전문가입니다.
 네이버 C-Rank와 D.I.A+ 알고리즘에 최적화된 병원 블로그 제목을 생성합니다.
 
 ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
@@ -44,7 +50,12 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 
     const regionHint = region ? `지역: ${region} (해당되는 경우 제목에 자연스럽게 포함 가능)\n` : '';
 
-    const userPrompt = `다음 키워드로 네이버 상위노출에 최적화된 병원 블로그 제목 5개를 생성하세요.
+    const userPrompt = isGoogle ? buildGoogleTitlesUserPrompt({
+      keyword,
+      hospitalType: typeof hospitalType === 'string' ? hospitalType : '',
+      region: typeof region === 'string' ? region : '',
+      competitorText,
+    }) : `다음 키워드로 네이버 상위노출에 최적화된 병원 블로그 제목 5개를 생성하세요.
 
 키워드: "${keyword}"
 병원 유형: ${hospitalType || '일반 병원'}

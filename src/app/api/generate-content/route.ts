@@ -4,6 +4,8 @@ import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/co
 import { logUsage } from '@/dev/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
 import { checkAndConsumeUsage, refundUsage } from '@/payment/lib/usage-guard';
+import { buildGoogleContentSystemPrompt, buildGoogleContentUserPrompt } from '@/content/lib/google-prompts';
+import type { TargetSite } from '@/types';
 
 export const maxDuration = 120;
 
@@ -74,10 +76,13 @@ export async function POST(req: NextRequest) {
     const {
       title, keyword, hospitalType, additionalInfo, titleFormat,
       writingStyle = '전문가', region = '', hospitalName = '',
-      optimizationMode = 'seo+geo',
+      optimizationMode = 'seo+geo', targetSite: rawTargetSite,
     } = await req.json();
 
     const isGeoMode = optimizationMode === 'seo+geo';
+    // 게시 사이트 검증 — 미지정·잘못된 값은 'naver' 기본값 (하위 호환)
+    const targetSite: TargetSite = rawTargetSite === 'google' ? 'google' : 'naver';
+    const isGoogle = targetSite === 'google';
 
     if (!title || !keyword) {
       return NextResponse.json({ error: '제목과 키워드를 입력해주세요.' }, { status: 400 });
@@ -142,7 +147,16 @@ export async function POST(req: NextRequest) {
 - 단락은 흐름 따라 1~5문장 유연하게 (정형화된 2~4 강제 X)
 - 완벽한 구조보다 자연스러운 호흡이 우선`;
 
-    const systemPrompt = `당신은 동네 단골 병원의 따뜻한 원장님입니다. 진료실에서 환자분과 마주 앉아 편하게 풀어 설명하듯이 글을 씁니다.
+    const writingStyleLabel = writingStyle === '고객이해' ? '고객이해시점 (전문용어 없이 쉽게)' : writingStyle === '사무장' ? '사무장시점 (병원 서비스·프로세스 중심)' : '전문가시점 (의학적 전문성 강조)';
+
+    // 게시 사이트 = 구글 분기용 파라미터 (네이버 프롬프트는 아래 리터럴 그대로 유지 — 품질 회귀 방지)
+    const googlePromptParams = {
+      title, keyword, hospitalType, additionalInfo,
+      writingStyleGuide, writingStyleLabel, formatGuide, longtailKeywords,
+      competitorText, region, hospitalName, isGeoMode,
+    };
+
+    const systemPrompt = isGoogle ? buildGoogleContentSystemPrompt(googlePromptParams) : `당신은 동네 단골 병원의 따뜻한 원장님입니다. 진료실에서 환자분과 마주 앉아 편하게 풀어 설명하듯이 글을 씁니다.
 의학 지식은 정확하지만, 말투는 가까운 사람이 알려주듯 부드럽고 자연스럽습니다. 학술 논문이나 보고서가 아니라, 실제 사람이 직접 쓴 진솔한 블로그 글을 만듭니다.
 
 ${writingStyleGuide}
@@ -206,8 +220,6 @@ ${geoBlock}
 - 이모지 사용 금지 (▶ 기호만 세부 소제목에 허용)
 ${baseStyleBlock}`;
 
-    const writingStyleLabel = writingStyle === '고객이해' ? '고객이해시점 (전문용어 없이 쉽게)' : writingStyle === '사무장' ? '사무장시점 (병원 서비스·프로세스 중심)' : '전문가시점 (의학적 전문성 강조)';
-
     const competitorSection = competitorText
       ? `\n【경쟁 블로그 분석 — 검색 의도 파악 후 차별화 필수】\n현재 네이버에서 "${keyword}"으로 상위 노출된 블로그들이 다루는 주제:\n${competitorText}\n→ 위 경쟁 글들이 공통으로 다루는 핵심 주제는 반드시 포함하되, 의학적 깊이와 구체성으로 차별화하세요.\n→ 경쟁 글에서 빠진 관점이나 더 구체적인 정보를 발굴하여 독자에게 추가 가치를 제공하세요.\n`
       : '';
@@ -264,7 +276,7 @@ A3. (답변 2~3문장)
 
     const lengthHint = isGeoMode ? '1,500~1,800자 (공백 포함, 요약 박스 + FAQ 제외)' : '1,500~1,800자 (공백 포함, 본문만)';
 
-    const userPrompt = `아래 제목으로 네이버 블로그 본문을 작성해주세요. [글쓰기 시점: ${writingStyleLabel}]
+    const userPrompt = isGoogle ? buildGoogleContentUserPrompt(googlePromptParams) : `아래 제목으로 네이버 블로그 본문을 작성해주세요. [글쓰기 시점: ${writingStyleLabel}]
 
 제목: "${title}"
 핵심 키워드: "${keyword}"

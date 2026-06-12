@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import type { WritingStyle, OptimizationMode } from '@/types';
+import type { WritingStyle, OptimizationMode, TargetSite } from '@/types';
 import SpecialtyKeywordSuggester from '@/content/components/SpecialtyKeywordSuggester';
 
 interface KeywordInputProps {
-  onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle, region: string, optimizationMode: OptimizationMode) => void;
+  onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle, region: string, optimizationMode: OptimizationMode, targetSite: TargetSite) => void;
   isLoading: boolean;
   defaultKeyword?: string;
   defaultHospitalType?: string;
   defaultAdditionalInfo?: string;
   defaultWritingStyle?: WritingStyle;
   defaultOptimizationMode?: OptimizationMode;
+  defaultTargetSite?: TargetSite;
   lockedHospitalType?: string;
   defaultRegion?: string;
 }
@@ -33,7 +34,12 @@ const OPTIMIZATION_MODES: { value: OptimizationMode; label: string; desc: string
   { value: 'seo',     label: 'SEO 최적화',     desc: 'AI티 없는 자연스런 글', icon: '🌿' },
 ];
 
-export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle, defaultOptimizationMode, lockedHospitalType, defaultRegion }: KeywordInputProps) {
+const TARGET_SITES: { value: TargetSite; label: string; desc: string; icon: string }[] = [
+  { value: 'naver',  label: '네이버 블로그', desc: '네이버 검색 최적화',    icon: '🟢' },
+  { value: 'google', label: '구글',          desc: '구글·AI 검색 최적화', icon: '🔍' },
+];
+
+export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle, defaultOptimizationMode, defaultTargetSite, lockedHospitalType, defaultRegion }: KeywordInputProps) {
   const [keyword, setKeyword] = useState(defaultKeyword ?? '');
   const [hospitalType, setHospitalType] = useState(lockedHospitalType || defaultHospitalType || '피부과');
   const keywordInputRef = useRef<HTMLInputElement>(null);
@@ -41,13 +47,14 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
   const [additionalInfo, setAdditionalInfo] = useState(defaultAdditionalInfo ?? '');
   const [writingStyle, setWritingStyle] = useState<WritingStyle>(defaultWritingStyle || '전문가');
   const [optimizationMode, setOptimizationMode] = useState<OptimizationMode>(defaultOptimizationMode || 'seo+geo');
+  const [targetSite, setTargetSite] = useState<TargetSite>(defaultTargetSite || 'naver');
 
   const effectiveHospitalType = lockedHospitalType || hospitalType;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyword.trim()) return;
-    onSubmit(keyword.trim(), effectiveHospitalType, additionalInfo.trim(), writingStyle, region.trim(), optimizationMode);
+    onSubmit(keyword.trim(), effectiveHospitalType, additionalInfo.trim(), writingStyle, region.trim(), optimizationMode, targetSite);
   };
 
   return (
@@ -190,6 +197,30 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
                 <span className="text-xl leading-none">{mode.icon}</span>
                 <span className="text-[11px] font-bold leading-tight">{mode.label}</span>
                 <span className="text-[9px] opacity-70 leading-tight">{mode.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 게시 사이트 */}
+        <div>
+          <label className="block text-xs font-semibold text-[#8891bd] mb-2">게시 사이트</label>
+          <div className="grid grid-cols-2 gap-2">
+            {TARGET_SITES.map((site) => (
+              <button
+                key={site.value}
+                type="button"
+                onClick={() => setTargetSite(site.value)}
+                disabled={isLoading}
+                className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all text-center min-h-[72px] ${
+                  targetSite === site.value
+                    ? 'border-[#4f6ef7] bg-[#4f6ef7]/10 text-white'
+                    : 'border-[#2a2b6e] bg-[#0b0d2b] text-[#8891bd] hover:border-[#4f6ef7]/40 active:bg-[#191970]/30'
+                }`}
+              >
+                <span className="text-xl leading-none">{site.icon}</span>
+                <span className="text-[11px] font-bold leading-tight">{site.label}</span>
+                <span className="text-[9px] opacity-70 leading-tight">{site.desc}</span>
               </button>
             ))}
           </div>

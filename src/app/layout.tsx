@@ -8,8 +8,14 @@ import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildOrganizationJsonLd, buildSoftwareApplicationJsonLd } from '@/dev/lib/seo/schemas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, SITE_URL } from '@/dev/lib/seo/site';
 
-// 네이버 서치어드바이저 verification 코드 (미설정 시 meta 태그 미출력)
+// 네이버 서치어드바이저 / 구글 서치 콘솔 verification 코드 (미설정 시 meta 태그 미출력)
+// env 없는 쪽 키는 객체에 아예 넣지 않아 빈/undefined 메타 태그가 생기지 않도록 조건부 spread로 합성
 const naverVerification = process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION;
+const googleVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
+const verification = {
+  ...(googleVerification ? { google: googleVerification } : {}),
+  ...(naverVerification ? { other: { 'naver-site-verification': naverVerification } } : {}),
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -31,9 +37,7 @@ export const metadata: Metadata = {
     locale: 'ko_KR',
     type: 'website',
   },
-  ...(naverVerification
-    ? { verification: { other: { 'naver-site-verification': naverVerification } } }
-    : {}),
+  ...(Object.keys(verification).length > 0 ? { verification } : {}),
 };
 
 export const viewport: Viewport = {

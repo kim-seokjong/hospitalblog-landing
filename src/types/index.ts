@@ -98,6 +98,8 @@ export type WritingStyle = '전문가' | '고객이해' | '사무장';
 
 export type OptimizationMode = 'seo+geo' | 'seo';
 
+export type TargetSite = 'naver' | 'google';
+
 export interface SlideStyleConfig {
   name: string;
   emoji: string;
