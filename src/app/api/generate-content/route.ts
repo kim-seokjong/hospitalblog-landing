@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
+import { getAnthropicClient, MODEL, proofreadContent } from '@/content/lib/anthropic';
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/content/lib/medical-compliance';
 import { logUsage } from '@/dev/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
@@ -210,6 +210,17 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 - 제목 형식(질문형/가이드형 등)에 맞는 본문 구조를 사용할 것
 - 첫 번째 단락 첫 문장에 핵심 키워드 반드시 포함 (D.I.A+ 첫 200자 가산점)
 - 주요 소제목(H2) 중 절반 이상에 핵심 키워드 또는 연관어 포함
+
+【키워드는 자연스러움이 최우선 — 비문 절대 금지】
+- 키워드는 문장이 자연스러운 곳에만 넣어라. 문법이 어색해지면 키워드를 빼라. 억지로 끼워 넣어 비문이 되느니 키워드를 생략하는 편이 낫다.
+- 키워드를 명사구에 억지로 결합하지 마라. 같은 키워드를 기계적으로 반복하지 말고, 동의어·연관어·대명사·생략으로 자연스럽게 변주하라.
+- 핵심 키워드는 본문 전체에서 4~6회면 충분하다. 그 이상 도배하지 마라.
+
+❌ 이렇게 쓰지 마라 (실제로 발생한 비문 — 절대 재현 금지)
+- "보톡스의 원인이 되는 구조적 특성" ← 보톡스가 원인이 아님, 의미가 붕괴된 키워드 억지 결합
+- "보톡스 증상 반응이 평소보다 과하게" ← 의미 불명의 키워드 명사구 강제 결합
+- "보톡스 예방" 을 문맥 없이 반복 ← 키워드 도배
+→ 위처럼 키워드를 조사·명사구에 강제로 붙여 의미가 무너지면, 차라리 키워드를 빼고 자연스러운 문장으로 써라.
 ${subHeadingBlock}
 ${geoBlock}
 
@@ -286,10 +297,12 @@ A3. (답변 2~3문장)
 ${competitorSection}${regionSection}${hospitalSection}
 ${formatGuide}
 
-【네이버 SEO 키워드 배치 — 반드시 준수】
-- 첫 번째 단락의 첫 문장에 "${keyword}" 반드시 포함 (D.I.A+ 가산점)
+【네이버 SEO 키워드 배치 — 자연스러움 우선, 비문 금지】
+- 첫 번째 단락의 첫 문장에 "${keyword}" 포함 (D.I.A+ 가산점) — 단 문장이 자연스러워야 함
 - 주요 소제목(H2) 중 2개 이상에 "${keyword}" 또는 연관 롱테일 키워드 포함
 - 연관 롱테일 키워드(${longtailKeywords.join(', ')})를 각각 자연스러운 위치에 분산 배치
+- ⚠️ 키워드를 억지로 끼워 넣어 문장이 어색해지면 키워드를 빼라. 동의어·대명사·생략으로 변주.
+  "키워드+의 원인이 되는", "키워드 증상 반응" 같은 의미가 붕괴된 결합 절대 금지.
 
 【소제목 계층 구조 — 반드시 준수】
 - 주요 소제목(H2): 4~5개, 기호 없이 독립 줄 (앞뒤 빈 줄)
@@ -305,7 +318,7 @@ ${formatGuide}
 【작성 조건】
 - 본문 분량: ${lengthHint}
 - 의료광고법 준수 (완치, 최고, 100% 등 표현 금지)
-- 핵심 키워드 "${keyword}" 4~6회 자연스럽게 포함
+- 핵심 키워드 "${keyword}"는 4~6회 정도, 오직 자연스러운 위치에만 (어색하면 빼고 동의어·대명사로 변주 — 도배·억지 결합 금지)
 - 각 소제목 아래 단락 2~3개 (2~4문장씩)
 - 이미지 위치는 [이미지 N: 설명] 형식으로 소제목 아래 표시 (총 5~6개)
 - 본문 마지막 문장: "개인마다 차이가 있을 수 있으니, 전문의와 상담 후 결정하시길 권해드립니다."
@@ -394,7 +407,12 @@ ${formatGuide}
       .trim();
 
     // 의료광고법 금지어 자동 교체 — Claude가 생성했더라도 100% 필터링
-    const { fixed: body, replaced: autoReplaced } = autoFix(mdCleaned);
+    const { fixed: cleanedBody, replaced: autoReplaced } = autoFix(mdCleaned);
+
+    // 교정(프루프리드) 패스 — 비문·오타·글리치·억지 키워드만 정리. 실패 시 원본 유지(graceful).
+    // 의료광고법 금지어가 다시 들어올 일은 없도록 교정 후 autoFix 한 번 더 적용.
+    const proofread = await proofreadContent(cleanedBody);
+    const { fixed: body } = proofread === cleanedBody ? { fixed: cleanedBody } : autoFix(proofread);
 
     const bodyForCount = body.replace(/\[이미지\s*\d+:[^\]]*\]/g, '');
     const charCount = bodyForCount.length;
