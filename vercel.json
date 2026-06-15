@@ -18,7 +18,7 @@
       "maxDuration": 300
     },
     "app/api/generate-content/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "app/api/generate-titles/route.ts": {
       "maxDuration": 60

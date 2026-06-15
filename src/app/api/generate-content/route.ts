@@ -7,7 +7,7 @@ import { checkAndConsumeUsage, refundUsage } from '@/payment/lib/usage-guard';
 import { buildGoogleContentSystemPrompt, buildGoogleContentUserPrompt } from '@/content/lib/google-prompts';
 import type { TargetSite } from '@/types';
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 type TitleFormat = '질문형' | '정보형' | '가이드형' | '노하우형' | '숫자형' | string;
 

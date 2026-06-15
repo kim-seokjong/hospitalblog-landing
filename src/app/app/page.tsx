@@ -422,9 +422,11 @@ export default function AppPage() {
       const effectiveRegion = profileRegion;
 
       // 1. generate-content 먼저 실행 (사용량 차감 포함)
-      const contentRes = await fetch('/api/generate-content', {
+      // safeFetchJson 으로 감싸 2패스 생성이 maxDuration 을 넘겨 Vercel 이
+      // HTML/텍스트 504 를 반환해도 JSON.parse 예외("Unexpected token 'A',
+      // \"An error o\"...") 가 컴포넌트로 새지 않고 한국어 안내로 표시되게 한다.
+      const result = await safeFetchJson<BlogContent>('/api/generate-content', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: selectedTitle.title, keyword, hospitalType, additionalInfo,
           titleFormat: selectedTitle.seoDetails?.format, writingStyle,
@@ -432,15 +434,16 @@ export default function AppPage() {
         }),
       });
 
-      const contentData = await contentRes.json();
-      if (!contentRes.ok) {
-        const reason = contentData.reason as string | undefined;
+      if (!result.ok) {
+        // safeFetchJson 은 실패 시 원본 payload 필드(reason 등)를 보존하므로
+        // 기존 플랜 차단 분기를 그대로 유지한다.
+        const reason = (result as { reason?: unknown }).reason as string | undefined;
         const isBlocked = reason === 'plan_required' || reason === 'plan_expired' || reason === 'limit_exceeded';
-        const err = new Error(contentData.error || '본문 생성에 실패했습니다.');
+        const err = new Error(result.error || '본문 생성에 실패했습니다.');
         if (isBlocked) (err as Error & { _blocked?: boolean })._blocked = true;
         throw err;
       }
-      setContent(contentData);
+      setContent(result.data);
       setViewStep('content');
 
       // 2. generate-tags 별도 실행 (실패해도 content는 보존)
