@@ -49,13 +49,27 @@ const WARNING_PATTERNS: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /할인|이벤트|특가|무료 상담/, message: '가격 할인 광고는 의료광고 심의 대상입니다.' },
 ];
 
+/**
+ * 금지어 매칭용 정규식을 생성한다.
+ *
+ * 한글 좌측 경계 `(?<![가-힣])`를 붙여 부분문자열 오매칭을 차단한다.
+ * 예) "기적"이 "정기적인"·"장기적인" 안의 "기적"에 매칭되는 글리치를 방지.
+ * - 실제 금지어는 항상 어절 시작(공백·문두·문장부호 뒤)에 오므로 좌측 경계로 누락 없음.
+ * - 조사(의/이/가/를)는 단어 뒤에 붙으므로 좌측 경계는 영향 없음.
+ * - 우측 경계는 추가하지 않는다 — 조사 결합("최고의")을 막아 실제 위반을 놓치기 때문.
+ * - `100%`·`No.1` 등 비한글 시작 단어에도 좌측 한글 경계는 무해하다.
+ */
+function buildForbiddenRegex(word: string): RegExp {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![가-힣])${escaped}`, 'gi');
+}
+
 export function autoFix(content: string): { fixed: string; replaced: { word: string; suggestion: string }[] } {
   let fixed = content;
   const replaced: { word: string; suggestion: string }[] = [];
   for (const { word, suggestion } of FORBIDDEN_WORDS) {
-    const regex = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    if (regex.test(fixed)) {
-      fixed = fixed.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), suggestion);
+    if (buildForbiddenRegex(word).test(fixed)) {
+      fixed = fixed.replace(buildForbiddenRegex(word), suggestion);
       replaced.push({ word, suggestion });
     }
   }
@@ -68,13 +82,13 @@ export function checkCompliance(content: string): ComplianceResult {
   let filteredContent = content;
 
   for (const { word, rule, suggestion, severity } of FORBIDDEN_WORDS) {
-    const lowerContent = content.toLowerCase();
-    const lowerWord = word.toLowerCase();
+    const matcher = buildForbiddenRegex(word);
+    const match = matcher.exec(content);
 
-    if (lowerContent.includes(lowerWord)) {
-      violations.push({ word, index: lowerContent.indexOf(lowerWord), suggestion, rule, severity });
+    if (match) {
+      violations.push({ word, index: match.index, suggestion, rule, severity });
       filteredContent = filteredContent.replace(
-        new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+        buildForbiddenRegex(word),
         `[${suggestion}]`
       );
     }
