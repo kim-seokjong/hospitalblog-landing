@@ -1,4 +1,12 @@
 {
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "^hospitalblog\\.kr$" }],
+      "destination": "https://www.hospitalblog.kr/:path*",
+      "permanent": true
+    }
+  ],
   "functions": {
     "app/api/publish-naver/route.ts": {
       "maxDuration": 300
