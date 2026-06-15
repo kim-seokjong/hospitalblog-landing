@@ -50,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
 
     const body = await req.json();
-    const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score'];
+    const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score', 'target_site'];
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     for (const field of allowedFields) {
@@ -75,6 +75,16 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
             return NextResponse.json({ error: '유효하지 않은 상태값입니다.' }, { status: 400 });
           }
           updates[field] = body[field];
+        } else if (field === 'target_site') {
+          const val = body[field];
+          // null은 네이버 간주로 되돌리는 정당한 경우 → 허용
+          if (val === null) {
+            updates[field] = null;
+          } else if (val === 'naver' || val === 'google') {
+            updates[field] = val;
+          } else {
+            return NextResponse.json({ error: 'target_site는 naver 또는 google이어야 합니다.' }, { status: 400 });
+          }
         } else {
           updates[field] = body[field];
         }

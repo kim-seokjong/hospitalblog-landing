@@ -601,6 +601,7 @@ export default function AppPage() {
               title: payload.title,
               content: payload.body,
               keyword: payload.keyword,
+              target_site: payload.targetSite,
               status: 'published',
             }),
           });
