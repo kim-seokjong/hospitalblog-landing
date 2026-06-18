@@ -74,7 +74,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0f1a] text-white">
+    <div className="min-h-screen bg-white text-[#202020]">
       {showAuthModal && (
         <AuthModal
           onClose={() => setShowAuthModal(false)}
@@ -83,34 +83,41 @@ export default function LandingPage() {
         />
       )}
 
-      {/* 헤더 */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b0f1a]/80 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className="w-7 h-7 flex-shrink-0 bg-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <span className="text-white text-sm">🏥</span>
+      {/* 상단 컬러 스와치 바 */}
+      <div className="flex h-2">
+        <i className="flex-1 bg-[#ff4628]" />
+        <i className="flex-1 bg-[#202020]" />
+        <i className="flex-1 bg-[#b8c8d7]" />
+      </div>
+
+      {/* 헤더 — 솔리드 화이트 + blur (그라데이션 금지) */}
+      <header className="sticky top-0 z-40 border-b border-[#dbe2ea] bg-white/85 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#ff4628] to-[#e63a1c] shadow-[0_8px_24px_-12px_rgba(255,70,40,0.5)]">
+              <span className="text-white text-sm">▦</span>
             </div>
-            <span className="font-bold text-white text-sm md:text-lg truncate">닥터포스트</span>
+            <span className="font-extrabold text-[#202020] text-base md:text-lg truncate">닥터포스트</span>
           </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm text-gray-400">
-            <a href="#features" className="hover:text-white transition-colors">기능</a>
-            <a href="#how" className="hover:text-white transition-colors">사용법</a>
-            <a href="#pricing" className="hover:text-white transition-colors">요금제</a>
+          <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-[#4a4f55]">
+            <a href="#features" className="hover:text-[#ff4628] transition-colors">기능</a>
+            <a href="#how" className="hover:text-[#ff4628] transition-colors">사용법</a>
+            <a href="#pricing" className="hover:text-[#ff4628] transition-colors">요금제</a>
           </nav>
           <div className="flex items-center gap-2 flex-shrink-0">
             {authChecked && (
               user ? (
                 <>
-                  <span className="text-xs text-gray-400 hidden md:block">{user.email}</span>
+                  <span className="text-xs text-[#8a93a0] hidden md:block">{user.email}</span>
                   <button
                     onClick={() => router.push('/app')}
-                    className="px-3 py-1.5 md:px-4 md:py-2 bg-blue-500 hover:bg-blue-400 text-white text-xs md:text-sm font-bold rounded-lg transition-colors"
+                    className="px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white text-xs md:text-sm font-bold rounded-lg transition-all hover:brightness-105 shadow-[0_8px_24px_-12px_rgba(255,70,40,0.5)]"
                   >
                     앱 열기
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="px-3 py-1.5 md:px-4 md:py-2 border border-white/20 text-gray-300 text-xs md:text-sm rounded-lg hover:bg-white/10 transition-colors"
+                    className="px-3 py-1.5 md:px-4 md:py-2 border border-[#dbe2ea] text-[#4a4f55] text-xs md:text-sm font-semibold rounded-lg hover:bg-[#eef2f6] transition-colors"
                   >
                     로그아웃
                   </button>
@@ -119,13 +126,13 @@ export default function LandingPage() {
                 <>
                   <button
                     onClick={handleLogin}
-                    className="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm text-gray-400 hover:text-white transition-colors"
+                    className="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-semibold text-[#4a4f55] hover:text-[#ff4628] transition-colors"
                   >
                     로그인
                   </button>
                   <button
                     onClick={handleStart}
-                    className="px-3 py-1.5 md:px-4 md:py-2 bg-blue-500 hover:bg-blue-400 text-white text-xs md:text-sm font-bold rounded-lg transition-colors shadow-lg shadow-blue-500/30"
+                    className="px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white text-xs md:text-sm font-bold rounded-lg transition-all hover:brightness-105 shadow-[0_8px_24px_-12px_rgba(255,70,40,0.5)]"
                   >
                     회원가입하기
                   </button>
@@ -137,58 +144,152 @@ export default function LandingPage() {
       </header>
 
       {/* 히어로 */}
-      <section className="relative overflow-hidden">
-        {/* 배경 글로우 */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[-200px] left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-blue-600/20 rounded-full blur-[120px]" />
-          <div className="absolute top-[100px] left-[10%] w-[300px] h-[300px] bg-indigo-600/10 rounded-full blur-[80px]" />
-        </div>
+      <section
+        className="relative overflow-hidden text-center"
+        style={{
+          background:
+            'radial-gradient(820px 360px at 50% -30px, #eef2f6, transparent 70%), linear-gradient(180deg,#fbfcfe,#ffffff)',
+        }}
+      >
+        <div className="relative max-w-4xl mx-auto px-5 sm:px-6 pt-16 sm:pt-24 pb-16 sm:pb-20">
+          <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#202020] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+            <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628]" />
+            Claude AI · 네이버·구글 SEO · AI검색(GEO) 최적화
+          </span>
 
-        <div className="relative max-w-4xl mx-auto px-6 pt-24 pb-20 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-full text-xs font-semibold mb-8 border border-blue-500/20">
-            <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
-            Claude AI · 네이버 SEO 최적화 · 의료광고법 준수
-          </div>
-
-          <h1 className="text-5xl md:text-7xl font-extrabold text-white leading-tight mb-6" style={{ letterSpacing: '-0.03em' }}>
+          <h1 className="text-[34px] sm:text-5xl md:text-[62px] font-black text-[#202020] leading-[1.12] mt-6 sm:mt-7" style={{ letterSpacing: '-1px' }}>
             병원 블로그,<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
-              AI가 대신
-            </span><br />
-            써드립니다.
+            <span className="text-[#ff4628]">AI가 대신</span> 써드려요.
           </h1>
 
-          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            60초 안에<br />
-            자동으로 작성 해드립니다.
+          <p className="text-base sm:text-lg md:text-[19px] text-[#4a4f55] max-w-2xl mx-auto mt-5 leading-relaxed">
+            복잡한 설정 없이, 60초 안에<br />
+            네이버 상위 노출용 블로그를 자동으로 작성해드려요.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
             <button
               onClick={handleStart}
-              className="px-8 py-4 bg-blue-500 hover:bg-blue-400 text-white font-bold text-lg rounded-xl transition-all shadow-2xl shadow-blue-500/30 hover:shadow-blue-400/40 hover:-translate-y-0.5"
+              className="px-7 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 hover:-translate-y-0.5"
             >
               회원가입하기 →
             </button>
             <a
               href="#features"
-              className="px-8 py-4 border border-white/20 text-gray-300 font-semibold text-lg rounded-xl hover:bg-white/10 transition-colors"
+              className="px-7 sm:px-8 py-3.5 sm:py-4 bg-white border border-[#dbe2ea] text-[#202020] font-semibold text-base sm:text-lg rounded-xl hover:bg-[#eef2f6] transition-colors"
             >
               기능 살펴보기
             </a>
           </div>
 
-          {/* 스탯 */}
-          <div className="mt-16 grid grid-cols-3 gap-4 max-w-2xl mx-auto">
+          {/* 스탯 3 */}
+          <div className="mt-12 sm:mt-14 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-[760px] mx-auto">
             {[
-              { num: '60초', line1: '블로그', line2: '1편 작성' },
-              { num: '9가지', line1: 'SEO', line2: '자동분석' },
-              { num: '100%', line1: '의료광고법', line2: '준수' },
-            ].map(({ num, line1, line2 }) => (
-              <div key={num} className="relative bg-gradient-to-b from-blue-500/10 to-white/5 border border-blue-500/20 rounded-2xl p-4 md:p-5 text-center overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-                <p className="relative text-xl md:text-2xl font-extrabold text-blue-400 mb-1">{num}</p>
-                <p className="relative text-xs text-gray-400 leading-snug">{line1}<br />{line2}</p>
+              { num: '60초', label: '블로그 1편 작성' },
+              { num: '네이버·구글·AI', label: '3대 검색 최적화' },
+              { num: '의료광고법', label: '자동 검수' },
+            ].map(({ num, label }) => (
+              <div key={num} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <b className="block text-2xl sm:text-[30px] font-black text-[#ff4628]">{num}</b>
+                <span className="block text-sm font-semibold text-[#8a93a0] mt-1.5">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 섹션 1: 문제 제기 */}
+      <section className="py-16 sm:py-[84px] bg-[#eef2f6]">
+        <div className="max-w-6xl mx-auto px-5 sm:px-6">
+          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">병원 블로그의 현실</p>
+          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+            이런 고민, 한 번쯤 있으셨죠?
+          </h2>
+          <p className="text-center text-[#4a4f55] mt-3 text-base">대부분의 원장님이 블로그 앞에서 똑같이 멈춰 섭니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10 sm:mt-12">
+            {[
+              { icon: '⏳', title: '글 쓸 시간이 없어요', desc: '진료만으로도 하루가 빠듯한데, 블로그까지 직접 쓰기란 현실적으로 어렵죠.' },
+              { icon: '⚖️', title: '의료광고법이 무서워요', desc: '어디까지 써도 되는지 몰라, 글 하나 올릴 때마다 마음이 불편합니다.' },
+              { icon: '💸', title: '대행사는 비싸고 들쭉날쭉', desc: '월 수십~수백만 원인데 품질 편차가 크고, 우리 병원을 잘 모르고 씁니다.' },
+              { icon: '🔍', title: '네이버에 글이 안 떠요', desc: '열심히 써도 노출이 안 되면 헛수고. C-Rank·D.I.A+를 모르면 막막하죠.' },
+              { icon: '🧩', title: '뭘 써야 할지 막막해요', desc: '키워드·주제 선정부터 막혀서 시작조차 어렵습니다.' },
+              { icon: '📉', title: '효과를 알 수가 없어요', desc: '글은 쌓이는데 실제로 환자 유입에 도움이 되는지 확인이 안 됩니다.' },
+            ].map(({ icon, title, desc }) => (
+              <div key={title} className="bg-white border border-[#dbe2ea] border-l-[3px] border-l-[#ff4628] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] transition-transform hover:-translate-y-0.5">
+                <div className="w-11 h-11 rounded-xl bg-[#ffece7] text-[#ff4628] flex items-center justify-center text-xl mb-4">{icon}</div>
+                <h3 className="font-extrabold text-[#202020] text-lg">{title}</h3>
+                <p className="text-sm text-[#4a4f55] leading-relaxed mt-2">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 섹션 2: 비교표 */}
+      <section className="py-16 sm:py-[84px] bg-white">
+        <div className="max-w-6xl mx-auto px-5 sm:px-6">
+          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">무엇이 다른가</p>
+          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+            직접 쓸까, 맡길까, 아니면 닥터포스트
+          </h2>
+          <p className="text-center text-[#4a4f55] mt-3 text-base">세 가지 방법을 한눈에 비교해보세요.</p>
+          <div className="mt-10 sm:mt-12 -mx-5 sm:mx-0 px-5 sm:px-0 overflow-x-auto">
+            <table className="w-full min-w-[640px] border-separate border-spacing-0 bg-white border border-[#dbe2ea] rounded-2xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+              <thead>
+                <tr>
+                  <th className="text-center text-sm font-extrabold text-[#202020] bg-[#eef2f6] px-5 py-4 border-b border-[#dbe2ea]">　</th>
+                  <th className="text-center text-sm font-extrabold text-[#202020] bg-[#eef2f6] px-5 py-4 border-b border-[#dbe2ea]">원장님이 직접</th>
+                  <th className="text-center text-sm font-extrabold text-[#202020] bg-[#eef2f6] px-5 py-4 border-b border-[#dbe2ea]">외주 대행사</th>
+                  <th className="text-center text-sm font-extrabold text-white px-5 py-4 border-b border-[#dbe2ea] bg-gradient-to-br from-[#ff4628] to-[#e63a1c]">닥터포스트</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: '비용', a: '무료지만 시간 소모', b: '월 수십~수백만 원', dp: '월 구독, 합리적' },
+                  { label: '1편 작성', a: '1~2시간', b: '외주 대기·소통', dp: '60초 초안' },
+                  { label: '의료광고법', a: '직접 확인, 불안', b: '대행사 역량에 의존', dp: 'AI 자동 검수' },
+                  { label: '검색 최적화', a: '네이버 위주', b: '네이버 중심', dp: '네이버·구글 SEO' },
+                  { label: 'AI 검색(GEO)', a: '대응 어려움', b: '거의 안 함', dp: 'GEO 자동 최적화' },
+                  { label: '통제권', a: '있음', b: '낮음', dp: '직접 생성·수정' },
+                ].map(({ label, a, b, dp }, i, arr) => {
+                  const last = i === arr.length - 1;
+                  const cellBorder = last ? '' : 'border-b border-[#dbe2ea]';
+                  return (
+                    <tr key={label}>
+                      <td className={`text-left text-sm font-bold text-[#202020] bg-[#fafbfc] px-5 py-4 ${cellBorder}`}>{label}</td>
+                      <td className={`text-center text-sm text-[#8a93a0] px-5 py-4 ${cellBorder}`}>{a}</td>
+                      <td className={`text-center text-sm text-[#8a93a0] px-5 py-4 ${cellBorder}`}>{b}</td>
+                      <td className={`text-center text-sm font-extrabold text-[#202020] bg-[#fff6f4] border-l border-r border-[#ffece7] px-5 py-4 ${cellBorder}`}>{dp}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* 섹션 3: 해결 매핑 */}
+      <section className="py-16 sm:py-[84px] bg-[#eef2f6]">
+        <div className="max-w-6xl mx-auto px-5 sm:px-6">
+          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">SOLUTION</p>
+          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+            닥터포스트는 이렇게 해결해요
+          </h2>
+          <p className="text-center text-[#4a4f55] mt-3 text-base">고민 하나하나에 정확히 답합니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-10 sm:mt-12">
+            {[
+              { problem: '시간이 없다', solution: '키워드 한 줄이면 60초 자동 초안' },
+              { problem: '법이 불안하다', solution: '과장·단정 표현 AI 자동 점검' },
+              { problem: '대행이 비싸다', solution: '월 구독으로 직접 운영, 통제권은 원장님께' },
+              { problem: '노출이 안 된다', solution: '네이버·구글 SEO + AI검색(GEO)까지 구조 자동 반영' },
+              { problem: '주제가 막막하다', solution: '시술명만 넣으면 제목·구성까지 제안' },
+              { problem: '효과를 모르겠다', solution: '발행 이력·경쟁사 모니터링으로 흐름 파악' },
+            ].map(({ problem, solution }) => (
+              <div key={problem} className="flex items-center gap-3.5 bg-white border border-[#dbe2ea] rounded-2xl px-5 py-4 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <span className="flex-none bg-[#eef2f6] text-[#3f5468] font-bold text-[13px] px-3 py-2 rounded-lg min-w-[100px] sm:min-w-[110px] text-center">{problem}</span>
+                <span className="text-[#ff4628] font-black text-lg flex-none">→</span>
+                <span className="font-bold text-sm text-[#202020] leading-snug">{solution}</span>
               </div>
             ))}
           </div>
@@ -196,48 +297,42 @@ export default function LandingPage() {
       </section>
 
       {/* 사용법 */}
-      <section id="how" className="py-20 border-t border-white/5">
-        <div className="max-w-4xl mx-auto px-6">
-          <p className="text-center text-xs font-bold text-blue-400 tracking-widest mb-3 uppercase">How it works</p>
-          <h2 className="text-3xl font-bold text-center text-white mb-4" style={{ letterSpacing: '-0.02em' }}>
+      <section id="how" className="py-16 sm:py-[84px] bg-white">
+        <div className="max-w-4xl mx-auto px-5 sm:px-6">
+          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">How it works</p>
+          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             3단계로 끝납니다
           </h2>
-          <p className="text-center text-gray-500 mb-14">복잡한 설정 없이 바로 사용하세요.</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <p className="text-center text-[#4a4f55] mt-3 mb-10 sm:mb-12 text-base">복잡한 설정 없이 바로 사용하세요.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              { step: '1', title: '키워드 입력', desc: '병원 시술명이나 질환명을 입력하세요. 예) 레이저 토닝, 허리디스크' },
-              { step: '2', title: 'AI 자동 작성', desc: 'Claude AI가 네이버 알고리즘에 맞춘 제목·본문·태그를 자동 생성합니다.' },
-              { step: '3', title: '복사 후 발행', desc: '생성된 글을 복사해서 네이버 블로그에 붙여넣기만 하면 끝입니다.' },
-            ].map(({ step, title, desc }, i) => (
-              <div key={step} className="relative bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-blue-500/40 hover:bg-white/[0.07] transition-all">
-                {i < 2 && (
-                  <div className="hidden md:block absolute top-8 -right-3 text-blue-500/40 text-xl z-10">→</div>
-                )}
-                <div className="w-9 h-9 rounded-full bg-blue-500/20 border border-blue-500/40 flex items-center justify-center mb-4">
-                  <span className="text-sm font-extrabold text-blue-400">{step}</span>
+              { step: '1', title: '키워드 입력', desc: '병원 시술명이나 질환명을 입력하세요. 예) 레이저 토닝', iconClass: 'bg-[#ffece7] text-[#ff4628]' },
+              { step: '2', title: 'AI 자동 작성', desc: 'Claude AI가 네이버 SEO에 맞춰 제목·본문·태그까지 생성해요.', iconClass: 'bg-[#eef2f6] text-[#3f5468]' },
+              { step: '3', title: '복사 후 발행', desc: '완성된 글을 복사해 네이버 블로그에 붙여넣으면 끝이에요.', iconClass: 'bg-[#ececec] text-[#202020]' },
+            ].map(({ step, title, desc, iconClass }) => (
+              <div key={step} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] transition-transform hover:-translate-y-0.5">
+                <div className={`w-11 h-11 rounded-xl ${iconClass} flex items-center justify-center text-xl font-extrabold mb-4`}>
+                  {step}
                 </div>
-                <h3 className="font-bold text-white mb-2">{title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                <h3 className="font-extrabold text-[#202020] text-lg mb-2">{title}</h3>
+                <p className="text-sm text-[#4a4f55] leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>
 
           {/* 사용법 시연 영상 */}
           <div className="mt-12 relative">
-            {/* 배경 글로우 */}
-            <div className="absolute inset-0 bg-blue-600/10 rounded-3xl blur-2xl scale-105 pointer-events-none" />
-
-            <div className="relative rounded-2xl overflow-hidden border border-blue-500/30 shadow-2xl shadow-blue-500/20 bg-[#0d1120]">
+            <div className="relative rounded-2xl overflow-hidden border border-[#dbe2ea] shadow-[0_12px_30px_-14px_rgba(32,32,32,0.20)] bg-white">
               {/* 브라우저 상단 바 */}
-              <div className="flex items-center gap-3 px-4 py-3 bg-white/5 border-b border-white/10">
+              <div className="flex items-center gap-3 px-4 py-3 bg-[#eef2f6] border-b border-[#dbe2ea]">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full bg-red-500/70" />
-                  <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
-                  <span className="w-3 h-3 rounded-full bg-green-500/70" />
+                  <span className="w-3 h-3 rounded-full bg-red-400" />
+                  <span className="w-3 h-3 rounded-full bg-yellow-400" />
+                  <span className="w-3 h-3 rounded-full bg-green-400" />
                 </div>
                 <div className="flex-1 flex justify-center">
-                  <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-md border border-white/10 text-xs text-gray-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                  <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-md border border-[#dbe2ea] text-xs text-[#8a93a0]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#ff4628] animate-pulse" />
                     닥터포스트 · 실시간 시연
                   </div>
                 </div>
@@ -256,7 +351,7 @@ export default function LandingPage() {
             </div>
 
             {/* 하단 캡션 */}
-            <p className="mt-4 text-center text-xs text-gray-500">
+            <p className="mt-4 text-center text-xs text-[#8a93a0]">
               실제 사용 화면입니다 · 키워드 입력부터 발행까지 60초
             </p>
           </div>
@@ -264,30 +359,30 @@ export default function LandingPage() {
       </section>
 
       {/* 기능 섹션 */}
-      <section id="features" className="py-20 border-t border-white/5">
-        <div className="max-w-5xl mx-auto px-6">
-          <p className="text-center text-xs font-bold text-cyan-400 tracking-widest mb-3 uppercase">Features</p>
-          <h2 className="text-3xl font-bold text-center text-white mb-4" style={{ letterSpacing: '-0.02em' }}>
-            블로그 운영에 필요한<br />모든 것
+      <section id="features" className="py-16 sm:py-[84px] bg-[#eef2f6]">
+        <div className="max-w-6xl mx-auto px-5 sm:px-6">
+          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">Features</p>
+          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+            블로그 운영에 필요한 모든 것
           </h2>
-          <p className="text-center text-gray-500 mb-14">
-            병원 마케팅의<br />모든 과정을 자동화합니다.
+          <p className="text-center text-[#4a4f55] mt-3 mb-10 sm:mb-12 text-base">
+            병원 마케팅의 모든 과정을 자동화해요.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "Claude AI가 네이버 C-Rank · D.I.A+ 최적화 블로그 글을 자동으로 작성합니다.", iconBg: "bg-blue-500/20", iconBorder: "border-blue-500/30" },
-              { icon: "🖼️", title: "이미지 자동 생성", desc: "Flux.1 Pro AI로 병원 특화 카드뉴스와 실사 이미지를 자동 생성합니다.", iconBg: "bg-indigo-500/20", iconBorder: "border-indigo-500/30" },
-              { icon: "🔍", title: "SEO 분석 최적화", desc: "9가지 SEO 체크리스트로 검색 최적화 점수를 실시간으로 분석합니다.", iconBg: "bg-cyan-500/20", iconBorder: "border-cyan-500/30" },
-              { icon: "⚖️", title: "의료광고법 검수", desc: "의료법 제56조 기준으로 과장·허위 광고 문구를 자동 필터링합니다.", iconBg: "bg-emerald-500/20", iconBorder: "border-emerald-500/30" },
-              { icon: "📊", title: "네이버 트렌드", desc: "DataLab 기반으로 실시간 키워드 검색 트렌드를 분석합니다.", iconBg: "bg-violet-500/20", iconBorder: "border-violet-500/30" },
-              { icon: "🎯", title: "독창성 검사", desc: "네이버 블로그 검색으로 중복 콘텐츠 여부를 자동으로 검사합니다.", iconBg: "bg-rose-500/20", iconBorder: "border-rose-500/30" },
-            ].map(({ icon, title, desc, iconBg, iconBorder }) => (
-              <div key={title} className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-white/20 hover:bg-white/[0.07] transition-all group">
-                <div className={`w-11 h-11 rounded-xl ${iconBg} border ${iconBorder} flex items-center justify-center text-xl mb-4`}>
+              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "네이버 C-Rank·D.I.A+ 최적 블로그 글을 작성해요.", iconClass: "bg-[#ffece7] text-[#ff4628]" },
+              { icon: "🖼️", title: "이미지 자동 생성", desc: "병원 특화 실사 이미지를 자동 생성해요.", iconClass: "bg-[#eef2f6] text-[#3f5468]" },
+              { icon: "🔍", title: "SEO·GEO 최적화", desc: "네이버·구글 SEO와 AI 검색(GEO) 기준으로 점수를 분석·최적화해요.", iconClass: "bg-[#ececec] text-[#202020]" },
+              { icon: "🛡️", title: "의료광고법 검수", desc: "과장·단정 광고 문구를 자동 필터링해요.", iconClass: "bg-[#eef2f6] text-[#3f5468]" },
+              { icon: "📈", title: "네이버 트렌드", desc: "실시간 검색 트렌드를 분석해요.", iconClass: "bg-[#ffece7] text-[#ff4628]" },
+              { icon: "📑", title: "독창성 검사", desc: "중복 콘텐츠를 자동으로 검사해요.", iconClass: "bg-[#ececec] text-[#202020]" },
+            ].map(({ icon, title, desc, iconClass }) => (
+              <div key={title} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] transition-transform hover:-translate-y-0.5">
+                <div className={`w-11 h-11 rounded-xl ${iconClass} flex items-center justify-center text-xl mb-4`}>
                   {icon}
                 </div>
-                <h3 className="font-bold text-white mb-2 group-hover:text-blue-300 transition-colors">{title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                <h3 className="font-extrabold text-[#202020] text-lg mb-2">{title}</h3>
+                <p className="text-sm text-[#4a4f55] leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>
@@ -295,16 +390,16 @@ export default function LandingPage() {
       </section>
 
       {/* 요금 섹션 */}
-      <section id="pricing" className="py-20 border-t border-white/5">
-        <div className="max-w-4xl mx-auto px-6">
-          <p className="text-center text-xs font-bold text-emerald-400 tracking-widest mb-3 uppercase">Pricing</p>
-          <h2 className="text-3xl font-bold text-center text-white mb-4" style={{ letterSpacing: '-0.02em' }}>
+      <section id="pricing" className="py-16 sm:py-[84px] bg-white">
+        <div className="max-w-4xl mx-auto px-5 sm:px-6">
+          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">Pricing</p>
+          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             합리적인 요금제
           </h2>
-          <p className="text-center text-gray-500 mb-14">
+          <p className="text-center text-[#4a4f55] mt-3 mb-10 sm:mb-12 text-base">
             병원 규모에 맞게 선택하세요<br />언제든지 변경 가능합니다.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
             {[
               {
                 plan: PLANS.basic, desc: "블로그 자동 작성 시작",
@@ -325,69 +420,66 @@ export default function LandingPage() {
               // 첫 달 할인 결제 플랜(프로): trialPrice > 0, 그 외(베이직/스탠다드): 첫 달 무료
               const isDiscountPlan = (plan.trialPrice ?? 0) > 0;
               return (
-              <div key={plan.id} className={`relative p-6 rounded-2xl border flex flex-col ${
+              <div key={plan.id} className={`relative p-7 sm:p-8 rounded-2xl bg-white flex flex-col ${
                 highlight
-                  ? 'border-blue-400/60 bg-gradient-to-b from-blue-500/15 to-blue-500/5 shadow-2xl shadow-blue-500/20'
-                  : 'border-white/10 bg-white/5'
+                  ? 'border-2 border-[#ff4628] shadow-[0_20px_46px_-16px_rgba(255,70,40,0.34)]'
+                  : 'border border-[#dbe2ea] shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]'
               }`}>
                 {highlight && (
-                  <>
-                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-blue-400/5 to-transparent pointer-events-none" />
-                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-bold text-white bg-gradient-to-r from-blue-500 to-cyan-500 px-4 py-1 rounded-full shadow-lg shadow-blue-500/30">
-                      가장 인기
-                    </span>
-                  </>
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-extrabold text-white bg-gradient-to-br from-[#ff4628] to-[#e63a1c] px-4 py-1.5 rounded-full">
+                    가장 인기
+                  </span>
                 )}
-                <h3 className="text-xl font-bold text-white mb-1">{plan.name}</h3>
-                <div className="mt-1 mb-1 inline-flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-full self-start">
-                  {isDiscountPlan ? '🎁 첫 달 50% 할인' : '🎁 첫 달 무료'}
+                <h3 className="text-lg font-extrabold text-[#202020] mb-1">{plan.name}</h3>
+                <div className="mt-1 mb-1 inline-flex items-center gap-1.5 bg-[#eef2f6] text-[#3f5468] text-[11px] sm:text-xs font-extrabold px-2.5 py-1 rounded-lg self-start">
+                  {isDiscountPlan ? '첫 달 50% 할인' : '첫 달 무료'}
                 </div>
                 {isDiscountPlan ? (
                   // 프로: 정상가 취소선 + 첫 달 할인가 강조
                   <>
                     <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span className="text-base sm:text-lg font-semibold text-gray-500 line-through">
+                      <span className="text-base sm:text-lg font-semibold text-[#8a93a0] line-through">
                         {plan.price.toLocaleString('ko-KR')}원
                       </span>
-                      <span className="text-gray-500 text-xs sm:text-sm">/ 월</span>
+                      <span className="text-[#8a93a0] text-xs sm:text-sm">/ 월</span>
                     </div>
                     <p className="mb-1 flex flex-wrap items-baseline gap-x-1">
-                      <span className="text-2xl sm:text-3xl font-extrabold text-emerald-300">
+                      <span className="text-2xl sm:text-3xl font-black text-[#202020]">
                         {(plan.trialPrice ?? 0).toLocaleString('ko-KR')}
                       </span>
-                      <span className="text-emerald-300/90 text-sm">원</span>
-                      <span className="text-gray-400 text-xs sm:text-sm">/ 첫 달</span>
+                      <span className="text-[#202020] text-sm font-bold">원</span>
+                      <span className="text-[#8a93a0] text-xs sm:text-sm">/ 첫 달</span>
                     </p>
                   </>
                 ) : (
                   // 베이직/스탠다드: 정상가 취소선 + "첫 달 무료" 강조
                   <>
                     <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span className="text-base sm:text-lg font-semibold text-gray-500 line-through">
+                      <span className="text-base sm:text-lg font-semibold text-[#8a93a0] line-through">
                         {plan.price.toLocaleString('ko-KR')}원
                       </span>
-                      <span className="text-gray-500 text-xs sm:text-sm">/ 월</span>
+                      <span className="text-[#8a93a0] text-xs sm:text-sm">/ 월</span>
                     </div>
-                    <p className="mt-1 mb-1 text-2xl sm:text-3xl font-extrabold text-emerald-300">첫 달 무료</p>
+                    <p className="mt-1 mb-1 text-2xl sm:text-3xl font-black text-[#202020]">첫 달 무료</p>
                   </>
                 )}
-                <p className="text-[11px] text-gray-500 mb-1">
+                <p className="text-[11px] text-[#8a93a0] mb-1">
                   둘째 달부터 매월 {plan.price.toLocaleString('ko-KR')}원 자동결제
                 </p>
-                <p className="text-sm text-gray-500 mb-5">{desc}</p>
+                <p className="text-sm text-[#4a4f55] mb-5">{desc}</p>
                 <ul className="space-y-2.5 mb-8 flex-1">
                   {features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-gray-300">
-                      <span className="text-blue-400 flex-shrink-0">✓</span> {f}
+                    <li key={f} className="flex items-center gap-2 text-sm text-[#4a4f55]">
+                      <span className="text-[#ff4628] font-black flex-shrink-0">✓</span> {f}
                     </li>
                   ))}
                 </ul>
                 <button
                   onClick={handlePricingClick}
-                  className={`w-full py-2.5 rounded-xl text-sm font-bold transition-colors ${
+                  className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
                     highlight
-                      ? 'bg-blue-500 hover:bg-blue-400 text-white shadow-lg shadow-blue-500/30'
-                      : 'border border-white/20 text-gray-300 hover:bg-white/10'
+                      ? 'bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white hover:brightness-105 shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)]'
+                      : 'bg-white border border-[#dbe2ea] text-[#202020] hover:bg-[#eef2f6]'
                   }`}
                 >
                   시작하기
@@ -396,28 +488,24 @@ export default function LandingPage() {
               );
             })}
           </div>
-          <p className="text-center text-xs text-gray-600 mt-6">
+          <p className="text-center text-xs text-[#8a93a0] mt-6">
             모든 플랜은 월 단위 구독이며, 언제든지 해지 가능합니다.
           </p>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-24 border-t border-white/5 relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-blue-600/20 rounded-full blur-[120px]" />
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[200px] bg-cyan-600/10 rounded-full blur-[80px]" />
-        </div>
-        <div className="relative max-w-2xl mx-auto px-6 text-center">
-          <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4 whitespace-nowrap" style={{ letterSpacing: '-0.02em' }}>
+      {/* CTA — 블랙 띠 */}
+      <section className="py-16 sm:py-[84px] bg-[#202020]">
+        <div className="max-w-2xl mx-auto px-5 sm:px-6 text-center">
+          <h2 className="text-[28px] sm:text-4xl font-black text-white mb-4" style={{ letterSpacing: '-0.5px' }}>
             지금 바로 시작해보세요
           </h2>
-          <p className="text-gray-400 mb-8">
-            병원 마케팅의 가장 큰 고민<br />AI가 해결해 드립니다.
+          <p className="text-[#b9bdc2] mb-8 text-base">
+            병원 마케팅의 가장 큰 고민, AI가 해결해드려요.
           </p>
           <button
             onClick={handlePricingClick}
-            className="px-10 py-4 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white font-bold text-lg rounded-xl transition-all shadow-2xl shadow-blue-500/30 hover:-translate-y-0.5"
+            className="px-9 sm:px-10 py-3.5 sm:py-4 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.40)] hover:brightness-105 hover:-translate-y-0.5"
           >
             시작하기 →
           </button>
@@ -425,16 +513,16 @@ export default function LandingPage() {
       </section>
 
       {/* 푸터 */}
-      <footer className="border-t border-white/5 py-8 text-center text-xs text-gray-600 leading-relaxed px-4">
+      <footer className="bg-white border-t border-[#dbe2ea] py-9 text-center text-xs text-[#8a93a0] leading-relaxed px-4">
         <p className="mb-1">© 2026 광고진정성. All rights reserved.</p>
         <p className="mb-1">상호: 광고진정성 · 대표: 김석종 · 사업자등록번호: 570-60-00560</p>
         <p className="mb-1">주소: 대구광역시 수성구 청호로422 2층</p>
         <p className="mb-1">통신판매업 신고번호: 제2026-대구수성구-0497호</p>
         <p className="mb-3">연락처: 010-2558-1115 · 이메일: terro6936@naver.com</p>
         <div className="flex flex-wrap justify-center gap-4">
-          <a href="/terms" className="hover:text-gray-400 transition-colors">이용약관</a>
-          <a href="/privacy" className="hover:text-gray-400 transition-colors">개인정보처리방침</a>
-          <a href="/refund" className="hover:text-gray-400 transition-colors">환불정책</a>
+          <a href="/terms" className="hover:text-[#ff4628] transition-colors">이용약관</a>
+          <a href="/privacy" className="hover:text-[#ff4628] transition-colors">개인정보처리방침</a>
+          <a href="/refund" className="hover:text-[#ff4628] transition-colors">환불정책</a>
         </div>
       </footer>
     </div>

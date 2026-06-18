@@ -59,7 +59,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="ko">
-      <body className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
+      <body className="bg-white text-[#202020] min-h-screen">
         <JsonLd data={buildOrganizationJsonLd()} />
         <JsonLd data={buildSoftwareApplicationJsonLd()} />
         <Script

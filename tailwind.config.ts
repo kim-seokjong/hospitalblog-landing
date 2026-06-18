@@ -21,6 +21,18 @@ const config: Config = {
           green: '#10b981',
           blue: '#0ea5e9',
         },
+        // 닥터포스트 랜딩 라이트 테마 brand 팔레트 (dp-light-mockup 기준)
+        brand: {
+          red: '#ff4628',
+          'red-d': '#e63a1c',
+          'red-soft': '#ffece7',
+          ink: '#202020',
+          steel: '#b8c8d7',
+          'steel-soft': '#eef2f6',
+          line: '#dbe2ea',
+          body: '#4a4f55',
+          muted: '#8a93a0',
+        },
       },
     },
   },
