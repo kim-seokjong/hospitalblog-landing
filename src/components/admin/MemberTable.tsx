@@ -17,10 +17,10 @@ const PLAN_LABEL: Record<PlanType, string> = {
 };
 
 const PLAN_BADGE: Record<PlanType, string> = {
-  free: 'bg-gray-700 text-gray-300',
-  basic: 'bg-blue-500/20 text-blue-300',
-  standard: 'bg-violet-500/20 text-violet-300',
-  pro: 'bg-emerald-500/20 text-emerald-300',
+  free: 'bg-[#eef2f6] text-[#4a4f55]',
+  basic: 'bg-blue-50 text-blue-600',
+  standard: 'bg-violet-50 text-violet-600',
+  pro: 'bg-emerald-50 text-emerald-700',
 };
 
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -111,9 +111,9 @@ export default function MemberTable({ members }: MemberTableProps) {
   }, [members, filter, query]);
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="p-4 border-b border-gray-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <h3 className="text-sm font-semibold text-gray-100">
+    <div className="bg-white border border-[#dbe2ea] rounded-xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <div className="p-4 border-b border-[#dbe2ea] flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <h3 className="text-sm font-semibold text-[#202020]">
           회원 목록 ({filtered.length}명)
         </h3>
         <div className="flex flex-col md:flex-row gap-2 md:items-center">
@@ -125,7 +125,7 @@ export default function MemberTable({ members }: MemberTableProps) {
                 className={`px-3 py-1.5 rounded text-xs transition-colors ${
                   filter === f.key
                     ? 'bg-emerald-600 text-white'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-[#eef2f6] text-[#4a4f55] hover:bg-[#dbe2ea]'
                 }`}
               >
                 {f.label}
@@ -137,14 +137,14 @@ export default function MemberTable({ members }: MemberTableProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="이메일·병원명·진료과 검색"
-            className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-emerald-500 min-w-[200px]"
+            className="px-3 py-1.5 bg-white border border-[#dbe2ea] rounded text-xs text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] min-w-[200px]"
           />
         </div>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="bg-gray-800/50 text-xs text-gray-400 uppercase">
+          <thead className="bg-[#eef2f6] text-xs text-[#8a93a0] uppercase">
             <tr>
               <th className="px-4 py-3 text-left font-medium">병원·이름</th>
               <th className="px-4 py-3 text-left font-medium">플랜</th>
@@ -161,7 +161,7 @@ export default function MemberTable({ members }: MemberTableProps) {
               <tr>
                 <td
                   colSpan={8}
-                  className="px-4 py-8 text-center text-gray-500 text-sm"
+                  className="px-4 py-8 text-center text-[#8a93a0] text-sm"
                 >
                   검색 결과 없음
                 </td>
@@ -171,18 +171,18 @@ export default function MemberTable({ members }: MemberTableProps) {
                 const plan = (m.plan ?? 'free') as PlanType;
                 const isExpanded = expandedId === m.id;
                 const rowBg = m.isExpiringSoon
-                  ? 'bg-amber-900/20'
-                  : 'hover:bg-gray-800/40';
+                  ? 'bg-amber-50'
+                  : 'hover:bg-[#eef2f6]';
                 return (
                   <Fragment key={m.id}>
                   <tr
                     onClick={() => toggleExpand(m.id)}
-                    className={`border-t border-gray-800 cursor-pointer ${rowBg}`}
+                    className={`border-t border-[#dbe2ea] cursor-pointer ${rowBg}`}
                   >
-                    <td className="px-4 py-3 text-gray-100">
+                    <td className="px-4 py-3 text-[#202020]">
                       <div className="flex items-center gap-2">
                         <span
-                          className="text-gray-500 text-xs select-none"
+                          className="text-[#8a93a0] text-xs select-none"
                           aria-hidden="true"
                         >
                           {isExpanded ? '▲' : '▼'}
@@ -191,7 +191,7 @@ export default function MemberTable({ members }: MemberTableProps) {
                           <div className="font-medium">
                             {m.hospital_name ?? '-'}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-[#8a93a0]">
                             {m.full_name ?? '-'}
                           </div>
                         </div>
@@ -204,25 +204,25 @@ export default function MemberTable({ members }: MemberTableProps) {
                         {PLAN_LABEL[plan]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-300">
+                    <td className="px-4 py-3 text-[#4a4f55]">
                       {m.email ?? '-'}
                     </td>
-                    <td className="px-4 py-3 text-gray-300">
+                    <td className="px-4 py-3 text-[#4a4f55]">
                       {m.specialty ?? '-'}
                     </td>
-                    <td className="px-4 py-3 text-gray-400">
+                    <td className="px-4 py-3 text-[#8a93a0]">
                       {formatDate(m.created_at)}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-300">
+                    <td className="px-4 py-3 text-right text-[#4a4f55]">
                       {(adjustResults[m.id]?.newCount ?? m.usage_count ?? 0).toLocaleString('ko-KR')}
                     </td>
-                    <td className="px-4 py-3 text-gray-400">
+                    <td className="px-4 py-3 text-[#8a93a0]">
                       {formatDate(m.plan_expires_at)}
                     </td>
                     <td className="px-4 py-3">
                       <span
                         className={
-                          m.isActive ? 'text-emerald-400' : 'text-rose-400'
+                          m.isActive ? 'text-emerald-600' : 'text-rose-600'
                         }
                       >
                         {m.isActive ? '활성' : '만료'}
@@ -230,35 +230,35 @@ export default function MemberTable({ members }: MemberTableProps) {
                     </td>
                   </tr>
                   {isExpanded && (
-                    <tr className="border-t border-gray-800 bg-gray-800/30">
+                    <tr className="border-t border-[#dbe2ea] bg-[#eef2f6]">
                       <td colSpan={8} className="px-4 py-4">
                         <div className="space-y-4">
                           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
                             <div>
-                              <dt className="text-xs uppercase text-gray-500">연락처</dt>
-                              <dd className="mt-0.5 text-gray-200 break-words">{m.phone ?? '-'}</dd>
+                              <dt className="text-xs uppercase text-[#8a93a0]">연락처</dt>
+                              <dd className="mt-0.5 text-[#202020] break-words">{m.phone ?? '-'}</dd>
                             </div>
                             <div>
-                              <dt className="text-xs uppercase text-gray-500">직책</dt>
-                              <dd className="mt-0.5 text-gray-200 break-words">{m.position ?? '-'}</dd>
+                              <dt className="text-xs uppercase text-[#8a93a0]">직책</dt>
+                              <dd className="mt-0.5 text-[#202020] break-words">{m.position ?? '-'}</dd>
                             </div>
                             <div>
-                              <dt className="text-xs uppercase text-gray-500">병원유형</dt>
-                              <dd className="mt-0.5 text-gray-200 break-words">{m.hospital_type ?? '-'}</dd>
+                              <dt className="text-xs uppercase text-[#8a93a0]">병원유형</dt>
+                              <dd className="mt-0.5 text-[#202020] break-words">{m.hospital_type ?? '-'}</dd>
                             </div>
                             <div className="sm:col-span-2 lg:col-span-1">
-                              <dt className="text-xs uppercase text-gray-500">주소</dt>
-                              <dd className="mt-0.5 text-gray-200 break-words">{m.hospital_address ?? '-'}</dd>
+                              <dt className="text-xs uppercase text-[#8a93a0]">주소</dt>
+                              <dd className="mt-0.5 text-[#202020] break-words">{m.hospital_address ?? '-'}</dd>
                             </div>
                           </dl>
 
                           {/* 사용량 조정 */}
-                          <div className="border-t border-gray-700 pt-3">
-                            <p className="text-xs font-semibold text-gray-400 mb-2">사용량 조정</p>
+                          <div className="border-t border-[#dbe2ea] pt-3">
+                            <p className="text-xs font-semibold text-[#4a4f55] mb-2">사용량 조정</p>
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs text-gray-400">
+                              <span className="text-xs text-[#8a93a0]">
                                 현재:{' '}
-                                <span className="text-gray-200 font-bold">
+                                <span className="text-[#202020] font-bold">
                                   {(adjustResults[m.id]?.newCount ?? m.usage_count ?? 0).toLocaleString('ko-KR')}회
                                 </span>
                               </span>
@@ -269,8 +269,8 @@ export default function MemberTable({ members }: MemberTableProps) {
                                   onClick={() => setDeltaInputs((prev) => ({ ...prev, [m.id]: String(v) }))}
                                   className={`px-2 py-1 rounded text-xs font-bold transition-colors ${
                                     v < 0
-                                      ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/40'
-                                      : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/40'
+                                      ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                                   }`}
                                 >
                                   {v > 0 ? `+${v}` : v}
@@ -283,24 +283,24 @@ export default function MemberTable({ members }: MemberTableProps) {
                                   setDeltaInputs((prev) => ({ ...prev, [m.id]: e.target.value }))
                                 }
                                 placeholder="직접입력"
-                                className="w-24 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-emerald-500 text-center"
+                                className="w-24 px-2 py-1 bg-white border border-[#dbe2ea] rounded text-xs text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] text-center"
                               />
                               <button
                                 onClick={() => handleAdjust(m.id)}
                                 disabled={adjusting[m.id] || !deltaInputs[m.id]}
-                                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-xs font-bold rounded transition-colors"
+                                className="px-3 py-1 bg-[#ff4628] hover:bg-[#e63a1c] disabled:bg-[#eef2f6] disabled:text-[#8a93a0] text-white text-xs font-bold rounded transition-colors"
                               >
                                 {adjusting[m.id] ? '처리 중...' : '적용'}
                               </button>
                             </div>
                             {adjustResults[m.id] && (
-                              <p className="mt-1.5 text-xs text-emerald-400">
+                              <p className="mt-1.5 text-xs text-emerald-600">
                                 ✓ 조정 완료 — {adjustResults[m.id]!.delta > 0 ? '+' : ''}{adjustResults[m.id]!.delta}회 적용,
                                 현재 {adjustResults[m.id]!.newCount.toLocaleString('ko-KR')}회
                               </p>
                             )}
                             {adjustErrors[m.id] && (
-                              <p className="mt-1.5 text-xs text-rose-400">✕ {adjustErrors[m.id]}</p>
+                              <p className="mt-1.5 text-xs text-rose-600">✕ {adjustErrors[m.id]}</p>
                             )}
                           </div>
                         </div>

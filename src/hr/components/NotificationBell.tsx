@@ -73,7 +73,7 @@ function NotificationIcon({ type }: { type: string }) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="text-blue-400 flex-shrink-0 mt-0.5"
+      className="text-[#ff4628] flex-shrink-0 mt-0.5"
     >
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -176,7 +176,7 @@ export default function NotificationBell() {
       <button
         onClick={handleToggle}
         aria-label="알림"
-        className="relative w-9 h-9 flex items-center justify-center rounded-lg border border-gray-700 hover:bg-gray-800 active:bg-gray-800 transition-colors"
+        className="relative w-9 h-9 flex items-center justify-center rounded-lg border border-[#dbe2ea] hover:bg-[#eef2f6] active:bg-[#eef2f6] transition-colors"
       >
         <svg
           width="18"
@@ -187,7 +187,7 @@ export default function NotificationBell() {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="text-gray-300"
+          className="text-[#4a4f55]"
         >
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -201,18 +201,18 @@ export default function NotificationBell() {
 
       {/* 드롭다운 */}
       {open && (
-        <div className="absolute right-0 top-11 w-80 sm:w-96 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl shadow-black/50 z-50 overflow-hidden">
+        <div className="absolute right-0 top-11 w-80 sm:w-96 bg-white border border-[#dbe2ea] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] z-50 overflow-hidden">
           {/* 헤더 */}
-          <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-            <span className="text-sm font-semibold text-white">알림</span>
+          <div className="px-4 py-3 border-b border-[#dbe2ea] flex items-center justify-between">
+            <span className="text-sm font-semibold text-[#202020]">알림</span>
             <div className="flex items-center gap-3">
               {unreadCount > 0 && (
-                <span className="text-xs text-gray-400">읽지 않은 {unreadCount}개</span>
+                <span className="text-xs text-[#8a93a0]">읽지 않은 {unreadCount}개</span>
               )}
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllRead}
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium"
+                  className="text-xs text-[#ff4628] hover:text-[#e63a1c] transition-colors font-medium"
                 >
                   모두 읽음
                 </button>
@@ -224,7 +224,7 @@ export default function NotificationBell() {
           <div className="max-h-80 overflow-y-auto">
             {loading && (
               <div className="flex items-center justify-center py-8">
-                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-[#ff4628] border-t-transparent rounded-full animate-spin" />
               </div>
             )}
 
@@ -239,12 +239,12 @@ export default function NotificationBell() {
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="text-gray-600 mx-auto mb-2"
+                  className="text-[#b8c8d7] mx-auto mb-2"
                 >
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                   <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
-                <p className="text-sm text-gray-500">새로운 알림이 없습니다.</p>
+                <p className="text-sm text-[#8a93a0]">새로운 알림이 없습니다.</p>
               </div>
             )}
 
@@ -252,7 +252,7 @@ export default function NotificationBell() {
               <button
                 key={n.id}
                 onClick={() => handleMarkRead(n.id)}
-                className={`w-full text-left px-4 py-3 border-b border-gray-700/50 last:border-b-0 hover:bg-gray-800/50 active:bg-gray-800/70 transition-colors ${
+                className={`w-full text-left px-4 py-3 border-b border-[#dbe2ea] last:border-b-0 hover:bg-[#eef2f6] active:bg-[#eef2f6] transition-colors ${
                   n.is_read ? 'opacity-60' : ''
                 }`}
               >
@@ -260,17 +260,17 @@ export default function NotificationBell() {
                   <NotificationIcon type={n.type} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <p className={`text-xs font-semibold truncate ${n.is_read ? 'text-gray-400' : 'text-white'}`}>
+                      <p className={`text-xs font-semibold truncate ${n.is_read ? 'text-[#8a93a0]' : 'text-[#202020]'}`}>
                         {n.title}
                       </p>
                       {!n.is_read && (
-                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" />
+                        <span className="w-1.5 h-1.5 bg-[#ff4628] rounded-full flex-shrink-0" />
                       )}
                     </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5 leading-snug line-clamp-2">
+                    <p className="text-[11px] text-[#4a4f55] mt-0.5 leading-snug line-clamp-2">
                       {n.message}
                     </p>
-                    <p className="text-[10px] text-gray-500 mt-1">
+                    <p className="text-[10px] text-[#8a93a0] mt-1">
                       {formatRelativeTime(n.created_at)}
                     </p>
                   </div>

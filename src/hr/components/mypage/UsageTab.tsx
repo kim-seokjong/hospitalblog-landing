@@ -42,17 +42,17 @@ export default function UsageTab() {
   }, [fetchUsage]);
 
   if (loading) {
-    return <div className="py-16 text-center text-gray-400 text-sm">사용량을 불러오는 중...</div>;
+    return <div className="py-16 text-center text-[#8a93a0] text-sm">사용량을 불러오는 중...</div>;
   }
 
   if (error || !usage) {
     return (
       <div className="py-16 text-center">
-        <p className="text-red-400 text-sm mb-4">{error ?? '사용량을 불러오지 못했습니다.'}</p>
+        <p className="text-red-600 text-sm mb-4">{error ?? '사용량을 불러오지 못했습니다.'}</p>
         <button
           type="button"
           onClick={() => void fetchUsage()}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          className="px-4 py-2 bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm font-semibold rounded-lg transition-colors"
         >
           다시 시도
         </button>
@@ -72,10 +72,10 @@ export default function UsageTab() {
     <div className="space-y-4">
       {/* 한도 임박 배너 */}
       {nearLimit && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-900/30 border border-amber-700 rounded-xl px-4 py-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-300">이번 달 사용 한도에 거의 도달했습니다</p>
-            <p className="text-xs text-amber-200/70 mt-0.5">
+            <p className="text-sm font-semibold text-amber-700">이번 달 사용 한도에 거의 도달했습니다</p>
+            <p className="text-xs text-amber-600 mt-0.5">
               {usage.usageCount} / {usage.monthlyLimit}건 사용 — 상위 플랜으로 업그레이드하면 더 많은 글을 생성할 수 있습니다.
             </p>
           </div>
@@ -89,28 +89,28 @@ export default function UsageTab() {
       )}
 
       {/* 이번 달 글 생성 게이지 */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-5">
+      <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
         <div className="flex items-center justify-between mb-3 gap-2">
-          <h3 className="text-sm font-semibold text-gray-300">이번 달 글 생성</h3>
+          <h3 className="text-sm font-semibold text-[#202020]">이번 달 글 생성</h3>
           {usage.planName && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-[#ffece7] text-[#ff4628] border border-[#ff4628]/40 font-medium">
               {usage.planName} 플랜
             </span>
           )}
         </div>
 
         <div className="flex items-end gap-2 mb-3">
-          <span className="text-3xl font-bold text-white">{usage.usageCount}</span>
-          <span className="text-sm text-gray-500 mb-1">
+          <span className="text-3xl font-bold text-[#202020]">{usage.usageCount}</span>
+          <span className="text-sm text-[#8a93a0] mb-1">
             {isUnlimited ? '건 (무제한)' : hasPlan ? `/ ${usage.monthlyLimit}건` : '건'}
           </span>
         </div>
 
         {!isUnlimited && hasPlan && (
-          <div className="w-full h-2.5 bg-gray-800 rounded-full overflow-hidden">
+          <div className="w-full h-2.5 bg-[#eef2f6] rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all ${
-                nearLimit ? 'bg-amber-500' : 'bg-blue-500'
+                nearLimit ? 'bg-amber-500' : 'bg-[#ff4628]'
               }`}
               style={{ width: `${Math.round(ratio * 100)}%` }}
               role="progressbar"
@@ -123,39 +123,39 @@ export default function UsageTab() {
         )}
 
         {!hasPlan && (
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-[#8a93a0]">
             활성 플랜이 없습니다.{' '}
-            <a href="/pricing" className="text-blue-400 hover:text-blue-300 underline">요금제 보기</a>
+            <a href="/pricing" className="text-[#ff4628] hover:text-[#e63a1c] underline">요금제 보기</a>
           </p>
         )}
       </div>
 
       {/* 이번 달 이미지 생성 */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-3">이번 달 이미지 생성</h3>
+      <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+        <h3 className="text-sm font-semibold text-[#202020] mb-3">이번 달 이미지 생성</h3>
         <div className="flex items-end gap-2">
-          <span className="text-3xl font-bold text-white">{usage.imageCount}</span>
-          <span className="text-sm text-gray-500 mb-1">장</span>
+          <span className="text-3xl font-bold text-[#202020]">{usage.imageCount}</span>
+          <span className="text-sm text-[#8a93a0] mb-1">장</span>
         </div>
       </div>
 
       {/* 최근 6개월 추이 */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">최근 6개월 글 생성 추이</h3>
+      <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+        <h3 className="text-sm font-semibold text-[#202020] mb-4">최근 6개월 글 생성 추이</h3>
         <div className="flex items-end justify-between gap-2 h-32">
           {usage.monthly.map((m) => (
             <div key={m.month} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
-              <span className="text-[11px] text-gray-400 font-medium">{m.posts}</span>
+              <span className="text-[11px] text-[#4a4f55] font-medium">{m.posts}</span>
               <div
-                className="w-full max-w-[36px] bg-blue-500/70 rounded-t-md"
+                className="w-full max-w-[36px] bg-[#ff4628]/70 rounded-t-md"
                 style={{ height: `${Math.max(4, Math.round((m.posts / maxTrend) * 80))}%` }}
                 aria-label={`${monthLabel(m.month)} 글 ${m.posts}건`}
               />
-              <span className="text-[11px] text-gray-500">{monthLabel(m.month)}</span>
+              <span className="text-[11px] text-[#8a93a0]">{monthLabel(m.month)}</span>
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-gray-600 mt-3">
+        <p className="text-[11px] text-[#8a93a0] mt-3">
           · 글 생성 기록 기준 집계이며, 집계 시스템 도입 이전의 사용량은 포함되지 않을 수 있습니다.
         </p>
       </div>

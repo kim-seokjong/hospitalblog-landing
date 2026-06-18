@@ -39,15 +39,15 @@ interface OriginalityCheckerProps {
 }
 
 const VERDICT_STYLE = {
-  '통과': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/40', text: 'text-emerald-200', badge: 'bg-emerald-500', icon: '✅' },
-  '수정권장': { bg: 'bg-amber-500/10', border: 'border-amber-500/40', text: 'text-amber-200', badge: 'bg-amber-500', icon: '⚠️' },
-  '재작성권장': { bg: 'bg-red-500/10', border: 'border-red-500/40', text: 'text-red-200', badge: 'bg-red-500', icon: '❌' },
+  '통과': { bg: 'bg-green-50', border: 'border-green-300', text: 'text-green-700', badge: 'bg-emerald-500', icon: '✅' },
+  '수정권장': { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-700', badge: 'bg-amber-500', icon: '⚠️' },
+  '재작성권장': { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-600', badge: 'bg-red-500', icon: '❌' },
 };
 
 const SEVERITY_STYLE = {
-  '높음': 'bg-red-500/15 text-red-200 border-red-500/40',
-  '중간': 'bg-amber-500/15 text-amber-200 border-amber-500/40',
-  '낮음': 'bg-blue-500/15 text-blue-200 border-blue-500/40',
+  '높음': 'bg-red-50 text-red-600 border-red-300',
+  '중간': 'bg-amber-50 text-amber-700 border-amber-300',
+  '낮음': 'bg-blue-50 text-blue-700 border-blue-300',
 };
 
 export default function OriginalityChecker({ title, body, keyword }: OriginalityCheckerProps) {
@@ -81,24 +81,24 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
   const style = verdict ? VERDICT_STYLE[verdict] : null;
 
   const scoreColor =
-    score >= 80 ? 'text-emerald-300' :
-    score >= 60 ? 'text-amber-300' : 'text-red-300';
+    score >= 80 ? 'text-emerald-600' :
+    score >= 60 ? 'text-amber-600' : 'text-red-500';
 
   const scoreBarColor =
     score >= 80 ? 'bg-emerald-500' :
     score >= 60 ? 'bg-amber-400' : 'bg-red-500';
 
   return (
-    <div className="bg-[#12153d] rounded-2xl shadow-xl border border-[#2a2b6e] overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] overflow-hidden">
       {/* 헤더 */}
-      <div className="p-4 sm:p-5 border-b border-[#2a2b6e] bg-[#191970]/40">
+      <div className="p-4 sm:p-5 border-b border-[#dbe2ea] bg-[#eef2f6]">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <span className="text-white text-lg">🔍</span>
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-base sm:text-lg font-bold text-white">독창성 검사</h2>
-            <p className="text-xs text-[#8891bd]">네이버 블로그 유사 글 비교 · Claude AI 분석</p>
+            <h2 className="text-base sm:text-lg font-bold text-[#202020]">독창성 검사</h2>
+            <p className="text-xs text-[#8a93a0]">네이버 블로그 유사 글 비교 · Claude AI 분석</p>
           </div>
           {result && (
             <span className={`text-xs font-bold px-3 py-1.5 rounded-full text-white ${style?.badge}`}>
@@ -113,7 +113,7 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
         <button
           onClick={handleCheck}
           disabled={loading}
-          className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 min-h-[48px]"
+          className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 min-h-[48px]"
         >
           {loading ? (
             <>
@@ -129,7 +129,7 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
         </button>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/40 rounded-xl p-3 text-sm text-red-200">
+          <div className="bg-red-50 border border-red-300 rounded-xl p-3 text-sm text-red-600">
             {error}
           </div>
         )}
@@ -138,17 +138,17 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
           <div className="space-y-4">
             {/* 네이버 검색 경고 */}
             {result.naverWarning && (
-              <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 text-xs text-amber-200">
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-xs text-amber-700">
                 ⚠️ {result.naverWarning}
               </div>
             )}
             {/* 점수 */}
             <div className={`rounded-xl border p-4 ${style?.bg} ${style?.border}`}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-white">독창성 점수</span>
+                <span className="text-sm font-bold text-[#202020]">독창성 점수</span>
                 <span className={`text-3xl font-black ${scoreColor}`}>{score}점</span>
               </div>
-              <div className="w-full bg-[#0b0d2b] rounded-full h-3 overflow-hidden border border-[#2a2b6e]">
+              <div className="w-full bg-[#eef2f6] rounded-full h-3 overflow-hidden border border-[#dbe2ea]">
                 <div
                   className={`h-3 rounded-full transition-all duration-700 ${scoreBarColor}`}
                   style={{ width: `${score}%` }}
@@ -162,7 +162,7 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
             {/* 위험 요소 */}
             {(result.analysis.risks ?? []).length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-bold text-white">⚠️ 유사 표현 감지 ({(result.analysis.risks ?? []).length}건)</p>
+                <p className="text-xs font-bold text-[#202020]">⚠️ 유사 표현 감지 ({(result.analysis.risks ?? []).length}건)</p>
                 {(result.analysis.risks ?? []).map((risk, i) => (
                   <div key={i} className={`rounded-lg border p-3 ${SEVERITY_STYLE[risk.severity]}`}>
                     <div className="flex items-center gap-2 mb-1">
@@ -179,11 +179,11 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
 
             {/* 개선 제안 */}
             {(result.analysis.suggestions ?? []).length > 0 && (
-              <div className="bg-blue-500/10 border border-blue-500/40 rounded-xl p-4">
-                <p className="text-xs font-bold text-blue-200 mb-2">💡 개선 제안</p>
+              <div className="bg-blue-50 border border-blue-300 rounded-xl p-4">
+                <p className="text-xs font-bold text-blue-700 mb-2">💡 개선 제안</p>
                 <ul className="space-y-1">
                   {(result.analysis.suggestions ?? []).map((s, i) => (
-                    <li key={i} className="text-xs text-blue-100 flex items-start gap-1.5">
+                    <li key={i} className="text-xs text-blue-800 flex items-start gap-1.5">
                       <span className="flex-shrink-0 mt-0.5">•</span>
                       <span>{s}</span>
                     </li>
@@ -196,7 +196,7 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
             <div>
               <button
                 onClick={() => setShowSimilar(v => !v)}
-                className="flex items-center gap-1.5 text-xs font-bold text-[#c5caf0] hover:text-white min-h-[36px]"
+                className="flex items-center gap-1.5 text-xs font-bold text-[#202020] hover:text-[#ff4628] min-h-[36px]"
               >
                 <span>{showSimilar ? '▼' : '▶'}</span>
                 네이버 검색 유사 글 ({result.similarPosts.length}건)
@@ -210,18 +210,18 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
                       href={post.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block bg-[#0b0d2b] border border-[#2a2b6e] rounded-lg p-3 hover:bg-[#191970]/40 transition-colors"
+                      className="block bg-[#eef2f6] border border-[#dbe2ea] rounded-lg p-3 hover:bg-[#e2e8ef] transition-colors"
                     >
-                      <p className="text-xs font-bold text-blue-300 truncate">{post.title}</p>
-                      <p className="text-[11px] text-[#c5caf0] mt-0.5 line-clamp-2">{post.description}</p>
-                      <p className="text-[10px] text-[#8891bd] mt-1">{post.blogger} · {post.date}</p>
+                      <p className="text-xs font-bold text-blue-600 truncate">{post.title}</p>
+                      <p className="text-[11px] text-[#4a4f55] mt-0.5 line-clamp-2">{post.description}</p>
+                      <p className="text-[10px] text-[#8a93a0] mt-1">{post.blogger} · {post.date}</p>
                     </a>
                   ))}
                 </div>
               )}
             </div>
 
-            <p className="text-[10px] text-[#8891bd] text-center">
+            <p className="text-[10px] text-[#8a93a0] text-center">
               검사 시각: {new Date(result.checkedAt).toLocaleString('ko-KR')}
             </p>
           </div>

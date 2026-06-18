@@ -208,21 +208,21 @@ export default function TeamSettingsPage() {
 
   if (!authChecked || loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-gray-400 text-sm">로딩 중...</div>
+      <div className="min-h-screen bg-[#eef2f6] flex items-center justify-center">
+        <div className="text-[#8a93a0] text-sm">로딩 중...</div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-[#eef2f6] flex items-center justify-center px-4">
         <div className="text-center">
-          <div className="text-white font-semibold text-base mb-2">로그인이 필요합니다</div>
-          <div className="text-gray-400 text-sm mb-6">팀 설정은 로그인 후 이용할 수 있습니다.</div>
+          <div className="text-[#202020] font-semibold text-base mb-2">로그인이 필요합니다</div>
+          <div className="text-[#8a93a0] text-sm mb-6">팀 설정은 로그인 후 이용할 수 있습니다.</div>
           <a
             href="/"
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+            className="px-6 py-2.5 bg-[#ff4628] text-white rounded-lg text-sm font-semibold hover:bg-[#e63a1c] transition-colors"
           >
             앱으로 이동해서 로그인
           </a>
@@ -234,22 +234,22 @@ export default function TeamSettingsPage() {
   const isPaidPlan = PAID_PLANS.includes(currentPlan);
 
   return (
-    <div className="min-h-screen bg-gray-950 py-8 px-4">
+    <div className="min-h-screen bg-[#eef2f6] py-8 px-4">
       <div className="max-w-2xl mx-auto">
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-bold text-white">팀 관리</h1>
-            <p className="text-gray-400 text-sm mt-0.5">{user.email}</p>
+            <h1 className="text-xl font-bold text-[#202020]">팀 관리</h1>
+            <p className="text-[#8a93a0] text-sm mt-0.5">{user.email}</p>
           </div>
           <div className="flex items-center gap-3">
             <a
               href="/settings/profile"
-              className="text-sm text-gray-400 hover:text-gray-200 transition-colors"
+              className="text-sm text-[#8a93a0] hover:text-[#202020] transition-colors"
             >
               프로필
             </a>
-            <a href="/" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">
+            <a href="/" className="text-sm text-[#8a93a0] hover:text-[#202020] transition-colors">
               ← 앱으로
             </a>
           </div>
@@ -260,8 +260,8 @@ export default function TeamSettingsPage() {
           <div
             className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
               alert.type === 'success'
-                ? 'bg-green-900/50 border border-green-700 text-green-300'
-                : 'bg-red-900/50 border border-red-700 text-red-300'
+                ? 'bg-green-50 border border-green-200 text-green-700'
+                : 'bg-red-50 border border-red-200 text-red-600'
             }`}
           >
             {alert.text}
@@ -272,7 +272,7 @@ export default function TeamSettingsPage() {
           {/* 섹션 1 - 내가 초대한 멤버 목록 */}
           <Section title={`초대한 멤버 (${members.length}명)`}>
             {members.length === 0 ? (
-              <p className="text-sm text-gray-500 py-2">아직 초대한 멤버가 없습니다.</p>
+              <p className="text-sm text-[#8a93a0] py-2">아직 초대한 멤버가 없습니다.</p>
             ) : (
               <div className="space-y-1">
                 {members.map(member => (
@@ -299,32 +299,32 @@ export default function TeamSettingsPage() {
               {PLAN_LIMIT_INFO.map(({ plan, limit }) => (
                 <div
                   key={plan}
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-center"
+                  className="bg-[#eef2f6] border border-[#dbe2ea] rounded-lg px-3 py-2 text-center"
                 >
-                  <div className="text-xs font-semibold text-gray-300 mb-0.5">{plan}</div>
-                  <div className="text-xs text-gray-500">{limit}</div>
+                  <div className="text-xs font-semibold text-[#4a4f55] mb-0.5">{plan}</div>
+                  <div className="text-xs text-[#8a93a0]">{limit}</div>
                 </div>
               ))}
             </div>
 
             {!isPaidPlan ? (
-              <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg px-4 py-3">
-                <p className="text-sm text-yellow-300 font-medium mb-1">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
+                <p className="text-sm text-yellow-700 font-medium mb-1">
                   팀 기능은 베이직 이상 플랜에서 사용 가능합니다
                 </p>
                 <a
                   href="/pricing"
-                  className="text-xs text-yellow-400 underline hover:text-yellow-300 transition-colors"
+                  className="text-xs text-yellow-700 underline hover:text-yellow-600 transition-colors"
                 >
                   플랜 업그레이드하기 →
                 </a>
               </div>
             ) : (
               <>
-                <p className="text-xs text-blue-400 mb-3 bg-blue-900/30 border border-blue-800 rounded-lg px-3 py-2">
+                <p className="text-xs text-[#ff4628] mb-3 bg-[#ffece7] border border-[#ff4628]/30 rounded-lg px-3 py-2">
                   초대 후 상대방이 닥터포스트에 로그인하여 초대를 수락하면 팀에 합류합니다.
                   {planLimit !== Infinity && planLimit > 0 && (
-                    <span className="block mt-0.5 text-blue-300">
+                    <span className="block mt-0.5 text-[#e63a1c]">
                       현재 플랜: {members.length}/{planLimit}명 사용 중
                     </span>
                   )}
@@ -338,21 +338,21 @@ export default function TeamSettingsPage() {
                       if (e.key === 'Enter') void handleInvite();
                     }}
                     placeholder="초대할 이메일 주소"
-                    className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                    className="flex-1 bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#b8c8d7] focus:outline-none focus:border-[#ff4628] transition-colors"
                   />
                   <select
                     value={inviteRole}
                     onChange={e => setInviteRole(e.target.value as MemberRole)}
-                    className="sm:w-28 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors appearance-none"
+                    className="sm:w-28 bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors appearance-none"
                   >
-                    <option value="member" className="bg-gray-800">멤버</option>
-                    <option value="admin" className="bg-gray-800">관리자</option>
+                    <option value="member" className="bg-white">멤버</option>
+                    <option value="admin" className="bg-white">관리자</option>
                   </select>
                   <button
                     type="button"
                     onClick={() => void handleInvite()}
                     disabled={inviting || !inviteEmail.trim()}
-                    className="sm:w-28 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="sm:w-28 px-4 py-2.5 bg-[#ff4628] text-white rounded-lg text-sm font-semibold hover:bg-[#e63a1c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {inviting ? '초대 중...' : '초대하기'}
                   </button>
@@ -364,19 +364,19 @@ export default function TeamSettingsPage() {
           {/* 섹션 3 - 내게 온 초대 */}
           <Section title="받은 초대">
             {pendingInvites.length === 0 ? (
-              <p className="text-sm text-gray-500 py-2">받은 초대가 없습니다.</p>
+              <p className="text-sm text-[#8a93a0] py-2">받은 초대가 없습니다.</p>
             ) : (
               <div className="space-y-2">
                 {pendingInvites.map(invite => (
                   <div
                     key={invite.id}
-                    className="flex items-center justify-between gap-3 py-2.5 border-b border-gray-800 last:border-0"
+                    className="flex items-center justify-between gap-3 py-2.5 border-b border-[#dbe2ea] last:border-0"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm text-white font-medium truncate">
+                      <div className="text-sm text-[#202020] font-medium truncate">
                         초대 받은 역할: {ROLE_LABELS[invite.role]}
                       </div>
-                      <div className="text-xs text-gray-500 mt-0.5">
+                      <div className="text-xs text-[#8a93a0] mt-0.5">
                         초대일: {formatDate(invite.created_at)}
                       </div>
                     </div>
@@ -384,7 +384,7 @@ export default function TeamSettingsPage() {
                       type="button"
                       onClick={() => void handleAcceptInvite(invite.id)}
                       disabled={acceptingId === invite.id}
-                      className="flex-shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="flex-shrink-0 px-3 py-1.5 bg-[#ff4628] text-white rounded-lg text-xs font-semibold hover:bg-[#e63a1c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {acceptingId === invite.id ? '수락 중...' : '수락'}
                     </button>
@@ -425,15 +425,15 @@ function MemberRow({
   const isUpdatingRole = updatingRoleId === member.id;
 
   return (
-    <div className="py-3 border-b border-gray-800 last:border-0">
+    <div className="py-3 border-b border-[#dbe2ea] last:border-0">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-white font-medium break-all">{member.member_email}</span>
+            <span className="text-sm text-[#202020] font-medium break-all">{member.member_email}</span>
             <RoleBadge role={member.role} />
             <StatusBadge status={member.status} />
           </div>
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-xs text-[#8a93a0] mt-1">
             {member.status === 'active'
               ? `가입일: ${formatDate(member.joined_at)}`
               : `초대일: ${formatDate(member.created_at)}`}
@@ -446,28 +446,28 @@ function MemberRow({
               value={member.role}
               disabled={isUpdatingRole}
               onChange={e => void onRoleChange(member.id, e.target.value as MemberRole)}
-              className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500 transition-colors appearance-none disabled:opacity-50"
+              className="bg-white border border-[#dbe2ea] rounded-lg px-2 py-1 text-xs text-[#4a4f55] focus:outline-none focus:border-[#ff4628] transition-colors appearance-none disabled:opacity-50"
             >
-              <option value="member" className="bg-gray-800">멤버</option>
-              <option value="admin" className="bg-gray-800">관리자</option>
+              <option value="member" className="bg-white">멤버</option>
+              <option value="admin" className="bg-white">관리자</option>
             </select>
           )}
 
           {isConfirming ? (
             <div className="flex items-center gap-1">
-              <span className="text-xs text-gray-400 hidden sm:inline">정말 제거?</span>
+              <span className="text-xs text-[#8a93a0] hidden sm:inline">정말 제거?</span>
               <button
                 type="button"
                 onClick={() => void onDeleteConfirm(member.id)}
                 disabled={isDeleting}
-                className="px-2 py-1 bg-red-700 text-white rounded text-xs font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors"
+                className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold hover:bg-red-500 disabled:opacity-50 transition-colors"
               >
                 {isDeleting ? '...' : '확인'}
               </button>
               <button
                 type="button"
                 onClick={onCancelDelete}
-                className="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs hover:bg-gray-600 transition-colors"
+                className="px-2 py-1 bg-[#eef2f6] text-[#4a4f55] rounded text-xs hover:bg-[#dbe2ea] transition-colors"
               >
                 취소
               </button>
@@ -477,7 +477,7 @@ function MemberRow({
               type="button"
               onClick={() => onDeleteRequest(member.id)}
               disabled={isDeleting}
-              className="px-2.5 py-1 bg-gray-800 border border-gray-700 text-gray-400 rounded-lg text-xs hover:border-red-700 hover:text-red-400 disabled:opacity-50 transition-colors"
+              className="px-2.5 py-1 bg-white border border-[#dbe2ea] text-[#8a93a0] rounded-lg text-xs hover:border-red-400 hover:text-red-600 disabled:opacity-50 transition-colors"
             >
               제거
             </button>
@@ -490,8 +490,8 @@ function MemberRow({
 
 function RoleBadge({ role }: { role: MemberRole }) {
   const styles: Record<MemberRole, string> = {
-    admin: 'bg-purple-900/50 border border-purple-700 text-purple-300',
-    member: 'bg-gray-800 border border-gray-700 text-gray-400',
+    admin: 'bg-purple-50 border border-purple-200 text-purple-700',
+    member: 'bg-[#eef2f6] border border-[#dbe2ea] text-[#8a93a0]',
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles[role]}`}>
@@ -502,8 +502,8 @@ function RoleBadge({ role }: { role: MemberRole }) {
 
 function StatusBadge({ status }: { status: MemberStatus }) {
   const styles: Record<MemberStatus, string> = {
-    active: 'bg-green-900/50 border border-green-700 text-green-300',
-    pending: 'bg-yellow-900/50 border border-yellow-700 text-yellow-300',
+    active: 'bg-green-50 border border-green-200 text-green-700',
+    pending: 'bg-yellow-50 border border-yellow-200 text-yellow-700',
   };
   const labels: Record<MemberStatus, string> = {
     active: '활성',
@@ -518,8 +518,8 @@ function StatusBadge({ status }: { status: MemberStatus }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-5">
-      <h2 className="text-sm font-semibold text-gray-300 mb-4 pb-3 border-b border-gray-800">
+    <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <h2 className="text-sm font-semibold text-[#4a4f55] mb-4 pb-3 border-b border-[#dbe2ea]">
         {title}
       </h2>
       <div className="space-y-3">{children}</div>

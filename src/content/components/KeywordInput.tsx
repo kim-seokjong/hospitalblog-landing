@@ -58,21 +58,21 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
   };
 
   return (
-    <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-4 sm:p-6 shadow-xl">
+    <div className="rounded-2xl border border-[#dbe2ea] bg-white p-4 sm:p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center">
-          <span className="text-[#4f6ef7] font-bold text-sm">1</span>
+        <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-[#ffece7] border border-[#ff4628]/30 flex items-center justify-center">
+          <span className="text-[#ff4628] font-bold text-sm">1</span>
         </div>
         <div>
-          <h2 className="text-base font-bold text-white">키워드 입력</h2>
-          <p className="text-xs text-[#8891bd]">블로그 주제 키워드를 입력하세요</p>
+          <h2 className="text-base font-bold text-[#202020]">키워드 입력</h2>
+          <p className="text-xs text-[#8a93a0]">블로그 주제 키워드를 입력하세요</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-[#8891bd] mb-1.5">
-            핵심 키워드 <span className="text-[#4f6ef7]">*</span>
+          <label className="block text-xs font-semibold text-[#8a93a0] mb-1.5">
+            핵심 키워드 <span className="text-[#ff4628]">*</span>
           </label>
           <input
             ref={keywordInputRef}
@@ -80,45 +80,45 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="예: 레이저 토닝, 보톡스, 도수치료"
-            className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white placeholder-[#555d8a] text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
+            className="w-full px-4 py-3 rounded-xl bg-white border border-[#dbe2ea] text-[#202020] placeholder-[#b8c8d7] text-sm focus:outline-none focus:border-[#ff4628] focus:ring-1 focus:ring-[#ff4628]/30 transition-colors"
             disabled={isLoading}
             autoComplete="off"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-[#8891bd] mb-1.5 flex items-center gap-1.5">
+          <label className="block text-xs font-semibold text-[#8a93a0] mb-1.5 flex items-center gap-1.5">
             병원 유형
-            {lockedHospitalType && <span className="text-[9px] bg-[#2a2b6e] text-[#8891bd] px-1.5 py-0.5 rounded-full">🔒 가입 시 설정됨</span>}
+            {lockedHospitalType && <span className="text-[9px] bg-[#eef2f6] text-[#8a93a0] px-1.5 py-0.5 rounded-full">🔒 가입 시 설정됨</span>}
           </label>
           {lockedHospitalType ? (
-            <div className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e]/60 text-[#8891bd] text-sm cursor-not-allowed">
+            <div className="w-full px-4 py-3 rounded-xl bg-[#eef2f6] border border-[#dbe2ea] text-[#8a93a0] text-sm cursor-not-allowed">
               {lockedHospitalType}
             </div>
           ) : (
             <select
               value={hospitalType}
               onChange={(e) => setHospitalType(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
+              className="w-full px-4 py-3 rounded-xl bg-white border border-[#dbe2ea] text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] focus:ring-1 focus:ring-[#ff4628]/30 transition-colors"
               disabled={isLoading}
             >
               {HOSPITAL_TYPES.map((type) => (
-                <option key={type} value={type} className="bg-[#12153d]">{type}</option>
+                <option key={type} value={type} className="bg-white">{type}</option>
               ))}
             </select>
           )}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-[#8891bd] mb-1.5">
-            지역 <span className="text-[#555d8a] font-normal">(선택 · 키워드 추천에 활용)</span>
+          <label className="block text-xs font-semibold text-[#8a93a0] mb-1.5">
+            지역 <span className="text-[#b8c8d7] font-normal">(선택 · 키워드 추천에 활용)</span>
           </label>
           <input
             type="text"
             value={region}
             onChange={(e) => setRegion(e.target.value)}
             placeholder="예: 강남, 홍대, 분당"
-            className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white placeholder-[#555d8a] text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors"
+            className="w-full px-4 py-3 rounded-xl bg-white border border-[#dbe2ea] text-[#202020] placeholder-[#b8c8d7] text-sm focus:outline-none focus:border-[#ff4628] focus:ring-1 focus:ring-[#ff4628]/30 transition-colors"
             disabled={isLoading}
             autoComplete="off"
           />
@@ -141,22 +141,22 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
         />
 
         <div>
-          <label className="block text-xs font-semibold text-[#8891bd] mb-1.5">
-            추가 정보 <span className="text-[#555d8a] font-normal">(선택)</span>
+          <label className="block text-xs font-semibold text-[#8a93a0] mb-1.5">
+            추가 정보 <span className="text-[#b8c8d7] font-normal">(선택)</span>
           </label>
           <textarea
             value={additionalInfo}
             onChange={(e) => setAdditionalInfo(e.target.value)}
             placeholder="강조할 내용, 타겟 환자군, 주요 서비스 등"
             rows={2}
-            className="w-full px-4 py-3 rounded-xl bg-[#0b0d2b] border border-[#2a2b6e] text-white placeholder-[#555d8a] text-sm focus:outline-none focus:border-[#4f6ef7] focus:ring-1 focus:ring-[#4f6ef7]/30 transition-colors resize-none"
+            className="w-full px-4 py-3 rounded-xl bg-white border border-[#dbe2ea] text-[#202020] placeholder-[#b8c8d7] text-sm focus:outline-none focus:border-[#ff4628] focus:ring-1 focus:ring-[#ff4628]/30 transition-colors resize-none"
             disabled={isLoading}
           />
         </div>
 
         {/* 글쓰기 말투 */}
         <div>
-          <label className="block text-xs font-semibold text-[#8891bd] mb-2">글쓰기 말투</label>
+          <label className="block text-xs font-semibold text-[#8a93a0] mb-2">글쓰기 말투</label>
           <div className="grid grid-cols-3 gap-2">
             {WRITING_STYLES.map((style) => (
               <button
@@ -166,8 +166,8 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
                 disabled={isLoading}
                 className={`flex flex-col items-center gap-1 py-3 px-1 rounded-xl border-2 transition-all text-center min-h-[72px] ${
                   writingStyle === style.value
-                    ? 'border-[#4f6ef7] bg-[#4f6ef7]/10 text-white'
-                    : 'border-[#2a2b6e] bg-[#0b0d2b] text-[#8891bd] hover:border-[#4f6ef7]/40 active:bg-[#191970]/30'
+                    ? 'border-[#ff4628] bg-[#ffece7] text-[#202020]'
+                    : 'border-[#dbe2ea] bg-white text-[#8a93a0] hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
                 }`}
               >
                 <span className="text-xl leading-none">{style.icon}</span>
@@ -180,7 +180,7 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
 
         {/* 문단 구성 (최적화 방식) */}
         <div>
-          <label className="block text-xs font-semibold text-[#8891bd] mb-2">문단 구성</label>
+          <label className="block text-xs font-semibold text-[#8a93a0] mb-2">문단 구성</label>
           <div className="grid grid-cols-2 gap-2">
             {OPTIMIZATION_MODES.map((mode) => (
               <button
@@ -190,8 +190,8 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
                 disabled={isLoading}
                 className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all text-center min-h-[72px] ${
                   optimizationMode === mode.value
-                    ? 'border-[#4f6ef7] bg-[#4f6ef7]/10 text-white'
-                    : 'border-[#2a2b6e] bg-[#0b0d2b] text-[#8891bd] hover:border-[#4f6ef7]/40 active:bg-[#191970]/30'
+                    ? 'border-[#ff4628] bg-[#ffece7] text-[#202020]'
+                    : 'border-[#dbe2ea] bg-white text-[#8a93a0] hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
                 }`}
               >
                 <span className="text-xl leading-none">{mode.icon}</span>
@@ -204,7 +204,7 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
 
         {/* 게시 사이트 */}
         <div>
-          <label className="block text-xs font-semibold text-[#8891bd] mb-2">게시 사이트</label>
+          <label className="block text-xs font-semibold text-[#8a93a0] mb-2">게시 사이트</label>
           <div className="grid grid-cols-2 gap-2">
             {TARGET_SITES.map((site) => (
               <button
@@ -214,8 +214,8 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
                 disabled={isLoading}
                 className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all text-center min-h-[72px] ${
                   targetSite === site.value
-                    ? 'border-[#4f6ef7] bg-[#4f6ef7]/10 text-white'
-                    : 'border-[#2a2b6e] bg-[#0b0d2b] text-[#8891bd] hover:border-[#4f6ef7]/40 active:bg-[#191970]/30'
+                    ? 'border-[#ff4628] bg-[#ffece7] text-[#202020]'
+                    : 'border-[#dbe2ea] bg-white text-[#8a93a0] hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
                 }`}
               >
                 <span className="text-xl leading-none">{site.icon}</span>
@@ -226,10 +226,10 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
           </div>
         </div>
 
-        <div className="bg-amber-500/15 border border-amber-500/40 rounded-xl p-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
           <div className="flex items-start gap-2">
-            <span className="text-amber-300 text-sm flex-shrink-0">⚠️</span>
-            <p className="text-[11px] font-semibold text-amber-100 leading-relaxed">
+            <span className="text-amber-500 text-sm flex-shrink-0">⚠️</span>
+            <p className="text-[11px] font-semibold text-amber-700 leading-relaxed">
               의료법 제56조 금지어 필터링 자동 적용 (완치, 최고, 100% 등 금지)
             </p>
           </div>
@@ -238,7 +238,7 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
         <button
           type="submit"
           disabled={!keyword.trim() || isLoading}
-          className="w-full py-4 bg-[#4f6ef7] hover:bg-[#3d5ef0] active:bg-[#2d4ee0] disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#4f6ef7]/20 min-h-[52px]"
+          className="w-full py-4 bg-[#ff4628] hover:bg-[#e63a1c] active:bg-[#e63a1c] disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] min-h-[52px]"
         >
           {isLoading ? (
             <>

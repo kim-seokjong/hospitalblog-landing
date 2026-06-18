@@ -136,7 +136,7 @@ export default function ProfileTab() {
 
   if (loading) {
     return (
-      <div className="py-16 text-center text-gray-400 text-sm">프로필을 불러오는 중...</div>
+      <div className="py-16 text-center text-[#8a93a0] text-sm">프로필을 불러오는 중...</div>
     );
   }
 
@@ -146,8 +146,8 @@ export default function ProfileTab() {
       {saveMsg && (
         <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
           saveMsg.type === 'success'
-            ? 'bg-green-900/50 border border-green-700 text-green-300'
-            : 'bg-red-900/50 border border-red-700 text-red-300'
+            ? 'bg-green-50 border border-green-200 text-green-700'
+            : 'bg-red-50 border border-red-200 text-red-600'
         }`}>
           {saveMsg.text}
         </div>
@@ -228,7 +228,7 @@ export default function ProfileTab() {
 
         {/* 3. 병원 소개 */}
         <Section title="병원 소개">
-          <p className="text-xs text-blue-400 mb-2 bg-blue-900/30 border border-blue-800 rounded-lg px-3 py-2">
+          <p className="text-xs text-[#ff4628] mb-2 bg-[#ffece7] border border-[#ff4628]/30 rounded-lg px-3 py-2">
             입력한 병원 소개는 AI 블로그 글 생성 시 자동으로 반영됩니다.
           </p>
           <Field label="병원 소개">
@@ -237,14 +237,14 @@ export default function ProfileTab() {
               onChange={e => setProfile(p => ({ ...p, hospital_desc: e.target.value }))}
               placeholder="병원의 특징, 진료 철학, 차별화 포인트 등을 입력해주세요."
               rows={4}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#8a93a0] resize-none focus:outline-none focus:border-[#ff4628] transition-colors"
             />
           </Field>
         </Section>
 
         {/* 4. 자주 쓰는 키워드 */}
         <Section title="자주 쓰는 키워드">
-          <p className="text-xs text-gray-500 mb-3">
+          <p className="text-xs text-[#8a93a0] mb-3">
             Enter 키로 추가 · 최대 10개 · 글 생성 시 키워드로 자동 활용됩니다
           </p>
           <div className="flex gap-2 mb-3">
@@ -254,12 +254,12 @@ export default function ProfileTab() {
               onChange={e => setKeywordInput(e.target.value)}
               onKeyDown={handleKeywordKeyDown}
               placeholder="키워드 입력 후 Enter"
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+              className="flex-1 bg-white border border-[#dbe2ea] rounded-lg px-3 py-2 text-[#202020] text-sm placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] transition-colors"
             />
             <button
               type="button"
               onClick={addKeyword}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="px-3 py-2 bg-[#ff4628] text-white rounded-lg text-sm font-medium hover:bg-[#e63a1c] transition-colors"
             >
               추가
             </button>
@@ -267,12 +267,12 @@ export default function ProfileTab() {
           {profile.hospital_keywords.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {profile.hospital_keywords.map(kw => (
-                <span key={kw} className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-200">
+                <span key={kw} className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#eef2f6] border border-[#dbe2ea] rounded-full text-sm text-[#202020]">
                   {kw}
                   <button
                     type="button"
                     onClick={() => removeKeyword(kw)}
-                    className="text-gray-500 hover:text-red-400 transition-colors leading-none"
+                    className="text-[#8a93a0] hover:text-red-600 transition-colors leading-none"
                     aria-label={`${kw} 삭제`}
                   >
                     ×
@@ -330,7 +330,7 @@ export default function ProfileTab() {
           type="button"
           onClick={() => void handleSave()}
           disabled={saving}
-          className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full sm:w-auto px-8 py-3 bg-[#ff4628] text-white rounded-xl font-semibold text-sm hover:bg-[#e63a1c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? '저장 중...' : '저장하기'}
         </button>

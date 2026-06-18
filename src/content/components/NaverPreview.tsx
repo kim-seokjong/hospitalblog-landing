@@ -28,13 +28,13 @@ export default function NaverPreview({ title, body, keyword }: NaverPreviewProps
     : `${title}에 대해 알아보겠습니다. 전문의와 상담 후 결정하시기 바랍니다.`;
 
   return (
-    <div className="bg-[#12153d] rounded-2xl shadow-xl border border-[#2a2b6e] overflow-hidden">
-      <div className="bg-slate-900 p-4 sm:p-5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
-        <h3 className="text-white font-bold text-base">네이버 검색 미리보기</h3>
-        <p className="text-slate-200 text-xs mt-0.5">실제 검색 결과 화면 시뮬레이션</p>
+    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] overflow-hidden">
+      <div className="bg-[#eef2f6] p-4 sm:p-5">
+        <h3 className="text-[#202020] font-bold text-base">네이버 검색 미리보기</h3>
+        <p className="text-[#4a4f55] text-xs mt-0.5">실제 검색 결과 화면 시뮬레이션</p>
       </div>
 
-      <div className="p-4 sm:p-5 bg-[#12153d]">
+      <div className="p-4 sm:p-5 bg-white">
         {/* 검색창 시뮬레이션 */}
         <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 mb-4">
           <span className="text-green-600 font-black text-lg">N</span>
@@ -85,7 +85,7 @@ export default function NaverPreview({ title, body, keyword }: NaverPreviewProps
 
         {/* 제목 분석 */}
         <div className="mt-4 space-y-2">
-          <h4 className="text-xs font-bold text-white">제목 분석</h4>
+          <h4 className="text-xs font-bold text-[#202020]">제목 분석</h4>
           <div className="grid grid-cols-3 gap-2">
             {[
               {
@@ -107,10 +107,10 @@ export default function NaverPreview({ title, body, keyword }: NaverPreviewProps
                 hint: '앞 10자 내 배치'
               },
             ].map(({ label, value, ok, hint }) => (
-              <div key={label} className={`rounded-lg p-2 text-center border ${ok ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
-                <p className="text-xs text-[#c5caf0]">{label}</p>
-                <p className={`text-xs font-bold mt-0.5 ${ok ? 'text-emerald-300' : 'text-amber-300'}`}>{value}</p>
-                <p className="text-[10px] text-[#8891bd] mt-0.5">{hint}</p>
+              <div key={label} className={`rounded-lg p-2 text-center border ${ok ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                <p className="text-xs text-[#202020]">{label}</p>
+                <p className={`text-xs font-bold mt-0.5 ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>{value}</p>
+                <p className="text-[10px] text-[#8a93a0] mt-0.5">{hint}</p>
               </div>
             ))}
           </div>

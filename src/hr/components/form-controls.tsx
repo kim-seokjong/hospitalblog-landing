@@ -10,8 +10,8 @@
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-5">
-      <h2 className="text-sm font-semibold text-gray-300 mb-4 pb-3 border-b border-gray-800">{title}</h2>
+    <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <h2 className="text-sm font-semibold text-[#202020] mb-4 pb-3 border-b border-[#dbe2ea]">{title}</h2>
       <div className="space-y-3">{children}</div>
     </div>
   );
@@ -20,7 +20,7 @@ export function Section({ title, children }: { title: string; children: React.Re
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>
+      <label className="block text-xs font-medium text-[#4a4f55] mb-1.5">{label}</label>
       {children}
     </div>
   );
@@ -43,7 +43,7 @@ export function Input({
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+      className="w-full bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] transition-colors"
     />
   );
 }
@@ -61,10 +61,10 @@ export function Select({
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors appearance-none"
+      className="w-full bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors appearance-none"
     >
       {options.map(opt => (
-        <option key={opt.value} value={opt.value} className="bg-gray-800">
+        <option key={opt.value} value={opt.value} className="bg-white text-[#202020]">
           {opt.label}
         </option>
       ))}
@@ -86,8 +86,8 @@ export function ToggleRow({
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
-        <div className="text-sm text-white font-medium">{label}</div>
-        <div className="text-xs text-gray-500 mt-0.5">{description}</div>
+        <div className="text-sm text-[#202020] font-medium">{label}</div>
+        <div className="text-xs text-[#8a93a0] mt-0.5">{description}</div>
       </div>
       <button
         type="button"
@@ -95,7 +95,7 @@ export function ToggleRow({
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors duration-200 focus:outline-none ${
-          checked ? 'bg-blue-600' : 'bg-gray-700'
+          checked ? 'bg-[#ff4628]' : 'bg-[#dbe2ea]'
         }`}
       >
         <span

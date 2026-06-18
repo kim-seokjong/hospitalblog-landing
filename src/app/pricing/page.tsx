@@ -23,7 +23,7 @@ export default function PricingPage() {
         src="https://cdn.portone.io/v2/browser-sdk.js"
         strategy="lazyOnload"
       />
-      <main className="min-h-screen bg-gray-950">
+      <main className="min-h-screen bg-white">
         <div className="pt-16">
           <PricingSection />
           <PricingFaqSection />

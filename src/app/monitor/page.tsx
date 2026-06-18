@@ -64,8 +64,8 @@ function KeywordChip({ keyword }: { keyword: string }) {
       onClick={handleCopy}
       className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
         copied
-          ? 'bg-green-500/20 border-green-500/50 text-green-400'
-          : 'bg-[#191970]/60 border-[#2a2b6e] text-[#8891bd] hover:border-[#4f6ef7]/50 hover:text-white hover:bg-[#4f6ef7]/10 active:bg-[#4f6ef7]/20'
+          ? 'bg-green-50 border-green-500/50 text-green-700'
+          : 'bg-[#eef2f6] border-[#dbe2ea] text-[#4a4f55] hover:border-[#ff4628]/50 hover:text-[#202020] hover:bg-[#ffece7] active:bg-[#ffece7]'
       }`}
     >
       {copied ? '✓ 복사됨' : `# ${keyword}`}
@@ -121,27 +121,27 @@ export default function MonitorPage() {
   }, [specialty, region, keyword]);
 
   return (
-    <div className="min-h-screen bg-[#0b0d2b] text-white">
+    <div className="min-h-screen bg-[#eef2f6] text-[#202020]">
       {/* 헤더 */}
-      <header className="sticky top-0 z-40 border-b border-[#2a2b6e] bg-[#0b0d2b]/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-[#dbe2ea] bg-white/95 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <a
             href="/app"
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
-            <div className="w-8 h-8 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-[#eef2f6] border border-[#ff4628]/30 flex items-center justify-center">
               <span className="text-base">🏥</span>
             </div>
-            <span className="font-bold text-white text-lg">닥터포스트</span>
+            <span className="font-bold text-[#202020] text-lg">닥터포스트</span>
           </a>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-[#4f6ef7] bg-[#4f6ef7]/10 border border-[#4f6ef7]/20 px-2.5 py-1 rounded-full hidden sm:inline-flex">
+            <span className="text-xs font-semibold text-[#ff4628] bg-[#ffece7] border border-[#ff4628]/30 px-2.5 py-1 rounded-full hidden sm:inline-flex">
               경쟁 분석
             </span>
             <a
               href="/app"
-              className="px-3 py-1.5 text-xs border border-[#2a2b6e] rounded-lg text-[#8891bd] hover:bg-[#191970] hover:text-white transition-colors"
+              className="px-3 py-1.5 text-xs border border-[#dbe2ea] rounded-lg text-[#4a4f55] hover:bg-[#eef2f6] hover:text-[#202020] transition-colors"
             >
               ← 앱으로
             </a>
@@ -153,28 +153,28 @@ export default function MonitorPage() {
         {/* 타이틀 */}
         <div className="mb-8 text-center">
           <h1
-            className="text-2xl sm:text-3xl font-extrabold text-white mb-2"
+            className="text-2xl sm:text-3xl font-extrabold text-[#202020] mb-2"
             style={{ letterSpacing: '-0.02em' }}
           >
             경쟁 병원 모니터링
           </h1>
-          <p className="text-sm text-[#8891bd]">
+          <p className="text-sm text-[#8a93a0]">
             같은 진료과목·지역의 최신 블로그를 분석하고 추천 키워드를 받아보세요.
           </p>
         </div>
 
         {/* 검색 폼 */}
-        <div className="bg-[#12153d] border border-[#2a2b6e] rounded-2xl p-5 sm:p-6 mb-6">
+        <div className="bg-white border border-[#dbe2ea] rounded-2xl p-5 sm:p-6 mb-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             {/* 진료과목 */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[#8891bd]">
-                진료과목 <span className="text-red-400">*</span>
+              <label className="text-xs font-semibold text-[#8a93a0]">
+                진료과목 <span className="text-red-500">*</span>
               </label>
               <select
                 value={specialty}
                 onChange={(e) => setSpecialty(e.target.value)}
-                className="bg-[#0b0d2b] border border-[#2a2b6e] text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#4f6ef7] transition-colors appearance-none"
+                className="bg-white border border-[#dbe2ea] text-[#202020] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#ff4628] transition-colors appearance-none"
               >
                 <option value="">선택하세요</option>
                 {SPECIALTIES.map((s) => (
@@ -187,31 +187,31 @@ export default function MonitorPage() {
 
             {/* 지역 */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[#8891bd]">
-                지역 <span className="text-red-400">*</span>
+              <label className="text-xs font-semibold text-[#8a93a0]">
+                지역 <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 placeholder="예) 강남구, 수원, 부산"
-                className="bg-[#0b0d2b] border border-[#2a2b6e] text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#4f6ef7] placeholder-[#555d8a] transition-colors"
+                className="bg-white border border-[#dbe2ea] text-[#202020] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#ff4628] placeholder-[#b8c8d7] transition-colors"
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAnalyze(); }}
               />
             </div>
 
             {/* 추가 키워드 */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[#8891bd]">
+              <label className="text-xs font-semibold text-[#8a93a0]">
                 키워드{' '}
-                <span className="text-[#555d8a] font-normal">(선택)</span>
+                <span className="text-[#b8c8d7] font-normal">(선택)</span>
               </label>
               <input
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 placeholder="예) 리프팅, 보톡스"
-                className="bg-[#0b0d2b] border border-[#2a2b6e] text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#4f6ef7] placeholder-[#555d8a] transition-colors"
+                className="bg-white border border-[#dbe2ea] text-[#202020] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#ff4628] placeholder-[#b8c8d7] transition-colors"
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAnalyze(); }}
               />
             </div>
@@ -220,7 +220,7 @@ export default function MonitorPage() {
           <button
             onClick={handleAnalyze}
             disabled={loading}
-            className="w-full sm:w-auto px-8 py-3 bg-[#4f6ef7] hover:bg-[#3d5ef0] active:bg-[#2d4ee0] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition-colors"
+            className="w-full sm:w-auto px-8 py-3 bg-[#ff4628] hover:bg-[#e63a1c] active:bg-[#e63a1c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition-colors"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -235,15 +235,15 @@ export default function MonitorPage() {
 
         {/* 에러 */}
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
-            <span className="text-red-400 flex-shrink-0 mt-0.5">✕</span>
+          <div className="mb-6 bg-red-50 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+            <span className="text-red-600 flex-shrink-0 mt-0.5">✕</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-red-300">오류 발생</p>
-              <p className="text-xs text-red-400 mt-0.5 break-words">{error}</p>
+              <p className="text-sm font-semibold text-red-700">오류 발생</p>
+              <p className="text-xs text-red-600 mt-0.5 break-words">{error}</p>
             </div>
             <button
               onClick={() => setError(null)}
-              className="text-red-400 hover:text-red-200 text-lg leading-none flex-shrink-0"
+              className="text-red-600 hover:text-red-800 text-lg leading-none flex-shrink-0"
               aria-label="닫기"
             >
               ×
@@ -253,9 +253,9 @@ export default function MonitorPage() {
 
         {/* 네이버 API 오류 경고 */}
         {result?.naverError && (
-          <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-start gap-3">
-            <span className="text-yellow-400 flex-shrink-0 mt-0.5">⚠</span>
-            <p className="text-xs text-yellow-400 leading-relaxed">
+          <div className="mb-6 bg-yellow-50 border border-yellow-500/30 rounded-xl p-4 flex items-start gap-3">
+            <span className="text-yellow-600 flex-shrink-0 mt-0.5">⚠</span>
+            <p className="text-xs text-yellow-700 leading-relaxed">
               네이버 블로그 검색 API 오류: {result.naverError}
             </p>
           </div>
@@ -265,13 +265,13 @@ export default function MonitorPage() {
         {result ? (
           <div className="space-y-6">
             {/* Claude 인사이트 카드 */}
-            <div className="bg-blue-950 border border-[#4f6ef7]/30 rounded-2xl p-5 sm:p-6">
+            <div className="bg-white border border-[#ff4628]/30 rounded-2xl p-5 sm:p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
               <div className="flex items-center gap-2 mb-5">
-                <div className="w-7 h-7 rounded-lg bg-[#4f6ef7]/20 flex items-center justify-center flex-shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-[#ffece7] flex items-center justify-center flex-shrink-0">
                   <span className="text-sm">🤖</span>
                 </div>
-                <h2 className="text-sm font-bold text-white">Claude AI 인사이트</h2>
-                <span className="text-[10px] font-semibold text-[#4f6ef7] bg-[#4f6ef7]/10 px-2 py-0.5 rounded-full border border-[#4f6ef7]/20 hidden sm:inline-flex">
+                <h2 className="text-sm font-bold text-[#202020]">Claude AI 인사이트</h2>
+                <span className="text-[10px] font-semibold text-[#ff4628] bg-[#ffece7] px-2 py-0.5 rounded-full border border-[#ff4628]/30 hidden sm:inline-flex">
                   {specialty} · {region}
                 </span>
               </div>
@@ -279,19 +279,19 @@ export default function MonitorPage() {
               {/* 경쟁자 주요 주제 */}
               {result.insights.topics.length > 0 ? (
                 <div className="mb-5">
-                  <p className="text-xs font-semibold text-[#8891bd] mb-3">
+                  <p className="text-xs font-semibold text-[#8a93a0] mb-3">
                     경쟁자 주요 주제
                   </p>
                   <ul className="space-y-2">
                     {result.insights.topics.map((topic, i) => (
                       <li
                         key={i}
-                        className="flex items-start gap-2.5 bg-[#0b0d2b]/40 rounded-xl px-4 py-3"
+                        className="flex items-start gap-2.5 bg-[#eef2f6] rounded-xl px-4 py-3"
                       >
-                        <span className="text-[#4f6ef7] font-bold text-xs flex-shrink-0 mt-0.5">
+                        <span className="text-[#ff4628] font-bold text-xs flex-shrink-0 mt-0.5">
                           {i + 1}.
                         </span>
-                        <span className="text-sm text-[#c5caf0] leading-relaxed">
+                        <span className="text-sm text-[#202020] leading-relaxed">
                           {topic}
                         </span>
                       </li>
@@ -299,16 +299,16 @@ export default function MonitorPage() {
                   </ul>
                 </div>
               ) : (
-                <p className="text-xs text-[#555d8a] mb-5">
+                <p className="text-xs text-[#b8c8d7] mb-5">
                   주제 분석 결과가 없습니다.
                 </p>
               )}
 
               {/* 추천 키워드 */}
               <div>
-                <p className="text-xs font-semibold text-[#8891bd] mb-2">
+                <p className="text-xs font-semibold text-[#8a93a0] mb-2">
                   추천 키워드{' '}
-                  <span className="font-normal text-[#555d8a]">(클릭하여 복사)</span>
+                  <span className="font-normal text-[#b8c8d7]">(클릭하여 복사)</span>
                 </p>
                 {result.insights.keywords.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -317,47 +317,47 @@ export default function MonitorPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#555d8a]">키워드 추천 결과가 없습니다.</p>
+                  <p className="text-xs text-[#b8c8d7]">키워드 추천 결과가 없습니다.</p>
                 )}
               </div>
             </div>
 
             {/* 최근 경쟁 블로그 목록 */}
             {result.posts.length > 0 ? (
-              <div className="bg-[#12153d] border border-[#2a2b6e] rounded-2xl overflow-hidden">
-                <div className="px-5 py-4 border-b border-[#2a2b6e] flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-white">최근 경쟁 블로그 글</h2>
-                  <span className="text-xs text-[#8891bd]">{result.posts.length}건</span>
+              <div className="bg-white border border-[#dbe2ea] rounded-2xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <div className="px-5 py-4 border-b border-[#dbe2ea] flex items-center justify-between">
+                  <h2 className="text-sm font-bold text-[#202020]">최근 경쟁 블로그 글</h2>
+                  <span className="text-xs text-[#8a93a0]">{result.posts.length}건</span>
                 </div>
-                <ul className="divide-y divide-[#2a2b6e]/50">
+                <ul className="divide-y divide-[#dbe2ea]">
                   {result.posts.map((post, idx) => (
                     <li key={idx}>
                       <a
                         href={post.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-start gap-3 px-5 py-4 hover:bg-[#191970]/40 active:bg-[#191970]/60 transition-colors group"
+                        className="flex items-start gap-3 px-5 py-4 hover:bg-[#eef2f6] active:bg-[#eef2f6] transition-colors group"
                       >
-                        <span className="text-[#555d8a] text-xs mt-0.5 flex-shrink-0 w-5 text-right">
+                        <span className="text-[#b8c8d7] text-xs mt-0.5 flex-shrink-0 w-5 text-right">
                           {idx + 1}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white group-hover:text-[#4f6ef7] transition-colors line-clamp-1 mb-0.5">
+                          <p className="text-sm font-semibold text-[#202020] group-hover:text-[#ff4628] transition-colors line-clamp-1 mb-0.5">
                             {post.title}
                           </p>
-                          <p className="text-xs text-[#8891bd] line-clamp-2 leading-relaxed mb-1.5">
+                          <p className="text-xs text-[#8a93a0] line-clamp-2 leading-relaxed mb-1.5">
                             {post.description}
                           </p>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-semibold text-[#555d8a] bg-[#0b0d2b]/60 px-2 py-0.5 rounded-full border border-[#2a2b6e]">
+                            <span className="text-[10px] font-semibold text-[#8a93a0] bg-[#eef2f6] px-2 py-0.5 rounded-full border border-[#dbe2ea]">
                               {post.bloggername}
                             </span>
-                            <span className="text-[10px] text-[#555d8a]">
+                            <span className="text-[10px] text-[#b8c8d7]">
                               {formatPostDate(post.postdate)}
                             </span>
                           </div>
                         </div>
-                        <span className="text-[#555d8a] group-hover:text-[#4f6ef7] flex-shrink-0 text-sm transition-colors">
+                        <span className="text-[#b8c8d7] group-hover:text-[#ff4628] flex-shrink-0 text-sm transition-colors">
                           →
                         </span>
                       </a>
@@ -367,10 +367,10 @@ export default function MonitorPage() {
               </div>
             ) : (
               !result.naverError && (
-                <div className="bg-[#12153d] border border-[#2a2b6e] rounded-2xl p-8 text-center">
+                <div className="bg-white border border-[#dbe2ea] rounded-2xl p-8 text-center shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
                   <p className="text-2xl mb-2">🔍</p>
-                  <p className="text-sm text-[#8891bd]">검색된 블로그 글이 없습니다.</p>
-                  <p className="text-xs text-[#555d8a] mt-1">검색어를 변경해보세요.</p>
+                  <p className="text-sm text-[#8a93a0]">검색된 블로그 글이 없습니다.</p>
+                  <p className="text-xs text-[#b8c8d7] mt-1">검색어를 변경해보세요.</p>
                 </div>
               )
             )}
@@ -378,12 +378,12 @@ export default function MonitorPage() {
         ) : (
           /* 빈 상태 */
           !loading && !error && (
-            <div className="bg-[#12153d] border border-[#2a2b6e] border-dashed rounded-2xl p-10 sm:p-16 text-center">
+            <div className="bg-white border border-[#dbe2ea] border-dashed rounded-2xl p-10 sm:p-16 text-center">
               <p className="text-3xl mb-3">🏥</p>
-              <p className="text-sm font-semibold text-[#8891bd] mb-1">
+              <p className="text-sm font-semibold text-[#8a93a0] mb-1">
                 진료과목과 지역을 선택해서 경쟁 병원 블로그를 분석하세요
               </p>
-              <p className="text-xs text-[#555d8a]">
+              <p className="text-xs text-[#b8c8d7]">
                 최근 블로그 글과 Claude AI 인사이트를 함께 확인할 수 있습니다.
               </p>
             </div>

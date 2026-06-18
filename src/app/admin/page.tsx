@@ -260,13 +260,13 @@ export default async function AdminPage() {
   const headerSub = `${now.getFullYear()}년 ${now.getMonth() + 1}월 기준`;
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100 p-6 md:p-10">
+    <main className="min-h-screen bg-[#eef2f6] text-[#202020] p-6 md:p-10">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-gray-100">
+          <h1 className="text-2xl font-bold text-[#202020]">
             hospitalblog.kr · 닥터포스트
           </h1>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-[#8a93a0]">
             SaaS KPI 대시보드 · {headerSub}
           </p>
         </div>

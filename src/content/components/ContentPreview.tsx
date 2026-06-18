@@ -41,8 +41,8 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
   };
 
   const charColor =
-    content.charCount >= 1500 && content.charCount <= 1800 ? 'text-emerald-400' :
-    content.charCount >= 1200 ? 'text-amber-400' : 'text-red-400';
+    content.charCount >= 1500 && content.charCount <= 1800 ? 'text-emerald-700' :
+    content.charCount >= 1200 ? 'text-amber-700' : 'text-red-600';
 
   const violationWords = content.compliance.violations.map((v) => v.word);
 
@@ -52,7 +52,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
     const parts = text.split(pattern);
     return parts.map((part, idx) =>
       violationWords.some((w) => w.toLowerCase() === part.toLowerCase())
-        ? <mark key={idx} className="bg-red-500/25 text-red-300 font-bold rounded px-0.5 not-italic">{part}</mark>
+        ? <mark key={idx} className="bg-red-100 text-red-700 font-bold rounded px-0.5 not-italic">{part}</mark>
         : part
     );
   };
@@ -157,7 +157,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
       // 세부 소제목 (H3)
       if (line.startsWith('▶')) {
         elements.push(
-          <h3 key={`h3-${key++}`} className="text-sm font-semibold text-[#4f6ef7] mt-3 mb-1 pl-2 border-l-2 border-[#4f6ef7]/40">
+          <h3 key={`h3-${key++}`} className="text-sm font-semibold text-[#ff4628] mt-3 mb-1 pl-2 border-l-2 border-[#ff4628]/40">
             {highlightViolations(line.replace(/^▶\s*/, ''))}
           </h3>
         );
@@ -215,43 +215,43 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
   };
 
   return (
-    <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] overflow-hidden shadow-xl">
+    <div className="rounded-2xl border border-[#dbe2ea] bg-white overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       {/* 헤더 */}
-      <div className="p-4 sm:p-5 border-b border-[#2a2b6e]">
+      <div className="p-4 sm:p-5 border-b border-[#dbe2ea]">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-9 h-9 rounded-xl bg-[#191970] border border-emerald-500/30 flex items-center justify-center">
-            <span className="text-emerald-400 font-bold text-sm">3</span>
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+            <span className="text-emerald-600 font-bold text-sm">3</span>
           </div>
           <div>
-            <h2 className="text-base font-bold text-white">본문 미리보기</h2>
-            <p className="text-xs text-[#8891bd]">D.I.A+ 최적화 콘텐츠</p>
+            <h2 className="text-base font-bold text-[#202020]">본문 미리보기</h2>
+            <p className="text-xs text-[#8a93a0]">D.I.A+ 최적화 콘텐츠</p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0b0d2b] border border-[#2a2b6e] ${charColor}`}>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#eef2f6] border border-[#dbe2ea] ${charColor}`}>
             {content.charCount.toLocaleString()}자{content.charCount >= 1500 ? ' ✓' : ' ⚠'}
           </span>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">H2 {content.seoAnalysis.h2Count}개</span>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">H3 {content.seoAnalysis.h3Count}개</span>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">H2 {content.seoAnalysis.h2Count}개</span>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">H3 {content.seoAnalysis.h3Count}개</span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
             content.seoAnalysis.keywordCount >= 4 && content.seoAnalysis.keywordCount <= 6
-              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-              : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-amber-50 text-amber-700 border-amber-200'
           }`}>키워드 {content.seoAnalysis.keywordCount}회</span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
             content.compliance.isCompliant
-              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-              : 'bg-red-500/10 text-red-300 border-red-500/20'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-red-50 text-red-600 border-red-200'
           }`}>
             {content.compliance.isCompliant ? '✅ 광고법 준수' : `⚠ 위반 ${content.compliance.violations.length}건`}
           </span>
           {content.geoAnalysis && (() => {
             const score = content.geoAnalysis.geoScore;
             const tone =
-              score >= 70 ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' :
-              score >= 50 ? 'bg-amber-500/10 text-amber-300 border-amber-500/20' :
-              'bg-red-500/10 text-red-300 border-red-500/20';
+              score >= 70 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+              score >= 50 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+              'bg-red-50 text-red-600 border-red-200';
             return (
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tone}`}>
                 🤖 GEO {score}점
@@ -263,12 +263,12 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
 
       {/* 자동 교체 알림 */}
       {content.autoReplaced && content.autoReplaced.length > 0 && (
-        <div className="mx-5 mt-4 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-          <p className="text-[10px] font-bold text-amber-300 mb-1.5">🔄 의료광고법 위반 단어 자동 교체됨</p>
+        <div className="mx-5 mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-amber-700 mb-1.5">🔄 의료광고법 위반 단어 자동 교체됨</p>
           <div className="flex flex-wrap gap-x-3 gap-y-1">
             {content.autoReplaced.map((r, i) => (
-              <span key={i} className="text-[10px] text-amber-300/80">
-                <span className="line-through text-red-400 mr-1">{r.word}</span>→<span className="text-emerald-400 ml-1">{r.suggestion}</span>
+              <span key={i} className="text-[10px] text-amber-700/80">
+                <span className="line-through text-red-500 mr-1">{r.word}</span>→<span className="text-emerald-600 ml-1">{r.suggestion}</span>
               </span>
             ))}
           </div>
@@ -277,21 +277,21 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
 
       {/* 위반사항 (자동교체 후에도 남은 경우) */}
       {!content.compliance.isCompliant && (
-        <div className="mx-5 mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+        <div className="mx-5 mt-4 bg-red-50 border border-red-200 rounded-xl p-3">
           <div className="flex items-center justify-between mb-1.5">
-            <p className="text-xs font-bold text-red-300">⚠️ 의료광고법 위반 감지</p>
-            <span className="text-[9px] text-red-400/70">아래 본문에서 빨간색으로 표시됨</span>
+            <p className="text-xs font-bold text-red-600">⚠️ 의료광고법 위반 감지</p>
+            <span className="text-[9px] text-red-500/70">아래 본문에서 빨간색으로 표시됨</span>
           </div>
           <div className="space-y-1">
             {content.compliance.violations.map((v, i) => (
               <div key={i} className="flex items-center gap-2 text-[10px]">
                 <span className={`font-bold px-1.5 py-0.5 rounded text-[9px] ${
-                  v.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-300' :
-                  v.severity === 'HIGH' ? 'bg-orange-500/20 text-orange-300' :
-                  'bg-yellow-500/20 text-yellow-300'
+                  v.severity === 'CRITICAL' ? 'bg-red-100 text-red-700' :
+                  v.severity === 'HIGH' ? 'bg-orange-100 text-orange-700' :
+                  'bg-yellow-100 text-yellow-700'
                 }`}>{v.severity}</span>
-                <mark className="bg-red-500/25 text-red-300 font-bold rounded px-0.5 not-italic">{v.word}</mark>
-                <span className="text-[#8891bd]">→ {v.suggestion}(으)로 수정 권장</span>
+                <mark className="bg-red-100 text-red-700 font-bold rounded px-0.5 not-italic">{v.word}</mark>
+                <span className="text-[#8a93a0]">→ {v.suggestion}(으)로 수정 권장</span>
               </div>
             ))}
           </div>
@@ -299,10 +299,10 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
       )}
 
       {content.compliance.warnings.length > 0 && (
-        <div className="mx-5 mt-3 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-          <p className="text-[10px] font-bold text-amber-300 mb-1">⚠ 주의사항</p>
+        <div className="mx-5 mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-amber-700 mb-1">⚠ 주의사항</p>
           {content.compliance.warnings.map((w, i) => (
-            <p key={i} className="text-[10px] text-amber-300/80">• {w}</p>
+            <p key={i} className="text-[10px] text-amber-700/80">• {w}</p>
           ))}
         </div>
       )}
@@ -310,11 +310,11 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
       {/* 본문 */}
       <div className="p-4 sm:p-5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-[#555d8a]">본문 내용</span>
+          <span className="text-[10px] text-[#b8c8d7]">본문 내용</span>
           {!isEditing && onContentChange && (
             <button
               onClick={() => { setEditBody(content.body); setIsEditing(true); }}
-              className="text-[10px] font-bold text-[#4f6ef7] hover:text-blue-300 px-2 py-1 rounded-lg border border-[#2a2b6e] hover:border-[#4f6ef7]/50 transition-colors"
+              className="text-[10px] font-bold text-[#ff4628] hover:text-[#e63a1c] px-2 py-1 rounded-lg border border-[#dbe2ea] hover:border-[#ff4628]/50 transition-colors"
             >
               ✏️ 직접 편집
             </button>
@@ -326,7 +326,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
               value={editBody}
               onChange={(e) => setEditBody(e.target.value)}
               rows={12}
-              className="w-full px-3 py-3 rounded-xl bg-[#0b0d2b] border border-[#4f6ef7]/50 text-white text-xs leading-relaxed focus:outline-none focus:ring-1 focus:ring-[#4f6ef7]/30 resize-none"
+              className="w-full px-3 py-3 rounded-xl bg-white border border-[#ff4628]/50 text-[#202020] text-xs leading-relaxed focus:outline-none focus:ring-1 focus:ring-[#ff4628]/30 resize-none"
             />
             <div className="flex gap-2">
               <button
@@ -337,7 +337,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
               </button>
               <button
                 onClick={() => setIsEditing(false)}
-                className="flex-1 py-2 bg-[#2a2b6e] hover:bg-[#3a3b8e] text-[#8891bd] text-xs font-bold rounded-xl transition-colors"
+                className="flex-1 py-2 bg-[#eef2f6] hover:bg-[#dbe2ea] text-[#4a4f55] text-xs font-bold rounded-xl transition-colors"
               >
                 취소
               </button>
@@ -359,7 +359,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
         <div className="px-5 pb-2">
           <button
             onClick={() => setShowImageHints(!showImageHints)}
-            className="text-[10px] font-bold text-[#4f6ef7] hover:text-blue-300 flex items-center gap-1"
+            className="text-[10px] font-bold text-[#ff4628] hover:text-[#e63a1c] flex items-center gap-1"
           >
             <span>{showImageHints ? '▼' : '▶'}</span>
             이미지 배치 가이드 ({content.imageGuidelines.placementHints.length}곳)
@@ -367,9 +367,9 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
           {showImageHints && (
             <div className="mt-2 space-y-1.5">
               {content.imageGuidelines.placementHints.map((hint, i) => (
-                <div key={i} className="flex items-start gap-2 text-[10px] bg-[#191970]/20 rounded-lg px-3 py-1.5">
-                  <span className="text-[#4f6ef7] font-bold">🖼 {i + 1}</span>
-                  <span className="text-[#8891bd]">{hint.description}</span>
+                <div key={i} className="flex items-start gap-2 text-[10px] bg-[#eef2f6] rounded-lg px-3 py-1.5">
+                  <span className="text-[#ff4628] font-bold">🖼 {i + 1}</span>
+                  <span className="text-[#8a93a0]">{hint.description}</span>
                 </div>
               ))}
             </div>
@@ -386,9 +386,9 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
           {copied ? <><span>✅</span> 복사 완료!</> : <><span>📋</span> 제목 + 본문 원클릭 복사</>}
         </button>
 
-        <div className="border-t border-[#2a2b6e] pt-3 space-y-3">
+        <div className="border-t border-[#dbe2ea] pt-3 space-y-3">
           <div>
-            <p className="text-[10px] font-bold text-[#8891bd] mb-2">이미지 스타일</p>
+            <p className="text-[10px] font-bold text-[#8a93a0] mb-2">이미지 스타일</p>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { val: 'photo' as const, icon: '📷', label: '실사AI이미지', sub: 'AI 의료 실사' },
@@ -401,8 +401,8 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
                   disabled={isLoadingImages}
                   className={`flex flex-col items-center gap-1 px-1 py-3 rounded-xl border-2 transition-all min-h-[72px] ${
                     imageStyle === val
-                      ? 'border-[#4f6ef7] bg-[#4f6ef7]/10 text-white'
-                      : 'border-[#2a2b6e] bg-[#0b0d2b] text-[#8891bd] hover:border-[#4f6ef7]/30'
+                      ? 'border-[#ff4628] bg-[#ffece7] text-[#202020]'
+                      : 'border-[#dbe2ea] bg-white text-[#8a93a0] hover:border-[#ff4628]/30'
                   }`}
                 >
                   <span className="text-lg">{icon}</span>
@@ -428,17 +428,17 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
 
           {imageStyle !== 'upload' && (
             <div className="flex items-center justify-between">
-              <p className="text-[10px] text-[#555d8a]">권장 {content.imageGuidelines.recommendedCount}장 이상</p>
+              <p className="text-[10px] text-[#b8c8d7]">권장 {content.imageGuidelines.recommendedCount}장 이상</p>
               <div className="flex items-center gap-2">
-                <label className="text-[10px] text-[#8891bd]">장수:</label>
+                <label className="text-[10px] text-[#8a93a0]">장수:</label>
                 <select
                   value={imageCount}
                   onChange={(e) => setImageCount(Number(e.target.value))}
-                  className="text-xs border border-[#2a2b6e] rounded-lg px-2 py-1 bg-[#0b0d2b] text-white"
+                  className="text-xs border border-[#dbe2ea] rounded-lg px-2 py-1 bg-white text-[#202020]"
                   disabled={isLoadingImages}
                 >
                   {[3, 4, 5, 6, 7, 8].map((n) => (
-                    <option key={n} value={n} className="bg-[#12153d]">{n}장{n === 6 ? ' (권장)' : ''}</option>
+                    <option key={n} value={n} className="bg-white">{n}장{n === 6 ? ' (권장)' : ''}</option>
                   ))}
                 </select>
               </div>
@@ -456,7 +456,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
             <button
               onClick={() => onGenerateImages(imageCount, imageStyle)}
               disabled={isLoadingImages}
-              className="w-full py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20 min-h-[48px] border-2 border-white/60"
+              className="w-full py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20 min-h-[48px] border-2 border-white/60"
             >
               {isLoadingImages ? (
                 <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 이미지 생성 중... ({imageCount}장)</>
@@ -467,12 +467,12 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
           )}
 
           {onGenerateSlides && (
-            <div className="border-t border-[#2a2b6e] pt-3">
-              <p className="text-[10px] font-bold text-[#8891bd] mb-2">인포그래픽 카드뉴스</p>
+            <div className="border-t border-[#dbe2ea] pt-3">
+              <p className="text-[10px] font-bold text-[#8a93a0] mb-2">인포그래픽 카드뉴스</p>
               <button
                 onClick={onGenerateSlides}
                 disabled={isLoadingSlides}
-                className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 disabled:bg-[#2a2b6e] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm border-2 border-white/60"
+                className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm border-2 border-white/60"
               >
                 {isLoadingSlides ? (
                   <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 슬라이드 생성 중...</>
@@ -480,7 +480,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
                   <><span>✦</span> 디자인 카드뉴스 3장 생성</>
                 )}
               </button>
-              <p className="text-[9px] text-[#555d8a] mt-1.5 text-center">표지 · 단계 · 마무리 슬라이드 · 1080×1080 PNG</p>
+              <p className="text-[9px] text-[#b8c8d7] mt-1.5 text-center">표지 · 단계 · 마무리 슬라이드 · 1080×1080 PNG</p>
             </div>
           )}
         </div>

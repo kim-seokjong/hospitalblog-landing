@@ -8,8 +8,8 @@ interface RegionProgressProps {
 
 export default function RegionProgress({ targets }: RegionProgressProps) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-      <h3 className="text-sm font-semibold text-gray-100 mb-4">
+    <div className="bg-white border border-[#dbe2ea] rounded-xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <h3 className="text-sm font-semibold text-[#202020] mb-4">
         지역별 진척률
       </h3>
       <div className="space-y-3">
@@ -23,12 +23,12 @@ export default function RegionProgress({ targets }: RegionProgressProps) {
           return (
             <div key={t.region} className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">{t.region}</span>
-                <span className="text-sm text-gray-400 text-right">
+                <span className="text-sm text-[#4a4f55]">{t.region}</span>
+                <span className="text-sm text-[#8a93a0] text-right">
                   {t.current} / {t.target}개 ({rate}%)
                 </span>
               </div>
-              <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-[#eef2f6] rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full ${barColor}`}
                   style={{ width: `${rate}%` }}

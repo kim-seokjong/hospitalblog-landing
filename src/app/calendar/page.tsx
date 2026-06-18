@@ -105,28 +105,28 @@ function ScheduleModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-sm bg-[#111827] border border-white/10 rounded-2xl shadow-2xl p-5">
+      <div className="w-full max-w-sm bg-white border border-[#dbe2ea] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] p-5">
         {mode === 'schedule' && (
           <>
-            <h2 className="text-white font-bold text-base mb-1">예약 발행 설정</h2>
-            <p className="text-sm text-gray-400 mb-4">{displayDate}</p>
+            <h2 className="text-[#202020] font-bold text-base mb-1">예약 발행 설정</h2>
+            <p className="text-sm text-[#8a93a0] mb-4">{displayDate}</p>
 
             {draftPosts.length === 0 ? (
-              <p className="text-sm text-gray-500 py-4 text-center">예약할 수 있는 임시저장 글이 없습니다.</p>
+              <p className="text-sm text-[#8a93a0] py-4 text-center">예약할 수 있는 임시저장 글이 없습니다.</p>
             ) : (
               <>
-                <label className="block text-xs text-gray-400 mb-1.5" htmlFor="post-select">
+                <label className="block text-xs text-[#8a93a0] mb-1.5" htmlFor="post-select">
                   글 선택
                 </label>
                 <select
                   id="post-select"
                   value={selectedPostId}
                   onChange={(e) => setSelectedPostId(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl text-white text-sm px-3 py-2.5 focus:outline-none focus:border-blue-500/60 appearance-none"
+                  className="w-full bg-white border border-[#dbe2ea] rounded-xl text-[#202020] text-sm px-3 py-2.5 focus:outline-none focus:border-[#ff4628]/60 appearance-none"
                 >
-                  <option value="" className="bg-[#111827]">— 글을 선택하세요 —</option>
+                  <option value="" className="bg-white">— 글을 선택하세요 —</option>
                   {draftPosts.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-[#111827]">
+                    <option key={p.id} value={p.id} className="bg-white">
                       {p.title.length > 40 ? p.title.slice(0, 40) + '…' : p.title}
                     </option>
                   ))}
@@ -137,14 +137,14 @@ function ScheduleModal({
             <div className="flex gap-2 mt-4">
               <button
                 onClick={onClose}
-                className="flex-1 py-2 rounded-xl border border-white/10 text-sm text-gray-400 hover:bg-white/5 transition-colors"
+                className="flex-1 py-2 rounded-xl border border-[#dbe2ea] text-sm text-[#8a93a0] hover:bg-[#eef2f6] transition-colors"
               >
                 취소
               </button>
               <button
                 onClick={handleScheduleSubmit}
                 disabled={!selectedPostId || isSaving}
-                className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+                className="flex-1 py-2 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] disabled:bg-[#ff4628]/40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
               >
                 {isSaving ? '저장 중...' : '예약 설정'}
               </button>
@@ -154,14 +154,14 @@ function ScheduleModal({
 
         {mode === 'manage' && post && (
           <>
-            <h2 className="text-white font-bold text-base mb-1 line-clamp-2">{post.title}</h2>
-            <p className="text-xs text-amber-400 mb-4">
+            <h2 className="text-[#202020] font-bold text-base mb-1 line-clamp-2">{post.title}</h2>
+            <p className="text-xs text-amber-600 mb-4">
               {post.scheduled_at ? formatScheduledDate(post.scheduled_at) : displayDate} 예약됨
             </p>
 
             {!confirmAction ? (
               <>
-                <p className="text-sm text-gray-400 mb-4">이 예약 글을 어떻게 처리할까요?</p>
+                <p className="text-sm text-[#4a4f55] mb-4">이 예약 글을 어떻게 처리할까요?</p>
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={() => setConfirmAction('publish')}
@@ -177,7 +177,7 @@ function ScheduleModal({
                   </button>
                   <button
                     onClick={onClose}
-                    className="py-2 rounded-xl border border-white/10 text-sm text-gray-400 hover:bg-white/5 transition-colors"
+                    className="py-2 rounded-xl border border-[#dbe2ea] text-sm text-[#8a93a0] hover:bg-[#eef2f6] transition-colors"
                   >
                     닫기
                   </button>
@@ -185,7 +185,7 @@ function ScheduleModal({
               </>
             ) : (
               <>
-                <p className="text-sm text-gray-300 mb-4">
+                <p className="text-sm text-[#4a4f55] mb-4">
                   {confirmAction === 'cancel'
                     ? '예약을 취소하고 임시저장 상태로 변경하시겠습니까?'
                     : '발행 완료 상태로 변경하시겠습니까?'}
@@ -193,7 +193,7 @@ function ScheduleModal({
                 <div className="flex gap-2">
                   <button
                     onClick={() => setConfirmAction(null)}
-                    className="flex-1 py-2 rounded-xl border border-white/10 text-sm text-gray-400 hover:bg-white/5 transition-colors"
+                    className="flex-1 py-2 rounded-xl border border-[#dbe2ea] text-sm text-[#8a93a0] hover:bg-[#eef2f6] transition-colors"
                   >
                     뒤로
                   </button>
@@ -244,14 +244,14 @@ function CalendarGrid({ year, month, scheduledByDate, today, onDayClick }: Calen
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 overflow-hidden">
+    <div className="rounded-2xl border border-[#dbe2ea] overflow-hidden bg-white">
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 bg-white/5">
+      <div className="grid grid-cols-7 bg-[#eef2f6]">
         {WEEKDAYS.map((wd, i) => (
           <div
             key={wd}
             className={`py-2 text-center text-xs font-semibold tracking-wide ${
-              i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'
+              i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-[#8a93a0]'
             }`}
           >
             {wd}
@@ -260,10 +260,10 @@ function CalendarGrid({ year, month, scheduledByDate, today, onDayClick }: Calen
       </div>
 
       {/* Day cells */}
-      <div className="grid grid-cols-7 divide-x divide-y divide-white/5">
+      <div className="grid grid-cols-7 divide-x divide-y divide-[#dbe2ea]">
         {cells.map((day, idx) => {
           if (day === null) {
-            return <div key={`empty-${idx}`} className="min-h-[72px] sm:min-h-[90px] bg-white/[0.02]" />;
+            return <div key={`empty-${idx}`} className="min-h-[72px] sm:min-h-[90px] bg-[#f6f8fa]" />;
           }
 
           const dateKey = toDateKey(year, month, day);
@@ -275,20 +275,20 @@ function CalendarGrid({ year, month, scheduledByDate, today, onDayClick }: Calen
             <button
               key={dateKey}
               onClick={() => onDayClick(dateKey, dayPosts)}
-              className={`min-h-[72px] sm:min-h-[90px] p-1.5 sm:p-2 text-left align-top transition-colors hover:bg-white/[0.05] focus:outline-none focus:ring-1 focus:ring-blue-500/50 ${
-                dayPosts.length > 0 ? 'bg-white/[0.02]' : ''
+              className={`min-h-[72px] sm:min-h-[90px] p-1.5 sm:p-2 text-left align-top transition-colors hover:bg-[#eef2f6] focus:outline-none focus:ring-1 focus:ring-[#ff4628]/50 ${
+                dayPosts.length > 0 ? 'bg-[#f6f8fa]' : ''
               }`}
               aria-label={`${dateKey}${dayPosts.length > 0 ? ` — 예약 ${dayPosts.length}건` : ''}`}
             >
               <span
                 className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium mb-1 ${
                   isToday
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-[#ff4628] text-white'
                     : dow === 0
-                    ? 'text-red-400'
+                    ? 'text-red-500'
                     : dow === 6
-                    ? 'text-blue-400'
-                    : 'text-gray-300'
+                    ? 'text-blue-500'
+                    : 'text-[#202020]'
                 }`}
               >
                 {day}
@@ -296,14 +296,14 @@ function CalendarGrid({ year, month, scheduledByDate, today, onDayClick }: Calen
               <div className="space-y-0.5">
                 {dayPosts.slice(0, 3).map((p) => (
                   <div key={p.id} className="flex items-center gap-1 min-w-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-                    <span className="text-[10px] sm:text-xs text-emerald-300 truncate leading-tight">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                    <span className="text-[10px] sm:text-xs text-emerald-700 truncate leading-tight">
                       {p.title}
                     </span>
                   </div>
                 ))}
                 {dayPosts.length > 3 && (
-                  <span className="text-[10px] text-gray-500">+{dayPosts.length - 3}건</span>
+                  <span className="text-[10px] text-[#8a93a0]">+{dayPosts.length - 3}건</span>
                 )}
               </div>
             </button>
@@ -324,7 +324,7 @@ interface ScheduledListProps {
 function ScheduledList({ posts, onItemClick }: ScheduledListProps) {
   if (posts.length === 0) {
     return (
-      <div className="text-center py-10 text-gray-500 text-sm">
+      <div className="text-center py-10 text-[#8a93a0] text-sm">
         이번 달 예약된 글이 없습니다.
       </div>
     );
@@ -336,17 +336,17 @@ function ScheduledList({ posts, onItemClick }: ScheduledListProps) {
         <li key={p.id}>
           <button
             onClick={() => onItemClick(p)}
-            className="w-full text-left bg-white/5 border border-white/10 rounded-xl px-4 py-3 hover:border-amber-500/30 hover:bg-white/[0.07] transition-all"
+            className="w-full text-left bg-white border border-[#dbe2ea] rounded-xl px-4 py-3 hover:border-amber-500/30 hover:bg-[#eef2f6] transition-all"
           >
             <div className="flex items-start justify-between gap-2 mb-1">
-              <span className="text-xs text-amber-400 font-medium flex-shrink-0">
+              <span className="text-xs text-amber-600 font-medium flex-shrink-0">
                 {p.scheduled_at ? formatScheduledDate(p.scheduled_at) : '날짜 미정'}
               </span>
-              <span className="text-[10px] text-gray-500 flex-shrink-0">예약됨</span>
+              <span className="text-[10px] text-[#8a93a0] flex-shrink-0">예약됨</span>
             </div>
-            <p className="text-sm text-white font-medium line-clamp-1">{p.title}</p>
+            <p className="text-sm text-[#202020] font-medium line-clamp-1">{p.title}</p>
             {p.keyword && (
-              <span className="text-xs text-blue-400 mt-0.5 block">#{p.keyword}</span>
+              <span className="text-xs text-[#ff4628] mt-0.5 block">#{p.keyword}</span>
             )}
           </button>
         </li>
@@ -365,7 +365,7 @@ interface MobileListViewProps {
 function MobileListView({ posts, onItemClick }: MobileListViewProps) {
   if (posts.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-500 text-sm">
+      <div className="text-center py-16 text-[#8a93a0] text-sm">
         이번 달 예약된 글이 없습니다.
       </div>
     );
@@ -377,17 +377,17 @@ function MobileListView({ posts, onItemClick }: MobileListViewProps) {
         <li key={p.id}>
           <button
             onClick={() => onItemClick(p)}
-            className="w-full text-left bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 hover:border-amber-500/30 transition-all"
+            className="w-full text-left bg-white border border-[#dbe2ea] rounded-xl px-4 py-3.5 hover:border-amber-500/30 transition-all"
           >
             <div className="flex items-center gap-2 mb-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-              <span className="text-xs text-amber-400 font-medium">
+              <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+              <span className="text-xs text-amber-600 font-medium">
                 {p.scheduled_at ? formatScheduledDate(p.scheduled_at) : '날짜 미정'}
               </span>
             </div>
-            <p className="text-sm text-white font-medium line-clamp-2 pl-4">{p.title}</p>
+            <p className="text-sm text-[#202020] font-medium line-clamp-2 pl-4">{p.title}</p>
             {p.keyword && (
-              <span className="text-xs text-blue-400 mt-0.5 block pl-4">#{p.keyword}</span>
+              <span className="text-xs text-[#ff4628] mt-0.5 block pl-4">#{p.keyword}</span>
             )}
           </button>
         </li>
@@ -630,8 +630,8 @@ export default function CalendarPage() {
 
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-[#0b0f1a] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#eef2f6] flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-[#ff4628] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -640,7 +640,7 @@ export default function CalendarPage() {
   const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth();
 
   return (
-    <div className="min-h-screen bg-[#0b0f1a] text-white">
+    <div className="min-h-screen bg-[#eef2f6] text-[#202020]">
       {/* Modal */}
       {modal && (
         <ScheduleModal
@@ -657,23 +657,23 @@ export default function CalendarPage() {
       )}
 
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b0f1a]/80 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-[#dbe2ea] bg-white/90 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => router.push('/app')}
-              className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
+              className="text-[#8a93a0] hover:text-[#202020] transition-colors flex-shrink-0"
               aria-label="앱으로 돌아가기"
             >
               ←
             </button>
-            <h1 className="font-bold text-white text-base sm:text-lg truncate">예약 발행 캘린더</h1>
+            <h1 className="font-bold text-[#202020] text-base sm:text-lg truncate">예약 발행 캘린더</h1>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {!isCurrentMonth && (
               <button
                 onClick={goToday}
-                className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:bg-blue-500/10 px-2.5 py-1.5 rounded-lg transition-colors"
+                className="text-xs text-[#ff4628] hover:text-[#e63a1c] border border-[#ff4628]/30 hover:bg-[#ffece7] px-2.5 py-1.5 rounded-lg transition-colors"
               >
                 오늘
               </button>
@@ -681,7 +681,7 @@ export default function CalendarPage() {
             <button
               onClick={loadPosts}
               disabled={fetchState === 'loading'}
-              className="text-xs text-gray-400 hover:text-white border border-white/10 hover:bg-white/10 px-2.5 py-1.5 rounded-lg transition-colors disabled:cursor-not-allowed"
+              className="text-xs text-[#8a93a0] hover:text-[#202020] border border-[#dbe2ea] hover:bg-[#eef2f6] px-2.5 py-1.5 rounded-lg transition-colors disabled:cursor-not-allowed"
               aria-label="새로고침"
             >
               새로고침
@@ -694,18 +694,18 @@ export default function CalendarPage() {
         {/* Loading */}
         {fetchState === 'loading' && (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-gray-500">캘린더를 불러오는 중...</p>
+            <div className="w-8 h-8 border-2 border-[#ff4628] border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-[#8a93a0]">캘린더를 불러오는 중...</p>
           </div>
         )}
 
         {/* Error */}
         {fetchState === 'error' && (
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-            <p className="text-red-400 text-sm">{fetchError}</p>
+            <p className="text-red-600 text-sm">{fetchError}</p>
             <button
               onClick={loadPosts}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+              className="px-4 py-2 bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm font-semibold rounded-lg transition-colors"
             >
               다시 시도
             </button>
@@ -718,15 +718,15 @@ export default function CalendarPage() {
             <div className="flex items-center justify-between mb-5">
               <button
                 onClick={prevMonth}
-                className="p-2 rounded-xl border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                className="p-2 rounded-xl border border-[#dbe2ea] hover:bg-[#eef2f6] text-[#8a93a0] hover:text-[#202020] transition-colors"
                 aria-label="이전 달"
               >
                 ‹
               </button>
-              <h2 className="text-lg sm:text-xl font-bold text-white">{titleLabel}</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-[#202020]">{titleLabel}</h2>
               <button
                 onClick={nextMonth}
-                className="p-2 rounded-xl border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                className="p-2 rounded-xl border border-[#dbe2ea] hover:bg-[#eef2f6] text-[#8a93a0] hover:text-[#202020] transition-colors"
                 aria-label="다음 달"
               >
                 ›
@@ -746,8 +746,8 @@ export default function CalendarPage() {
 
             {/* Mobile: list view instead of grid */}
             <div className="sm:hidden mb-8">
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
-                <p className="text-xs text-gray-400 mb-3">
+              <div className="bg-white border border-[#dbe2ea] rounded-2xl p-4 mb-4">
+                <p className="text-xs text-[#8a93a0] mb-3">
                   이번 달 예약 글 {monthlyPosts.length}건 · 날짜를 탭해 예약을 관리하세요
                 </p>
                 <MobileListView posts={monthlyPosts} onItemClick={handleListItemClick} />
@@ -758,7 +758,7 @@ export default function CalendarPage() {
                   const key = toDateKey(viewYear, viewMonth, n.getDate());
                   handleDayClick(key, scheduledByDate.get(key) ?? []);
                 }}
-                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors"
+                className="w-full py-3 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm font-semibold transition-colors"
               >
                 + 오늘 날짜에 예약 추가
               </button>
@@ -766,10 +766,10 @@ export default function CalendarPage() {
 
             {/* Monthly scheduled list (desktop) */}
             <div className="hidden sm:block">
-              <h3 className="text-sm font-semibold text-gray-400 mb-3">
+              <h3 className="text-sm font-semibold text-[#8a93a0] mb-3">
                 {titleLabel} 예약 목록
                 {monthlyPosts.length > 0 && (
-                  <span className="ml-2 text-amber-400">{monthlyPosts.length}건</span>
+                  <span className="ml-2 text-amber-600">{monthlyPosts.length}건</span>
                 )}
               </h3>
               <ScheduledList posts={monthlyPosts} onItemClick={handleListItemClick} />

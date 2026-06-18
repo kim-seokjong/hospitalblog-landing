@@ -150,13 +150,13 @@ function GeneratingSpinner() {
   return (
     <div className="flex items-center justify-center py-16 sm:py-24">
       <div className="text-center">
-        <div className="w-12 h-12 border-4 border-[#4f6ef7] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-white font-semibold">본문 + 태그 생성 중...</p>
-        <p className="text-xs text-[#8891bd] mt-1">Claude AI · 약 20~30초 소요</p>
+        <div className="w-12 h-12 border-4 border-[#ff4628] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-[#202020] font-semibold">본문 + 태그 생성 중...</p>
+        <p className="text-xs text-[#8a93a0] mt-1">Claude AI · 약 20~30초 소요</p>
         <div className="mt-4 space-y-2 text-left inline-block">
           {GEN_STEPS.map((step, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs text-[#8891bd]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#4f6ef7] animate-pulse flex-shrink-0" style={{ animationDelay: `${i * 0.4}s` }} />
+            <div key={i} className="flex items-center gap-2 text-xs text-[#8a93a0]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#ff4628] animate-pulse flex-shrink-0" style={{ animationDelay: `${i * 0.4}s` }} />
               {step}
             </div>
           ))}
@@ -641,7 +641,7 @@ export default function AppPage() {
   const planLimit = (userPlan !== null || userIsAdmin) ? getPlanUsageLimit(userPlan?.plan, userIsAdmin) : null;
 
   return (
-    <div className="min-h-screen bg-[#0b0d2b] text-white">
+    <div className="min-h-screen bg-white text-[#202020]">
       {showAuthModal && (
         <AuthModal
           // 프로필 미완성(유령 계정) 또는 비로그인 상태면 회원가입 탭으로 유도
@@ -667,25 +667,25 @@ export default function AppPage() {
       )}
 
       {/* 헤더 */}
-      <header className="sticky top-0 z-40 border-b border-[#2a2b6e] bg-[#0b0d2b]/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-[#dbe2ea] bg-white/85 backdrop-blur-md">
         <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 h-13 sm:h-14 flex items-center justify-between gap-2 sm:gap-4" style={{ minHeight: '52px' }}>
           <Link href="/" className="flex items-center gap-2 flex-shrink-0 hover:opacity-80 transition-opacity" title="홈으로">
-            <div className="w-8 h-8 rounded-xl bg-[#191970] border border-[#4f6ef7]/30 flex items-center justify-center shadow-lg shadow-[#4f6ef7]/10">
+            <div className="w-8 h-8 rounded-xl bg-[#ffece7] border border-[#ff4628]/30 flex items-center justify-center shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
               <span className="text-base">🏥</span>
             </div>
-            <span className="font-bold text-white text-lg">닥터포스트</span>
+            <span className="font-bold text-[#202020] text-lg">닥터포스트</span>
           </Link>
 
           <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-center">
             {viewStep === 'input' ? (
               <>
-                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#4f6ef7]/10 text-[#4f6ef7] border border-[#4f6ef7]/20 text-[10px] sm:text-xs font-semibold">
-                  <span className="w-1.5 h-1.5 bg-[#4f6ef7] rounded-full animate-pulse flex-shrink-0" />
+                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#ffece7] text-[#ff4628] border border-[#ff4628]/30 text-[10px] sm:text-xs font-semibold">
+                  <span className="w-1.5 h-1.5 bg-[#ff4628] rounded-full animate-pulse flex-shrink-0" />
                   <span className="sm:hidden">Step 1</span>
                   <span className="hidden sm:inline">Step 1 · 키워드 → 제목 선택</span>
                 </div>
-                <span className="text-[#555d8a] text-xs hidden sm:block">→</span>
-                <div className="hidden sm:block px-2.5 py-1 rounded-full bg-[#2a2b6e]/40 text-[#555d8a] border border-[#2a2b6e] text-xs font-semibold">
+                <span className="text-[#b8c8d7] text-xs hidden sm:block">→</span>
+                <div className="hidden sm:block px-2.5 py-1 rounded-full bg-[#eef2f6] text-[#b8c8d7] border border-[#dbe2ea] text-xs font-semibold">
                   Step 2 · 본문 · 이미지
                 </div>
               </>
@@ -693,13 +693,13 @@ export default function AppPage() {
               <>
                 <button
                   onClick={() => setViewStep('input')}
-                  className="flex items-center gap-1 text-[#8891bd] hover:text-white active:text-white transition-colors flex-shrink-0 text-xs min-h-[36px] px-1"
+                  className="flex items-center gap-1 text-[#8a93a0] hover:text-[#202020] active:text-[#202020] transition-colors flex-shrink-0 text-xs min-h-[36px] px-1"
                 >
                   ← 뒤로
                 </button>
-                <span className="text-[#555d8a] text-xs">·</span>
-                <span className="text-[#c5caf0] truncate text-[10px] sm:text-xs">{selectedTitle.title}</span>
-                <span className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-[#191970] text-[9px] text-[#8891bd] border border-[#2a2b6e] hidden sm:block">
+                <span className="text-[#b8c8d7] text-xs">·</span>
+                <span className="text-[#202020] truncate text-[10px] sm:text-xs">{selectedTitle.title}</span>
+                <span className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-[#eef2f6] text-[9px] text-[#8a93a0] border border-[#dbe2ea] hidden sm:block">
                   {STYLE_LABEL[writingStyle]}
                 </span>
               </>
@@ -726,8 +726,8 @@ export default function AppPage() {
             </a>
             {/* 사용량 표시 */}
             {planLimit !== null && planLimit !== 0 && (userPlan || userIsAdmin) && (
-              <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[#191970]/50 border border-[#2a2b6e]">
-                <span className={`text-[10px] font-semibold ${!userIsAdmin && userPlan && userPlan.usage_count >= planLimit ? 'text-red-400' : 'text-[#8891bd]'}`}>
+              <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[#eef2f6] border border-[#dbe2ea]">
+                <span className={`text-[10px] font-semibold ${!userIsAdmin && userPlan && userPlan.usage_count >= planLimit ? 'text-red-500' : 'text-[#8a93a0]'}`}>
                   {userIsAdmin ? '관리자 · ∞' : `${userPlan?.usage_count ?? 0}/${planLimit === Infinity ? '∞' : planLimit}회`}
                 </span>
               </div>
@@ -735,11 +735,11 @@ export default function AppPage() {
             {authChecked && (
               user ? (
                 <>
-                  <span className="text-xs text-[#8891bd] hidden lg:block max-w-[120px] truncate">{user.email}</span>
+                  <span className="text-xs text-[#8a93a0] hidden lg:block max-w-[120px] truncate">{user.email}</span>
                   <Link
                     href="/mypage"
                     title="마이페이지"
-                    className="px-2.5 sm:px-3 py-1.5 text-xs border border-[#2a2b6e] rounded-lg text-[#8891bd] hover:bg-[#191970] hover:text-white active:bg-[#191970] transition-colors min-h-[36px] flex items-center gap-1"
+                    className="px-2.5 sm:px-3 py-1.5 text-xs border border-[#dbe2ea] rounded-lg text-[#8a93a0] hover:bg-[#eef2f6] hover:text-[#202020] active:bg-[#eef2f6] transition-colors min-h-[36px] flex items-center gap-1"
                   >
                     <span>👤</span>
                     <span className="hidden sm:inline">마이페이지</span>
@@ -755,7 +755,7 @@ export default function AppPage() {
                   )}
                   <button
                     onClick={handleLogout}
-                    className="px-2.5 sm:px-3 py-1.5 text-xs border border-[#2a2b6e] rounded-lg text-[#8891bd] hover:bg-[#191970] hover:text-white active:bg-[#191970] transition-colors min-h-[36px]"
+                    className="px-2.5 sm:px-3 py-1.5 text-xs border border-[#dbe2ea] rounded-lg text-[#8a93a0] hover:bg-[#eef2f6] hover:text-[#202020] active:bg-[#eef2f6] transition-colors min-h-[36px]"
                   >
                     로그아웃
                   </button>
@@ -763,7 +763,7 @@ export default function AppPage() {
               ) : (
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="px-2.5 sm:px-3 py-1.5 bg-[#4f6ef7] hover:bg-[#3d5ef0] active:bg-[#2d4ee0] text-white text-xs font-bold rounded-lg transition-colors min-h-[36px]"
+                  className="px-2.5 sm:px-3 py-1.5 bg-[#ff4628] hover:bg-[#e63a1c] active:bg-[#e63a1c] text-white text-xs font-bold rounded-lg transition-colors min-h-[36px]"
                 >
                   로그인
                 </button>
@@ -776,16 +776,16 @@ export default function AppPage() {
       {/* 저장된 초안 복원 배너 */}
       {draftToRestore && (
         <div className="max-w-screen-2xl mx-auto px-4 pt-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-[#191970]/60 border border-[#4f6ef7]/40 rounded-xl px-4 py-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-[#eef2f6] border border-[#ff4628]/40 rounded-xl px-4 py-3">
             <span className="text-xl flex-shrink-0">📋</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white">
+              <p className="text-sm font-semibold text-[#202020]">
                 이전에 작성하던 내용이 있습니다
-                <span className="ml-2 text-[10px] font-normal text-[#8891bd]">
+                <span className="ml-2 text-[10px] font-normal text-[#8a93a0]">
                   {new Date(draftToRestore.savedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 저장
                 </span>
               </p>
-              <p className="text-xs text-[#8891bd] mt-0.5 truncate">
+              <p className="text-xs text-[#8a93a0] mt-0.5 truncate">
                 키워드: {draftToRestore.keyword || '(없음)'}
                 {draftToRestore.content && ' · 본문 작성됨'}
                 {draftToRestore.titles.length > 0 && ` · 제목 ${draftToRestore.titles.length}개`}
@@ -794,13 +794,13 @@ export default function AppPage() {
             <div className="flex gap-2 flex-shrink-0">
               <button
                 onClick={restoreDraft}
-                className="px-3 py-1.5 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-xs font-bold rounded-lg transition-colors min-h-[34px]"
+                className="px-3 py-1.5 bg-[#ff4628] hover:bg-[#e63a1c] text-white text-xs font-bold rounded-lg transition-colors min-h-[34px]"
               >
                 복원하기
               </button>
               <button
                 onClick={dismissDraft}
-                className="px-3 py-1.5 border border-[#2a2b6e] text-[#8891bd] hover:text-white hover:border-[#4f6ef7]/40 text-xs rounded-lg transition-colors min-h-[34px]"
+                className="px-3 py-1.5 border border-[#dbe2ea] text-[#8a93a0] hover:text-[#202020] hover:border-[#ff4628]/40 text-xs rounded-lg transition-colors min-h-[34px]"
               >
                 삭제
               </button>
@@ -812,16 +812,16 @@ export default function AppPage() {
       {/* 구독 플랜 필요 알림 (한도 초과 / 미구독 / 만료) */}
       {blocked && (
         <div className="max-w-screen-2xl mx-auto px-4 pt-4">
-          <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/40 rounded-2xl p-5 sm:p-6">
+          <div className="bg-[#ffece7] border border-[#ff4628]/40 rounded-2xl p-5 sm:p-6">
             <div className="flex items-start gap-3 mb-4">
               <span className="text-3xl flex-shrink-0">💎</span>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-white text-base sm:text-lg mb-1">구독 플랜이 필요합니다</p>
-                <p className="text-xs sm:text-sm text-blue-200">{error}</p>
+                <p className="font-bold text-[#202020] text-base sm:text-lg mb-1">구독 플랜이 필요합니다</p>
+                <p className="text-xs sm:text-sm text-[#4a4f55]">{error}</p>
               </div>
               <button
                 onClick={dismissBlocked}
-                className="text-blue-200 hover:text-white text-2xl leading-none flex-shrink-0"
+                className="text-[#4a4f55] hover:text-[#202020] text-2xl leading-none flex-shrink-0"
                 aria-label="닫기"
               >
                 ×
@@ -830,19 +830,19 @@ export default function AppPage() {
             <div className="flex flex-col sm:flex-row gap-2">
               <Link
                 href="/#pricing"
-                className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white text-sm font-bold rounded-xl text-center transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-3 bg-[#ff4628] hover:bg-[#e63a1c] active:bg-[#e63a1c] text-white text-sm font-bold rounded-xl text-center transition-colors flex items-center justify-center gap-2"
               >
                 💎 구독 플랜 보기
               </Link>
               <Link
                 href="/app/subscription"
-                className="flex-1 py-3 bg-[#191970] hover:bg-[#22227a] text-white text-sm font-semibold rounded-xl text-center transition-colors border border-[#4f6ef7]/40 flex items-center justify-center gap-2"
+                className="flex-1 py-3 bg-white hover:bg-[#eef2f6] text-[#202020] text-sm font-semibold rounded-xl text-center transition-colors border border-[#dbe2ea] flex items-center justify-center gap-2"
               >
                 ⚙️ 구독 관리
               </Link>
               <Link
                 href="/"
-                className="flex-1 py-3 bg-transparent hover:bg-[#191970]/50 text-[#8891bd] hover:text-white text-sm font-semibold rounded-xl text-center transition-colors border border-[#2a2b6e] flex items-center justify-center gap-2"
+                className="flex-1 py-3 bg-transparent hover:bg-[#eef2f6] text-[#8a93a0] hover:text-[#202020] text-sm font-semibold rounded-xl text-center transition-colors border border-[#dbe2ea] flex items-center justify-center gap-2"
               >
                 🏠 홈으로
               </Link>
@@ -854,22 +854,22 @@ export default function AppPage() {
       {/* 일반 에러 */}
       {error && !blocked && (
         <div className="max-w-screen-2xl mx-auto px-4 pt-4">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-3">
-            <span className="text-red-400 text-lg flex-shrink-0">❌</span>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-3">
+            <span className="text-red-500 text-lg flex-shrink-0">❌</span>
             <div className="flex-1">
-              <p className="font-semibold text-red-300 text-sm">오류 발생</p>
-              <p className="text-xs text-red-400 mt-0.5">{error}</p>
+              <p className="font-semibold text-red-600 text-sm">오류 발생</p>
+              <p className="text-xs text-red-500 mt-0.5">{error}</p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {retryAction && (
                 <button
                   onClick={handleRetry}
-                  className="px-3 py-1.5 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-xs font-bold rounded-lg transition-colors min-h-[36px]"
+                  className="px-3 py-1.5 bg-[#ff4628] hover:bg-[#e63a1c] text-white text-xs font-bold rounded-lg transition-colors min-h-[36px]"
                 >
                   🔄 다시 시도
                 </button>
               )}
-              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-200 text-lg leading-none">×</button>
+              <button onClick={() => setError(null)} className="text-red-500 hover:text-red-600 text-lg leading-none">×</button>
             </div>
           </div>
         </div>
@@ -910,7 +910,7 @@ export default function AppPage() {
                         <button
                           onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite)}
                           disabled={loadingTitles}
-                          className="w-full py-2.5 text-xs text-[#8891bd] hover:text-white border border-[#2a2b6e] hover:border-[#4f6ef7]/40 bg-[#0b0d2b] hover:bg-[#191970]/30 rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
+                          className="w-full py-2.5 text-xs text-[#8a93a0] hover:text-[#202020] border border-[#dbe2ea] hover:border-[#ff4628]/40 bg-white hover:bg-[#eef2f6] rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
                         >
                           {loadingTitles ? (
                             <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 생성 중...</>
@@ -926,13 +926,13 @@ export default function AppPage() {
                 {titles.length === 0 && !loadingTitles && !loadingContent && (
                   <div className="mt-8 sm:mt-12 text-center px-4">
                     <div className="text-4xl sm:text-5xl mb-3">✍️</div>
-                    <p className="text-base font-semibold text-white mb-1">키워드를 입력하여 시작하세요</p>
-                    <p className="text-xs text-[#8891bd] mb-5">
+                    <p className="text-base font-semibold text-[#202020] mb-1">키워드를 입력하여 시작하세요</p>
+                    <p className="text-xs text-[#8a93a0] mb-5">
                       네이버 C-Rank · D.I.A+ 알고리즘 기반 SEO 최적화 블로그 자동 생성
                     </p>
                     <div className="flex flex-wrap justify-center gap-2">
                       {['레이저 토닝', '보톡스 시술', '도수치료', '허리디스크', '임플란트', '라식 수술'].map((kw) => (
-                        <span key={kw} className="bg-[#191970]/50 text-[#8891bd] text-xs px-3 py-1.5 rounded-full border border-[#2a2b6e]">
+                        <span key={kw} className="bg-[#eef2f6] text-[#8a93a0] text-xs px-3 py-1.5 rounded-full border border-[#dbe2ea]">
                           {kw}
                         </span>
                       ))}
@@ -1024,12 +1024,12 @@ export default function AppPage() {
                     )}
 
                     {!user && authChecked && (
-                      <div className="rounded-2xl border border-[#2a2b6e] bg-[#12153d] p-5 text-center">
-                        <p className="text-sm font-semibold text-white mb-1">발행 도우미는 로그인 후 사용 가능합니다</p>
-                        <p className="text-xs text-[#8891bd] mb-4">로그인하고 네이버 블로그에 바로 발행하세요</p>
+                      <div className="rounded-2xl border border-[#dbe2ea] bg-white shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] p-5 text-center">
+                        <p className="text-sm font-semibold text-[#202020] mb-1">발행 도우미는 로그인 후 사용 가능합니다</p>
+                        <p className="text-xs text-[#8a93a0] mb-4">로그인하고 네이버 블로그에 바로 발행하세요</p>
                         <button
                           onClick={() => setShowAuthModal(true)}
-                          className="px-5 py-2 bg-[#4f6ef7] hover:bg-[#3d5ef0] text-white text-sm font-bold rounded-xl transition-colors"
+                          className="px-5 py-2 bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm font-bold rounded-xl transition-colors"
                         >
                           로그인 / 회원가입
                         </button>
@@ -1045,12 +1045,12 @@ export default function AppPage() {
         </div>
       </main>
 
-      <footer className="mt-16 border-t border-[#2a2b6e] bg-[#0b0d2b]">
+      <footer className="mt-16 border-t border-[#dbe2ea] bg-white">
         <div className="max-w-screen-2xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-2">
-          <p className="text-[10px] text-[#555d8a]">
+          <p className="text-[10px] text-[#b8c8d7]">
             본 서비스는 의료광고법(의료법 제56조) 준수를 지원합니다. 최종 광고 심의는 의료광고 심의기관을 통해 확인하시기 바랍니다.
           </p>
-          <p className="text-[10px] text-[#555d8a] flex-shrink-0">닥터포스트 © 2026 · Claude AI · 네이버 C-Rank · D.I.A+ 최적화</p>
+          <p className="text-[10px] text-[#b8c8d7] flex-shrink-0">닥터포스트 © 2026 · Claude AI · 네이버 C-Rank · D.I.A+ 최적화</p>
         </div>
       </footer>
 

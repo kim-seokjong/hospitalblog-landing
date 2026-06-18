@@ -17,19 +17,19 @@ function formatDate(dateStr: string): string {
 function statusBadge(status: SavedPost['status']): { text: string; className: string } {
   switch (status) {
     case 'published':
-      return { text: '발행됨', className: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' };
+      return { text: '발행됨', className: 'bg-green-50 text-green-700 border border-green-200' };
     case 'scheduled':
-      return { text: '예약됨', className: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' };
+      return { text: '예약됨', className: 'bg-amber-50 text-amber-700 border border-amber-200' };
     default:
-      return { text: '임시저장', className: 'bg-gray-500/20 text-gray-400 border border-gray-500/30' };
+      return { text: '임시저장', className: 'bg-[#eef2f6] text-[#8a93a0] border border-[#dbe2ea]' };
   }
 }
 
 function siteBadge(targetSite: SavedPost['target_site']): { text: string; className: string } {
   if (targetSite === 'google') {
-    return { text: '구글', className: 'bg-blue-500/20 text-blue-300 border border-blue-500/30' };
+    return { text: '구글', className: 'bg-blue-50 text-blue-600 border border-blue-200' };
   }
-  return { text: '네이버', className: 'bg-green-500/20 text-green-300 border border-green-500/30' };
+  return { text: '네이버', className: 'bg-green-50 text-green-700 border border-green-200' };
 }
 
 interface DetailModalProps {
@@ -69,22 +69,22 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
       role="dialog"
       aria-label="콘텐츠 상세 보기"
     >
-      <div className="relative w-full max-w-3xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl flex flex-col">
+      <div className="relative w-full max-w-3xl bg-white border border-[#dbe2ea] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] flex flex-col">
         {/* 헤더 */}
-        <div className="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-800">
+        <div className="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[#dbe2ea]">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${status.className}`}>{status.text}</span>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${site.className}`}>{site.text}</span>
-              {post.keyword && <span className="text-xs text-blue-400">#{post.keyword}</span>}
+              {post.keyword && <span className="text-xs text-[#ff4628]">#{post.keyword}</span>}
             </div>
-            <h2 className="text-base sm:text-lg font-bold text-white leading-snug">{post.title}</h2>
-            <p className="text-xs text-gray-500 mt-1">{formatDate(post.published_at ?? post.created_at)}</p>
+            <h2 className="text-base sm:text-lg font-bold text-[#202020] leading-snug">{post.title}</h2>
+            <p className="text-xs text-[#8a93a0] mt-1">{formatDate(post.published_at ?? post.created_at)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-[#8a93a0] hover:text-[#202020] hover:bg-[#eef2f6] transition-colors"
             aria-label="닫기"
           >
             ✕
@@ -93,20 +93,20 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
 
         {/* 본문 전문 */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 max-h-[55vh]">
-          <pre className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed font-sans">
+          <pre className="whitespace-pre-wrap break-words text-sm text-[#202020] leading-relaxed font-sans">
             {post.content}
           </pre>
         </div>
 
         {/* 푸터 */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2 px-4 sm:px-6 py-4 border-t border-gray-800">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2 px-4 sm:px-6 py-4 border-t border-[#dbe2ea]">
           <button
             type="button"
             onClick={() => void handleCopy()}
             className={`px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors ${
               copied
-                ? 'bg-emerald-700 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                ? 'bg-green-600 text-white'
+                : 'bg-[#ff4628] hover:bg-[#e63a1c] text-white'
             }`}
           >
             {copied ? '복사됨 ✓' : '본문 복사'}
@@ -114,7 +114,7 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
           <button
             type="button"
             onClick={() => onEdit(post)}
-            className="px-4 py-2.5 text-sm font-semibold text-gray-300 border border-gray-700 hover:bg-gray-800 rounded-lg transition-colors"
+            className="px-4 py-2.5 text-sm font-semibold text-[#4a4f55] border border-[#dbe2ea] hover:bg-[#eef2f6] rounded-lg transition-colors"
           >
             수정하기
           </button>
@@ -230,35 +230,35 @@ export default function ContentArchiveTab() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="제목·키워드 검색"
-          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+          className="flex-1 bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] transition-colors"
           aria-label="제목 또는 키워드 검색"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors appearance-none sm:w-36"
+          className="bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors appearance-none sm:w-36"
           aria-label="상태 필터"
         >
-          <option value="all" className="bg-gray-800">전체 상태</option>
-          <option value="published" className="bg-gray-800">발행됨</option>
-          <option value="scheduled" className="bg-gray-800">예약됨</option>
-          <option value="draft" className="bg-gray-800">임시저장</option>
+          <option value="all" className="bg-white text-[#202020]">전체 상태</option>
+          <option value="published" className="bg-white text-[#202020]">발행됨</option>
+          <option value="scheduled" className="bg-white text-[#202020]">예약됨</option>
+          <option value="draft" className="bg-white text-[#202020]">임시저장</option>
         </select>
       </div>
 
       {/* 로딩 */}
       {fetchState === 'loading' && (
-        <div className="py-16 text-center text-gray-400 text-sm">콘텐츠를 불러오는 중...</div>
+        <div className="py-16 text-center text-[#8a93a0] text-sm">콘텐츠를 불러오는 중...</div>
       )}
 
       {/* 에러 */}
       {fetchState === 'error' && (
         <div className="py-16 text-center">
-          <p className="text-red-400 text-sm mb-4">{fetchError}</p>
+          <p className="text-red-600 text-sm mb-4">{fetchError}</p>
           <button
             type="button"
             onClick={() => void loadPosts()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
+            className="px-4 py-2 bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm font-semibold rounded-lg transition-colors"
           >
             다시 시도
           </button>
@@ -267,11 +267,11 @@ export default function ContentArchiveTab() {
 
       {/* 빈 상태 */}
       {fetchState === 'ready' && filtered.length === 0 && (
-        <div className="py-16 text-center bg-gray-900 border border-gray-800 rounded-xl">
-          <p className="text-white font-semibold mb-1">
+        <div className="py-16 text-center bg-white border border-[#dbe2ea] rounded-xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+          <p className="text-[#202020] font-semibold mb-1">
             {posts.length === 0 ? '아직 저장된 글이 없습니다' : '조건에 맞는 글이 없습니다'}
           </p>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-[#8a93a0] mb-4">
             {posts.length === 0
               ? '글을 작성한 후 저장함에 보관해보세요. (최근 6개월 콘텐츠가 표시됩니다)'
               : '검색어나 상태 필터를 변경해보세요.'}
@@ -279,7 +279,7 @@ export default function ContentArchiveTab() {
           {posts.length === 0 && (
             <a
               href="/app"
-              className="inline-block px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="inline-block px-5 py-2.5 bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm font-semibold rounded-xl transition-colors"
             >
               글 작성하러 가기
             </a>
@@ -290,7 +290,7 @@ export default function ContentArchiveTab() {
       {/* 목록 */}
       {fetchState === 'ready' && filtered.length > 0 && (
         <>
-          <p className="text-xs text-gray-500 mb-3">최근 6개월 · {filtered.length}편</p>
+          <p className="text-xs text-[#8a93a0] mb-3">최근 6개월 · {filtered.length}편</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {filtered.map((post) => {
               const status = statusBadge(post.status);
@@ -298,7 +298,7 @@ export default function ContentArchiveTab() {
               return (
                 <div
                   key={post.id}
-                  className="relative bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-blue-500/40 transition-colors cursor-pointer group"
+                  className="relative bg-white border border-[#dbe2ea] rounded-xl p-4 hover:border-[#ff4628]/40 transition-colors cursor-pointer group shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
                   onClick={() => setDetailPost(post)}
                   role="button"
                   tabIndex={0}
@@ -318,19 +318,19 @@ export default function ContentArchiveTab() {
                       type="button"
                       onClick={(e) => { e.stopPropagation(); void handleDelete(post.id); }}
                       disabled={deletingId === post.id}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-gray-600 hover:text-red-400 disabled:text-gray-700 text-xs transition-all px-2 py-1 rounded-lg hover:bg-red-500/10 disabled:cursor-not-allowed flex-shrink-0"
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[#b8c8d7] hover:text-red-600 disabled:text-[#dbe2ea] text-xs transition-all px-2 py-1 rounded-lg hover:bg-red-50 disabled:cursor-not-allowed flex-shrink-0"
                       aria-label="글 삭제"
                     >
                       {deletingId === post.id ? '삭제 중...' : '삭제'}
                     </button>
                   </div>
 
-                  <h3 className="font-semibold text-white text-sm leading-snug mb-2 line-clamp-2">
+                  <h3 className="font-semibold text-[#202020] text-sm leading-snug mb-2 line-clamp-2">
                     {post.title}
                   </h3>
 
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                    {post.keyword && <span className="text-blue-400">#{post.keyword}</span>}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#8a93a0]">
+                    {post.keyword && <span className="text-[#ff4628]">#{post.keyword}</span>}
                     <span>{formatDate(post.published_at ?? post.created_at)}</span>
                   </div>
                 </div>

@@ -122,18 +122,18 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
   const doneCount = [titleCopied, bodyCopied, downloaded.size > 0, tagsCopied && (tags?.naverTags?.length ?? 0) > 0].filter(Boolean).length;
 
   return (
-    <div className="bg-[#12153d] rounded-2xl shadow-xl border border-[#2a2b6e] overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] overflow-hidden">
       {/* 헤더 */}
-      <div className="px-4 sm:px-5 py-4 flex items-center gap-3 border-b border-[#2a2b6e]">
+      <div className="px-4 sm:px-5 py-4 flex items-center gap-3 border-b border-[#dbe2ea]">
         <div className="w-9 h-9 bg-green-500 rounded-xl flex items-center justify-center flex-shrink-0">
           <span className="text-white text-base font-bold">N</span>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-bold text-yellow-300">네이버 블로그 발행 도우미</h3>
-          <p className="text-xs text-yellow-100/80">단계별로 복사 → 네이버에 붙여넣기</p>
+          <h3 className="text-sm font-bold text-[#202020]">네이버 블로그 발행 도우미</h3>
+          <p className="text-xs text-[#8a93a0]">단계별로 복사 → 네이버에 붙여넣기</p>
         </div>
         {doneCount > 0 && (
-          <span className="text-xs font-bold text-emerald-200 bg-emerald-500/20 border border-emerald-500/40 px-2 py-1 rounded-lg flex-shrink-0">
+          <span className="text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-lg flex-shrink-0">
             {doneCount}단계 완료
           </span>
         )}
@@ -147,7 +147,7 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
           sub={titleCopied ? '제목이 클립보드에 복사됨 — 제목란에 Ctrl+V' : `"${title.slice(0, 30)}${title.length > 30 ? '…' : ''}"`}
           done={titleCopied}
           btnLabel={titleCopied ? '재복사' : '제목 복사'}
-          btnClass="bg-blue-500 hover:bg-blue-600"
+          btnClass="bg-[#ff4628] hover:bg-[#e63a1c]"
           onClick={handleCopyTitle}
         />
 
@@ -160,25 +160,25 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
             : `${content.charCount.toLocaleString()}자${images.length > 0 ? ` · 이미지 자리표시자 ${images.length}개 포함` : ''}`}
           done={bodyCopied}
           btnLabel={bodyCopied ? '재복사' : '본문 복사'}
-          btnClass="bg-blue-500 hover:bg-blue-600"
+          btnClass="bg-[#ff4628] hover:bg-[#e63a1c]"
           onClick={handleCopyBody}
         />
 
         {/* STEP 3: 이미지 다운로드 */}
         {images.length > 0 && (
-          <div className={`rounded-xl border p-3 space-y-2 transition-colors ${downloaded.size === images.length ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-[#2a2b6e] bg-[#0b0d2b]'}`}>
+          <div className={`rounded-xl border p-3 space-y-2 transition-colors ${downloaded.size === images.length ? 'border-green-200 bg-green-50' : 'border-[#dbe2ea] bg-[#eef2f6]'}`}>
             <div className="flex items-center gap-2.5">
-              <span className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${downloaded.size > 0 ? 'bg-emerald-500 text-white' : 'bg-[#2a2b6e] text-white'}`}>
+              <span className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${downloaded.size > 0 ? 'bg-green-500 text-white' : 'bg-[#ff4628] text-white'}`}>
                 {downloaded.size > 0 ? '✓' : '3'}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-white">이미지 다운로드</p>
-                <p className="text-xs text-[#8891bd]">{downloaded.size}/{images.length}개 · [이미지N] 위치에 삽입</p>
+                <p className="text-xs font-bold text-[#202020]">이미지 다운로드</p>
+                <p className="text-xs text-[#8a93a0]">{downloaded.size}/{images.length}개 · [이미지N] 위치에 삽입</p>
               </div>
               <button
                 onClick={handleDownloadAll}
                 disabled={downloadingAll}
-                className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:bg-[#2a2b6e] disabled:opacity-50 text-white rounded-lg transition-colors"
+                className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:bg-[#dbe2ea] disabled:opacity-50 text-white rounded-lg transition-colors"
               >
                 {downloadingAll ? '다운로드 중…' : '전체 다운로드'}
               </button>
@@ -190,7 +190,7 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
                   key={img.id}
                   onClick={() => handleDownloadOne(img, i)}
                   title={`이미지${i + 1} 다운로드`}
-                  className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-colors ${downloaded.has(img.id) ? 'border-green-400' : 'border-transparent hover:border-blue-400'}`}
+                  className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-colors ${downloaded.has(img.id) ? 'border-green-400' : 'border-transparent hover:border-[#ff4628]'}`}
                 >
                   <img src={img.url} alt={`이미지${i + 1}`} className="w-full h-full object-cover" />
                   <div className={`absolute inset-0 flex items-end justify-center pb-1 ${downloaded.has(img.id) ? 'bg-green-500/60' : 'bg-black/30 opacity-0 hover:opacity-100'} transition-opacity`}>
@@ -202,9 +202,9 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
               ))}
             </div>
 
-            <div className="mt-2 bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-2.5">
-              <p className="text-xs font-bold text-indigo-200 mb-1">📌 이미지 삽입 방법</p>
-              <ol className="text-xs text-indigo-100 space-y-0.5 list-decimal list-inside">
+            <div className="mt-2 bg-[#ffece7] border border-[#ff4628]/30 rounded-xl p-2.5">
+              <p className="text-xs font-bold text-[#ff4628] mb-1">📌 이미지 삽입 방법</p>
+              <ol className="text-xs text-[#4a4f55] space-y-0.5 list-decimal list-inside">
                 <li>본문 붙여넣기 후 <strong>[이미지N]</strong> 텍스트 위치로 스크롤</li>
                 <li><strong>[이미지N]</strong> 텍스트 앞에 커서 위치 → 에디터 상단 <strong>사진 버튼</strong> 클릭</li>
                 <li>다운로드한 이미지 선택 후 업로드</li>
@@ -224,15 +224,15 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
               : (tags?.naverTags ?? []).slice(0, 5).map((t) => `#${t}`).join(' ') + (((tags?.naverTags?.length ?? 0) > 5) ? ' …' : '')}
             done={tagsCopied}
             btnLabel={tagsCopied ? '재복사' : '태그 복사'}
-            btnClass="bg-blue-500 hover:bg-blue-600"
+            btnClass="bg-[#ff4628] hover:bg-[#e63a1c]"
             onClick={handleCopyTags}
           />
         )}
 
         {/* 가이드 */}
-        <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3">
-          <p className="text-xs font-semibold text-blue-200 mb-1">붙여넣기 순서</p>
-          <ol className="text-xs text-blue-100 space-y-0.5 list-decimal list-inside">
+        <div className="bg-[#ffece7] border border-[#ff4628]/30 rounded-xl p-3">
+          <p className="text-xs font-semibold text-[#ff4628] mb-1">붙여넣기 순서</p>
+          <ol className="text-xs text-[#4a4f55] space-y-0.5 list-decimal list-inside">
             <li>네이버 블로그 글쓰기 열기</li>
             <li>제목 복사 → 제목란 Ctrl+V</li>
             <li>본문 복사 → 본문 영역 Ctrl+V</li>
@@ -257,17 +257,17 @@ interface StepProps {
 
 function Step({ n, label, sub, done, btnLabel, btnClass, onClick }: StepProps) {
   return (
-    <div className={`rounded-xl border p-3 flex items-center gap-2.5 transition-colors ${done ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-[#2a2b6e] bg-[#0b0d2b]'}`}>
-      <span className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${done ? 'bg-emerald-500 text-white' : 'bg-[#2a2b6e] text-white'}`}>
+    <div className={`rounded-xl border p-3 flex items-center gap-2.5 transition-colors ${done ? 'border-green-200 bg-green-50' : 'border-[#dbe2ea] bg-[#eef2f6]'}`}>
+      <span className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${done ? 'bg-green-500 text-white' : 'bg-[#ff4628] text-white'}`}>
         {done ? '✓' : n}
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-bold text-white">{label}</p>
-        <p className="text-xs text-[#8891bd] truncate">{sub}</p>
+        <p className="text-xs font-bold text-[#202020]">{label}</p>
+        <p className="text-xs text-[#8a93a0] truncate">{sub}</p>
       </div>
       <button
         onClick={onClick}
-        className={`flex-shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors text-white ${done ? 'bg-emerald-500 hover:bg-emerald-600' : btnClass}`}
+        className={`flex-shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors text-white ${done ? 'bg-green-500 hover:bg-green-600' : btnClass}`}
       >
         {btnLabel}
       </button>

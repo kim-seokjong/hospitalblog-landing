@@ -60,17 +60,17 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
 
   if (checking) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4">
+      <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] p-4">
         <div className="animate-pulse flex items-center gap-3">
-          <div className="w-9 h-9 bg-gray-200 rounded-xl" />
-          <div className="h-4 bg-gray-200 rounded w-32" />
+          <div className="w-9 h-9 bg-[#eef2f6] rounded-xl" />
+          <div className="h-4 bg-[#eef2f6] rounded w-32" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] overflow-hidden">
       <div className="px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${existing?.exists ? 'bg-green-500' : 'bg-orange-400'}`}>
@@ -87,22 +87,22 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
         </div>
         {existing?.exists && (
           <div className="flex gap-2">
-            <button onClick={() => setShowForm((v) => !v)} className="text-xs text-blue-600 hover:text-blue-700 font-medium">변경</button>
+            <button onClick={() => setShowForm((v) => !v)} className="text-xs text-[#ff4628] hover:text-[#e63a1c] font-medium">변경</button>
             <button onClick={handleDelete} className="text-xs text-red-500 hover:text-red-600 font-medium">삭제</button>
           </div>
         )}
       </div>
 
       {showForm && (
-        <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-3">
+        <div className="px-5 pb-5 border-t border-[#dbe2ea] pt-4 space-y-3">
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-700">네이버 아이디</label>
+            <label className="text-xs font-semibold text-[#4a4f55]">네이버 아이디</label>
             <input
               type="text"
               value={naverId}
               onChange={(e) => setNaverId(e.target.value)}
               placeholder="네이버 아이디 입력"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
+              className="w-full px-3 py-2.5 bg-white border border-[#dbe2ea] rounded-lg text-sm text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
             />
           </div>
@@ -118,7 +118,7 @@ export default function NaverCredentialSetup({ onSaved }: NaverCredentialSetupPr
               {loading ? '저장 중...' : '저장하기'}
             </button>
             {existing?.exists && (
-              <button onClick={() => setShowForm(false)} className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
+              <button onClick={() => setShowForm(false)} className="px-4 py-2.5 border border-[#dbe2ea] text-[#4a4f55] rounded-xl text-sm hover:bg-[#eef2f6]">
                 취소
               </button>
             )}

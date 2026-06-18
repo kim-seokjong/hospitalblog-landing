@@ -18,11 +18,11 @@ const STATUS_LABELS: Record<PaymentStatus, string> = {
 };
 
 const STATUS_COLORS: Record<PaymentStatus, string> = {
-  PAID: 'text-green-400 bg-green-900/40 border-green-800',
-  PENDING: 'text-yellow-400 bg-yellow-900/40 border-yellow-800',
-  FAILED: 'text-red-400 bg-red-900/40 border-red-800',
-  CANCELLED: 'text-gray-400 bg-gray-800 border-gray-700',
-  VIRTUAL_ACCOUNT_ISSUED: 'text-blue-400 bg-blue-900/40 border-blue-800',
+  PAID: 'text-green-700 bg-green-50 border-green-200',
+  PENDING: 'text-yellow-700 bg-yellow-50 border-yellow-200',
+  FAILED: 'text-red-600 bg-red-50 border-red-200',
+  CANCELLED: 'text-[#8a93a0] bg-[#eef2f6] border-[#dbe2ea]',
+  VIRTUAL_ACCOUNT_ISSUED: 'text-[#ff4628] bg-[#ffece7] border-[#ff4628]/30',
 };
 
 function formatDate(dateStr: string | null): string {
@@ -141,19 +141,19 @@ export default function PaymentHistoryPage() {
 
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-gray-400 text-sm">로딩 중...</div>
+      <div className="min-h-screen bg-[#eef2f6] flex items-center justify-center">
+        <div className="text-[#8a93a0] text-sm">로딩 중...</div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-[#eef2f6] flex items-center justify-center px-4">
         <div className="text-center">
-          <div className="text-white font-semibold text-base mb-2">로그인이 필요합니다</div>
-          <div className="text-gray-400 text-sm mb-6">결제 내역은 로그인 후 이용할 수 있습니다.</div>
-          <a href="/" className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors">
+          <div className="text-[#202020] font-semibold text-base mb-2">로그인이 필요합니다</div>
+          <div className="text-[#8a93a0] text-sm mb-6">결제 내역은 로그인 후 이용할 수 있습니다.</div>
+          <a href="/" className="px-6 py-2.5 bg-[#ff4628] text-white rounded-lg text-sm font-semibold hover:bg-[#e63a1c] transition-colors">
             앱으로 이동해서 로그인
           </a>
         </div>
@@ -162,44 +162,44 @@ export default function PaymentHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 py-8 px-4">
+    <div className="min-h-screen bg-[#eef2f6] py-8 px-4">
       <div className="max-w-2xl mx-auto">
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-bold text-white">결제 내역</h1>
-            <p className="text-gray-400 text-sm mt-0.5">{user.email}</p>
+            <h1 className="text-xl font-bold text-[#202020]">결제 내역</h1>
+            <p className="text-[#8a93a0] text-sm mt-0.5">{user.email}</p>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => void fetchPayments()}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+              className="px-3 py-1.5 bg-white border border-[#dbe2ea] text-[#4a4f55] rounded-lg text-sm hover:bg-[#eef2f6] transition-colors"
             >
               새로고침
             </button>
-            <a href="/usage" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">
+            <a href="/usage" className="text-sm text-[#8a93a0] hover:text-[#202020] transition-colors">
               ← 사용량
             </a>
-            <a href="/" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">
+            <a href="/" className="text-sm text-[#8a93a0] hover:text-[#202020] transition-colors">
               앱으로 →
             </a>
           </div>
         </div>
 
         {/* 내비게이션 탭 */}
-        <div className="flex gap-1 mb-6 bg-gray-900 border border-gray-800 rounded-xl p-1">
+        <div className="flex gap-1 mb-6 bg-white border border-[#dbe2ea] rounded-xl p-1">
           <a
             href="/usage"
-            className="flex-1 text-center py-2 rounded-lg text-sm text-gray-400 hover:text-gray-200 transition-colors"
+            className="flex-1 text-center py-2 rounded-lg text-sm text-[#8a93a0] hover:text-[#202020] transition-colors"
           >
             사용량
           </a>
-          <span className="flex-1 text-center py-2 rounded-lg text-sm bg-blue-600 text-white font-medium">
+          <span className="flex-1 text-center py-2 rounded-lg text-sm bg-[#ff4628] text-white font-medium">
             결제 내역
           </span>
           <a
             href="/settings/profile"
-            className="flex-1 text-center py-2 rounded-lg text-sm text-gray-400 hover:text-gray-200 transition-colors"
+            className="flex-1 text-center py-2 rounded-lg text-sm text-[#8a93a0] hover:text-[#202020] transition-colors"
           >
             프로필 설정
           </a>
@@ -207,12 +207,12 @@ export default function PaymentHistoryPage() {
 
         {/* 로딩 */}
         {loading && (
-          <div className="text-center text-gray-400 py-16 text-sm">불러오는 중...</div>
+          <div className="text-center text-[#8a93a0] py-16 text-sm">불러오는 중...</div>
         )}
 
         {/* 에러 */}
         {error && (
-          <div className="bg-red-900/40 border border-red-800 rounded-xl px-4 py-3 text-red-300 text-sm mb-4">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm mb-4">
             오류: {error}
           </div>
         )}
@@ -221,13 +221,13 @@ export default function PaymentHistoryPage() {
         {!loading && !error && (
           <>
             {payments.length === 0 ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl py-16 text-center">
-                <div className="text-gray-500 text-4xl mb-4">🧾</div>
-                <div className="text-gray-300 font-medium mb-1">결제 내역이 없습니다</div>
-                <div className="text-gray-500 text-sm">플랜을 구독하면 결제 내역이 여기에 표시됩니다.</div>
+              <div className="bg-white border border-[#dbe2ea] rounded-xl py-16 text-center shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <div className="text-[#8a93a0] text-4xl mb-4">🧾</div>
+                <div className="text-[#4a4f55] font-medium mb-1">결제 내역이 없습니다</div>
+                <div className="text-[#8a93a0] text-sm">플랜을 구독하면 결제 내역이 여기에 표시됩니다.</div>
                 <a
                   href="/pricing"
-                  className="inline-block mt-4 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+                  className="inline-block mt-4 px-5 py-2 bg-[#ff4628] text-white rounded-lg text-sm font-semibold hover:bg-[#e63a1c] transition-colors"
                 >
                   플랜 보기
                 </a>
@@ -255,12 +255,12 @@ function PaymentCard({ payment }: { payment: Payment }) {
   const createdAt = formatDate(payment.created_at);
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-5">
+    <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           {/* 플랜 + 상태 */}
           <div className="flex items-center gap-2 flex-wrap mb-2">
-            <span className="text-white font-semibold">{planName} 플랜</span>
+            <span className="text-[#202020] font-semibold">{planName} 플랜</span>
             <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusColor}`}>
               {statusLabel}
             </span>
@@ -287,7 +287,7 @@ function PaymentCard({ payment }: { payment: Payment }) {
           <button
             type="button"
             onClick={() => printReceipt(payment)}
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 bg-gray-800 border border-gray-700 text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-700 hover:text-white transition-colors"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 bg-white border border-[#dbe2ea] text-[#4a4f55] rounded-lg text-xs font-medium hover:bg-[#eef2f6] hover:text-[#202020] transition-colors"
           >
             <span>🖨</span>
             <span className="hidden sm:inline">영수증</span>
@@ -297,12 +297,12 @@ function PaymentCard({ payment }: { payment: Payment }) {
 
       {/* 영수증 URL */}
       {payment.receipt_url && (
-        <div className="mt-3 pt-3 border-t border-gray-800">
+        <div className="mt-3 pt-3 border-t border-[#dbe2ea]">
           <a
             href={payment.receipt_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            className="text-xs text-[#ff4628] hover:text-[#e63a1c] transition-colors"
           >
             PG사 영수증 보기 →
           </a>
@@ -325,8 +325,8 @@ function InfoRow({
 }) {
   return (
     <div className="flex gap-2">
-      <span className="text-gray-500 w-20 flex-shrink-0">{label}</span>
-      <span className={`${bold ? 'text-white font-semibold' : error ? 'text-red-400' : 'text-gray-300'}`}>
+      <span className="text-[#8a93a0] w-20 flex-shrink-0">{label}</span>
+      <span className={`${bold ? 'text-[#202020] font-semibold' : error ? 'text-red-600' : 'text-[#4a4f55]'}`}>
         {value}
       </span>
     </div>

@@ -15,7 +15,7 @@ function ScoreRing({ score, label }: { score: number; label: string }) {
   return (
     <div className="flex flex-col items-center gap-1">
       <svg width="56" height="56" viewBox="0 0 56 56">
-        <circle cx="28" cy="28" r={r} fill="none" stroke="#2a2b6e" strokeWidth="6" />
+        <circle cx="28" cy="28" r={r} fill="none" stroke="#dbe2ea" strokeWidth="6" />
         <circle
           cx="28" cy="28" r={r} fill="none"
           stroke={color} strokeWidth="6"
@@ -25,7 +25,7 @@ function ScoreRing({ score, label }: { score: number; label: string }) {
         />
         <text x="28" y="33" textAnchor="middle" fontSize="12" fontWeight="700" fill={color}>{score}</text>
       </svg>
-      <span className="text-xs text-[#c5caf0] text-center leading-tight">{label}</span>
+      <span className="text-xs text-[#202020] text-center leading-tight">{label}</span>
     </div>
   );
 }
@@ -52,7 +52,7 @@ export default function SeoAnalysis({ content }: SeoAnalysisProps) {
   );
 
   return (
-    <div className="bg-[#12153d] rounded-2xl shadow-xl border border-[#2a2b6e] overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] overflow-hidden">
       <div className="bg-blue-900 p-4 sm:p-5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
         <h3 className="text-white font-bold text-base">네이버 SEO 분석 리포트</h3>
         <p className="text-blue-100 text-xs mt-0.5">C-Rank · D.I.A+ 기준 최적화 분석</p>
@@ -69,7 +69,7 @@ export default function SeoAnalysis({ content }: SeoAnalysisProps) {
 
         {/* 체크리스트 */}
         <div className="space-y-2 mb-4">
-          <h4 className="text-xs font-bold text-white mb-2">상위노출 체크리스트</h4>
+          <h4 className="text-xs font-bold text-[#202020] mb-2">상위노출 체크리스트</h4>
           {[
             { ok: charOk, label: `글자수 ${content.charCount.toLocaleString()}자`, sub: '1,500자 이상 권장' },
             { ok: h2Ok, label: `H2 소제목 ${seoAnalysis.h2Count}개`, sub: '4~5개 권장' },
@@ -81,25 +81,25 @@ export default function SeoAnalysis({ content }: SeoAnalysisProps) {
             { ok: content.compliance.isCompliant, label: '의료광고법 준수', sub: '금지어 없음' },
             { ok: imageGuidelines.placementHints.length >= 4, label: `이미지 위치 ${imageGuidelines.placementHints.length}곳`, sub: '5곳 이상 권장' },
           ].map(({ ok, label, sub }, i) => (
-            <div key={i} className={`flex items-center gap-2 p-2 rounded-lg border ${ok ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
-              <span className={`text-sm flex-shrink-0 ${ok ? 'text-emerald-300' : 'text-amber-300'}`}>
+            <div key={i} className={`flex items-center gap-2 p-2 rounded-lg border ${ok ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+              <span className={`text-sm flex-shrink-0 ${ok ? 'text-emerald-600' : 'text-amber-600'}`}>
                 {ok ? '✓' : '△'}
               </span>
               <div className="flex-1 min-w-0">
-                <span className={`text-xs font-semibold ${ok ? 'text-emerald-100' : 'text-amber-100'}`}>{label}</span>
-                <span className="text-xs text-[#c5caf0] ml-1">({sub})</span>
+                <span className={`text-xs font-semibold ${ok ? 'text-green-700' : 'text-amber-700'}`}>{label}</span>
+                <span className="text-xs text-[#4a4f55] ml-1">({sub})</span>
               </div>
             </div>
           ))}
         </div>
 
         {/* 읽기 시간 */}
-        <div className="bg-[#0b0d2b] border border-[#2a2b6e] rounded-xl p-3 flex items-center gap-3">
+        <div className="bg-[#eef2f6] border border-[#dbe2ea] rounded-xl p-3 flex items-center gap-3">
           <span className="text-2xl">⏱</span>
           <div>
-            <p className="text-xs font-bold text-white">예상 읽기 시간</p>
-            <p className="text-sm font-bold text-blue-300">{seoAnalysis.estimatedReadingTime}분</p>
-            <p className="text-xs text-[#8891bd]">체류 시간이 길수록 D.I.A+ 가산점</p>
+            <p className="text-xs font-bold text-[#202020]">예상 읽기 시간</p>
+            <p className="text-sm font-bold text-blue-600">{seoAnalysis.estimatedReadingTime}분</p>
+            <p className="text-xs text-[#8a93a0]">체류 시간이 길수록 D.I.A+ 가산점</p>
           </div>
         </div>
       </div>
