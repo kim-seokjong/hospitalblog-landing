@@ -111,8 +111,8 @@ export default function MemberTable({ members }: MemberTableProps) {
   }, [members, filter, query]);
 
   return (
-    <div className="bg-white border border-[#dbe2ea] rounded-xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-      <div className="p-4 border-b border-[#dbe2ea] flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div className="bg-white border border-[#b4bfce] rounded-xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <div className="p-4 border-b border-[#b4bfce] flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h3 className="text-sm font-semibold text-[#202020]">
           회원 목록 ({filtered.length}명)
         </h3>
@@ -125,7 +125,7 @@ export default function MemberTable({ members }: MemberTableProps) {
                 className={`px-3 py-1.5 rounded text-xs transition-colors ${
                   filter === f.key
                     ? 'bg-emerald-600 text-white'
-                    : 'bg-[#eef2f6] text-[#4a4f55] hover:bg-[#dbe2ea]'
+                    : 'bg-[#eef2f6] text-[#4a4f55] hover:bg-[#b4bfce]'
                 }`}
               >
                 {f.label}
@@ -137,14 +137,14 @@ export default function MemberTable({ members }: MemberTableProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="이메일·병원명·진료과 검색"
-            className="px-3 py-1.5 bg-white border border-[#dbe2ea] rounded text-xs text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] min-w-[200px]"
+            className="px-3 py-1.5 bg-white border border-[#b4bfce] rounded text-xs text-[#202020] placeholder-[#5b6573] focus:outline-none focus:border-[#ff4628] min-w-[200px]"
           />
         </div>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="bg-[#eef2f6] text-xs text-[#8a93a0] uppercase">
+          <thead className="bg-[#eef2f6] text-xs text-[#5b6573] uppercase">
             <tr>
               <th className="px-4 py-3 text-left font-medium">병원·이름</th>
               <th className="px-4 py-3 text-left font-medium">플랜</th>
@@ -161,7 +161,7 @@ export default function MemberTable({ members }: MemberTableProps) {
               <tr>
                 <td
                   colSpan={8}
-                  className="px-4 py-8 text-center text-[#8a93a0] text-sm"
+                  className="px-4 py-8 text-center text-[#5b6573] text-sm"
                 >
                   검색 결과 없음
                 </td>
@@ -177,12 +177,12 @@ export default function MemberTable({ members }: MemberTableProps) {
                   <Fragment key={m.id}>
                   <tr
                     onClick={() => toggleExpand(m.id)}
-                    className={`border-t border-[#dbe2ea] cursor-pointer ${rowBg}`}
+                    className={`border-t border-[#b4bfce] cursor-pointer ${rowBg}`}
                   >
                     <td className="px-4 py-3 text-[#202020]">
                       <div className="flex items-center gap-2">
                         <span
-                          className="text-[#8a93a0] text-xs select-none"
+                          className="text-[#5b6573] text-xs select-none"
                           aria-hidden="true"
                         >
                           {isExpanded ? '▲' : '▼'}
@@ -191,7 +191,7 @@ export default function MemberTable({ members }: MemberTableProps) {
                           <div className="font-medium">
                             {m.hospital_name ?? '-'}
                           </div>
-                          <div className="text-xs text-[#8a93a0]">
+                          <div className="text-xs text-[#5b6573]">
                             {m.full_name ?? '-'}
                           </div>
                         </div>
@@ -210,13 +210,13 @@ export default function MemberTable({ members }: MemberTableProps) {
                     <td className="px-4 py-3 text-[#4a4f55]">
                       {m.specialty ?? '-'}
                     </td>
-                    <td className="px-4 py-3 text-[#8a93a0]">
+                    <td className="px-4 py-3 text-[#5b6573]">
                       {formatDate(m.created_at)}
                     </td>
                     <td className="px-4 py-3 text-right text-[#4a4f55]">
                       {(adjustResults[m.id]?.newCount ?? m.usage_count ?? 0).toLocaleString('ko-KR')}
                     </td>
-                    <td className="px-4 py-3 text-[#8a93a0]">
+                    <td className="px-4 py-3 text-[#5b6573]">
                       {formatDate(m.plan_expires_at)}
                     </td>
                     <td className="px-4 py-3">
@@ -230,33 +230,33 @@ export default function MemberTable({ members }: MemberTableProps) {
                     </td>
                   </tr>
                   {isExpanded && (
-                    <tr className="border-t border-[#dbe2ea] bg-[#eef2f6]">
+                    <tr className="border-t border-[#b4bfce] bg-[#eef2f6]">
                       <td colSpan={8} className="px-4 py-4">
                         <div className="space-y-4">
                           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
                             <div>
-                              <dt className="text-xs uppercase text-[#8a93a0]">연락처</dt>
+                              <dt className="text-xs uppercase text-[#5b6573]">연락처</dt>
                               <dd className="mt-0.5 text-[#202020] break-words">{m.phone ?? '-'}</dd>
                             </div>
                             <div>
-                              <dt className="text-xs uppercase text-[#8a93a0]">직책</dt>
+                              <dt className="text-xs uppercase text-[#5b6573]">직책</dt>
                               <dd className="mt-0.5 text-[#202020] break-words">{m.position ?? '-'}</dd>
                             </div>
                             <div>
-                              <dt className="text-xs uppercase text-[#8a93a0]">병원유형</dt>
+                              <dt className="text-xs uppercase text-[#5b6573]">병원유형</dt>
                               <dd className="mt-0.5 text-[#202020] break-words">{m.hospital_type ?? '-'}</dd>
                             </div>
                             <div className="sm:col-span-2 lg:col-span-1">
-                              <dt className="text-xs uppercase text-[#8a93a0]">주소</dt>
+                              <dt className="text-xs uppercase text-[#5b6573]">주소</dt>
                               <dd className="mt-0.5 text-[#202020] break-words">{m.hospital_address ?? '-'}</dd>
                             </div>
                           </dl>
 
                           {/* 사용량 조정 */}
-                          <div className="border-t border-[#dbe2ea] pt-3">
+                          <div className="border-t border-[#b4bfce] pt-3">
                             <p className="text-xs font-semibold text-[#4a4f55] mb-2">사용량 조정</p>
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs text-[#8a93a0]">
+                              <span className="text-xs text-[#5b6573]">
                                 현재:{' '}
                                 <span className="text-[#202020] font-bold">
                                   {(adjustResults[m.id]?.newCount ?? m.usage_count ?? 0).toLocaleString('ko-KR')}회
@@ -283,12 +283,12 @@ export default function MemberTable({ members }: MemberTableProps) {
                                   setDeltaInputs((prev) => ({ ...prev, [m.id]: e.target.value }))
                                 }
                                 placeholder="직접입력"
-                                className="w-24 px-2 py-1 bg-white border border-[#dbe2ea] rounded text-xs text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] text-center"
+                                className="w-24 px-2 py-1 bg-white border border-[#b4bfce] rounded text-xs text-[#202020] placeholder-[#5b6573] focus:outline-none focus:border-[#ff4628] text-center"
                               />
                               <button
                                 onClick={() => handleAdjust(m.id)}
                                 disabled={adjusting[m.id] || !deltaInputs[m.id]}
-                                className="px-3 py-1 bg-[#ff4628] hover:bg-[#e63a1c] disabled:bg-[#eef2f6] disabled:text-[#8a93a0] text-white text-xs font-bold rounded transition-colors"
+                                className="px-3 py-1 bg-[#ff4628] hover:bg-[#e63a1c] disabled:bg-[#eef2f6] disabled:text-[#5b6573] text-white text-xs font-bold rounded transition-colors"
                               >
                                 {adjusting[m.id] ? '처리 중...' : '적용'}
                               </button>

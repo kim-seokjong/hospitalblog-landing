@@ -60,14 +60,14 @@ export default function AnalysisPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-[#202020]">
-      <header className="sticky top-0 z-40 border-b border-[#dbe2ea] bg-white/85 backdrop-blur-md">
+    <div className="min-h-screen bg-[#eaeef4] text-[#202020]">
+      <header className="sticky top-0 z-40 border-b border-[#b4bfce] bg-white/85 backdrop-blur-md">
         <div className="max-w-screen-lg mx-auto px-4 h-14 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg flex-shrink-0">📊</span>
             <h1 className="text-sm sm:text-base font-bold text-[#202020] truncate">상세 분석</h1>
             {payload?.title && (
-              <span className="hidden sm:inline text-xs text-[#8a93a0] truncate ml-2">
+              <span className="hidden sm:inline text-xs text-[#5b6573] truncate ml-2">
                 · {payload.title}
               </span>
             )}
@@ -76,7 +76,7 @@ export default function AnalysisPage() {
             type="button"
             onClick={handleClose}
             aria-label="창 닫기"
-            className="flex-shrink-0 px-3 py-2 flex items-center gap-1.5 rounded-lg bg-[#eef2f6] text-[#202020] hover:bg-red-500/80 hover:text-white transition-colors text-sm font-semibold border border-[#dbe2ea] hover:border-red-500"
+            className="flex-shrink-0 px-3 py-2 flex items-center gap-1.5 rounded-lg bg-[#eef2f6] text-[#202020] hover:bg-red-500/80 hover:text-white transition-colors text-sm font-semibold border border-[#b4bfce] hover:border-red-500"
           >
             <span className="text-base leading-none">✕</span>
             <span className="hidden sm:inline">창 닫기</span>
@@ -86,12 +86,12 @@ export default function AnalysisPage() {
 
       <main className="max-w-screen-lg mx-auto px-4 py-6 space-y-5">
         {!loaded ? (
-          <div className="py-20 text-center text-[#8a93a0] text-sm">불러오는 중...</div>
+          <div className="py-20 text-center text-[#5b6573] text-sm">불러오는 중...</div>
         ) : !payload ? (
           <div className="py-20 text-center">
             <div className="text-4xl mb-3">📭</div>
             <p className="text-base font-semibold text-[#202020] mb-1">분석할 본문 데이터가 없습니다</p>
-            <p className="text-xs text-[#8a93a0] mb-5">
+            <p className="text-xs text-[#5b6573] mb-5">
               본문 생성 후 메인 페이지에서 다시 시도해주세요.
             </p>
             <Link
@@ -117,7 +117,7 @@ export default function AnalysisPage() {
             <button
               type="button"
               onClick={handleClose}
-              className="w-full py-3 rounded-xl bg-[#eef2f6] hover:bg-[#eef2f6] text-[#202020] text-sm font-semibold border border-[#dbe2ea] hover:border-[#ff4628]/40 transition-colors"
+              className="w-full py-3 rounded-xl bg-[#eef2f6] hover:bg-[#eef2f6] text-[#202020] text-sm font-semibold border border-[#b4bfce] hover:border-[#ff4628]/40 transition-colors"
             >
               창 닫기
             </button>
@@ -128,7 +128,7 @@ export default function AnalysisPage() {
       {toast && (
         <div
           role="status"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl bg-white border border-[#dbe2ea] text-[#202020] text-sm shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] z-50"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl bg-white border border-[#b4bfce] text-[#202020] text-sm shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] z-50"
         >
           {toast}
         </div>

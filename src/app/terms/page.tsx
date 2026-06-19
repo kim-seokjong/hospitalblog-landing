@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <main className="min-h-screen bg-white text-[#4a4f55]">
+    <main className="min-h-screen bg-[#eaeef4] text-[#4a4f55]">
       <div className="max-w-3xl mx-auto px-6 py-16">
 
         <div className="mb-12">
@@ -15,7 +15,7 @@ export default function TermsPage() {
             ← 홈으로
           </Link>
           <h1 className="text-3xl font-bold text-[#202020] mb-3">이용약관</h1>
-          <p className="text-sm text-[#8a93a0]">시행일: 2026년 5월 8일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 8일</p>
+          <p className="text-sm text-[#5b6573]">시행일: 2026년 5월 8일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 8일</p>
         </div>
 
         <div className="space-y-10 text-sm leading-relaxed">
@@ -27,7 +27,7 @@ export default function TermsPage() {
           </p>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제1조 (목적 및 적용 범위)
             </h2>
             <p className="text-[#4a4f55]">
@@ -37,7 +37,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제2조 (이용자 자격)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -49,7 +49,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제3조 (서비스 내용)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -63,16 +63,16 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제4조 (요금제 및 사용량)
             </h2>
             <div className="overflow-x-auto mb-4">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-[#eef2f6]">
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">플랜</th>
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">요금</th>
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">월 사용 한도</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">플랜</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">요금</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">월 사용 한도</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -81,10 +81,10 @@ export default function TermsPage() {
                     ['스탠다드', '199,000원/월', '월 20건'],
                     ['프로', '399,000원/월', '무제한'],
                   ].map(([plan, price, limit]) => (
-                    <tr key={plan} className="border-b border-[#dbe2ea]">
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{plan}</td>
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{price}</td>
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{limit}</td>
+                    <tr key={plan} className="border-b border-[#b4bfce]">
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{plan}</td>
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{price}</td>
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{limit}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -98,7 +98,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제5조 (자동갱신 결제)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -113,7 +113,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제6조 (청약철회 및 환불)
             </h2>
             <p className="text-[#4a4f55] mb-3">
@@ -131,7 +131,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제7조 (이용 제한 및 금지 행위)
             </h2>
             <p className="text-[#4a4f55] mb-3">다음 행위는 금지되며, 위반 시 서비스 이용이 즉시 제한될 수 있습니다.</p>
@@ -145,7 +145,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제8조 (콘텐츠 책임)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -156,7 +156,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제9조 (지적재산권)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -167,7 +167,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제10조 (서비스 중단 및 변경)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -178,7 +178,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제11조 (면책조항)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -189,7 +189,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               제12조 (분쟁 해결 및 준거법)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -198,7 +198,7 @@ export default function TermsPage() {
             </ul>
           </section>
 
-          <p className="text-xs text-[#8a93a0] pt-6 border-t border-[#dbe2ea]">
+          <p className="text-xs text-[#5b6573] pt-6 border-t border-[#b4bfce]">
             본 약관은 2026년 5월 8일부터 적용됩니다.
           </p>
         </div>

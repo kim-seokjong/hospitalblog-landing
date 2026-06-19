@@ -36,10 +36,10 @@ export default function AnalysisModal({ open, onClose, content, title, keyword }
       onClick={onClose}
     >
       <div
-        className="relative w-full sm:w-[min(960px,92vw)] max-h-screen sm:max-h-[90vh] flex flex-col bg-[#f7f9fb] sm:rounded-2xl border-0 sm:border sm:border-[#dbe2ea] shadow-2xl overflow-hidden isolate"
+        className="relative w-full sm:w-[min(960px,92vw)] max-h-screen sm:max-h-[90vh] flex flex-col bg-[#f7f9fb] sm:rounded-2xl border-0 sm:border sm:border-[#b4bfce] shadow-2xl overflow-hidden isolate"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-[#dbe2ea] bg-white sticky top-0 z-30">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-[#b4bfce] bg-white sticky top-0 z-30">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg flex-shrink-0">📊</span>
             <h2 className="text-sm sm:text-base font-bold text-[#202020] truncate">상세 분석</h2>
@@ -48,7 +48,7 @@ export default function AnalysisModal({ open, onClose, content, title, keyword }
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="flex-shrink-0 w-11 h-11 flex items-center justify-center rounded-lg bg-[#eef2f6] text-[#202020] hover:bg-red-500/80 hover:text-white transition-colors text-2xl leading-none font-bold border border-[#dbe2ea] hover:border-red-500"
+            className="flex-shrink-0 w-11 h-11 flex items-center justify-center rounded-lg bg-[#eef2f6] text-[#202020] hover:bg-red-500/80 hover:text-white transition-colors text-2xl leading-none font-bold border border-[#b4bfce] hover:border-red-500"
           >
             ×
           </button>
@@ -62,7 +62,7 @@ export default function AnalysisModal({ open, onClose, content, title, keyword }
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-3 rounded-xl bg-[#eef2f6] hover:bg-[#e2e8ef] text-[#202020] text-sm font-semibold border border-[#dbe2ea] hover:border-[#c2ccd6] transition-colors"
+            className="w-full py-3 rounded-xl bg-[#eef2f6] hover:bg-[#e2e8ef] text-[#202020] text-sm font-semibold border border-[#b4bfce] hover:border-[#c2ccd6] transition-colors"
           >
             닫기
           </button>

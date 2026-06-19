@@ -42,7 +42,7 @@ export default function UsageTab() {
   }, [fetchUsage]);
 
   if (loading) {
-    return <div className="py-16 text-center text-[#8a93a0] text-sm">사용량을 불러오는 중...</div>;
+    return <div className="py-16 text-center text-[#5b6573] text-sm">사용량을 불러오는 중...</div>;
   }
 
   if (error || !usage) {
@@ -89,7 +89,7 @@ export default function UsageTab() {
       )}
 
       {/* 이번 달 글 생성 게이지 */}
-      <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <div className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
         <div className="flex items-center justify-between mb-3 gap-2">
           <h3 className="text-sm font-semibold text-[#202020]">이번 달 글 생성</h3>
           {usage.planName && (
@@ -101,7 +101,7 @@ export default function UsageTab() {
 
         <div className="flex items-end gap-2 mb-3">
           <span className="text-3xl font-bold text-[#202020]">{usage.usageCount}</span>
-          <span className="text-sm text-[#8a93a0] mb-1">
+          <span className="text-sm text-[#5b6573] mb-1">
             {isUnlimited ? '건 (무제한)' : hasPlan ? `/ ${usage.monthlyLimit}건` : '건'}
           </span>
         </div>
@@ -123,7 +123,7 @@ export default function UsageTab() {
         )}
 
         {!hasPlan && (
-          <p className="text-xs text-[#8a93a0]">
+          <p className="text-xs text-[#5b6573]">
             활성 플랜이 없습니다.{' '}
             <a href="/pricing" className="text-[#ff4628] hover:text-[#e63a1c] underline">요금제 보기</a>
           </p>
@@ -131,16 +131,16 @@ export default function UsageTab() {
       </div>
 
       {/* 이번 달 이미지 생성 */}
-      <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <div className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
         <h3 className="text-sm font-semibold text-[#202020] mb-3">이번 달 이미지 생성</h3>
         <div className="flex items-end gap-2">
           <span className="text-3xl font-bold text-[#202020]">{usage.imageCount}</span>
-          <span className="text-sm text-[#8a93a0] mb-1">장</span>
+          <span className="text-sm text-[#5b6573] mb-1">장</span>
         </div>
       </div>
 
       {/* 최근 6개월 추이 */}
-      <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <div className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
         <h3 className="text-sm font-semibold text-[#202020] mb-4">최근 6개월 글 생성 추이</h3>
         <div className="flex items-end justify-between gap-2 h-32">
           {usage.monthly.map((m) => (
@@ -151,11 +151,11 @@ export default function UsageTab() {
                 style={{ height: `${Math.max(4, Math.round((m.posts / maxTrend) * 80))}%` }}
                 aria-label={`${monthLabel(m.month)} 글 ${m.posts}건`}
               />
-              <span className="text-[11px] text-[#8a93a0]">{monthLabel(m.month)}</span>
+              <span className="text-[11px] text-[#5b6573]">{monthLabel(m.month)}</span>
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-[#8a93a0] mt-3">
+        <p className="text-[11px] text-[#5b6573] mt-3">
           · 글 생성 기록 기준 집계이며, 집계 시스템 도입 이전의 사용량은 포함되지 않을 수 있습니다.
         </p>
       </div>

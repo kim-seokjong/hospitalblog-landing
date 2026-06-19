@@ -52,13 +52,13 @@ export default async function SubscriptionPage() {
     !!billingKey?.trial_until && new Date(billingKey.trial_until) > new Date()
 
   return (
-    <main className="min-h-screen bg-white text-[#202020]">
-      <header className="border-b border-[#dbe2ea] bg-white/85 backdrop-blur sticky top-0 z-10">
+    <main className="min-h-screen bg-[#eaeef4] text-[#202020]">
+      <header className="border-b border-[#b4bfce] bg-white/85 backdrop-blur sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/app" className="text-base font-bold text-[#202020] flex items-center gap-2">
             <span>🏥</span> 닥터포스트
           </Link>
-          <Link href="/app" className="text-xs text-[#8a93a0] hover:text-[#202020] transition-colors">
+          <Link href="/app" className="text-xs text-[#5b6573] hover:text-[#202020] transition-colors">
             ← 앱으로
           </Link>
         </div>
@@ -68,13 +68,13 @@ export default async function SubscriptionPage() {
 
         <div>
           <h1 className="text-2xl font-bold text-[#202020] mb-1">구독 관리</h1>
-          <p className="text-sm text-[#8a93a0]">현재 구독 상태와 결제 내역을 확인할 수 있습니다.</p>
+          <p className="text-sm text-[#5b6573]">현재 구독 상태와 결제 내역을 확인할 수 있습니다.</p>
         </div>
 
         <section className={`rounded-2xl border p-6 ${
           isActiveSubscription
             ? 'border-[#ff4628]/30 bg-[#ffece7]'
-            : 'border-[#dbe2ea] bg-white shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]'}`
+            : 'border-[#b4bfce] bg-white shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]'}`
         }>
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-semibold text-[#202020]">현재 구독</h2>
@@ -83,7 +83,7 @@ export default async function SubscriptionPage() {
                 ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/40'
                 : isActiveSubscription
                   ? 'bg-[#ffece7] text-[#ff4628] border border-[#ff4628]/40'
-                  : 'bg-[#eef2f6] text-[#8a93a0]'}`
+                  : 'bg-[#eef2f6] text-[#5b6573]'}`
             }>
               {isInTrial ? '🎁 무료 체험 중' : isActiveSubscription ? '자동갱신 중' : '비활성'}
             </span>
@@ -130,8 +130,8 @@ export default async function SubscriptionPage() {
               </div>
 
               {isActiveSubscription && (
-                <div className="pt-4 border-t border-[#dbe2ea]">
-                  <p className="text-xs text-[#8a93a0] mb-3">
+                <div className="pt-4 border-t border-[#b4bfce]">
+                  <p className="text-xs text-[#5b6573] mb-3">
                     {isInTrial
                       ? '무료 체험 중 해지 시 청구 없이 즉시 종료됩니다.'
                       : `해지 시 다음 결제일부터 자동 청구가 중단되며, 이미 결제한 기간(${formatDate(billingKey?.next_billing_at ?? null)} 까지)은 정상 이용할 수 있습니다.`}
@@ -141,7 +141,7 @@ export default async function SubscriptionPage() {
               )}
 
               {!isActiveSubscription && (
-                <div className="pt-4 border-t border-[#dbe2ea]">
+                <div className="pt-4 border-t border-[#b4bfce]">
                   <Link
                     href="/#pricing"
                     className="block w-full py-3 rounded-lg text-sm font-semibold text-center bg-[#ff4628] hover:bg-[#e63a1c] text-white transition-colors"
@@ -153,7 +153,7 @@ export default async function SubscriptionPage() {
             </div>
           ) : (
             <div className="text-center py-6">
-              <p className="text-[#8a93a0] mb-4">활성 구독이 없습니다.</p>
+              <p className="text-[#5b6573] mb-4">활성 구독이 없습니다.</p>
               <Link
                 href="/#pricing"
                 className="inline-block px-6 py-2.5 rounded-lg text-sm font-semibold bg-[#ff4628] hover:bg-[#e63a1c] text-white transition-colors"
@@ -167,24 +167,24 @@ export default async function SubscriptionPage() {
         <section>
           <h2 className="text-lg font-semibold text-[#202020] mb-4">결제 내역</h2>
           {payments.length === 0 ? (
-            <p className="text-sm text-[#8a93a0] text-center py-8 bg-white rounded-xl border border-[#dbe2ea] shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+            <p className="text-sm text-[#5b6573] text-center py-8 bg-white rounded-xl border border-[#b4bfce] shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
               결제 내역이 없습니다.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-[#dbe2ea]">
+            <div className="overflow-x-auto rounded-xl border border-[#b4bfce]">
               <table className="w-full text-sm">
                 <thead className="bg-[#eef2f6]">
                   <tr>
-                    <th className="text-left px-4 py-3 text-[#8a93a0] font-medium">결제일</th>
-                    <th className="text-left px-4 py-3 text-[#8a93a0] font-medium">플랜</th>
-                    <th className="text-right px-4 py-3 text-[#8a93a0] font-medium">금액</th>
-                    <th className="text-center px-4 py-3 text-[#8a93a0] font-medium">상태</th>
-                    <th className="text-center px-4 py-3 text-[#8a93a0] font-medium">영수증</th>
+                    <th className="text-left px-4 py-3 text-[#5b6573] font-medium">결제일</th>
+                    <th className="text-left px-4 py-3 text-[#5b6573] font-medium">플랜</th>
+                    <th className="text-right px-4 py-3 text-[#5b6573] font-medium">금액</th>
+                    <th className="text-center px-4 py-3 text-[#5b6573] font-medium">상태</th>
+                    <th className="text-center px-4 py-3 text-[#5b6573] font-medium">영수증</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payments.map((p) => (
-                    <tr key={p.id} className="border-t border-[#dbe2ea] bg-white">
+                    <tr key={p.id} className="border-t border-[#b4bfce] bg-white">
                       <td className="px-4 py-3 text-[#4a4f55]">
                         {formatDate(p.paid_at ?? p.created_at)}
                       </td>
@@ -200,7 +200,7 @@ export default async function SubscriptionPage() {
                             ? 'bg-green-500/20 text-green-600'
                             : p.status === 'FAILED'
                               ? 'bg-red-500/20 text-red-600'
-                              : 'bg-[#eef2f6] text-[#8a93a0]'
+                              : 'bg-[#eef2f6] text-[#5b6573]'
                         }`}>
                           {STATUS_LABEL[p.status] ?? p.status}
                         </span>
@@ -216,7 +216,7 @@ export default async function SubscriptionPage() {
                             보기
                           </a>
                         ) : (
-                          <span className="text-xs text-[#b8c8d7]">-</span>
+                          <span className="text-xs text-[#73808f]">-</span>
                         )}
                       </td>
                     </tr>
@@ -227,7 +227,7 @@ export default async function SubscriptionPage() {
           )}
         </section>
 
-        <section className="text-xs text-[#8a93a0] space-y-1.5 pt-4 border-t border-[#dbe2ea]">
+        <section className="text-xs text-[#5b6573] space-y-1.5 pt-4 border-t border-[#b4bfce]">
           <p>· 다음 결제 7일 전 등록된 이메일로 사전 안내가 발송됩니다.</p>
           <p>· 카드 한도 초과 등으로 결제가 실패하면 3일 후 1회 재시도 후 자동 해지됩니다.</p>
           <p>· 환불 정책은{' '}
@@ -243,7 +243,7 @@ export default async function SubscriptionPage() {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-[#8a93a0] mb-1">{label}</p>
+      <p className="text-xs text-[#5b6573] mb-1">{label}</p>
       <p className="text-sm font-medium text-[#202020]">{value}</p>
     </div>
   )

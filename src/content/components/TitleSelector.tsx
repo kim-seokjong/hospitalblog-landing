@@ -26,7 +26,7 @@ function SeoScoreBar({ label, score }: { label: string; score: number }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs font-semibold text-[#202020] w-20 flex-shrink-0">{label}</span>
-      <div className="flex-1 bg-[#eef2f6] rounded-full h-2 border border-[#dbe2ea]">
+      <div className="flex-1 bg-[#eef2f6] rounded-full h-2 border border-[#b4bfce]">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${score}%` }} />
       </div>
       <span className={`text-xs font-bold w-8 text-right ${textColor}`}>{score}</span>
@@ -49,14 +49,14 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
   };
 
   return (
-    <div className="rounded-2xl border border-[#dbe2ea] bg-white p-4 sm:p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+    <div className="rounded-2xl border border-[#b4bfce] bg-white p-4 sm:p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center">
           <span className="text-purple-600 font-bold text-sm">2</span>
         </div>
         <div>
           <h2 className="text-base font-bold text-[#202020]">제목 선택</h2>
-          <p className="text-xs text-[#8a93a0]">AI 생성 제목 선택 또는 직접 입력</p>
+          <p className="text-xs text-[#5b6573]">AI 생성 제목 선택 또는 직접 입력</p>
         </div>
       </div>
 
@@ -67,7 +67,7 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors min-h-[40px] ${
-              tab === t ? 'bg-white text-[#202020] shadow-sm' : 'text-[#8a93a0] hover:text-[#202020] active:bg-[#eef2f6]'
+              tab === t ? 'bg-white text-[#202020] shadow-sm' : 'text-[#5b6573] hover:text-[#202020] active:bg-[#eef2f6]'
             }`}
           >
             {t === 'ai' ? 'AI 생성 제목' : '직접 입력'}
@@ -82,9 +82,9 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
             onChange={(e) => handleManualChange(e.target.value)}
             placeholder="원하는 제목을 직접 입력하세요"
             rows={3}
-            className="w-full px-4 py-3 rounded-xl bg-white border-2 border-[#dbe2ea] text-[#202020] placeholder-[#b8c8d7] text-sm focus:outline-none focus:border-purple-500/60 transition-colors resize-none"
+            className="w-full px-4 py-3 rounded-xl bg-white border-2 border-[#b4bfce] text-[#202020] placeholder-[#73808f] text-sm focus:outline-none focus:border-purple-500/60 transition-colors resize-none"
           />
-          <p className="text-[10px] text-[#8a93a0]">
+          <p className="text-[10px] text-[#5b6573]">
             {manualTitle.length}자
             {manualTitle.length >= 25 && manualTitle.length <= 35
               ? <span className="text-emerald-600 ml-1">✓ 적정 길이</span>
@@ -94,7 +94,7 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
           <button
             onClick={onGenerate}
             disabled={!manualTitle.trim() || isLoading}
-            className="w-full py-4 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 min-h-[52px] border-2 border-yellow-400"
+            className="w-full py-4 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-[#b4bfce] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 min-h-[52px] border-2 border-yellow-400"
           >
             {isLoading ? (
               <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 본문 생성 중...</>
@@ -109,7 +109,7 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
         <div>
           {titles.length === 0 ? (
             <div className="py-10 text-center">
-              <p className="text-[#b8c8d7] text-sm">키워드를 입력하면 AI 제목이 생성됩니다</p>
+              <p className="text-[#73808f] text-sm">키워드를 입력하면 AI 제목이 생성됩니다</p>
             </div>
           ) : (
             <>
@@ -125,19 +125,19 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
                       className={`w-full text-left p-3.5 rounded-xl border-2 transition-all active:scale-[0.99] ${
                         isSelected
                           ? 'border-yellow-400 bg-yellow-50 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]'
-                          : 'border-[#dbe2ea] hover:border-yellow-400/40 hover:bg-[#eef2f6] active:bg-[#eef2f6]'
+                          : 'border-[#b4bfce] hover:border-yellow-400/40 hover:bg-[#eef2f6] active:bg-[#eef2f6]'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1.5">
                         <div className="flex items-start gap-2 flex-1 min-w-0">
                           <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
-                            isSelected ? 'border-yellow-400 bg-yellow-400' : 'border-[#b8c8d7]'
+                            isSelected ? 'border-yellow-400 bg-yellow-400' : 'border-[#73808f]'
                           }`}>
                             {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                           </div>
                           <span className={`text-sm font-medium leading-relaxed ${isSelected ? 'text-[#202020]' : 'text-[#202020]'}`}>
                             {title.title}
-                            <span className="text-[10px] text-[#8a93a0] ml-1.5 whitespace-nowrap">
+                            <span className="text-[10px] text-[#5b6573] ml-1.5 whitespace-nowrap">
                               ({title.title.length}자
                               {title.title.length >= 25 && title.title.length <= 35
                                 ? <span className="text-emerald-600 ml-0.5">✓</span>
@@ -184,7 +184,7 @@ export default function TitleSelector({ titles, selectedTitle, onSelect, onGener
               <button
                 onClick={onGenerate}
                 disabled={!selectedTitle || isLoading}
-                className="w-full py-4 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] min-h-[52px] border-2 border-yellow-400"
+                className="w-full py-4 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-[#b4bfce] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] min-h-[52px] border-2 border-yellow-400"
               >
                 {isLoading ? (
                   <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 본문 + 태그 생성 중...</>

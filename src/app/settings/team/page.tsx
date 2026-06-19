@@ -209,7 +209,7 @@ export default function TeamSettingsPage() {
   if (!authChecked || loading) {
     return (
       <div className="min-h-screen bg-[#eef2f6] flex items-center justify-center">
-        <div className="text-[#8a93a0] text-sm">로딩 중...</div>
+        <div className="text-[#5b6573] text-sm">로딩 중...</div>
       </div>
     );
   }
@@ -219,7 +219,7 @@ export default function TeamSettingsPage() {
       <div className="min-h-screen bg-[#eef2f6] flex items-center justify-center px-4">
         <div className="text-center">
           <div className="text-[#202020] font-semibold text-base mb-2">로그인이 필요합니다</div>
-          <div className="text-[#8a93a0] text-sm mb-6">팀 설정은 로그인 후 이용할 수 있습니다.</div>
+          <div className="text-[#5b6573] text-sm mb-6">팀 설정은 로그인 후 이용할 수 있습니다.</div>
           <a
             href="/"
             className="px-6 py-2.5 bg-[#ff4628] text-white rounded-lg text-sm font-semibold hover:bg-[#e63a1c] transition-colors"
@@ -240,16 +240,16 @@ export default function TeamSettingsPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-bold text-[#202020]">팀 관리</h1>
-            <p className="text-[#8a93a0] text-sm mt-0.5">{user.email}</p>
+            <p className="text-[#5b6573] text-sm mt-0.5">{user.email}</p>
           </div>
           <div className="flex items-center gap-3">
             <a
               href="/settings/profile"
-              className="text-sm text-[#8a93a0] hover:text-[#202020] transition-colors"
+              className="text-sm text-[#5b6573] hover:text-[#202020] transition-colors"
             >
               프로필
             </a>
-            <a href="/" className="text-sm text-[#8a93a0] hover:text-[#202020] transition-colors">
+            <a href="/" className="text-sm text-[#5b6573] hover:text-[#202020] transition-colors">
               ← 앱으로
             </a>
           </div>
@@ -272,7 +272,7 @@ export default function TeamSettingsPage() {
           {/* 섹션 1 - 내가 초대한 멤버 목록 */}
           <Section title={`초대한 멤버 (${members.length}명)`}>
             {members.length === 0 ? (
-              <p className="text-sm text-[#8a93a0] py-2">아직 초대한 멤버가 없습니다.</p>
+              <p className="text-sm text-[#5b6573] py-2">아직 초대한 멤버가 없습니다.</p>
             ) : (
               <div className="space-y-1">
                 {members.map(member => (
@@ -299,10 +299,10 @@ export default function TeamSettingsPage() {
               {PLAN_LIMIT_INFO.map(({ plan, limit }) => (
                 <div
                   key={plan}
-                  className="bg-[#eef2f6] border border-[#dbe2ea] rounded-lg px-3 py-2 text-center"
+                  className="bg-[#eef2f6] border border-[#b4bfce] rounded-lg px-3 py-2 text-center"
                 >
                   <div className="text-xs font-semibold text-[#4a4f55] mb-0.5">{plan}</div>
-                  <div className="text-xs text-[#8a93a0]">{limit}</div>
+                  <div className="text-xs text-[#5b6573]">{limit}</div>
                 </div>
               ))}
             </div>
@@ -338,12 +338,12 @@ export default function TeamSettingsPage() {
                       if (e.key === 'Enter') void handleInvite();
                     }}
                     placeholder="초대할 이메일 주소"
-                    className="flex-1 bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#b8c8d7] focus:outline-none focus:border-[#ff4628] transition-colors"
+                    className="flex-1 bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#73808f] focus:outline-none focus:border-[#ff4628] transition-colors"
                   />
                   <select
                     value={inviteRole}
                     onChange={e => setInviteRole(e.target.value as MemberRole)}
-                    className="sm:w-28 bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors appearance-none"
+                    className="sm:w-28 bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors appearance-none"
                   >
                     <option value="member" className="bg-white">멤버</option>
                     <option value="admin" className="bg-white">관리자</option>
@@ -364,19 +364,19 @@ export default function TeamSettingsPage() {
           {/* 섹션 3 - 내게 온 초대 */}
           <Section title="받은 초대">
             {pendingInvites.length === 0 ? (
-              <p className="text-sm text-[#8a93a0] py-2">받은 초대가 없습니다.</p>
+              <p className="text-sm text-[#5b6573] py-2">받은 초대가 없습니다.</p>
             ) : (
               <div className="space-y-2">
                 {pendingInvites.map(invite => (
                   <div
                     key={invite.id}
-                    className="flex items-center justify-between gap-3 py-2.5 border-b border-[#dbe2ea] last:border-0"
+                    className="flex items-center justify-between gap-3 py-2.5 border-b border-[#b4bfce] last:border-0"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-sm text-[#202020] font-medium truncate">
                         초대 받은 역할: {ROLE_LABELS[invite.role]}
                       </div>
-                      <div className="text-xs text-[#8a93a0] mt-0.5">
+                      <div className="text-xs text-[#5b6573] mt-0.5">
                         초대일: {formatDate(invite.created_at)}
                       </div>
                     </div>
@@ -425,7 +425,7 @@ function MemberRow({
   const isUpdatingRole = updatingRoleId === member.id;
 
   return (
-    <div className="py-3 border-b border-[#dbe2ea] last:border-0">
+    <div className="py-3 border-b border-[#b4bfce] last:border-0">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -433,7 +433,7 @@ function MemberRow({
             <RoleBadge role={member.role} />
             <StatusBadge status={member.status} />
           </div>
-          <div className="text-xs text-[#8a93a0] mt-1">
+          <div className="text-xs text-[#5b6573] mt-1">
             {member.status === 'active'
               ? `가입일: ${formatDate(member.joined_at)}`
               : `초대일: ${formatDate(member.created_at)}`}
@@ -446,7 +446,7 @@ function MemberRow({
               value={member.role}
               disabled={isUpdatingRole}
               onChange={e => void onRoleChange(member.id, e.target.value as MemberRole)}
-              className="bg-white border border-[#dbe2ea] rounded-lg px-2 py-1 text-xs text-[#4a4f55] focus:outline-none focus:border-[#ff4628] transition-colors appearance-none disabled:opacity-50"
+              className="bg-white border border-[#b4bfce] rounded-lg px-2 py-1 text-xs text-[#4a4f55] focus:outline-none focus:border-[#ff4628] transition-colors appearance-none disabled:opacity-50"
             >
               <option value="member" className="bg-white">멤버</option>
               <option value="admin" className="bg-white">관리자</option>
@@ -455,7 +455,7 @@ function MemberRow({
 
           {isConfirming ? (
             <div className="flex items-center gap-1">
-              <span className="text-xs text-[#8a93a0] hidden sm:inline">정말 제거?</span>
+              <span className="text-xs text-[#5b6573] hidden sm:inline">정말 제거?</span>
               <button
                 type="button"
                 onClick={() => void onDeleteConfirm(member.id)}
@@ -467,7 +467,7 @@ function MemberRow({
               <button
                 type="button"
                 onClick={onCancelDelete}
-                className="px-2 py-1 bg-[#eef2f6] text-[#4a4f55] rounded text-xs hover:bg-[#dbe2ea] transition-colors"
+                className="px-2 py-1 bg-[#eef2f6] text-[#4a4f55] rounded text-xs hover:bg-[#b4bfce] transition-colors"
               >
                 취소
               </button>
@@ -477,7 +477,7 @@ function MemberRow({
               type="button"
               onClick={() => onDeleteRequest(member.id)}
               disabled={isDeleting}
-              className="px-2.5 py-1 bg-white border border-[#dbe2ea] text-[#8a93a0] rounded-lg text-xs hover:border-red-400 hover:text-red-600 disabled:opacity-50 transition-colors"
+              className="px-2.5 py-1 bg-white border border-[#b4bfce] text-[#5b6573] rounded-lg text-xs hover:border-red-400 hover:text-red-600 disabled:opacity-50 transition-colors"
             >
               제거
             </button>
@@ -491,7 +491,7 @@ function MemberRow({
 function RoleBadge({ role }: { role: MemberRole }) {
   const styles: Record<MemberRole, string> = {
     admin: 'bg-purple-50 border border-purple-200 text-purple-700',
-    member: 'bg-[#eef2f6] border border-[#dbe2ea] text-[#8a93a0]',
+    member: 'bg-[#eef2f6] border border-[#b4bfce] text-[#5b6573]',
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles[role]}`}>
@@ -518,8 +518,8 @@ function StatusBadge({ status }: { status: MemberStatus }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-      <h2 className="text-sm font-semibold text-[#4a4f55] mb-4 pb-3 border-b border-[#dbe2ea]">
+    <div className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <h2 className="text-sm font-semibold text-[#4a4f55] mb-4 pb-3 border-b border-[#b4bfce]">
         {title}
       </h2>
       <div className="space-y-3">{children}</div>

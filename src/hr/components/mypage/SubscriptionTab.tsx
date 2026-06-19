@@ -18,7 +18,7 @@ const STATUS_COLORS: Record<PaymentStatus, string> = {
   PAID: 'text-green-700 bg-green-50 border-green-200',
   PENDING: 'text-yellow-700 bg-yellow-50 border-yellow-200',
   FAILED: 'text-red-600 bg-red-50 border-red-200',
-  CANCELLED: 'text-[#8a93a0] bg-[#eef2f6] border-[#dbe2ea]',
+  CANCELLED: 'text-[#5b6573] bg-[#eef2f6] border-[#b4bfce]',
   VIRTUAL_ACCOUNT_ISSUED: 'text-blue-600 bg-blue-50 border-blue-200',
 };
 
@@ -39,7 +39,7 @@ function getPlanName(plan: string): string {
 function InfoField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-[#8a93a0] mb-1">{label}</p>
+      <p className="text-xs text-[#5b6573] mb-1">{label}</p>
       <p className="text-sm font-medium text-[#202020]">{value}</p>
     </div>
   );
@@ -90,7 +90,7 @@ export default function SubscriptionTab() {
   }, [fetchAll]);
 
   if (loading) {
-    return <div className="py-16 text-center text-[#8a93a0] text-sm">구독 정보를 불러오는 중...</div>;
+    return <div className="py-16 text-center text-[#5b6573] text-sm">구독 정보를 불러오는 중...</div>;
   }
 
   if (error) {
@@ -119,7 +119,7 @@ export default function SubscriptionTab() {
     <div className="space-y-6">
       {/* 현재 구독 카드 */}
       <section className={`rounded-xl border p-4 sm:p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] ${
-        sub?.autoRenew ? 'border-[#ff4628] bg-[#ffece7]' : 'border-[#dbe2ea] bg-white'
+        sub?.autoRenew ? 'border-[#ff4628] bg-[#ffece7]' : 'border-[#b4bfce] bg-white'
       }`}>
         <div className="flex items-center justify-between mb-5 gap-2">
           <h2 className="text-base sm:text-lg font-semibold text-[#202020]">현재 구독</h2>
@@ -130,7 +130,7 @@ export default function SubscriptionTab() {
                 ? 'bg-[#ffece7] text-[#ff4628] border border-[#ff4628]/40'
                 : sub?.isActive
                   ? 'bg-[#eef2f6] text-[#4a4f55]'
-                  : 'bg-[#eef2f6] text-[#8a93a0]'
+                  : 'bg-[#eef2f6] text-[#5b6573]'
           }`}>
             {sub?.isTrial ? '🎁 무료 체험 중' : sub?.autoRenew ? '자동갱신 중' : sub?.isActive ? '이용 중 (자동갱신 해지됨)' : '비활성'}
           </span>
@@ -158,7 +158,7 @@ export default function SubscriptionTab() {
               {cardLabel && <InfoField label="결제 수단" value={cardLabel} />}
             </div>
 
-            <div className="pt-4 border-t border-[#dbe2ea] flex flex-col sm:flex-row gap-2">
+            <div className="pt-4 border-t border-[#b4bfce] flex flex-col sm:flex-row gap-2">
               <a
                 href="/pricing"
                 className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-center bg-[#ff4628] hover:bg-[#e63a1c] text-white transition-colors"
@@ -167,7 +167,7 @@ export default function SubscriptionTab() {
               </a>
               <a
                 href="/app/subscription"
-                className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-center border border-[#dbe2ea] text-[#4a4f55] hover:bg-[#eef2f6] transition-colors"
+                className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-center border border-[#b4bfce] text-[#4a4f55] hover:bg-[#eef2f6] transition-colors"
               >
                 구독 상세 관리 (해지 포함)
               </a>
@@ -175,7 +175,7 @@ export default function SubscriptionTab() {
           </div>
         ) : (
           <div className="text-center py-6">
-            <p className="text-[#8a93a0] mb-4 text-sm">활성 구독이 없습니다.</p>
+            <p className="text-[#5b6573] mb-4 text-sm">활성 구독이 없습니다.</p>
             <a
               href="/pricing"
               className="inline-block px-6 py-2.5 rounded-lg text-sm font-semibold bg-[#ff4628] hover:bg-[#e63a1c] text-white transition-colors"
@@ -190,7 +190,7 @@ export default function SubscriptionTab() {
       <section>
         <h2 className="text-base sm:text-lg font-semibold text-[#202020] mb-4">결제 내역</h2>
         {payments.length === 0 ? (
-          <p className="text-sm text-[#8a93a0] text-center py-8 bg-white rounded-xl border border-[#dbe2ea] shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+          <p className="text-sm text-[#5b6573] text-center py-8 bg-white rounded-xl border border-[#b4bfce] shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
             결제 내역이 없습니다.
           </p>
         ) : (
@@ -199,7 +199,7 @@ export default function SubscriptionTab() {
               const statusLabel = STATUS_LABELS[p.status] ?? p.status;
               const statusColor = STATUS_COLORS[p.status] ?? STATUS_COLORS.PENDING;
               return (
-                <div key={p.id} className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <div key={p.id} className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[#202020] font-semibold text-sm">{getPlanName(p.plan)} 플랜</span>
@@ -209,7 +209,7 @@ export default function SubscriptionTab() {
                     </div>
                     <span className="text-[#202020] font-semibold text-sm">{formatAmount(p.amount)}</span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#8a93a0]">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#5b6573]">
                     <span>결제일 {formatDate(p.paid_at ?? p.created_at)}</span>
                     {p.card_name && <span>{p.card_name}</span>}
                     {p.failure_reason && <span className="text-red-600">{p.failure_reason}</span>}

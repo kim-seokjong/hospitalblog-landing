@@ -54,7 +54,7 @@ function formatDateTime(iso: string): string {
 
 function ChangeBadge({ value, suffix = 'MoM' }: { value: number; suffix?: string }) {
   if (!Number.isFinite(value) || value === 0) {
-    return <span className="text-xs text-[#8a93a0]">유지</span>;
+    return <span className="text-xs text-[#5b6573]">유지</span>;
   }
   const positive = value > 0;
   const color = positive ? 'text-emerald-600' : 'text-rose-600';
@@ -101,52 +101,52 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
     <div className="space-y-6">
       {/* 상단 5 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="bg-white border border-[#dbe2ea] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-          <p className="text-xs text-[#8a93a0] mb-2">MRR</p>
+        <div className="bg-white border border-[#b4bfce] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+          <p className="text-xs text-[#5b6573] mb-2">MRR</p>
           <p className="text-2xl font-bold text-[#202020]">
             {formatKRW(Math.round(metric.mrr / 10000))}
-            <span className="text-base font-normal text-[#8a93a0] ml-1">만원</span>
+            <span className="text-base font-normal text-[#5b6573] ml-1">만원</span>
           </p>
           <div className="mt-2">
             <ChangeBadge value={metric.mrrChangeMoM} />
           </div>
         </div>
 
-        <div className="bg-white border border-[#dbe2ea] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-          <p className="text-xs text-[#8a93a0] mb-2">구독 클리닉</p>
+        <div className="bg-white border border-[#b4bfce] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+          <p className="text-xs text-[#5b6573] mb-2">구독 클리닉</p>
           <p className="text-2xl font-bold text-[#202020]">
             {metric.activeSubs}
-            <span className="text-base font-normal text-[#8a93a0] ml-1">개</span>
+            <span className="text-base font-normal text-[#5b6573] ml-1">개</span>
           </p>
           <p className="mt-2 text-xs text-emerald-600">
             ↑ +{metric.newSubsThisMonth} 이번달
           </p>
         </div>
 
-        <div className="bg-white border border-[#dbe2ea] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-          <p className="text-xs text-[#8a93a0] mb-2">목표 달성률</p>
+        <div className="bg-white border border-[#b4bfce] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+          <p className="text-xs text-[#5b6573] mb-2">목표 달성률</p>
           <p className="text-2xl font-bold text-[#202020]">
             {metric.goalRate.toFixed(1)}
-            <span className="text-base font-normal text-[#8a93a0] ml-1">%</span>
+            <span className="text-base font-normal text-[#5b6573] ml-1">%</span>
           </p>
-          <p className="mt-2 text-xs text-[#8a93a0]">253개 목표</p>
+          <p className="mt-2 text-xs text-[#5b6573]">253개 목표</p>
         </div>
 
-        <div className="bg-white border border-[#dbe2ea] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-          <p className="text-xs text-[#8a93a0] mb-2">해지율 (MoM)</p>
+        <div className="bg-white border border-[#b4bfce] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+          <p className="text-xs text-[#5b6573] mb-2">해지율 (MoM)</p>
           <p className="text-2xl font-bold text-[#202020]">
             {metric.churnRate}
-            <span className="text-base font-normal text-[#8a93a0] ml-1">%</span>
+            <span className="text-base font-normal text-[#5b6573] ml-1">%</span>
           </p>
           {/* TODO: 해지율 추적 미구현 — 현재 근사치 0 */}
-          <p className="mt-2 text-xs text-[#8a93a0]">유지</p>
+          <p className="mt-2 text-xs text-[#5b6573]">유지</p>
         </div>
 
-        <div className="bg-white border border-[#dbe2ea] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-          <p className="text-xs text-[#8a93a0] mb-2">ARPU</p>
+        <div className="bg-white border border-[#b4bfce] rounded-xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+          <p className="text-xs text-[#5b6573] mb-2">ARPU</p>
           <p className="text-2xl font-bold text-[#202020]">
             {formatKRW(metric.arpu)}
-            <span className="text-base font-normal text-[#8a93a0] ml-1">원</span>
+            <span className="text-base font-normal text-[#5b6573] ml-1">원</span>
           </p>
           <div className="mt-2">
             <ChangeBadge value={metric.arpuChangeMoM} />
@@ -157,7 +157,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
       {/* 차트 그리드 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* MRR 추이 LineChart */}
-        <div className="bg-white border border-[#dbe2ea] rounded-xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+        <div className="bg-white border border-[#b4bfce] rounded-xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-[#202020]">
               MRR 추이 (만원)
@@ -168,7 +168,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
                 className={`px-2.5 py-1 rounded text-xs transition-colors ${
                   range === 6
                     ? 'bg-emerald-600 text-white'
-                    : 'bg-[#eef2f6] text-[#4a4f55] hover:bg-[#dbe2ea]'
+                    : 'bg-[#eef2f6] text-[#4a4f55] hover:bg-[#b4bfce]'
                 }`}
               >
                 6개월
@@ -178,7 +178,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
                 className={`px-2.5 py-1 rounded text-xs transition-colors ${
                   range === 12
                     ? 'bg-emerald-600 text-white'
-                    : 'bg-[#eef2f6] text-[#4a4f55] hover:bg-[#dbe2ea]'
+                    : 'bg-[#eef2f6] text-[#4a4f55] hover:bg-[#b4bfce]'
                 }`}
               >
                 12개월
@@ -202,12 +202,12 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
               <Tooltip
                 contentStyle={{
                   backgroundColor: '#ffffff',
-                  border: '1px solid #dbe2ea',
+                  border: '1px solid #b4bfce',
                   borderRadius: 6,
                   color: '#202020',
                   fontSize: 12,
                 }}
-                labelStyle={{ color: '#8a93a0' }}
+                labelStyle={{ color: '#5b6573' }}
                 formatter={(value) => [`${formatKRW(Number(value))}만원`, 'MRR']}
               />
               <Line
@@ -223,12 +223,12 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         </div>
 
         {/* 플랜별 도넛 PieChart */}
-        <div className="bg-white border border-[#dbe2ea] rounded-xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+        <div className="bg-white border border-[#b4bfce] rounded-xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
           <h3 className="text-sm font-semibold text-[#202020] mb-4">
             플랜별 분포
           </h3>
           {pieData.length === 0 ? (
-            <div className="h-[240px] flex items-center justify-center text-sm text-[#8a93a0]">
+            <div className="h-[240px] flex items-center justify-center text-sm text-[#5b6573]">
               데이터 없음
             </div>
           ) : (
@@ -252,7 +252,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#ffffff',
-                    border: '1px solid #dbe2ea',
+                    border: '1px solid #b4bfce',
                     borderRadius: 6,
                     color: '#202020',
                     fontSize: 12,
@@ -269,12 +269,12 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         </div>
 
         {/* 진료과별 BarChart (가로형) */}
-        <div className="bg-white border border-[#dbe2ea] rounded-xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+        <div className="bg-white border border-[#b4bfce] rounded-xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
           <h3 className="text-sm font-semibold text-[#202020] mb-4">
             진료과별 활성 구독
           </h3>
           {sortedSpecialty.length === 0 ? (
-            <div className="h-[240px] flex items-center justify-center text-sm text-[#8a93a0]">
+            <div className="h-[240px] flex items-center justify-center text-sm text-[#5b6573]">
               데이터 없음
             </div>
           ) : (
@@ -302,7 +302,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#ffffff',
-                    border: '1px solid #dbe2ea',
+                    border: '1px solid #b4bfce',
                     borderRadius: 6,
                     color: '#202020',
                     fontSize: 12,
@@ -334,13 +334,13 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
       </div>
 
       {/* 최근 결제 테이블 */}
-      <div className="bg-white border border-[#dbe2ea] rounded-xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-        <div className="p-4 border-b border-[#dbe2ea]">
+      <div className="bg-white border border-[#b4bfce] rounded-xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+        <div className="p-4 border-b border-[#b4bfce]">
           <h3 className="text-sm font-semibold text-[#202020]">최근 결제 (최대 10건)</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[600px] text-sm">
-            <thead className="bg-[#eef2f6] text-xs text-[#8a93a0] uppercase">
+            <thead className="bg-[#eef2f6] text-xs text-[#5b6573] uppercase">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">플랜</th>
                 <th className="px-4 py-3 text-left font-medium">이메일</th>
@@ -353,7 +353,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
                 <tr>
                   <td
                     colSpan={4}
-                    className="px-4 py-8 text-center text-[#8a93a0] text-sm"
+                    className="px-4 py-8 text-center text-[#5b6573] text-sm"
                   >
                     결제 내역 없음
                   </td>
@@ -362,7 +362,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
                 recentPayments.map((p, i) => (
                   <tr
                     key={i}
-                    className="border-t border-[#dbe2ea] hover:bg-[#eef2f6]"
+                    className="border-t border-[#b4bfce] hover:bg-[#eef2f6]"
                   >
                     <td className="px-4 py-3 text-[#202020]">
                       {PLAN_LABEL[(p.plan ?? 'free') as PlanType] ?? p.plan}
@@ -373,7 +373,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
                     <td className="px-4 py-3 text-right text-[#202020]">
                       {formatKRW(p.amount)}원
                     </td>
-                    <td className="px-4 py-3 text-[#8a93a0]">
+                    <td className="px-4 py-3 text-[#5b6573]">
                       {formatDateTime(p.created_at)}
                     </td>
                   </tr>

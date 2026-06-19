@@ -122,15 +122,15 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
   const doneCount = [titleCopied, bodyCopied, downloaded.size > 0, tagsCopied && (tags?.naverTags?.length ?? 0) > 0].filter(Boolean).length;
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#b4bfce] overflow-hidden">
       {/* 헤더 */}
-      <div className="px-4 sm:px-5 py-4 flex items-center gap-3 border-b border-[#dbe2ea]">
+      <div className="px-4 sm:px-5 py-4 flex items-center gap-3 border-b border-[#b4bfce]">
         <div className="w-9 h-9 bg-green-500 rounded-xl flex items-center justify-center flex-shrink-0">
           <span className="text-white text-base font-bold">N</span>
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-bold text-[#202020]">네이버 블로그 발행 도우미</h3>
-          <p className="text-xs text-[#8a93a0]">단계별로 복사 → 네이버에 붙여넣기</p>
+          <p className="text-xs text-[#5b6573]">단계별로 복사 → 네이버에 붙여넣기</p>
         </div>
         {doneCount > 0 && (
           <span className="text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-lg flex-shrink-0">
@@ -166,19 +166,19 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
 
         {/* STEP 3: 이미지 다운로드 */}
         {images.length > 0 && (
-          <div className={`rounded-xl border p-3 space-y-2 transition-colors ${downloaded.size === images.length ? 'border-green-200 bg-green-50' : 'border-[#dbe2ea] bg-[#eef2f6]'}`}>
+          <div className={`rounded-xl border p-3 space-y-2 transition-colors ${downloaded.size === images.length ? 'border-green-200 bg-green-50' : 'border-[#b4bfce] bg-[#eef2f6]'}`}>
             <div className="flex items-center gap-2.5">
               <span className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${downloaded.size > 0 ? 'bg-green-500 text-white' : 'bg-[#ff4628] text-white'}`}>
                 {downloaded.size > 0 ? '✓' : '3'}
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-[#202020]">이미지 다운로드</p>
-                <p className="text-xs text-[#8a93a0]">{downloaded.size}/{images.length}개 · [이미지N] 위치에 삽입</p>
+                <p className="text-xs text-[#5b6573]">{downloaded.size}/{images.length}개 · [이미지N] 위치에 삽입</p>
               </div>
               <button
                 onClick={handleDownloadAll}
                 disabled={downloadingAll}
-                className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:bg-[#dbe2ea] disabled:opacity-50 text-white rounded-lg transition-colors"
+                className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:bg-[#b4bfce] disabled:opacity-50 text-white rounded-lg transition-colors"
               >
                 {downloadingAll ? '다운로드 중…' : '전체 다운로드'}
               </button>
@@ -257,13 +257,13 @@ interface StepProps {
 
 function Step({ n, label, sub, done, btnLabel, btnClass, onClick }: StepProps) {
   return (
-    <div className={`rounded-xl border p-3 flex items-center gap-2.5 transition-colors ${done ? 'border-green-200 bg-green-50' : 'border-[#dbe2ea] bg-[#eef2f6]'}`}>
+    <div className={`rounded-xl border p-3 flex items-center gap-2.5 transition-colors ${done ? 'border-green-200 bg-green-50' : 'border-[#b4bfce] bg-[#eef2f6]'}`}>
       <span className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${done ? 'bg-green-500 text-white' : 'bg-[#ff4628] text-white'}`}>
         {done ? '✓' : n}
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-bold text-[#202020]">{label}</p>
-        <p className="text-xs text-[#8a93a0] truncate">{sub}</p>
+        <p className="text-xs text-[#5b6573] truncate">{sub}</p>
       </div>
       <button
         onClick={onClick}

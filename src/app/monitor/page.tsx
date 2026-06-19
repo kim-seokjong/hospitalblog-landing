@@ -65,7 +65,7 @@ function KeywordChip({ keyword }: { keyword: string }) {
       className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
         copied
           ? 'bg-green-50 border-green-500/50 text-green-700'
-          : 'bg-[#eef2f6] border-[#dbe2ea] text-[#4a4f55] hover:border-[#ff4628]/50 hover:text-[#202020] hover:bg-[#ffece7] active:bg-[#ffece7]'
+          : 'bg-[#eef2f6] border-[#b4bfce] text-[#4a4f55] hover:border-[#ff4628]/50 hover:text-[#202020] hover:bg-[#ffece7] active:bg-[#ffece7]'
       }`}
     >
       {copied ? '✓ 복사됨' : `# ${keyword}`}
@@ -123,7 +123,7 @@ export default function MonitorPage() {
   return (
     <div className="min-h-screen bg-[#eef2f6] text-[#202020]">
       {/* 헤더 */}
-      <header className="sticky top-0 z-40 border-b border-[#dbe2ea] bg-white/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-[#b4bfce] bg-white/95 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <a
             href="/app"
@@ -141,7 +141,7 @@ export default function MonitorPage() {
             </span>
             <a
               href="/app"
-              className="px-3 py-1.5 text-xs border border-[#dbe2ea] rounded-lg text-[#4a4f55] hover:bg-[#eef2f6] hover:text-[#202020] transition-colors"
+              className="px-3 py-1.5 text-xs border border-[#b4bfce] rounded-lg text-[#4a4f55] hover:bg-[#eef2f6] hover:text-[#202020] transition-colors"
             >
               ← 앱으로
             </a>
@@ -158,23 +158,23 @@ export default function MonitorPage() {
           >
             경쟁 병원 모니터링
           </h1>
-          <p className="text-sm text-[#8a93a0]">
+          <p className="text-sm text-[#5b6573]">
             같은 진료과목·지역의 최신 블로그를 분석하고 추천 키워드를 받아보세요.
           </p>
         </div>
 
         {/* 검색 폼 */}
-        <div className="bg-white border border-[#dbe2ea] rounded-2xl p-5 sm:p-6 mb-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+        <div className="bg-white border border-[#b4bfce] rounded-2xl p-5 sm:p-6 mb-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             {/* 진료과목 */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[#8a93a0]">
+              <label className="text-xs font-semibold text-[#5b6573]">
                 진료과목 <span className="text-red-500">*</span>
               </label>
               <select
                 value={specialty}
                 onChange={(e) => setSpecialty(e.target.value)}
-                className="bg-white border border-[#dbe2ea] text-[#202020] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#ff4628] transition-colors appearance-none"
+                className="bg-white border border-[#b4bfce] text-[#202020] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#ff4628] transition-colors appearance-none"
               >
                 <option value="">선택하세요</option>
                 {SPECIALTIES.map((s) => (
@@ -187,7 +187,7 @@ export default function MonitorPage() {
 
             {/* 지역 */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[#8a93a0]">
+              <label className="text-xs font-semibold text-[#5b6573]">
                 지역 <span className="text-red-500">*</span>
               </label>
               <input
@@ -195,23 +195,23 @@ export default function MonitorPage() {
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 placeholder="예) 강남구, 수원, 부산"
-                className="bg-white border border-[#dbe2ea] text-[#202020] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#ff4628] placeholder-[#b8c8d7] transition-colors"
+                className="bg-white border border-[#b4bfce] text-[#202020] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#ff4628] placeholder-[#73808f] transition-colors"
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAnalyze(); }}
               />
             </div>
 
             {/* 추가 키워드 */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[#8a93a0]">
+              <label className="text-xs font-semibold text-[#5b6573]">
                 키워드{' '}
-                <span className="text-[#b8c8d7] font-normal">(선택)</span>
+                <span className="text-[#73808f] font-normal">(선택)</span>
               </label>
               <input
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 placeholder="예) 리프팅, 보톡스"
-                className="bg-white border border-[#dbe2ea] text-[#202020] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#ff4628] placeholder-[#b8c8d7] transition-colors"
+                className="bg-white border border-[#b4bfce] text-[#202020] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#ff4628] placeholder-[#73808f] transition-colors"
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAnalyze(); }}
               />
             </div>
@@ -279,7 +279,7 @@ export default function MonitorPage() {
               {/* 경쟁자 주요 주제 */}
               {result.insights.topics.length > 0 ? (
                 <div className="mb-5">
-                  <p className="text-xs font-semibold text-[#8a93a0] mb-3">
+                  <p className="text-xs font-semibold text-[#5b6573] mb-3">
                     경쟁자 주요 주제
                   </p>
                   <ul className="space-y-2">
@@ -299,16 +299,16 @@ export default function MonitorPage() {
                   </ul>
                 </div>
               ) : (
-                <p className="text-xs text-[#b8c8d7] mb-5">
+                <p className="text-xs text-[#73808f] mb-5">
                   주제 분석 결과가 없습니다.
                 </p>
               )}
 
               {/* 추천 키워드 */}
               <div>
-                <p className="text-xs font-semibold text-[#8a93a0] mb-2">
+                <p className="text-xs font-semibold text-[#5b6573] mb-2">
                   추천 키워드{' '}
-                  <span className="font-normal text-[#b8c8d7]">(클릭하여 복사)</span>
+                  <span className="font-normal text-[#73808f]">(클릭하여 복사)</span>
                 </p>
                 {result.insights.keywords.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -317,19 +317,19 @@ export default function MonitorPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#b8c8d7]">키워드 추천 결과가 없습니다.</p>
+                  <p className="text-xs text-[#73808f]">키워드 추천 결과가 없습니다.</p>
                 )}
               </div>
             </div>
 
             {/* 최근 경쟁 블로그 목록 */}
             {result.posts.length > 0 ? (
-              <div className="bg-white border border-[#dbe2ea] rounded-2xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-                <div className="px-5 py-4 border-b border-[#dbe2ea] flex items-center justify-between">
+              <div className="bg-white border border-[#b4bfce] rounded-2xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <div className="px-5 py-4 border-b border-[#b4bfce] flex items-center justify-between">
                   <h2 className="text-sm font-bold text-[#202020]">최근 경쟁 블로그 글</h2>
-                  <span className="text-xs text-[#8a93a0]">{result.posts.length}건</span>
+                  <span className="text-xs text-[#5b6573]">{result.posts.length}건</span>
                 </div>
-                <ul className="divide-y divide-[#dbe2ea]">
+                <ul className="divide-y divide-[#b4bfce]">
                   {result.posts.map((post, idx) => (
                     <li key={idx}>
                       <a
@@ -338,26 +338,26 @@ export default function MonitorPage() {
                         rel="noopener noreferrer"
                         className="flex items-start gap-3 px-5 py-4 hover:bg-[#eef2f6] active:bg-[#eef2f6] transition-colors group"
                       >
-                        <span className="text-[#b8c8d7] text-xs mt-0.5 flex-shrink-0 w-5 text-right">
+                        <span className="text-[#73808f] text-xs mt-0.5 flex-shrink-0 w-5 text-right">
                           {idx + 1}
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-[#202020] group-hover:text-[#ff4628] transition-colors line-clamp-1 mb-0.5">
                             {post.title}
                           </p>
-                          <p className="text-xs text-[#8a93a0] line-clamp-2 leading-relaxed mb-1.5">
+                          <p className="text-xs text-[#5b6573] line-clamp-2 leading-relaxed mb-1.5">
                             {post.description}
                           </p>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-semibold text-[#8a93a0] bg-[#eef2f6] px-2 py-0.5 rounded-full border border-[#dbe2ea]">
+                            <span className="text-[10px] font-semibold text-[#5b6573] bg-[#eef2f6] px-2 py-0.5 rounded-full border border-[#b4bfce]">
                               {post.bloggername}
                             </span>
-                            <span className="text-[10px] text-[#b8c8d7]">
+                            <span className="text-[10px] text-[#73808f]">
                               {formatPostDate(post.postdate)}
                             </span>
                           </div>
                         </div>
-                        <span className="text-[#b8c8d7] group-hover:text-[#ff4628] flex-shrink-0 text-sm transition-colors">
+                        <span className="text-[#73808f] group-hover:text-[#ff4628] flex-shrink-0 text-sm transition-colors">
                           →
                         </span>
                       </a>
@@ -367,10 +367,10 @@ export default function MonitorPage() {
               </div>
             ) : (
               !result.naverError && (
-                <div className="bg-white border border-[#dbe2ea] rounded-2xl p-8 text-center shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <div className="bg-white border border-[#b4bfce] rounded-2xl p-8 text-center shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
                   <p className="text-2xl mb-2">🔍</p>
-                  <p className="text-sm text-[#8a93a0]">검색된 블로그 글이 없습니다.</p>
-                  <p className="text-xs text-[#b8c8d7] mt-1">검색어를 변경해보세요.</p>
+                  <p className="text-sm text-[#5b6573]">검색된 블로그 글이 없습니다.</p>
+                  <p className="text-xs text-[#73808f] mt-1">검색어를 변경해보세요.</p>
                 </div>
               )
             )}
@@ -378,12 +378,12 @@ export default function MonitorPage() {
         ) : (
           /* 빈 상태 */
           !loading && !error && (
-            <div className="bg-white border border-[#dbe2ea] border-dashed rounded-2xl p-10 sm:p-16 text-center">
+            <div className="bg-white border border-[#b4bfce] border-dashed rounded-2xl p-10 sm:p-16 text-center">
               <p className="text-3xl mb-3">🏥</p>
-              <p className="text-sm font-semibold text-[#8a93a0] mb-1">
+              <p className="text-sm font-semibold text-[#5b6573] mb-1">
                 진료과목과 지역을 선택해서 경쟁 병원 블로그를 분석하세요
               </p>
-              <p className="text-xs text-[#b8c8d7]">
+              <p className="text-xs text-[#73808f]">
                 최근 블로그 글과 Claude AI 인사이트를 함께 확인할 수 있습니다.
               </p>
             </div>

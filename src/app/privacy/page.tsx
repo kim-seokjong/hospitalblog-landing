@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen bg-white text-[#4a4f55]">
+    <main className="min-h-screen bg-[#eaeef4] text-[#4a4f55]">
       <div className="max-w-3xl mx-auto px-6 py-16">
 
         {/* 헤더 */}
@@ -16,7 +16,7 @@ export default function PrivacyPage() {
             ← 홈으로
           </Link>
           <h1 className="text-3xl font-bold text-[#202020] mb-3">개인정보처리방침</h1>
-          <p className="text-sm text-[#8a93a0]">시행일: 2026년 5월 2일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 2일</p>
+          <p className="text-sm text-[#5b6573]">시행일: 2026년 5월 2일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 2일</p>
         </div>
 
         <div className="space-y-10 text-sm leading-relaxed">
@@ -29,7 +29,7 @@ export default function PrivacyPage() {
 
           {/* 1 */}
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               1. 수집하는 개인정보 항목
             </h2>
             <div className="space-y-4">
@@ -60,7 +60,7 @@ export default function PrivacyPage() {
 
           {/* 2 */}
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               2. 개인정보 수집 및 이용 목적
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -75,15 +75,15 @@ export default function PrivacyPage() {
 
           {/* 3 */}
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               3. 개인정보 보유 및 이용 기간
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-[#eef2f6]">
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">항목</th>
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">보유 기간</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">항목</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">보유 기간</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -93,9 +93,9 @@ export default function PrivacyPage() {
                     ['접속 로그', '3개월'],
                     ['분쟁 관련 기록', '분쟁 해결 후 1년'],
                   ].map(([item, period]) => (
-                    <tr key={item} className="border-b border-[#dbe2ea]">
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{item}</td>
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{period}</td>
+                    <tr key={item} className="border-b border-[#b4bfce]">
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{item}</td>
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{period}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -105,7 +105,7 @@ export default function PrivacyPage() {
 
           {/* 4 */}
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               4. 개인정보 제3자 제공
             </h2>
             <p className="text-[#4a4f55] mb-3">
@@ -120,15 +120,15 @@ export default function PrivacyPage() {
 
           {/* 5 */}
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               5. 개인정보 처리 위탁
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-[#eef2f6]">
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">수탁업체</th>
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">위탁 업무</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">수탁업체</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">위탁 업무</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -140,9 +140,9 @@ export default function PrivacyPage() {
                     ['Vercel Inc.', '서비스 호스팅 및 배포'],
                     ['Meta Platforms', '광고 성과 측정 (Meta Pixel/CAPI)'],
                   ].map(([company, task]) => (
-                    <tr key={company} className="border-b border-[#dbe2ea]">
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{company}</td>
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{task}</td>
+                    <tr key={company} className="border-b border-[#b4bfce]">
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{company}</td>
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{task}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -152,7 +152,7 @@ export default function PrivacyPage() {
 
           {/* 6 */}
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               6. 이용자의 권리
             </h2>
             <p className="text-[#4a4f55] mb-3">
@@ -171,7 +171,7 @@ export default function PrivacyPage() {
 
           {/* 7 */}
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               7. 쿠키 사용
             </h2>
             <p className="text-[#4a4f55]">
@@ -182,10 +182,10 @@ export default function PrivacyPage() {
 
           {/* 8 */}
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               8. 개인정보 보호책임자
             </h2>
-            <div className="bg-[#eef2f6] border border-[#dbe2ea] rounded-xl p-5 space-y-2 text-[#4a4f55]">
+            <div className="bg-[#eef2f6] border border-[#b4bfce] rounded-xl p-5 space-y-2 text-[#4a4f55]">
               <p><span className="text-[#202020]">서비스명:</span> 닥터포스트</p>
               <p><span className="text-[#202020]">이메일:</span>{' '}
                 <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
@@ -197,7 +197,7 @@ export default function PrivacyPage() {
 
           {/* 9 */}
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               9. 방침 변경 시 공지
             </h2>
             <p className="text-[#4a4f55]">
@@ -206,7 +206,7 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          <p className="text-xs text-[#8a93a0] pt-6 border-t border-[#dbe2ea]">
+          <p className="text-xs text-[#5b6573] pt-6 border-t border-[#b4bfce]">
             본 방침은 2026년 5월 2일부터 적용됩니다.
           </p>
         </div>

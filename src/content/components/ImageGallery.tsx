@@ -152,7 +152,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
   };
 
   return (
-    <div className="rounded-2xl border border-[#dbe2ea] bg-white p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+    <div className="rounded-2xl border border-[#b4bfce] bg-white p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-[#ffece7] border border-[#ff4628]/30 flex items-center justify-center">
           <span className="text-[#ff4628] text-lg">🖼</span>
@@ -161,7 +161,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
           <h2 className="text-base font-bold text-[#202020]">
             {style === 'cardnews' ? '카드뉴스 이미지' : style === 'upload' ? '첨부 이미지' : '실사 이미지'}
           </h2>
-          <p className="text-xs text-[#8a93a0]">{images.length}장 · 개별 재생성 가능</p>
+          <p className="text-xs text-[#5b6573]">{images.length}장 · 개별 재생성 가능</p>
         </div>
         {onRegenerate && (
           <button
@@ -196,7 +196,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                 {(isRendering || isRegening) && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 z-10">
                     <div className="w-7 h-7 border-2 border-[#ff4628] border-t-transparent rounded-full animate-spin mb-2" />
-                    <p className="text-[10px] text-[#8a93a0]">{isRegening ? '재생성 중...' : '합성 중...'}</p>
+                    <p className="text-[10px] text-[#5b6573]">{isRegening ? '재생성 중...' : '합성 중...'}</p>
                   </div>
                 )}
 
@@ -232,15 +232,15 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                       <div className="flex gap-1.5">
                         <button
                           onClick={(e) => { e.stopPropagation(); setSelected(image); }}
-                          className="bg-white/95 text-[#202020] text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 ring-[#dbe2ea] shadow-lg hover:bg-[#eef2f6] transition-colors"
+                          className="bg-white/95 text-[#202020] text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 ring-[#b4bfce] shadow-lg hover:bg-[#eef2f6] transition-colors"
                         >확대</button>
                         <button
                           onClick={(e) => { e.stopPropagation(); setEditing(image); }}
-                          className="bg-white/95 text-[#202020] text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 ring-[#dbe2ea] shadow-lg hover:bg-[#eef2f6] transition-colors"
+                          className="bg-white/95 text-[#202020] text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 ring-[#b4bfce] shadow-lg hover:bg-[#eef2f6] transition-colors"
                         >편집</button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDownload(image); }}
-                          className="bg-white/95 text-[#202020] text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 ring-[#dbe2ea] shadow-lg hover:bg-[#eef2f6] transition-colors"
+                          className="bg-white/95 text-[#202020] text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 ring-[#b4bfce] shadow-lg hover:bg-[#eef2f6] transition-colors"
                         >저장</button>
                       </div>
                     </div>
@@ -250,7 +250,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
 
               {/* 모바일용 버튼 행 */}
               <div className="flex gap-1 sm:hidden">
-                <button onClick={() => isReady && setSelected(image)} className="flex-1 py-2 bg-[#eef2f6] text-[#4a4f55] text-[11px] font-bold rounded-lg border border-[#dbe2ea] min-h-[36px]">확대</button>
+                <button onClick={() => isReady && setSelected(image)} className="flex-1 py-2 bg-[#eef2f6] text-[#4a4f55] text-[11px] font-bold rounded-lg border border-[#b4bfce] min-h-[36px]">확대</button>
                 <button onClick={() => setEditing(image)} className="flex-1 py-2 bg-purple-50 text-purple-700 text-[11px] font-bold rounded-lg border border-purple-200 min-h-[36px]">편집</button>
                 <button onClick={() => handleDownload(image)} className="flex-1 py-2 bg-[#ffece7] text-[#ff4628] text-[11px] font-bold rounded-lg border border-[#ff4628]/20 min-h-[36px]">저장</button>
               </div>
@@ -266,7 +266,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                     placeholder="한국어로 입력하세요&#10;예: 피부과 의사가 환자에게 시술 설명하는 장면"
                     autoFocus
                   />
-                  <p className="text-[9px] text-[#b8c8d7]">💡 한국어 입력 가능 — Claude가 자동 번역 후 생성</p>
+                  <p className="text-[9px] text-[#73808f]">💡 한국어 입력 가능 — Claude가 자동 번역 후 생성</p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleRegenerateOne(image)}
@@ -277,7 +277,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                     </button>
                     <button
                       onClick={() => setEditingPrompt(null)}
-                      className="px-4 py-2.5 bg-[#eef2f6] text-[#8a93a0] text-xs rounded-lg min-h-[44px]"
+                      className="px-4 py-2.5 bg-[#eef2f6] text-[#5b6573] text-xs rounded-lg min-h-[44px]"
                     >
                       취소
                     </button>
@@ -287,7 +287,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => { setEditingText(''); setEditingPrompt(image.id); }}
-                    className="flex-1 py-2.5 bg-[#eef2f6] hover:bg-[#e2e8ef] active:bg-[#d6dee7] text-[#8a93a0] hover:text-[#202020] text-[11px] rounded-lg border border-[#dbe2ea] transition-colors truncate px-2 min-h-[44px]"
+                    className="flex-1 py-2.5 bg-[#eef2f6] hover:bg-[#e2e8ef] active:bg-[#d6dee7] text-[#5b6573] hover:text-[#202020] text-[11px] rounded-lg border border-[#b4bfce] transition-colors truncate px-2 min-h-[44px]"
                   >
                     ✏️ 프롬프트 편집
                   </button>
@@ -306,7 +306,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
         })}
       </div>
 
-      <p className="text-[10px] text-[#b8c8d7] mt-4 text-center">
+      <p className="text-[10px] text-[#73808f] mt-4 text-center">
         이미지를 클릭하여 확대 · 다운로드
       </p>
 
@@ -332,7 +332,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
           aria-label="이미지 확대"
         >
           <div
-            className="relative bg-white border border-[#dbe2ea] rounded-t-2xl sm:rounded-2xl overflow-hidden w-full sm:max-w-2xl shadow-2xl"
+            className="relative bg-white border border-[#b4bfce] rounded-t-2xl sm:rounded-2xl overflow-hidden w-full sm:max-w-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* 우상단 X 닫기 버튼 — 44×44 터치영역, 사진 위 가독성 위해 어두운 chip 유지 */}
@@ -360,7 +360,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
               )}
             </div>
             <div className="p-4 flex items-center justify-between gap-2">
-              <p className="text-xs text-[#8a93a0] truncate">#{keyword}</p>
+              <p className="text-xs text-[#5b6573] truncate">#{keyword}</p>
               <div className="flex gap-2 flex-shrink-0">
                 <button onClick={() => handleDownload(selected)} className="bg-[#ff4628] hover:bg-[#e63a1c] text-white text-xs font-bold px-4 py-2.5 rounded-lg min-h-[44px]">⬇ 다운로드</button>
                 <button onClick={() => setSelected(null)} className="bg-[#eef2f6] hover:bg-[#e2e8ef] text-[#202020] text-xs font-bold px-4 py-2.5 rounded-lg min-h-[44px]">닫기</button>

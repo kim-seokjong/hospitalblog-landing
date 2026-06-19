@@ -22,7 +22,7 @@ interface MyPageTabsProps {
 export default function MyPageTabs({ active, onChange }: MyPageTabsProps) {
   return (
     <div
-      className="flex gap-1 mb-6 bg-white border border-[#dbe2ea] rounded-xl p-1 overflow-x-auto shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
+      className="flex gap-1 mb-6 bg-white border border-[#b4bfce] rounded-xl p-1 overflow-x-auto shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
       role="tablist"
       aria-label="마이페이지 탭"
     >
@@ -36,7 +36,7 @@ export default function MyPageTabs({ active, onChange }: MyPageTabsProps) {
           className={`flex-1 whitespace-nowrap text-center px-3 py-2 rounded-lg text-sm transition-colors min-w-fit ${
             active === tab.id
               ? 'bg-[#ffece7] text-[#ff4628] font-medium'
-              : 'text-[#8a93a0] hover:text-[#202020]'
+              : 'text-[#5b6573] hover:text-[#202020]'
           }`}
         >
           {tab.label}

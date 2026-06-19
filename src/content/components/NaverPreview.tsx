@@ -28,7 +28,7 @@ export default function NaverPreview({ title, body, keyword }: NaverPreviewProps
     : `${title}에 대해 알아보겠습니다. 전문의와 상담 후 결정하시기 바랍니다.`;
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#b4bfce] overflow-hidden">
       <div className="bg-[#eef2f6] p-4 sm:p-5">
         <h3 className="text-[#202020] font-bold text-base">네이버 검색 미리보기</h3>
         <p className="text-[#4a4f55] text-xs mt-0.5">실제 검색 결과 화면 시뮬레이션</p>
@@ -110,7 +110,7 @@ export default function NaverPreview({ title, body, keyword }: NaverPreviewProps
               <div key={label} className={`rounded-lg p-2 text-center border ${ok ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                 <p className="text-xs text-[#202020]">{label}</p>
                 <p className={`text-xs font-bold mt-0.5 ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>{value}</p>
-                <p className="text-[10px] text-[#8a93a0] mt-0.5">{hint}</p>
+                <p className="text-[10px] text-[#5b6573] mt-0.5">{hint}</p>
               </div>
             ))}
           </div>

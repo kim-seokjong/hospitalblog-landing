@@ -266,7 +266,7 @@ export default async function AdminPage() {
           <h1 className="text-2xl font-bold text-[#202020]">
             hospitalblog.kr · 닥터포스트
           </h1>
-          <p className="text-sm text-[#8a93a0]">
+          <p className="text-sm text-[#5b6573]">
             SaaS KPI 대시보드 · {headerSub}
           </p>
         </div>

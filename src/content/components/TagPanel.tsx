@@ -45,7 +45,7 @@ export default function TagPanel({ tags, onRegenerate, isLoading }: TagPanelProp
   const hashtagsText = tags.hashtags.join(' ');
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#b4bfce] overflow-hidden">
       <div className="bg-emerald-800 p-4 sm:p-5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
         <h3 className="text-white font-bold text-base">태그 & 해시태그</h3>
         <p className="text-emerald-100 text-xs mt-0.5">네이버 색인 최적화 · 모바일 탭 유입</p>
@@ -57,7 +57,7 @@ export default function TagPanel({ tags, onRegenerate, isLoading }: TagPanelProp
           <div className="flex items-center justify-between mb-2">
             <div>
               <h4 className="text-sm font-bold text-[#202020]">네이버 블로그 태그</h4>
-              <p className="text-xs text-[#8a93a0]">색인 + 모바일 탭 유입 목적</p>
+              <p className="text-xs text-[#5b6573]">색인 + 모바일 탭 유입 목적</p>
             </div>
             <button
               onClick={() => copy(naverTagsText, 'naver')}
@@ -70,7 +70,7 @@ export default function TagPanel({ tags, onRegenerate, isLoading }: TagPanelProp
           <div className="flex flex-wrap gap-2 mb-3">
             {tags.tags.map((tag, i) => (
               <div key={i} className="flex items-center gap-1">
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${CATEGORY_COLORS[tag.category] || 'bg-[#eef2f6] text-[#202020] border border-[#dbe2ea]'}`}>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${CATEGORY_COLORS[tag.category] || 'bg-[#eef2f6] text-[#202020] border border-[#b4bfce]'}`}>
                   {tag.tag}
                 </span>
                 <span className="text-xs" title={`검색량: ${tag.searchVolume}`}>{VOLUME_BADGES[tag.searchVolume]}</span>
@@ -87,7 +87,7 @@ export default function TagPanel({ tags, onRegenerate, isLoading }: TagPanelProp
           <div className="flex items-center justify-between mb-2">
             <div>
               <h4 className="text-sm font-bold text-[#202020]">해시태그</h4>
-              <p className="text-xs text-[#8a93a0]">본문 하단 삽입용</p>
+              <p className="text-xs text-[#5b6573]">본문 하단 삽입용</p>
             </div>
             <button
               onClick={() => copy(hashtagsText, 'hash')}
@@ -96,7 +96,7 @@ export default function TagPanel({ tags, onRegenerate, isLoading }: TagPanelProp
               {copiedType === 'hash' ? '✓ 복사됨' : '복사'}
             </button>
           </div>
-          <div className="bg-[#eef2f6] border border-[#dbe2ea] rounded-xl p-3 font-mono text-sm font-semibold text-teal-700 leading-relaxed break-all">
+          <div className="bg-[#eef2f6] border border-[#b4bfce] rounded-xl p-3 font-mono text-sm font-semibold text-teal-700 leading-relaxed break-all">
             {hashtagsText}
           </div>
         </div>
@@ -112,7 +112,7 @@ export default function TagPanel({ tags, onRegenerate, isLoading }: TagPanelProp
         </div>
 
         {prevTags && (
-          <div className="border border-[#dbe2ea] rounded-xl overflow-hidden">
+          <div className="border border-[#b4bfce] rounded-xl overflow-hidden">
             <button
               onClick={() => setShowPrev(!showPrev)}
               className="w-full flex items-center justify-between px-3 py-2 bg-[#eef2f6] hover:bg-[#e2e8ef] transition-colors text-xs font-semibold text-[#4a4f55] min-h-[40px]"
@@ -124,12 +124,12 @@ export default function TagPanel({ tags, onRegenerate, isLoading }: TagPanelProp
               <div className="px-3 py-2 space-y-2 bg-[#eef2f6]">
                 <div className="flex flex-wrap gap-1.5">
                   {prevTags.tags.map((tag, i) => (
-                    <span key={i} className={`text-xs font-semibold px-2 py-0.5 rounded-full opacity-70 ${CATEGORY_COLORS[tag.category] || 'bg-[#dbe2ea] text-[#202020] border border-[#c2ccd6]'}`}>
+                    <span key={i} className={`text-xs font-semibold px-2 py-0.5 rounded-full opacity-70 ${CATEGORY_COLORS[tag.category] || 'bg-[#b4bfce] text-[#202020] border border-[#c2ccd6]'}`}>
                       {tag.tag}
                     </span>
                   ))}
                 </div>
-                <p className="text-[10px] text-[#8a93a0] font-mono break-all">{prevTags.naverTags.join(' ')}</p>
+                <p className="text-[10px] text-[#5b6573] font-mono break-all">{prevTags.naverTags.join(' ')}</p>
               </div>
             )}
           </div>

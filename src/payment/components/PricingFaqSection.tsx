@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { PRICING_FAQS } from '@/payment/lib/pricingFaq'
 
 // 가격 페이지 FAQ 아코디언 (결제팀 소관)
-// 팔레트: 라이트 테마(흰 배경·흰 카드 + #dbe2ea 보더) — 가격 페이지와 동일 톤 유지
+// 팔레트: 라이트 테마(흰 배경·흰 카드 + #b4bfce 보더) — 가격 페이지와 동일 톤 유지
 
 export default function PricingFaqSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
@@ -22,7 +22,7 @@ export default function PricingFaqSection() {
         >
           자주 묻는 질문
         </h2>
-        <p className="text-center text-sm sm:text-base text-[#8a93a0] mb-8">
+        <p className="text-center text-sm sm:text-base text-[#5b6573] mb-8">
           요금제·결제·해지에 대해 궁금한 점을 확인하세요
         </p>
 
@@ -32,7 +32,7 @@ export default function PricingFaqSection() {
             return (
               <div
                 key={faq.question}
-                className="bg-white border border-[#dbe2ea] rounded-xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
+                className="bg-white border border-[#b4bfce] rounded-xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
               >
                 <button
                   type="button"
@@ -56,7 +56,7 @@ export default function PricingFaqSection() {
                 {isOpen && (
                   <div
                     id={`pricing-faq-panel-${index}`}
-                    className="px-4 sm:px-5 pb-4 text-sm sm:text-base leading-relaxed text-[#4a4f55] border-t border-[#dbe2ea] pt-3"
+                    className="px-4 sm:px-5 pb-4 text-sm sm:text-base leading-relaxed text-[#4a4f55] border-t border-[#b4bfce] pt-3"
                   >
                     {faq.answer}
                   </div>

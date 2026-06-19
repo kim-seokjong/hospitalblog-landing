@@ -136,7 +136,7 @@ export default function ProfileTab() {
 
   if (loading) {
     return (
-      <div className="py-16 text-center text-[#8a93a0] text-sm">프로필을 불러오는 중...</div>
+      <div className="py-16 text-center text-[#5b6573] text-sm">프로필을 불러오는 중...</div>
     );
   }
 
@@ -237,14 +237,14 @@ export default function ProfileTab() {
               onChange={e => setProfile(p => ({ ...p, hospital_desc: e.target.value }))}
               placeholder="병원의 특징, 진료 철학, 차별화 포인트 등을 입력해주세요."
               rows={4}
-              className="w-full bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#8a93a0] resize-none focus:outline-none focus:border-[#ff4628] transition-colors"
+              className="w-full bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#5b6573] resize-none focus:outline-none focus:border-[#ff4628] transition-colors"
             />
           </Field>
         </Section>
 
         {/* 4. 자주 쓰는 키워드 */}
         <Section title="자주 쓰는 키워드">
-          <p className="text-xs text-[#8a93a0] mb-3">
+          <p className="text-xs text-[#5b6573] mb-3">
             Enter 키로 추가 · 최대 10개 · 글 생성 시 키워드로 자동 활용됩니다
           </p>
           <div className="flex gap-2 mb-3">
@@ -254,7 +254,7 @@ export default function ProfileTab() {
               onChange={e => setKeywordInput(e.target.value)}
               onKeyDown={handleKeywordKeyDown}
               placeholder="키워드 입력 후 Enter"
-              className="flex-1 bg-white border border-[#dbe2ea] rounded-lg px-3 py-2 text-[#202020] text-sm placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] transition-colors"
+              className="flex-1 bg-white border border-[#b4bfce] rounded-lg px-3 py-2 text-[#202020] text-sm placeholder-[#5b6573] focus:outline-none focus:border-[#ff4628] transition-colors"
             />
             <button
               type="button"
@@ -267,12 +267,12 @@ export default function ProfileTab() {
           {profile.hospital_keywords.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {profile.hospital_keywords.map(kw => (
-                <span key={kw} className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#eef2f6] border border-[#dbe2ea] rounded-full text-sm text-[#202020]">
+                <span key={kw} className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#eef2f6] border border-[#b4bfce] rounded-full text-sm text-[#202020]">
                   {kw}
                   <button
                     type="button"
                     onClick={() => removeKeyword(kw)}
-                    className="text-[#8a93a0] hover:text-red-600 transition-colors leading-none"
+                    className="text-[#5b6573] hover:text-red-600 transition-colors leading-none"
                     aria-label={`${kw} 삭제`}
                   >
                     ×

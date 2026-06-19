@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function RefundPage() {
   return (
-    <main className="min-h-screen bg-white text-[#4a4f55]">
+    <main className="min-h-screen bg-[#eaeef4] text-[#4a4f55]">
       <div className="max-w-3xl mx-auto px-6 py-16">
 
         <div className="mb-12">
@@ -15,7 +15,7 @@ export default function RefundPage() {
             ← 홈으로
           </Link>
           <h1 className="text-3xl font-bold text-[#202020] mb-3">환불·해지정책</h1>
-          <p className="text-sm text-[#8a93a0]">시행일: 2026년 5월 8일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 8일</p>
+          <p className="text-sm text-[#5b6573]">시행일: 2026년 5월 8일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 8일</p>
         </div>
 
         <div className="space-y-10 text-sm leading-relaxed">
@@ -26,7 +26,7 @@ export default function RefundPage() {
           </div>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               1. 결제 방식
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -39,7 +39,7 @@ export default function RefundPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               2. 구독 해지 절차
             </h2>
             <ol className="list-decimal list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -48,22 +48,22 @@ export default function RefundPage() {
               <li>해지 즉시 다음 결제일부터 자동 청구가 중단됩니다.</li>
               <li>이미 결제한 기간(다음 결제일 전까지)은 그대로 서비스 이용 가능합니다.</li>
             </ol>
-            <p className="text-[#8a93a0] text-xs mt-3">
+            <p className="text-[#5b6573] text-xs mt-3">
               ※ 해지는 1클릭으로 즉시 처리됩니다. 별도 이메일 요청이나 통화 절차가 필요하지 않습니다.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               3. 환불 기준
             </h2>
             <div className="overflow-x-auto mb-4">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-[#eef2f6]">
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">시점</th>
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">환불 여부</th>
-                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#dbe2ea]">비고</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">시점</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">환불 여부</th>
+                    <th className="text-left px-4 py-3 text-[#202020] font-medium border border-[#b4bfce]">비고</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -73,22 +73,22 @@ export default function RefundPage() {
                     ['결제 후 8일 이후', '환불 불가', '구독 해지로 다음 결제 중단만 가능'],
                     ['서비스 장애로 이용 불가 (회사 귀책)', '장애 기간 비례 환불 또는 사용량 보상', '회사 판단 후 개별 안내'],
                   ].map(([timing, refund, note]) => (
-                    <tr key={timing} className="border-b border-[#dbe2ea]">
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{timing}</td>
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{refund}</td>
-                      <td className="px-4 py-3 text-[#4a4f55] border border-[#dbe2ea]">{note}</td>
+                    <tr key={timing} className="border-b border-[#b4bfce]">
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{timing}</td>
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{refund}</td>
+                      <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{note}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <p className="text-[#8a93a0] text-xs">
+            <p className="text-[#5b6573] text-xs">
               ※ 자동갱신 결제분에도 동일한 7일 청약철회 기준이 적용됩니다(매 결제일 기준).
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               4. 환불 신청 방법
             </h2>
             <ol className="list-decimal list-inside space-y-3 text-[#4a4f55] ml-2">
@@ -111,7 +111,7 @@ export default function RefundPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               5. 결제 실패 시 처리
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -123,7 +123,7 @@ export default function RefundPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               6. 환불 불가 사유
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -135,7 +135,7 @@ export default function RefundPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               7. 서비스 장애 시 보상
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
@@ -146,10 +146,10 @@ export default function RefundPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#dbe2ea]">
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
               8. 문의처
             </h2>
-            <div className="bg-[#eef2f6] border border-[#dbe2ea] rounded-xl p-5 space-y-2 text-[#4a4f55]">
+            <div className="bg-[#eef2f6] border border-[#b4bfce] rounded-xl p-5 space-y-2 text-[#4a4f55]">
               <p><span className="text-[#202020]">서비스명:</span> 닥터포스트</p>
               <p>
                 <span className="text-[#202020]">이메일:</span>{' '}
@@ -157,11 +157,11 @@ export default function RefundPage() {
                   terro6936@gmail.com
                 </a>
               </p>
-              <p className="text-xs text-[#8a93a0]">평일 09:00 ~ 18:00 (주말·공휴일 제외)</p>
+              <p className="text-xs text-[#5b6573]">평일 09:00 ~ 18:00 (주말·공휴일 제외)</p>
             </div>
           </section>
 
-          <p className="text-xs text-[#8a93a0] pt-6 border-t border-[#dbe2ea]">
+          <p className="text-xs text-[#5b6573] pt-6 border-t border-[#b4bfce]">
             본 환불·해지정책은 2026년 5월 8일부터 적용됩니다.
           </p>
         </div>

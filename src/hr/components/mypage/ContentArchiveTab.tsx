@@ -21,7 +21,7 @@ function statusBadge(status: SavedPost['status']): { text: string; className: st
     case 'scheduled':
       return { text: '예약됨', className: 'bg-amber-50 text-amber-700 border border-amber-200' };
     default:
-      return { text: '임시저장', className: 'bg-[#eef2f6] text-[#8a93a0] border border-[#dbe2ea]' };
+      return { text: '임시저장', className: 'bg-[#eef2f6] text-[#5b6573] border border-[#b4bfce]' };
   }
 }
 
@@ -69,9 +69,9 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
       role="dialog"
       aria-label="콘텐츠 상세 보기"
     >
-      <div className="relative w-full max-w-3xl bg-white border border-[#dbe2ea] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] flex flex-col">
+      <div className="relative w-full max-w-3xl bg-white border border-[#b4bfce] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] flex flex-col">
         {/* 헤더 */}
-        <div className="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[#dbe2ea]">
+        <div className="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[#b4bfce]">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${status.className}`}>{status.text}</span>
@@ -79,12 +79,12 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
               {post.keyword && <span className="text-xs text-[#ff4628]">#{post.keyword}</span>}
             </div>
             <h2 className="text-base sm:text-lg font-bold text-[#202020] leading-snug">{post.title}</h2>
-            <p className="text-xs text-[#8a93a0] mt-1">{formatDate(post.published_at ?? post.created_at)}</p>
+            <p className="text-xs text-[#5b6573] mt-1">{formatDate(post.published_at ?? post.created_at)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-[#8a93a0] hover:text-[#202020] hover:bg-[#eef2f6] transition-colors"
+            className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-[#5b6573] hover:text-[#202020] hover:bg-[#eef2f6] transition-colors"
             aria-label="닫기"
           >
             ✕
@@ -99,7 +99,7 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
         </div>
 
         {/* 푸터 */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2 px-4 sm:px-6 py-4 border-t border-[#dbe2ea]">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2 px-4 sm:px-6 py-4 border-t border-[#b4bfce]">
           <button
             type="button"
             onClick={() => void handleCopy()}
@@ -114,7 +114,7 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
           <button
             type="button"
             onClick={() => onEdit(post)}
-            className="px-4 py-2.5 text-sm font-semibold text-[#4a4f55] border border-[#dbe2ea] hover:bg-[#eef2f6] rounded-lg transition-colors"
+            className="px-4 py-2.5 text-sm font-semibold text-[#4a4f55] border border-[#b4bfce] hover:bg-[#eef2f6] rounded-lg transition-colors"
           >
             수정하기
           </button>
@@ -230,13 +230,13 @@ export default function ContentArchiveTab() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="제목·키워드 검색"
-          className="flex-1 bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] transition-colors"
+          className="flex-1 bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#5b6573] focus:outline-none focus:border-[#ff4628] transition-colors"
           aria-label="제목 또는 키워드 검색"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          className="bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors appearance-none sm:w-36"
+          className="bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors appearance-none sm:w-36"
           aria-label="상태 필터"
         >
           <option value="all" className="bg-white text-[#202020]">전체 상태</option>
@@ -248,7 +248,7 @@ export default function ContentArchiveTab() {
 
       {/* 로딩 */}
       {fetchState === 'loading' && (
-        <div className="py-16 text-center text-[#8a93a0] text-sm">콘텐츠를 불러오는 중...</div>
+        <div className="py-16 text-center text-[#5b6573] text-sm">콘텐츠를 불러오는 중...</div>
       )}
 
       {/* 에러 */}
@@ -267,11 +267,11 @@ export default function ContentArchiveTab() {
 
       {/* 빈 상태 */}
       {fetchState === 'ready' && filtered.length === 0 && (
-        <div className="py-16 text-center bg-white border border-[#dbe2ea] rounded-xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+        <div className="py-16 text-center bg-white border border-[#b4bfce] rounded-xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
           <p className="text-[#202020] font-semibold mb-1">
             {posts.length === 0 ? '아직 저장된 글이 없습니다' : '조건에 맞는 글이 없습니다'}
           </p>
-          <p className="text-sm text-[#8a93a0] mb-4">
+          <p className="text-sm text-[#5b6573] mb-4">
             {posts.length === 0
               ? '글을 작성한 후 저장함에 보관해보세요. (최근 6개월 콘텐츠가 표시됩니다)'
               : '검색어나 상태 필터를 변경해보세요.'}
@@ -290,7 +290,7 @@ export default function ContentArchiveTab() {
       {/* 목록 */}
       {fetchState === 'ready' && filtered.length > 0 && (
         <>
-          <p className="text-xs text-[#8a93a0] mb-3">최근 6개월 · {filtered.length}편</p>
+          <p className="text-xs text-[#5b6573] mb-3">최근 6개월 · {filtered.length}편</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {filtered.map((post) => {
               const status = statusBadge(post.status);
@@ -298,7 +298,7 @@ export default function ContentArchiveTab() {
               return (
                 <div
                   key={post.id}
-                  className="relative bg-white border border-[#dbe2ea] rounded-xl p-4 hover:border-[#ff4628]/40 transition-colors cursor-pointer group shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
+                  className="relative bg-white border border-[#b4bfce] rounded-xl p-4 hover:border-[#ff4628]/40 transition-colors cursor-pointer group shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
                   onClick={() => setDetailPost(post)}
                   role="button"
                   tabIndex={0}
@@ -318,7 +318,7 @@ export default function ContentArchiveTab() {
                       type="button"
                       onClick={(e) => { e.stopPropagation(); void handleDelete(post.id); }}
                       disabled={deletingId === post.id}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[#b8c8d7] hover:text-red-600 disabled:text-[#dbe2ea] text-xs transition-all px-2 py-1 rounded-lg hover:bg-red-50 disabled:cursor-not-allowed flex-shrink-0"
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[#73808f] hover:text-red-600 disabled:text-[#b4bfce] text-xs transition-all px-2 py-1 rounded-lg hover:bg-red-50 disabled:cursor-not-allowed flex-shrink-0"
                       aria-label="글 삭제"
                     >
                       {deletingId === post.id ? '삭제 중...' : '삭제'}
@@ -329,7 +329,7 @@ export default function ContentArchiveTab() {
                     {post.title}
                   </h3>
 
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#8a93a0]">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#5b6573]">
                     {post.keyword && <span className="text-[#ff4628]">#{post.keyword}</span>}
                     <span>{formatDate(post.published_at ?? post.created_at)}</span>
                   </div>

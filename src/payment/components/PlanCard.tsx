@@ -23,7 +23,7 @@ export default function PlanCard({
     <div className={`relative flex flex-col rounded-2xl p-6
       ${recommended
         ? 'border-2 border-[#ff4628] bg-white shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]'
-        : 'border border-[#dbe2ea] bg-white shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]'}`}
+        : 'border border-[#b4bfce] bg-white shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]'}`}
     >
       {recommended && (
         <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white text-xs font-bold px-3 py-1 rounded-full">
@@ -44,7 +44,7 @@ export default function PlanCard({
           // 프로: 정상가 취소선 + 첫 달 할인가 강조
           <>
             <div className="mt-2 mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="text-base sm:text-lg font-semibold text-[#8a93a0] line-through">
+              <span className="text-base sm:text-lg font-semibold text-[#5b6573] line-through">
                 {plan.price.toLocaleString('ko-KR')}원
               </span>
               <span className="inline-flex items-center bg-green-50 border border-green-200 text-green-700 text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full">
@@ -56,9 +56,9 @@ export default function PlanCard({
                 {(plan.trialPrice ?? 0).toLocaleString('ko-KR')}
               </span>
               <span className="text-[#202020] text-sm">원</span>
-              <span className="text-[#8a93a0] text-xs sm:text-sm">/ 첫 달</span>
+              <span className="text-[#5b6573] text-xs sm:text-sm">/ 첫 달</span>
             </div>
-            <p className="text-[11px] text-[#8a93a0] mb-5">
+            <p className="text-[11px] text-[#5b6573] mb-5">
               둘째 달부터 매월 {plan.price.toLocaleString('ko-KR')}원 자동결제
             </p>
           </>
@@ -66,15 +66,15 @@ export default function PlanCard({
           // 베이직/스탠다드: 정상가 취소선 + "첫 달 무료" 강조
           <>
             <div className="mt-2 mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="text-base sm:text-lg font-semibold text-[#8a93a0] line-through">
+              <span className="text-base sm:text-lg font-semibold text-[#5b6573] line-through">
                 {plan.price.toLocaleString('ko-KR')}원
               </span>
-              <span className="text-[#8a93a0] text-xs sm:text-sm">/월</span>
+              <span className="text-[#5b6573] text-xs sm:text-sm">/월</span>
             </div>
             <div className="mb-1">
               <span className="text-2xl sm:text-3xl font-extrabold text-green-700">첫 달 무료</span>
             </div>
-            <p className="text-[11px] text-[#8a93a0] mb-5">
+            <p className="text-[11px] text-[#5b6573] mb-5">
               둘째 달부터 매월 {plan.price.toLocaleString('ko-KR')}원 자동결제
             </p>
           </>
@@ -86,9 +86,9 @@ export default function PlanCard({
             <span className="text-3xl font-extrabold text-[#202020]">
               {plan.price.toLocaleString('ko-KR')}
             </span>
-            <span className="text-[#8a93a0] text-sm ml-1">원/월</span>
+            <span className="text-[#5b6573] text-sm ml-1">원/월</span>
           </div>
-          <p className="text-xs text-[#8a93a0] mb-5">매월 자동결제</p>
+          <p className="text-xs text-[#5b6573] mb-5">매월 자동결제</p>
         </>
       )}
 
@@ -104,7 +104,7 @@ export default function PlanCard({
       </ul>
 
       {isCurrentPlan ? (
-        <div className="w-full py-3 text-center rounded-lg bg-[#eef2f6] text-[#8a93a0] text-sm font-medium">
+        <div className="w-full py-3 text-center rounded-lg bg-[#eef2f6] text-[#5b6573] text-sm font-medium">
           현재 사용 중
         </div>
       ) : (

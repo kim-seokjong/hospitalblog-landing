@@ -89,16 +89,16 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
     score >= 60 ? 'bg-amber-400' : 'bg-red-500';
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#dbe2ea] overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] border border-[#b4bfce] overflow-hidden">
       {/* 헤더 */}
-      <div className="p-4 sm:p-5 border-b border-[#dbe2ea] bg-[#eef2f6]">
+      <div className="p-4 sm:p-5 border-b border-[#b4bfce] bg-[#eef2f6]">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <span className="text-white text-lg">🔍</span>
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-base sm:text-lg font-bold text-[#202020]">독창성 검사</h2>
-            <p className="text-xs text-[#8a93a0]">네이버 블로그 유사 글 비교 · Claude AI 분석</p>
+            <p className="text-xs text-[#5b6573]">네이버 블로그 유사 글 비교 · Claude AI 분석</p>
           </div>
           {result && (
             <span className={`text-xs font-bold px-3 py-1.5 rounded-full text-white ${style?.badge}`}>
@@ -113,7 +113,7 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
         <button
           onClick={handleCheck}
           disabled={loading}
-          className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 min-h-[48px]"
+          className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-[#b4bfce] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 min-h-[48px]"
         >
           {loading ? (
             <>
@@ -148,7 +148,7 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
                 <span className="text-sm font-bold text-[#202020]">독창성 점수</span>
                 <span className={`text-3xl font-black ${scoreColor}`}>{score}점</span>
               </div>
-              <div className="w-full bg-[#eef2f6] rounded-full h-3 overflow-hidden border border-[#dbe2ea]">
+              <div className="w-full bg-[#eef2f6] rounded-full h-3 overflow-hidden border border-[#b4bfce]">
                 <div
                   className={`h-3 rounded-full transition-all duration-700 ${scoreBarColor}`}
                   style={{ width: `${score}%` }}
@@ -210,18 +210,18 @@ export default function OriginalityChecker({ title, body, keyword }: Originality
                       href={post.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block bg-[#eef2f6] border border-[#dbe2ea] rounded-lg p-3 hover:bg-[#e2e8ef] transition-colors"
+                      className="block bg-[#eef2f6] border border-[#b4bfce] rounded-lg p-3 hover:bg-[#e2e8ef] transition-colors"
                     >
                       <p className="text-xs font-bold text-blue-600 truncate">{post.title}</p>
                       <p className="text-[11px] text-[#4a4f55] mt-0.5 line-clamp-2">{post.description}</p>
-                      <p className="text-[10px] text-[#8a93a0] mt-1">{post.blogger} · {post.date}</p>
+                      <p className="text-[10px] text-[#5b6573] mt-1">{post.blogger} · {post.date}</p>
                     </a>
                   ))}
                 </div>
               )}
             </div>
 
-            <p className="text-[10px] text-[#8a93a0] text-center">
+            <p className="text-[10px] text-[#5b6573] text-center">
               검사 시각: {new Date(result.checkedAt).toLocaleString('ko-KR')}
             </p>
           </div>

@@ -124,15 +124,15 @@ export default function PostEditor({ post, onSave, onClose }: PostEditorProps) {
       aria-label="글 수정 에디터"
     >
       <div
-        className="relative w-full max-w-3xl bg-white border border-[#dbe2ea] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] flex flex-col"
+        className="relative w-full max-w-3xl bg-white border border-[#b4bfce] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-[#dbe2ea]">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-[#b4bfce]">
           <h2 className="text-base sm:text-lg font-bold text-[#202020]">글 수정</h2>
           <button
             onClick={handleClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#8a93a0] hover:text-[#202020] hover:bg-[#eef2f6] transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#5b6573] hover:text-[#202020] hover:bg-[#eef2f6] transition-colors"
             aria-label="닫기"
           >
             ✕
@@ -143,7 +143,7 @@ export default function PostEditor({ post, onSave, onClose }: PostEditorProps) {
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
           {/* 제목 */}
           <div>
-            <label className="block text-xs font-semibold text-[#8a93a0] mb-1.5" htmlFor="post-title">
+            <label className="block text-xs font-semibold text-[#5b6573] mb-1.5" htmlFor="post-title">
               제목
             </label>
             <input
@@ -152,15 +152,15 @@ export default function PostEditor({ post, onSave, onClose }: PostEditorProps) {
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
               maxLength={200}
-              className="w-full bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-sm text-[#202020] placeholder-[#b8c8d7] focus:outline-none focus:border-[#ff4628] focus:bg-white transition-colors"
+              className="w-full bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-sm text-[#202020] placeholder-[#73808f] focus:outline-none focus:border-[#ff4628] focus:bg-white transition-colors"
               placeholder="글 제목을 입력하세요"
             />
-            <p className="text-right text-xs text-[#b8c8d7] mt-1">{title.length} / 200</p>
+            <p className="text-right text-xs text-[#73808f] mt-1">{title.length} / 200</p>
           </div>
 
           {/* 본문 */}
           <div>
-            <label className="block text-xs font-semibold text-[#8a93a0] mb-1.5" htmlFor="post-content">
+            <label className="block text-xs font-semibold text-[#5b6573] mb-1.5" htmlFor="post-content">
               본문
             </label>
             <textarea
@@ -168,15 +168,15 @@ export default function PostEditor({ post, onSave, onClose }: PostEditorProps) {
               value={content}
               onChange={(e) => handleContentChange(e.target.value)}
               style={{ minHeight: '400px' }}
-              className="w-full bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-sm text-[#202020] placeholder-[#b8c8d7] focus:outline-none focus:border-[#ff4628] focus:bg-white transition-colors resize-y leading-relaxed"
+              className="w-full bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-sm text-[#202020] placeholder-[#73808f] focus:outline-none focus:border-[#ff4628] focus:bg-white transition-colors resize-y leading-relaxed"
               placeholder="블로그 본문을 입력하세요"
             />
-            <p className="text-right text-xs text-[#b8c8d7] mt-1">{content.length.toLocaleString()}자</p>
+            <p className="text-right text-xs text-[#73808f] mt-1">{content.length.toLocaleString()}자</p>
           </div>
 
           {/* 태그 */}
           <div>
-            <label className="block text-xs font-semibold text-[#8a93a0] mb-1.5">
+            <label className="block text-xs font-semibold text-[#5b6573] mb-1.5">
               태그
             </label>
             <div className="flex gap-2">
@@ -186,13 +186,13 @@ export default function PostEditor({ post, onSave, onClose }: PostEditorProps) {
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleTagKeyDown}
                 maxLength={50}
-                className="flex-1 bg-white border border-[#dbe2ea] rounded-lg px-3 py-2 text-sm text-[#202020] placeholder-[#b8c8d7] focus:outline-none focus:border-[#ff4628] focus:bg-white transition-colors"
+                className="flex-1 bg-white border border-[#b4bfce] rounded-lg px-3 py-2 text-sm text-[#202020] placeholder-[#73808f] focus:outline-none focus:border-[#ff4628] focus:bg-white transition-colors"
                 placeholder="태그 입력 후 Enter"
               />
               <button
                 onClick={handleAddTag}
                 type="button"
-                className="px-3 py-2 bg-[#eef2f6] hover:bg-[#dbe2ea] text-[#4a4f55] text-sm rounded-lg transition-colors"
+                className="px-3 py-2 bg-[#eef2f6] hover:bg-[#b4bfce] text-[#4a4f55] text-sm rounded-lg transition-colors"
               >
                 추가
               </button>
@@ -227,17 +227,17 @@ export default function PostEditor({ post, onSave, onClose }: PostEditorProps) {
         </div>
 
         {/* 푸터 */}
-        <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-[#dbe2ea]">
+        <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-[#b4bfce]">
           <button
             onClick={handleClose}
-            className="px-4 py-2 text-sm text-[#4a4f55] hover:text-[#202020] border border-[#dbe2ea] hover:bg-[#eef2f6] rounded-lg transition-colors"
+            className="px-4 py-2 text-sm text-[#4a4f55] hover:text-[#202020] border border-[#b4bfce] hover:bg-[#eef2f6] rounded-lg transition-colors"
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saving || !dirty}
-            className="px-5 py-2 bg-[#ff4628] hover:bg-[#e63a1c] disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
+            className="px-5 py-2 bg-[#ff4628] hover:bg-[#e63a1c] disabled:bg-[#b4bfce] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
           >
             {saving ? (
               <>

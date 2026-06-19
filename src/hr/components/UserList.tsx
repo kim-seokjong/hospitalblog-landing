@@ -111,11 +111,11 @@ export default function UserList() {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-[#dbe2ea] shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-[#b4bfce] shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <h2 className="text-sm font-semibold text-[#202020]">회원 목록</h2>
-          <p className="text-xs text-[#8a93a0] mt-0.5">
+          <p className="text-xs text-[#5b6573] mt-0.5">
             전체 {total.toLocaleString('ko-KR')}명{debouncedQuery && ` · 검색결과`}
           </p>
         </div>
@@ -124,7 +124,7 @@ export default function UserList() {
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="이메일·이름·병원명 검색"
-          className="w-full sm:w-72 px-3 py-2 bg-white border border-[#dbe2ea] rounded-lg text-sm text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628]"
+          className="w-full sm:w-72 px-3 py-2 bg-white border border-[#b4bfce] rounded-lg text-sm text-[#202020] placeholder-[#5b6573] focus:outline-none focus:border-[#ff4628]"
         />
       </div>
 
@@ -139,7 +139,7 @@ export default function UserList() {
           <div className="w-6 h-6 border-2 border-[#ff4628] border-t-transparent rounded-full animate-spin" />
         </div>
       ) : users.length === 0 ? (
-        <p className="text-sm text-[#8a93a0] text-center py-8">
+        <p className="text-sm text-[#5b6573] text-center py-8">
           {debouncedQuery ? '검색 결과가 없습니다.' : '가입한 회원이 없습니다.'}
         </p>
       ) : (
@@ -150,7 +150,7 @@ export default function UserList() {
             return (
               <div
                 key={u.id}
-                className="border border-[#dbe2ea] rounded-xl p-4 hover:border-[#ff4628]/40 transition-colors"
+                className="border border-[#b4bfce] rounded-xl p-4 hover:border-[#ff4628]/40 transition-colors"
               >
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <span className="text-sm font-semibold text-[#202020]">
@@ -163,7 +163,7 @@ export default function UserList() {
                     {expired && plan !== 'free' && ' · 만료'}
                   </span>
                   {u.hospital_type && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#eef2f6] text-[#4a4f55] border border-[#dbe2ea]">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#eef2f6] text-[#4a4f55] border border-[#b4bfce]">
                       {u.hospital_type}
                     </span>
                   )}
@@ -171,25 +171,25 @@ export default function UserList() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-[#4a4f55]">
                   <div>
-                    <span className="text-[#8a93a0]">이메일:</span> {u.email ?? '-'}
+                    <span className="text-[#5b6573]">이메일:</span> {u.email ?? '-'}
                   </div>
                   <div>
-                    <span className="text-[#8a93a0]">연락처:</span> {u.phone ?? '-'}
+                    <span className="text-[#5b6573]">연락처:</span> {u.phone ?? '-'}
                   </div>
                   <div>
-                    <span className="text-[#8a93a0]">병원:</span> {u.hospital_name ?? '-'}
-                    {u.position && <span className="text-[#8a93a0]"> · {u.position}</span>}
+                    <span className="text-[#5b6573]">병원:</span> {u.hospital_name ?? '-'}
+                    {u.position && <span className="text-[#5b6573]"> · {u.position}</span>}
                   </div>
                   <div>
-                    <span className="text-[#8a93a0]">주소:</span> {u.hospital_address ?? '-'}
+                    <span className="text-[#5b6573]">주소:</span> {u.hospital_address ?? '-'}
                   </div>
                   <div>
-                    <span className="text-[#8a93a0]">가입:</span> {formatDate(u.created_at)}
+                    <span className="text-[#5b6573]">가입:</span> {formatDate(u.created_at)}
                   </div>
                   <div>
-                    <span className="text-[#8a93a0]">사용량:</span> {u.usage_count ?? 0}건
+                    <span className="text-[#5b6573]">사용량:</span> {u.usage_count ?? 0}건
                     {u.plan_expires_at && plan !== 'free' && (
-                      <span className="text-[#8a93a0]"> · 만료: {formatDate(u.plan_expires_at)}</span>
+                      <span className="text-[#5b6573]"> · 만료: {formatDate(u.plan_expires_at)}</span>
                     )}
                   </div>
                 </div>
@@ -202,7 +202,7 @@ export default function UserList() {
       {hasMore && !loading && (
         <button
           onClick={handleLoadMore}
-          className="w-full mt-4 py-2 bg-[#eef2f6] hover:bg-[#dbe2ea] text-[#4a4f55] rounded-lg text-sm transition-colors"
+          className="w-full mt-4 py-2 bg-[#eef2f6] hover:bg-[#b4bfce] text-[#4a4f55] rounded-lg text-sm transition-colors"
         >
           더 보기 ({users.length}/{total.toLocaleString('ko-KR')})
         </button>

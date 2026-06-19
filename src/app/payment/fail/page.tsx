@@ -22,14 +22,14 @@ function FailContent() {
         <p className="text-[#4a4f55] mb-4">
           {message ?? '결제 처리 중 오류가 발생했습니다.'}
         </p>
-        <p className="text-[#8a93a0] text-sm mb-8">
+        <p className="text-[#5b6573] text-sm mb-8">
           문제가 지속되면 고객센터(010-2558-1115)로 문의해주세요.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
             onClick={() => router.back()}
-            className="px-6 py-3 bg-[#eef2f6] border border-[#dbe2ea] hover:bg-[#dbe2ea] text-[#202020] rounded-lg font-semibold transition-colors"
+            className="px-6 py-3 bg-[#eef2f6] border border-[#b4bfce] hover:bg-[#b4bfce] text-[#202020] rounded-lg font-semibold transition-colors"
           >
             뒤로 가기
           </button>
@@ -41,7 +41,7 @@ function FailContent() {
           </Link>
           <Link
             href="/"
-            className="px-6 py-3 bg-[#eef2f6] border border-[#dbe2ea] hover:bg-[#dbe2ea] text-[#202020] rounded-lg font-semibold transition-colors"
+            className="px-6 py-3 bg-[#eef2f6] border border-[#b4bfce] hover:bg-[#b4bfce] text-[#202020] rounded-lg font-semibold transition-colors"
           >
             홈으로
           </Link>

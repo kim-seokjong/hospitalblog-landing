@@ -23,7 +23,7 @@ export default function PaymentSuccessPage({ searchParams }: Props) {
         </p>
 
         {searchParams.paymentId && (
-          <p className="text-xs text-[#b8c8d7] mb-6">
+          <p className="text-xs text-[#73808f] mb-6">
             결제 ID: {searchParams.paymentId}
           </p>
         )}
@@ -37,13 +37,13 @@ export default function PaymentSuccessPage({ searchParams }: Props) {
           </Link>
           <Link
             href="/app/subscription"
-            className="px-6 py-3 bg-[#eef2f6] border border-[#dbe2ea] hover:bg-[#dbe2ea] text-[#202020] rounded-lg font-semibold transition-colors"
+            className="px-6 py-3 bg-[#eef2f6] border border-[#b4bfce] hover:bg-[#b4bfce] text-[#202020] rounded-lg font-semibold transition-colors"
           >
             구독 관리
           </Link>
         </div>
 
-        <p className="text-xs text-[#8a93a0] mt-6">
+        <p className="text-xs text-[#5b6573] mt-6">
           언제든 마이페이지에서 1클릭으로 해지할 수 있습니다.
         </p>
       </div>

@@ -8,7 +8,7 @@ interface RegionProgressProps {
 
 export default function RegionProgress({ targets }: RegionProgressProps) {
   return (
-    <div className="bg-white border border-[#dbe2ea] rounded-xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+    <div className="bg-white border border-[#b4bfce] rounded-xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       <h3 className="text-sm font-semibold text-[#202020] mb-4">
         지역별 진척률
       </h3>
@@ -24,7 +24,7 @@ export default function RegionProgress({ targets }: RegionProgressProps) {
             <div key={t.region} className="space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-[#4a4f55]">{t.region}</span>
-                <span className="text-sm text-[#8a93a0] text-right">
+                <span className="text-sm text-[#5b6573] text-right">
                   {t.current} / {t.target}개 ({rate}%)
                 </span>
               </div>

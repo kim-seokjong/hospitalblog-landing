@@ -215,21 +215,21 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
   };
 
   return (
-    <div className="rounded-2xl border border-[#dbe2ea] bg-white overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+    <div className="rounded-2xl border border-[#b4bfce] bg-white overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       {/* 헤더 */}
-      <div className="p-4 sm:p-5 border-b border-[#dbe2ea]">
+      <div className="p-4 sm:p-5 border-b border-[#b4bfce]">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
             <span className="text-emerald-600 font-bold text-sm">3</span>
           </div>
           <div>
             <h2 className="text-base font-bold text-[#202020]">본문 미리보기</h2>
-            <p className="text-xs text-[#8a93a0]">D.I.A+ 최적화 콘텐츠</p>
+            <p className="text-xs text-[#5b6573]">D.I.A+ 최적화 콘텐츠</p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#eef2f6] border border-[#dbe2ea] ${charColor}`}>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#eef2f6] border border-[#b4bfce] ${charColor}`}>
             {content.charCount.toLocaleString()}자{content.charCount >= 1500 ? ' ✓' : ' ⚠'}
           </span>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">H2 {content.seoAnalysis.h2Count}개</span>
@@ -291,7 +291,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
                   'bg-yellow-100 text-yellow-700'
                 }`}>{v.severity}</span>
                 <mark className="bg-red-100 text-red-700 font-bold rounded px-0.5 not-italic">{v.word}</mark>
-                <span className="text-[#8a93a0]">→ {v.suggestion}(으)로 수정 권장</span>
+                <span className="text-[#5b6573]">→ {v.suggestion}(으)로 수정 권장</span>
               </div>
             ))}
           </div>
@@ -310,11 +310,11 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
       {/* 본문 */}
       <div className="p-4 sm:p-5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-[#b8c8d7]">본문 내용</span>
+          <span className="text-[10px] text-[#73808f]">본문 내용</span>
           {!isEditing && onContentChange && (
             <button
               onClick={() => { setEditBody(content.body); setIsEditing(true); }}
-              className="text-[10px] font-bold text-[#ff4628] hover:text-[#e63a1c] px-2 py-1 rounded-lg border border-[#dbe2ea] hover:border-[#ff4628]/50 transition-colors"
+              className="text-[10px] font-bold text-[#ff4628] hover:text-[#e63a1c] px-2 py-1 rounded-lg border border-[#b4bfce] hover:border-[#ff4628]/50 transition-colors"
             >
               ✏️ 직접 편집
             </button>
@@ -337,7 +337,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
               </button>
               <button
                 onClick={() => setIsEditing(false)}
-                className="flex-1 py-2 bg-[#eef2f6] hover:bg-[#dbe2ea] text-[#4a4f55] text-xs font-bold rounded-xl transition-colors"
+                className="flex-1 py-2 bg-[#eef2f6] hover:bg-[#b4bfce] text-[#4a4f55] text-xs font-bold rounded-xl transition-colors"
               >
                 취소
               </button>
@@ -369,7 +369,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
               {content.imageGuidelines.placementHints.map((hint, i) => (
                 <div key={i} className="flex items-start gap-2 text-[10px] bg-[#eef2f6] rounded-lg px-3 py-1.5">
                   <span className="text-[#ff4628] font-bold">🖼 {i + 1}</span>
-                  <span className="text-[#8a93a0]">{hint.description}</span>
+                  <span className="text-[#5b6573]">{hint.description}</span>
                 </div>
               ))}
             </div>
@@ -386,9 +386,9 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
           {copied ? <><span>✅</span> 복사 완료!</> : <><span>📋</span> 제목 + 본문 원클릭 복사</>}
         </button>
 
-        <div className="border-t border-[#dbe2ea] pt-3 space-y-3">
+        <div className="border-t border-[#b4bfce] pt-3 space-y-3">
           <div>
-            <p className="text-[10px] font-bold text-[#8a93a0] mb-2">이미지 스타일</p>
+            <p className="text-[10px] font-bold text-[#5b6573] mb-2">이미지 스타일</p>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { val: 'photo' as const, icon: '📷', label: '실사AI이미지', sub: 'AI 의료 실사' },
@@ -402,7 +402,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
                   className={`flex flex-col items-center gap-1 px-1 py-3 rounded-xl border-2 transition-all min-h-[72px] ${
                     imageStyle === val
                       ? 'border-[#ff4628] bg-[#ffece7] text-[#202020]'
-                      : 'border-[#dbe2ea] bg-white text-[#8a93a0] hover:border-[#ff4628]/30'
+                      : 'border-[#b4bfce] bg-white text-[#5b6573] hover:border-[#ff4628]/30'
                   }`}
                 >
                   <span className="text-lg">{icon}</span>
@@ -428,13 +428,13 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
 
           {imageStyle !== 'upload' && (
             <div className="flex items-center justify-between">
-              <p className="text-[10px] text-[#b8c8d7]">권장 {content.imageGuidelines.recommendedCount}장 이상</p>
+              <p className="text-[10px] text-[#73808f]">권장 {content.imageGuidelines.recommendedCount}장 이상</p>
               <div className="flex items-center gap-2">
-                <label className="text-[10px] text-[#8a93a0]">장수:</label>
+                <label className="text-[10px] text-[#5b6573]">장수:</label>
                 <select
                   value={imageCount}
                   onChange={(e) => setImageCount(Number(e.target.value))}
-                  className="text-xs border border-[#dbe2ea] rounded-lg px-2 py-1 bg-white text-[#202020]"
+                  className="text-xs border border-[#b4bfce] rounded-lg px-2 py-1 bg-white text-[#202020]"
                   disabled={isLoadingImages}
                 >
                   {[3, 4, 5, 6, 7, 8].map((n) => (
@@ -456,7 +456,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
             <button
               onClick={() => onGenerateImages(imageCount, imageStyle)}
               disabled={isLoadingImages}
-              className="w-full py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20 min-h-[48px] border-2 border-white/60"
+              className="w-full py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-[#b4bfce] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20 min-h-[48px] border-2 border-white/60"
             >
               {isLoadingImages ? (
                 <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 이미지 생성 중... ({imageCount}장)</>
@@ -467,12 +467,12 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
           )}
 
           {onGenerateSlides && (
-            <div className="border-t border-[#dbe2ea] pt-3">
-              <p className="text-[10px] font-bold text-[#8a93a0] mb-2">인포그래픽 카드뉴스</p>
+            <div className="border-t border-[#b4bfce] pt-3">
+              <p className="text-[10px] font-bold text-[#5b6573] mb-2">인포그래픽 카드뉴스</p>
               <button
                 onClick={onGenerateSlides}
                 disabled={isLoadingSlides}
-                className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 disabled:bg-[#dbe2ea] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm border-2 border-white/60"
+                className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 disabled:bg-[#b4bfce] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm border-2 border-white/60"
               >
                 {isLoadingSlides ? (
                   <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 슬라이드 생성 중...</>
@@ -480,7 +480,7 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
                   <><span>✦</span> 디자인 카드뉴스 3장 생성</>
                 )}
               </button>
-              <p className="text-[9px] text-[#b8c8d7] mt-1.5 text-center">표지 · 단계 · 마무리 슬라이드 · 1080×1080 PNG</p>
+              <p className="text-[9px] text-[#73808f] mt-1.5 text-center">표지 · 단계 · 마무리 슬라이드 · 1080×1080 PNG</p>
             </div>
           )}
         </div>

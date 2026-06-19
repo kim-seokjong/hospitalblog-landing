@@ -29,7 +29,7 @@ export default function PricingSection() {
     <section id="pricing" className="py-12 sm:py-20 bg-white">
       <div className="max-w-5xl mx-auto px-4">
         <h2 className="text-2xl sm:text-3xl font-bold text-center text-[#202020] mb-2">요금제</h2>
-        <p className="text-center text-sm sm:text-base text-[#8a93a0] mb-3">
+        <p className="text-center text-sm sm:text-base text-[#5b6573] mb-3">
           병원 규모에 맞는 플랜을 선택하세요
         </p>
 
@@ -66,7 +66,7 @@ export default function PricingSection() {
           className={`mt-8 mx-auto max-w-2xl rounded-xl border px-4 sm:px-5 py-4 transition-colors
             ${showAgreementError
               ? 'border-red-300 bg-red-50'
-              : 'border-[#dbe2ea] bg-white'}`}
+              : 'border-[#b4bfce] bg-white'}`}
         >
           <label className="flex items-start gap-3 cursor-pointer select-none">
             <input
@@ -95,7 +95,7 @@ export default function PricingSection() {
           )}
         </div>
 
-        <p className="text-center text-[#8a93a0] text-xs sm:text-sm mt-6 sm:mt-8 px-2">
+        <p className="text-center text-[#5b6573] text-xs sm:text-sm mt-6 sm:mt-8 px-2">
           해지는 마이페이지에서 1클릭으로 가능합니다. 베이직·스탠다드 무료 체험 중 해지 시 청구 없이 즉시 종료되며, 유료 기간 해지 시 다음 결제일까지 이용할 수 있습니다.
         </p>
       </div>

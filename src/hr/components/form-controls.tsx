@@ -10,8 +10,8 @@
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-      <h2 className="text-sm font-semibold text-[#202020] mb-4 pb-3 border-b border-[#dbe2ea]">{title}</h2>
+    <div className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+      <h2 className="text-sm font-semibold text-[#202020] mb-4 pb-3 border-b border-[#b4bfce]">{title}</h2>
       <div className="space-y-3">{children}</div>
     </div>
   );
@@ -43,7 +43,7 @@ export function Input({
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] transition-colors"
+      className="w-full bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#5b6573] focus:outline-none focus:border-[#ff4628] transition-colors"
     />
   );
 }
@@ -61,7 +61,7 @@ export function Select({
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full bg-white border border-[#dbe2ea] rounded-lg px-3 py-2.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors appearance-none"
+      className="w-full bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors appearance-none"
     >
       {options.map(opt => (
         <option key={opt.value} value={opt.value} className="bg-white text-[#202020]">
@@ -87,7 +87,7 @@ export function ToggleRow({
     <div className="flex items-center justify-between gap-4">
       <div>
         <div className="text-sm text-[#202020] font-medium">{label}</div>
-        <div className="text-xs text-[#8a93a0] mt-0.5">{description}</div>
+        <div className="text-xs text-[#5b6573] mt-0.5">{description}</div>
       </div>
       <button
         type="button"
@@ -95,7 +95,7 @@ export function ToggleRow({
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors duration-200 focus:outline-none ${
-          checked ? 'bg-[#ff4628]' : 'bg-[#dbe2ea]'
+          checked ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
         }`}
       >
         <span

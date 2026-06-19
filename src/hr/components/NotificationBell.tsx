@@ -176,7 +176,7 @@ export default function NotificationBell() {
       <button
         onClick={handleToggle}
         aria-label="알림"
-        className="relative w-9 h-9 flex items-center justify-center rounded-lg border border-[#dbe2ea] hover:bg-[#eef2f6] active:bg-[#eef2f6] transition-colors"
+        className="relative w-9 h-9 flex items-center justify-center rounded-lg border border-[#b4bfce] hover:bg-[#eef2f6] active:bg-[#eef2f6] transition-colors"
       >
         <svg
           width="18"
@@ -201,13 +201,13 @@ export default function NotificationBell() {
 
       {/* 드롭다운 */}
       {open && (
-        <div className="absolute right-0 top-11 w-80 sm:w-96 bg-white border border-[#dbe2ea] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] z-50 overflow-hidden">
+        <div className="absolute right-0 top-11 w-80 sm:w-96 bg-white border border-[#b4bfce] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] z-50 overflow-hidden">
           {/* 헤더 */}
-          <div className="px-4 py-3 border-b border-[#dbe2ea] flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-[#b4bfce] flex items-center justify-between">
             <span className="text-sm font-semibold text-[#202020]">알림</span>
             <div className="flex items-center gap-3">
               {unreadCount > 0 && (
-                <span className="text-xs text-[#8a93a0]">읽지 않은 {unreadCount}개</span>
+                <span className="text-xs text-[#5b6573]">읽지 않은 {unreadCount}개</span>
               )}
               {unreadCount > 0 && (
                 <button
@@ -239,12 +239,12 @@ export default function NotificationBell() {
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="text-[#b8c8d7] mx-auto mb-2"
+                  className="text-[#73808f] mx-auto mb-2"
                 >
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                   <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
-                <p className="text-sm text-[#8a93a0]">새로운 알림이 없습니다.</p>
+                <p className="text-sm text-[#5b6573]">새로운 알림이 없습니다.</p>
               </div>
             )}
 
@@ -252,7 +252,7 @@ export default function NotificationBell() {
               <button
                 key={n.id}
                 onClick={() => handleMarkRead(n.id)}
-                className={`w-full text-left px-4 py-3 border-b border-[#dbe2ea] last:border-b-0 hover:bg-[#eef2f6] active:bg-[#eef2f6] transition-colors ${
+                className={`w-full text-left px-4 py-3 border-b border-[#b4bfce] last:border-b-0 hover:bg-[#eef2f6] active:bg-[#eef2f6] transition-colors ${
                   n.is_read ? 'opacity-60' : ''
                 }`}
               >
@@ -260,7 +260,7 @@ export default function NotificationBell() {
                   <NotificationIcon type={n.type} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <p className={`text-xs font-semibold truncate ${n.is_read ? 'text-[#8a93a0]' : 'text-[#202020]'}`}>
+                      <p className={`text-xs font-semibold truncate ${n.is_read ? 'text-[#5b6573]' : 'text-[#202020]'}`}>
                         {n.title}
                       </p>
                       {!n.is_read && (
@@ -270,7 +270,7 @@ export default function NotificationBell() {
                     <p className="text-[11px] text-[#4a4f55] mt-0.5 leading-snug line-clamp-2">
                       {n.message}
                     </p>
-                    <p className="text-[10px] text-[#8a93a0] mt-1">
+                    <p className="text-[10px] text-[#5b6573] mt-1">
                       {formatRelativeTime(n.created_at)}
                     </p>
                   </div>
