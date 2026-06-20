@@ -36,11 +36,11 @@ export default function PricingSection() {
           병원 규모에 맞는 플랜을 선택하세요
         </p>
 
-        <div className="mx-auto max-w-2xl bg-green-50 border border-green-200 rounded-xl px-4 py-3.5 mb-4 text-center">
-          <p className="text-base sm:text-lg text-green-700 font-bold">
+        <div className="mx-auto max-w-2xl bg-gradient-to-b from-[#1f1f1f] to-[#0c0c0c] border border-[#d4af37]/45 rounded-xl px-4 py-4 mb-4 text-center shadow-[0_0_34px_-10px_rgba(212,175,55,0.55)]">
+          <p className="text-lg sm:text-xl font-extrabold bg-gradient-to-r from-[#f4dd82] via-[#fff7d6] to-[#dcb84c] bg-clip-text text-transparent drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
             🎉 6월 한정 — 스탠다드 첫 달 0원 / 프로·클리닉픽스 번들 첫 달 50% 할인
           </p>
-          <p className="text-xs sm:text-sm text-green-600 mt-1.5">
+          <p className="text-xs sm:text-sm text-[#d9c690] mt-1.5">
             지금 시작하면 첫 달 혜택 · <strong>둘째 달부터</strong> 매월 자동결제 · 7월부터 정상가
           </p>
           <PromoCountdown />

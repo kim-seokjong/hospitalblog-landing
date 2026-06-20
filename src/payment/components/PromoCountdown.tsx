@@ -51,14 +51,14 @@ export default function PromoCountdown() {
 
   return (
     <div className="mt-3 flex items-center justify-center gap-2 flex-wrap">
-      <span className="text-xs sm:text-sm text-green-700 font-semibold">⏳ 마감까지</span>
+      <span className="text-xs sm:text-sm text-[#e8d6a0] font-semibold">⏳ 마감까지</span>
       <div className="flex items-end gap-1.5">
         {units.map((u) => (
           <div key={u.label} className="flex flex-col items-center">
-            <span className="bg-[#1a1a1a] text-[#f5c84b] font-bold tabular-nums rounded-md px-2 py-1 text-sm sm:text-base min-w-[2.3rem] text-center">
+            <span className="bg-gradient-to-b from-[#f9e8a8] to-[#d4af37] text-[#1a1a1a] font-bold tabular-nums rounded-md px-2 py-1 text-sm sm:text-base min-w-[2.3rem] text-center shadow-[0_0_12px_-2px_rgba(212,175,55,0.7)]">
               {String(u.n).padStart(2, '0')}
             </span>
-            <span className="text-[10px] text-green-700 mt-0.5">{u.label}</span>
+            <span className="text-[10px] text-[#e8d6a0] mt-0.5">{u.label}</span>
           </div>
         ))}
       </div>
