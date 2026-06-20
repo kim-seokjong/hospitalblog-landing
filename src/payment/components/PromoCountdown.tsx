@@ -55,7 +55,7 @@ export default function PromoCountdown() {
       <div className="flex items-end gap-1.5">
         {units.map((u) => (
           <div key={u.label} className="flex flex-col items-center">
-            <span className="bg-green-600 text-white font-bold tabular-nums rounded-md px-2 py-1 text-sm sm:text-base min-w-[2.3rem] text-center">
+            <span className="bg-[#1a1a1a] text-[#f5c84b] font-bold tabular-nums rounded-md px-2 py-1 text-sm sm:text-base min-w-[2.3rem] text-center">
               {String(u.n).padStart(2, '0')}
             </span>
             <span className="text-[10px] text-green-700 mt-0.5">{u.label}</span>

@@ -422,7 +422,7 @@ export default function LandingPage() {
               {
                 plan: PLANS.standard, desc: "블로그 + 이미지",
                 features: ["AI 블로그 작성 월 20건", "카드뉴스·이미지 자동 생성", "독창성 검사", "의료광고법 검수"],
-                highlight: true,
+                highlight: false,
               },
               {
                 plan: PLANS.pro, desc: "블로그 무제한",
@@ -432,7 +432,7 @@ export default function LandingPage() {
               {
                 plan: PLANS.growth8_standard, desc: "블로그+영상+멀티채널",
                 features: ["AI 블로그 월 20건", "AI 영상 월 8건", "멀티채널 세트 월 20건", "카드뉴스·이미지 자동 생성", "의료광고법 검수"],
-                highlight: false,
+                highlight: true,
               },
               {
                 plan: PLANS.pro12_pro, desc: "올인원 무제한",
@@ -454,8 +454,9 @@ export default function LandingPage() {
                   </span>
                 )}
                 <h3 className="text-lg font-extrabold text-[#202020] mb-1">{plan.name}</h3>
-                <div className="mt-1 mb-1 inline-flex items-center gap-1.5 bg-[#eef2f6] text-[#3f5468] text-[11px] sm:text-xs font-extrabold px-2.5 py-1 rounded-lg self-start">
-                  {isDiscountPlan ? '첫 달 50% 할인' : '첫 달 무료'}
+                <div className="mt-1 mb-1 inline-flex items-center gap-1.5 bg-[#eef2f6] text-[#3f5468] text-[11px] sm:text-xs font-extrabold px-2.5 py-1 rounded-lg self-start whitespace-nowrap">
+                  <span>{isDiscountPlan ? '첫 달 50% 할인' : '첫 달 무료'}</span>
+                  <span className="text-[#ff4628]">(6월 한정)</span>
                 </div>
                 {isDiscountPlan ? (
                   // 프로: 정상가 취소선 + 첫 달 할인가 강조
