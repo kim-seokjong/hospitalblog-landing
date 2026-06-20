@@ -976,16 +976,16 @@ export default function AppPage() {
                         );
                         window.open('/app/analysis', '_blank', 'noopener,noreferrer');
                       }}
-                      className="group analysis-cta relative w-full py-3.5 sm:py-4 rounded-xl border-2 border-cyan-400/70 hover:border-cyan-300 bg-gradient-to-r from-cyan-500/15 via-emerald-500/15 to-cyan-500/15 hover:from-cyan-500/25 hover:via-emerald-500/25 hover:to-cyan-500/25 text-white text-sm sm:text-base font-bold transition-all flex items-center justify-center gap-2.5"
+                      className="group analysis-cta relative w-full py-3.5 sm:py-4 rounded-xl border-2 border-emerald-400 hover:border-emerald-500 bg-gradient-to-r from-cyan-100 via-emerald-100 to-cyan-100 hover:from-cyan-200 hover:via-emerald-200 hover:to-cyan-200 text-slate-900 text-sm sm:text-base font-bold transition-all flex items-center justify-center gap-2.5"
                     >
                       <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 flex h-2.5 w-2.5">
                         <span className="absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75 animate-ping"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-300"></span>
                       </span>
                       <span className="text-lg">📊</span>
-                      <span className="bg-gradient-to-r from-cyan-200 to-emerald-200 bg-clip-text text-transparent">상세 분석 보기</span>
-                      <span className="text-[10px] sm:text-[11px] text-cyan-300/80 font-medium hidden sm:inline">(SEO · 독창성 · 네이버 검색 미리보기)</span>
-                      <span className="text-cyan-300 group-hover:translate-x-1 transition-transform text-base font-extrabold">→ <span className="text-[10px] font-medium opacity-80">(새 창)</span></span>
+                      <span className="text-slate-900 font-extrabold">상세 분석 보기</span>
+                      <span className="text-[10px] sm:text-[11px] text-slate-600 font-medium hidden sm:inline">(SEO · 독창성 · 네이버 검색 미리보기)</span>
+                      <span className="text-emerald-700 group-hover:translate-x-1 transition-transform text-base font-extrabold">→ <span className="text-[10px] font-medium opacity-80">(새 창)</span></span>
                     </button>
 
                     {tags && (
