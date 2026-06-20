@@ -74,16 +74,19 @@ export class ClinicflixUnavailableError extends Error {
 }
 
 function baseUrl(): string {
-  const url = process.env.CLINICFLIX_SERVICE_URL
+  let url = process.env.CLINICFLIX_SERVICE_URL?.trim()
   if (!url) {
     throw new ClinicflixUnavailableError(
       '멀티채널 생성 서비스가 설정되지 않았습니다. 관리자에게 문의해 주세요.',
     )
   }
+  // 스킴 누락 방어: env 값에 http(s):// 가 없으면 https:// 를 자동 보정 (가장 흔한 설정 실수)
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`
   return url.replace(/\/+$/, '')
 }
 
-const DEFAULT_TIMEOUT_MS = 15_000
+// 콜드스타트/네트워크 지연 여유 (변환은 큐만 걸고 즉시 반환하지만, 깨어나는 데 시간이 걸릴 수 있음)
+const DEFAULT_TIMEOUT_MS = 30_000
 
 async function callClinicflix<T>(
   path: string,
