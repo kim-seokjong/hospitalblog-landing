@@ -427,13 +427,13 @@ export function ImageCarousel({ urls }: { urls: string[] }) {
   );
 }
 
-export function DownloadLink({ href, label, small }: { href: string; label: string; small?: boolean }) {
+export function DownloadLink({ href, label, name, small }: { href: string; label: string; name?: string; small?: boolean }) {
+  // 외부 도메인(fal.media)은 a[download]가 무시되어 새 탭만 열림 → 동일 출처 프록시로 강제 다운로드(컴퓨터 저장)
+  const proxied = `/api/clinicflix/download?url=${encodeURIComponent(href)}${name ? `&name=${encodeURIComponent(name)}` : ''}`
   return (
     <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      download
+      href={proxied}
+      download={name ?? true}
       className={`block text-center rounded-lg bg-[#ff4628]/10 hover:bg-[#ff4628]/20 text-[#ff4628] font-semibold transition-colors ${
         small ? 'text-xs py-1.5' : 'text-sm py-2.5 mt-2'
       }`}
