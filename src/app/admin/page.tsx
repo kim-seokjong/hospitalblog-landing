@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabas
 import { isAdmin } from '@/hr/lib/admin';
 import KpiDashboard from '@/components/admin/KpiDashboard';
 import MemberTable from '@/components/admin/MemberTable';
+import NoticeComposer from '@/components/admin/NoticeComposer';
 import type {
   DashboardData,
   MemberRow,
@@ -276,6 +277,8 @@ export default async function AdminPage() {
         </div>
 
         <KpiDashboard data={data} />
+
+        <NoticeComposer members={data.members} />
 
         <MemberTable members={data.members} />
       </div>

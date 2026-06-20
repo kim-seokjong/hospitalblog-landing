@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { PLANS } from '@/payment/lib/plans';
 import sampleText from '../../../public/clinicflix-samples/sample-text.json';
 
 /**
@@ -56,38 +55,6 @@ const STEPS = [
   { step: '4', title: '다운로드', desc: '완성된 콘텐츠를 받아 원하는 채널에 직접 올리면 끝이에요.' },
 ];
 
-interface BundleView {
-  id: string;
-  name: string;
-  desc: string;
-  features: string[];
-}
-
-const BUNDLES: BundleView[] = [
-  {
-    id: PLANS.growth8_standard.id,
-    name: PLANS.growth8_standard.name,
-    desc: '블로그 + 영상 + 멀티채널 입문',
-    features: [
-      'AI 블로그 월 20건',
-      'AI 영상 월 8건',
-      '멀티채널 세트 월 20건 (영상·카드뉴스·스토리·쓰레드·피드)',
-      '의료광고법 검수 내장',
-    ],
-  },
-  {
-    id: PLANS.pro12_pro.id,
-    name: PLANS.pro12_pro.name,
-    desc: '올인원 무제한',
-    features: [
-      'AI 블로그 무제한',
-      'AI 영상 월 12건',
-      `멀티채널 세트 무제한 (공정사용 월 ${PLANS.pro12_pro.fairUseCap ?? 60}세트)`,
-      '의료광고법 검수 내장 · 우선 고객 지원',
-    ],
-  },
-];
-
 interface ClinicflixSectionProps {
   /** 가입/문의 CTA (랜딩의 기존 패턴 재사용) */
   onCtaClick: () => void;
@@ -107,8 +74,10 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
             className="text-[28px] sm:text-4xl md:text-[44px] font-black text-[#202020] mt-5 leading-[1.18]"
             style={{ letterSpacing: '-0.5px' }}
           >
-            블로그 1편이<br />
-            <span style={{ color: ACCENT }}>영상·카드뉴스·스토리·쓰레드·인스타</span>가 됩니다
+            <span className="block">블로그 1편이</span>
+            <span className="block mt-3 sm:mt-4">
+              <span style={{ color: ACCENT }}>영상·카드뉴스·스토리·쓰레드·인스타</span>와 같이 됩니다
+            </span>
           </h2>
           <p className="text-base sm:text-lg text-[#4a4f55] max-w-2xl mx-auto mt-5 leading-relaxed">
             닥터포스트로 쓴 블로그 한 편을, 클리닉픽스가 5종 멀티채널 콘텐츠로 자동 제작해드려요.
@@ -194,82 +163,6 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
             * 위 콘텐츠는 클리닉픽스가 실제 생성한 샘플입니다. 영상·이미지는 AI로 제작되었으며,
             완성된 콘텐츠는 다운로드 후 직접 게시합니다. (자동 발행 기능 아님)
           </p>
-        </div>
-
-        {/* ── Bundle pricing ── */}
-        <div className="mt-16 sm:mt-20">
-          <p className="text-center text-[13px] font-extrabold tracking-[2px] uppercase" style={{ color: ACCENT }}>
-            Bundle
-          </p>
-          <h3 className="text-center text-[22px] sm:text-3xl font-black text-[#202020] mt-2 leading-tight">
-            블로그 + 영상 + 멀티채널 번들
-          </h3>
-          <p className="text-center text-[#4a4f55] mt-3 text-sm sm:text-base">
-            닥터포스트 블로그에 클리닉픽스 멀티채널 제작을 더한 통합 플랜이에요.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-9 max-w-3xl mx-auto items-start">
-            {BUNDLES.map((bundle, i) => {
-              const plan = PLANS[bundle.id as keyof typeof PLANS];
-              const highlight = i === 1;
-              return (
-                <div
-                  key={bundle.id}
-                  className={`relative p-7 sm:p-8 rounded-2xl bg-white flex flex-col ${
-                    highlight
-                      ? 'border-2 shadow-[0_20px_46px_-16px_rgba(255,70,40,0.34)]'
-                      : 'border border-[#dbe2ea] shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]'
-                  }`}
-                  style={highlight ? { borderColor: ACCENT } : undefined}
-                >
-                  {highlight && (
-                    <span
-                      className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-extrabold text-white px-4 py-1.5 rounded-full"
-                      style={{ background: ACCENT }}
-                    >
-                      올인원
-                    </span>
-                  )}
-                  <h4 className="text-lg font-extrabold text-[#202020] mb-1">{plan.name}</h4>
-                  <p className="text-sm text-[#4a4f55] mb-3">{bundle.desc}</p>
-                  <p className="mb-1 flex flex-wrap items-baseline gap-x-1">
-                    <span className="text-3xl font-black text-[#202020]">
-                      {plan.price.toLocaleString('ko-KR')}
-                    </span>
-                    <span className="text-[#202020] text-sm font-bold">원</span>
-                    <span className="text-[#8a93a0] text-xs sm:text-sm">/ 월</span>
-                  </p>
-                  {plan.trialPrice != null && plan.trialPrice < plan.price && (
-                    <p className="mb-1 text-xs sm:text-sm font-bold" style={{ color: ACCENT }}>
-                      🎁 6월 한정 첫 달 50% 할인 {plan.trialPrice.toLocaleString('ko-KR')}원
-                      <span className="ml-1 font-medium text-[#8a93a0]">· 7월부터 정상가</span>
-                    </p>
-                  )}
-                  <ul className="space-y-2.5 my-5 flex-1">
-                    {bundle.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-sm text-[#4a4f55]">
-                        <span className="font-black flex-shrink-0 mt-0.5" style={{ color: ACCENT }}>
-                          ✓
-                        </span>
-                        <span className="leading-snug">{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <a
-                    href="#pricing"
-                    className={`w-full text-center py-3 rounded-xl text-sm font-bold transition-all ${
-                      highlight
-                        ? 'text-white hover:brightness-105 shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)]'
-                        : 'bg-white border border-[#dbe2ea] text-[#202020] hover:bg-[#eef2f6]'
-                    }`}
-                    style={highlight ? { backgroundImage: `linear-gradient(135deg, ${ACCENT}, #e63a1c)` } : undefined}
-                  >
-                    요금제 자세히 보기
-                  </a>
-                </div>
-              );
-            })}
-          </div>
         </div>
 
         {/* ── CTA ── */}
