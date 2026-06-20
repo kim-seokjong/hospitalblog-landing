@@ -127,6 +127,40 @@ export async function activateUserPlan(params: {
   if (error) throw new Error(`플랜 활성화 실패: ${error.message}`)
 }
 
+/**
+ * 업그레이드 전용: profiles 의 plan 만 교체한다 (plan_expires_at 은 전달값 유지).
+ * activateUserPlan 과 달리 usage_count / usage_reset_at 을 초기화하지 않는다
+ * (업그레이드는 같은 주기 내 즉시 전환이므로 사용량을 유지해야 한다).
+ */
+export async function setUserPlanKeepUsage(
+  userId: string,
+  plan: PlanId,
+  expiresAt: string | null,
+): Promise<void> {
+  const patch: Record<string, unknown> = {
+    plan,
+    updated_at: new Date().toISOString(),
+  }
+  // plan_expires_at 은 기존 값을 그대로 유지(전달값) — 주기를 변경하지 않는다.
+  if (expiresAt != null) patch.plan_expires_at = expiresAt
+
+  const { error } = await getAdmin().from('profiles').update(patch).eq('id', userId)
+  if (error) throw new Error(`플랜 전환 실패: ${error.message}`)
+}
+
+/**
+ * 업그레이드 전용: 활성 빌링키 행의 plan 만 교체한다.
+ * next_billing_at / trial_until / status 는 유지한다 (정기결제 주기 불변).
+ */
+export async function updateActiveBillingKeyPlan(userId: string, plan: PlanId): Promise<void> {
+  const { error } = await getAdmin()
+    .from('billing_keys')
+    .update({ plan, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE')
+  if (error) throw new Error(`빌링키 플랜 전환 실패: ${error.message}`)
+}
+
 export async function getProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await getAdmin()
     .from('profiles')

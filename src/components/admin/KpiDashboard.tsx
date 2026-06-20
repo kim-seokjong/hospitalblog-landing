@@ -28,8 +28,8 @@ const PLAN_LABEL: Record<PlanType, string> = {
   basic: '베이직', // 레거시
   standard: '스탠다드',
   pro: '프로',
-  growth8_standard: '그로스8+스탠다드',
-  pro12_pro: '프로12+프로',
+  growth8_standard: '올인원 그로스',
+  pro12_pro: '올인원 프로',
 };
 
 const PLAN_COLOR: Record<PlanType, string> = {

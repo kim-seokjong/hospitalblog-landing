@@ -5,8 +5,8 @@
 //     standard  스탠다드  ₩199,000  블로그 20 + 이미지
 //     pro       프로      ₩399,000  블로그 무제한 (첫 달 ₩199,000)
 //   [번들 — ClinicFlix (블로그 + 영상 + 멀티채널)]
-//     growth8_standard  그로스8+스탠다드  ₩499,000  블로그 20 / 영상 8 / 채널 20
-//     pro12_pro         프로12+프로       ₩699,000  블로그 무제한 / 영상 12 / 채널 무제한(공정사용 소프트캡 60)
+//     growth8_standard  올인원 그로스  ₩499,000  블로그 20 / 영상 8 / 채널 20
+//     pro12_pro         올인원 프로     ₩699,000  블로그 무제한 / 영상 12 / 채널 무제한(공정사용 소프트캡 60)
 //   [레거시 — 공개 비노출]
 //     basic     베이직    ₩99,000   블로그 10  ← 신규 판매 중단(아래 LEGACY 주석 참조)
 
@@ -116,7 +116,7 @@ export const PLANS: Record<PlanId, Plan> = {
   // ───────────── 번들 (ClinicFlix: 블로그 + 영상 + 멀티채널) ─────────────
   growth8_standard: {
     id: 'growth8_standard',
-    name: '그로스8+스탠다드',
+    name: '올인원 그로스',
     category: 'bundle',
     price: 499000,
     trialPrice: 249500, // 6월 한정 첫 달 50% 할인 (499,000 → 249,500)
@@ -135,7 +135,7 @@ export const PLANS: Record<PlanId, Plan> = {
   },
   pro12_pro: {
     id: 'pro12_pro',
-    name: '프로12+프로',
+    name: '올인원 프로',
     category: 'bundle',
     price: 699000,
     trialPrice: 349500, // 6월 한정 첫 달 50% 할인 (699,000 → 349,500)
@@ -188,6 +188,68 @@ export function firstMonthAmount(plan: Plan, now: Date = new Date()): number {
 
 export function getPlan(id: PlanId): Plan {
   return PLANS[id]
+}
+
+// ─────────────────────────────────────────────────────────────
+// 업그레이드 (마이페이지 인앱 플랜 상향)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 허용된 업그레이드 경로 맵 (명시적 화이트리스트).
+ * 키 = 현재 플랜, 값 = 업그레이드 가능한 상위 플랜 목록.
+ * 여기에 없는 경로(동일 플랜·다운그레이드 포함)는 업그레이드가 아니다.
+ */
+const ALLOWED_UPGRADES: Record<PlanId, PlanId[]> = {
+  basic: ['standard', 'pro', 'growth8_standard', 'pro12_pro'],
+  standard: ['growth8_standard', 'pro12_pro'],
+  pro: ['pro12_pro'],
+  growth8_standard: ['pro12_pro'],
+  pro12_pro: [],
+}
+
+/** from → to 가 허용된 업그레이드 경로인지 여부 (동일·다운그레이드는 false). */
+export function isUpgrade(from: PlanId, to: PlanId): boolean {
+  if (from === to) return false
+  return (ALLOWED_UPGRADES[from] ?? []).includes(to)
+}
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 즉시 업그레이드 시 청구할 일할(prorated) 차액 (KRW, 0 이상 정수).
+ *
+ *  charge = round((to.price − from.price) × daysRemaining / cycleDays)
+ *
+ * - cycleDays    = round((cycleEnd − cycleStart)/일), 최소 1, 유효하지 않으면 30 fallback
+ * - daysRemaining = clamp(ceil((cycleEnd − now)/일), 0, cycleDays)
+ * - 음수면 0 으로 절삭한다 (다운그레이드 방어).
+ */
+export function proratedUpgradeCharge(
+  from: Plan,
+  to: Plan,
+  now: Date,
+  cycleStart: Date,
+  cycleEnd: Date,
+): number {
+  const startMs = cycleStart.getTime()
+  const endMs = cycleEnd.getTime()
+  const nowMs = now.getTime()
+
+  let cycleDays: number
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    cycleDays = 30
+  } else {
+    cycleDays = Math.max(1, Math.round((endMs - startMs) / ONE_DAY_MS))
+  }
+
+  let daysRemaining: number
+  if (!Number.isFinite(endMs) || !Number.isFinite(nowMs)) {
+    daysRemaining = cycleDays
+  } else {
+    daysRemaining = Math.min(cycleDays, Math.max(0, Math.ceil((endMs - nowMs) / ONE_DAY_MS)))
+  }
+
+  return Math.max(0, Math.round(((to.price - from.price) * daysRemaining) / cycleDays))
 }
 
 /**
