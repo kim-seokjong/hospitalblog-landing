@@ -9,6 +9,7 @@ import type { User } from '@supabase/supabase-js';
 import AuthModal from '@/hr/components/AuthModal';
 import { PLANS } from '@/payment/lib/plans';
 import ClinicflixSection from '@/components/landing/ClinicflixSection';
+import PromoCountdown from '@/payment/components/PromoCountdown';
 
 export default function LandingPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -401,9 +402,21 @@ export default function LandingPage() {
           <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             합리적인 요금제
           </h2>
-          <p className="text-center text-[#4a4f55] mt-3 mb-10 sm:mb-12 text-base">
+          <p className="text-center text-[#4a4f55] mt-3 mb-6 text-base">
             병원 규모에 맞게 선택하세요<br />언제든지 변경 가능합니다.
           </p>
+
+          {/* 6월 한정 프로모 배너 + 마감 카운트다운 */}
+          <div className="mx-auto max-w-2xl bg-green-50 border border-green-200 rounded-2xl px-4 py-4 mb-10 sm:mb-12 text-center">
+            <p className="text-base sm:text-lg text-green-700 font-bold">
+              🎉 6월 한정 — 스탠다드 첫 달 0원 / 프로·올인원 번들 첫 달 50% 할인
+            </p>
+            <p className="text-xs sm:text-sm text-green-600 mt-1.5">
+              둘째 달부터 매월 자동결제 · 7월부터 정상가
+            </p>
+            <PromoCountdown />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-start">
             {[
               {
