@@ -4,6 +4,8 @@
 // 기존 모달(MultichannelConverter)에서 추출. /app/multichannel 페이지가 유일한 소비자다.
 // raw JSON 덤프 대신 채널별 포맷터로 사람이 읽기 좋게 렌더한다. (internal image_prompt 숨김)
 
+import type { PlanEdits } from '@/content/lib/clinicflix-client';
+
 export const CHANNEL_LABELS: Record<string, string> = {
   shorts: '쇼츠 영상',
   cardnews: '카드뉴스',
@@ -125,6 +127,260 @@ export function planToCopyText(kind: PlanKind, value: unknown): string {
     return [str(o.caption), asStrArr(o.hashtags).join(' ')].filter(Boolean).join('\n\n');
   }
   return '';
+}
+
+// ── 검수1 편집(EditablePlan) ────────────────────────────────────────
+// 채널별 텍스트만 편집 가능한 드래프트. (internal image_prompt/영문 필드는 노출하지 않는다)
+export interface EditableDraft {
+  shorts: { scenes: { narration: string; caption: string }[] };
+  cardnews: { slides: { headline: string; body: string }[]; caption: string };
+  threads: { posts: string[] };
+  feed: { caption: string };
+  story: { frames: { text: string }[] };
+  // 어떤 채널이 기획에 존재하는지 (없으면 카드 자체를 숨김)
+  present: Record<PlanKind, boolean>;
+}
+
+/** job.plan 으로부터 편집 드래프트 초기화. 존재하지 않는 채널은 present=false. */
+export function buildDraft(plan: {
+  shorts?: unknown; cardnews?: unknown; threads?: unknown; feed?: unknown; story?: unknown;
+} | null | undefined): EditableDraft {
+  const shortsO = asRec(plan?.shorts);
+  const cardnewsO = asRec(plan?.cardnews);
+  const threadsO = asRec(plan?.threads);
+  const feedO = asRec(plan?.feed);
+  const storyO = asRec(plan?.story);
+  return {
+    shorts: {
+      scenes: asRecArr(shortsO.scenes).map((s) => ({
+        narration: str(s.narration),
+        caption: str(s.caption),
+      })),
+    },
+    cardnews: {
+      slides: asRecArr(cardnewsO.slides).map((s) => ({
+        headline: str(s.headline),
+        body: str(s.body),
+      })),
+      caption: str(cardnewsO.caption),
+    },
+    threads: { posts: asStrArr(threadsO.posts) },
+    feed: { caption: str(feedO.caption) },
+    story: { frames: asRecArr(storyO.frames).map((f) => ({ text: str(f.text) })) },
+    present: {
+      shorts: plan?.shorts != null,
+      cardnews: plan?.cardnews != null,
+      threads: plan?.threads != null,
+      feed: plan?.feed != null,
+      story: plan?.story != null,
+    },
+  };
+}
+
+/** 편집 드래프트 → 서비스 계약(PlanEdits) 직렬화. 존재하는 채널만 포함한다. */
+export function draftToEdits(d: EditableDraft): PlanEdits {
+  const edits: PlanEdits = {};
+  if (d.present.shorts) {
+    edits.shorts = {
+      scenes: d.shorts.scenes.map((s) => ({ narration: s.narration, caption: s.caption })),
+    };
+  }
+  if (d.present.cardnews) {
+    edits.cardnews = {
+      slides: d.cardnews.slides.map((s) => ({ headline: s.headline, body: s.body })),
+      caption: d.cardnews.caption,
+    };
+  }
+  if (d.present.threads) {
+    edits.threads = { posts: [...d.threads.posts] };
+  }
+  if (d.present.feed) {
+    edits.feed = { caption: d.feed.caption };
+  }
+  if (d.present.story) {
+    edits.story = { frames: d.story.frames.map((f) => ({ text: f.text })) };
+  }
+  return edits;
+}
+
+const editLabel = 'block text-xs font-semibold text-[#5b6573]';
+const editInput =
+  'w-full rounded-lg border border-[#b4bfce] bg-white px-3 py-2 text-sm text-[#202020] focus:border-[#ff4628] focus:outline-none focus:ring-1 focus:ring-[#ff4628]';
+const editTextarea = `${editInput} resize-y leading-relaxed`;
+
+function EditCard({
+  title, onReset, children,
+}: { title: string; onReset?: () => void; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-[#b4bfce] bg-white p-4 sm:p-5 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm sm:text-base font-bold text-[#202020]">{title}</p>
+        {onReset && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-xs text-[#73808f] hover:text-[#ff4628] underline underline-offset-2 transition-colors shrink-0"
+          >
+            원래대로
+          </button>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 검수1 — 채널별 텍스트 인라인 편집기.
+ * draft 를 controlled 로 받아 onChange(next) 로 상위 상태를 갱신한다.
+ * original 은 채널별 "원래대로" 리셋용.
+ */
+export function EditablePlan({
+  draft, original, onChange,
+}: {
+  draft: EditableDraft;
+  original: EditableDraft;
+  onChange: (next: EditableDraft) => void;
+}) {
+  function resetChannel<K extends keyof EditableDraft>(key: K) {
+    onChange({ ...draft, [key]: original[key] });
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* 🎬 쇼츠 */}
+      {draft.present.shorts && (
+        <EditCard title="🎬 쇼츠 영상 (컷별 내레이션·자막)" onReset={() => resetChannel('shorts')}>
+          {draft.shorts.scenes.map((s, i) => (
+            <div key={i} className="space-y-1.5 border-b border-[#eef2f6] pb-3 last:border-0 last:pb-0">
+              <p className="text-xs font-semibold text-[#ff4628]">컷 {i + 1}</p>
+              <div className="space-y-1">
+                <label className={editLabel}>내레이션</label>
+                <textarea
+                  className={editTextarea}
+                  rows={2}
+                  value={s.narration}
+                  onChange={(e) => {
+                    const scenes = draft.shorts.scenes.map((x, j) => (j === i ? { ...x, narration: e.target.value } : x));
+                    onChange({ ...draft, shorts: { scenes } });
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className={editLabel}>자막</label>
+                <input
+                  className={editInput}
+                  value={s.caption}
+                  onChange={(e) => {
+                    const scenes = draft.shorts.scenes.map((x, j) => (j === i ? { ...x, caption: e.target.value } : x));
+                    onChange({ ...draft, shorts: { scenes } });
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </EditCard>
+      )}
+
+      {/* 🖼️ 카드뉴스 */}
+      {draft.present.cardnews && (
+        <EditCard title="🖼️ 카드뉴스 (슬라이드)" onReset={() => resetChannel('cardnews')}>
+          {draft.cardnews.slides.map((s, i) => (
+            <div key={i} className="space-y-1.5 border-b border-[#eef2f6] pb-3 last:border-0 last:pb-0">
+              <p className="text-xs font-semibold text-[#ff4628]">슬라이드 {i + 1}</p>
+              <div className="space-y-1">
+                <label className={editLabel}>헤드라인</label>
+                <input
+                  className={editInput}
+                  value={s.headline}
+                  onChange={(e) => {
+                    const slides = draft.cardnews.slides.map((x, j) => (j === i ? { ...x, headline: e.target.value } : x));
+                    onChange({ ...draft, cardnews: { ...draft.cardnews, slides } });
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className={editLabel}>본문</label>
+                <textarea
+                  className={editTextarea}
+                  rows={2}
+                  value={s.body}
+                  onChange={(e) => {
+                    const slides = draft.cardnews.slides.map((x, j) => (j === i ? { ...x, body: e.target.value } : x));
+                    onChange({ ...draft, cardnews: { ...draft.cardnews, slides } });
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+          <div className="space-y-1">
+            <label className={editLabel}>캡션 (선택)</label>
+            <textarea
+              className={editTextarea}
+              rows={2}
+              value={draft.cardnews.caption}
+              onChange={(e) => onChange({ ...draft, cardnews: { ...draft.cardnews, caption: e.target.value } })}
+            />
+          </div>
+        </EditCard>
+      )}
+
+      {/* 🧵 쓰레드 */}
+      {draft.present.threads && (
+        <EditCard title="🧵 쓰레드" onReset={() => resetChannel('threads')}>
+          {draft.threads.posts.map((p, i) => (
+            <div key={i} className="space-y-1">
+              <label className={editLabel}>{i + 1}번째 글</label>
+              <textarea
+                className={editTextarea}
+                rows={3}
+                value={p}
+                onChange={(e) => {
+                  const posts = draft.threads.posts.map((x, j) => (j === i ? e.target.value : x));
+                  onChange({ ...draft, threads: { posts } });
+                }}
+              />
+            </div>
+          ))}
+        </EditCard>
+      )}
+
+      {/* 📰 인스타 피드 */}
+      {draft.present.feed && (
+        <EditCard title="📰 인스타 피드" onReset={() => resetChannel('feed')}>
+          <div className="space-y-1">
+            <label className={editLabel}>캡션</label>
+            <textarea
+              className={editTextarea}
+              rows={5}
+              value={draft.feed.caption}
+              onChange={(e) => onChange({ ...draft, feed: { caption: e.target.value } })}
+            />
+          </div>
+        </EditCard>
+      )}
+
+      {/* 📱 스토리 */}
+      {draft.present.story && (
+        <EditCard title="📱 스토리" onReset={() => resetChannel('story')}>
+          {draft.story.frames.map((f, i) => (
+            <div key={i} className="space-y-1">
+              <label className={editLabel}>프레임 {i + 1}</label>
+              <textarea
+                className={editTextarea}
+                rows={2}
+                value={f.text}
+                onChange={(e) => {
+                  const frames = draft.story.frames.map((x, j) => (j === i ? { text: e.target.value } : x));
+                  onChange({ ...draft, story: { frames } });
+                }}
+              />
+            </div>
+          ))}
+        </EditCard>
+      )}
+    </div>
+  );
 }
 
 // 결과(검수2) 묶음 카드

@@ -14,12 +14,15 @@ import {
 } from '@/content/lib/clinicflix-client';
 import {
   CHANNEL_LABELS,
-  PlanBlock,
+  EditablePlan,
+  buildDraft,
+  draftToEdits,
   Section,
   TextSection,
   ImageCarousel,
   DownloadLink,
   isPlayableUrl,
+  type EditableDraft,
 } from '@/content/components/multichannel-views';
 
 type Stage = 'loading' | 'idle' | 'planning' | 'review1' | 'approving' | 'rendering' | 'done' | 'failed';
@@ -31,6 +34,9 @@ export default function MultichannelPage() {
   const [blogText, setBlogText] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>('loading');
   const [job, setJob] = useState<ClinicflixJobView | null>(null);
+  // 검수1 채널별 편집 드래프트 (기획 도착 시 1회 초기화) + 리셋용 원본
+  const [draft, setDraft] = useState<EditableDraft | null>(null);
+  const draftOriginalRef = useRef<EditableDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [upgrade, setUpgrade] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -75,6 +81,9 @@ export default function MultichannelPage() {
         setStage('failed');
         return;
       }
+      const initialDraft = buildDraft(planned.plan);
+      draftOriginalRef.current = initialDraft;
+      setDraft(initialDraft);
       setStage('review1');
     } catch (e) {
       if (e instanceof UpgradeRequiredError) {
@@ -95,7 +104,8 @@ export default function MultichannelPage() {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      await approveJob(job.job_id);
+      const edits = draft ? draftToEdits(draft) : undefined;
+      await approveJob(job.job_id, edits);
       setStage('rendering');
       const done = await pollUntil(
         job.job_id,
@@ -120,6 +130,8 @@ export default function MultichannelPage() {
     setError(null);
     setUpgrade(false);
     setJob(null);
+    setDraft(null);
+    draftOriginalRef.current = null;
     if (blogText) {
       void runPlanning(blogText);
     } else {
@@ -222,11 +234,14 @@ export default function MultichannelPage() {
           </div>
         )}
 
-        {/* 검수1 · 채널별 기획안 */}
-        {stage === 'review1' && job && (
+        {/* 검수1 · 채널별 기획안 (인라인 편집) */}
+        {stage === 'review1' && job && draft && (
           <div className="space-y-5">
             <div className="space-y-2">
-              <p className="text-base font-bold text-[#202020]">검수 1 · 채널별 기획안</p>
+              <p className="text-base font-bold text-[#202020]">검수 1 · 채널별 기획안 편집</p>
+              <p className="text-sm text-[#5b6573] leading-relaxed">
+                생성하기 전에 채널별 문구를 직접 고칠 수 있어요. 수정한 내용이 그대로 제작에 반영됩니다.
+              </p>
               <div className="flex flex-wrap gap-2">
                 {planChannels.map((c) => (
                   <span key={c} className="px-3 py-1 rounded-full bg-[#ff4628]/10 text-[#ff4628] text-xs font-semibold">
@@ -236,13 +251,11 @@ export default function MultichannelPage() {
               </div>
             </div>
 
-            <div className="space-y-4">
-              <PlanBlock kind="shorts" label="🎬 쇼츠 영상 (컷별 내레이션·자막)" value={job.plan?.shorts} />
-              <PlanBlock kind="cardnews" label="🖼️ 카드뉴스 (슬라이드)" value={job.plan?.cardnews} />
-              <PlanBlock kind="threads" label="🧵 쓰레드" value={job.plan?.threads} />
-              <PlanBlock kind="feed" label="📰 인스타 피드" value={job.plan?.feed} />
-              <PlanBlock kind="story" label="📱 스토리" value={job.plan?.story} />
-            </div>
+            <EditablePlan
+              draft={draft}
+              original={draftOriginalRef.current ?? draft}
+              onChange={setDraft}
+            />
 
             {typeof job.cost_krw === 'number' && (
               <p className="text-sm text-[#73808f]">예상 비용: 약 {job.cost_krw.toLocaleString()}원</p>

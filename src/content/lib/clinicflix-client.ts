@@ -31,6 +31,19 @@ export interface ConvertResult {
   status: ClinicflixJobStatus
 }
 
+/**
+ * 승인 시 함께 보내는 채널별 텍스트 수정안 (모두 선택적).
+ * 인덱스 정렬: scenes[i]/slides[i]/frames[i] 는 원본 기획 순서에 매핑된다.
+ * 서버 전용 clinicflix.ts 의 ClinicflixPlanEdits 와 동일한 형태(브라우저 번들 분리 위해 재선언).
+ */
+export interface PlanEdits {
+  shorts?: { scenes?: { narration?: string; caption?: string }[] }
+  cardnews?: { slides?: { headline?: string; body?: string }[]; caption?: string }
+  threads?: { posts?: string[] }
+  feed?: { caption?: string }
+  story?: { frames?: { text?: string }[] }
+}
+
 async function parseError(res: Response): Promise<string> {
   try {
     const data = await res.json()
@@ -74,11 +87,13 @@ export async function fetchJob(jobId: string): Promise<ClinicflixJobView> {
   return res.json()
 }
 
-export async function approveJob(jobId: string): Promise<void> {
+/** 승인하고 렌더 시작. edits 가 있으면 채널별 수정안을 함께 전달한다(없으면 기존처럼 {}). */
+export async function approveJob(jobId: string, edits?: PlanEdits): Promise<void> {
+  const hasEdits = edits != null && Object.keys(edits).length > 0
   const res = await fetch(`/api/clinicflix/jobs/${encodeURIComponent(jobId)}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify(hasEdits ? { edits } : {}),
   })
   if (!res.ok) {
     throw new Error(await parseError(res))

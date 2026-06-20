@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { clinicflixApprove, ClinicflixUnavailableError } from '@/content/lib/clinicflix'
+import { clinicflixApprove, ClinicflixUnavailableError, type ClinicflixPlanEdits } from '@/content/lib/clinicflix'
 import { getConversionByJobId, commitUsage } from '@/content/lib/clinicflix-usage'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +29,7 @@ function getSupabase() {
  *   - 멱등이므로 approve 가 실패해 사용자가 다시 눌러도 중복 차감되지 않는다.
  */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { jobId: string } },
 ) {
   try {
@@ -44,6 +44,17 @@ export async function POST(
     const jobId = params.jobId
     if (!jobId) {
       return NextResponse.json({ error: '잘못된 요청입니다' }, { status: 400 })
+    }
+
+    // ── 채널별 텍스트 수정안(선택) 파싱 (없으면 undefined → 기존 동작 유지) ──
+    let edits: ClinicflixPlanEdits | undefined
+    try {
+      const body = (await req.json()) as { edits?: ClinicflixPlanEdits } | null
+      if (body?.edits && typeof body.edits === 'object') {
+        edits = body.edits
+      }
+    } catch {
+      // 본문 없음/비JSON → edits 미적용 (기존 동작)
     }
 
     const mapping = await getConversionByJobId(jobId)
@@ -65,7 +76,7 @@ export async function POST(
 
     // ── ClinicFlix approve 프록시 ──
     try {
-      await clinicflixApprove(jobId)
+      await clinicflixApprove(jobId, edits)
     } catch (e) {
       // 이미 차감은 멱등이므로 재시도 시 중복되지 않는다.
       if (e instanceof ClinicflixUnavailableError) {

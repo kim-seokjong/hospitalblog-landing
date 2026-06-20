@@ -54,6 +54,19 @@ export interface ClinicflixJobAssets {
   shorts_video_path?: string | null
 }
 
+/**
+ * 승인 시 함께 보내는 채널별 텍스트 수정안 (모두 선택적).
+ * 인덱스 정렬: scenes[i]/slides[i]/frames[i] 는 원본 기획 순서에 매핑된다.
+ * 비우거나 생략하면 원본을 유지한다.
+ */
+export interface ClinicflixPlanEdits {
+  shorts?: { scenes?: { narration?: string; caption?: string }[] }
+  cardnews?: { slides?: { headline?: string; body?: string }[]; caption?: string }
+  threads?: { posts?: string[] }
+  feed?: { caption?: string }
+  story?: { frames?: { text?: string }[] }
+}
+
 export interface ClinicflixJob {
   job_id: string
   conversion_id: string
@@ -147,10 +160,15 @@ export async function clinicflixGetJob(jobId: string): Promise<ClinicflixJob> {
   })
 }
 
-export async function clinicflixApprove(jobId: string): Promise<{ ok: boolean }> {
+export async function clinicflixApprove(
+  jobId: string,
+  edits?: ClinicflixPlanEdits,
+): Promise<{ ok: boolean }> {
+  // edits 가 없거나 빈 객체면 {} 를 보낸다(기존 동작 유지). 있으면 { edits } 로 전달.
+  const hasEdits = edits != null && Object.keys(edits).length > 0
   await callClinicflix<unknown>(`/jobs/${encodeURIComponent(jobId)}/approve`, {
     method: 'POST',
-    body: JSON.stringify({}),
+    body: JSON.stringify(hasEdits ? { edits } : {}),
   })
   return { ok: true }
 }
