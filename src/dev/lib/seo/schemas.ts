@@ -40,7 +40,9 @@ export function buildOrganizationJsonLd(): JsonLdData {
 
 /** 닥터포스트 SoftwareApplication 스키마 (랜딩용) */
 export function buildSoftwareApplicationJsonLd(): JsonLdData {
-  const prices = Object.values(PLANS).map((plan) => plan.price)
+  // 공개(비숨김) 플랜만 SEO 가격 범위에 반영 — 레거시 basic 제외
+  const publicPlans = Object.values(PLANS).filter((plan) => !plan.hidden)
+  const prices = publicPlans.map((plan) => plan.price)
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -56,7 +58,7 @@ export function buildSoftwareApplicationJsonLd(): JsonLdData {
       priceCurrency: 'KRW',
       lowPrice: Math.min(...prices),
       highPrice: Math.max(...prices),
-      offerCount: Object.keys(PLANS).length,
+      offerCount: publicPlans.length,
       url: `${SITE_URL}/pricing`,
     },
     provider: {
@@ -95,9 +97,9 @@ export function buildPricingJsonLd(): JsonLdData {
     '@type': 'Product',
     name: `${SITE_NAME} 구독`,
     description:
-      '병원 블로그 콘텐츠 자동 생성 월 구독 서비스. 베이직·스탠다드·프로 요금제 제공.',
+      '병원 블로그·영상·멀티채널 콘텐츠 자동 생성 월 구독 서비스. 스탠다드·프로 및 번들 요금제 제공.',
     brand: { '@type': 'Brand', name: SITE_NAME },
-    offers: Object.values(PLANS).map((plan) => ({
+    offers: Object.values(PLANS).filter((plan) => !plan.hidden).map((plan) => ({
       '@type': 'Offer',
       name: `${plan.name} 플랜`,
       price: plan.price,

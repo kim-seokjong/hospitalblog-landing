@@ -8,6 +8,12 @@ interface Props {
   showPromo?: boolean
 }
 
+/** 분리 한도(-1=무제한, 0=미포함)를 한국어 표기로 변환 */
+function formatLimit(value: number, unit: string): string {
+  if (value === -1) return '무제한'
+  return `${value}${unit}`
+}
+
 export default function PlanCard({
   plan,
   currentPlan,
@@ -90,6 +96,31 @@ export default function PlanCard({
           </div>
           <p className="text-xs text-[#5b6573] mb-5">매월 자동결제</p>
         </>
+      )}
+
+      {/* 분리 한도 요약 (블로그/영상/채널) */}
+      <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-[#f6f8fb] border border-[#e3e9f0] p-2.5 text-center">
+        <div>
+          <p className="text-[10px] text-[#5b6573]">블로그</p>
+          <p className="text-sm font-bold text-[#202020]">{formatLimit(plan.limits.blog, '건')}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-[#5b6573]">영상</p>
+          <p className={`text-sm font-bold ${plan.limits.video === 0 ? 'text-[#b4bfce]' : 'text-[#202020]'}`}>
+            {plan.limits.video === 0 ? '–' : formatLimit(plan.limits.video, '건')}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] text-[#5b6573]">채널</p>
+          <p className={`text-sm font-bold ${plan.limits.channels === 0 ? 'text-[#b4bfce]' : 'text-[#202020]'}`}>
+            {plan.limits.channels === 0 ? '–' : formatLimit(plan.limits.channels, '건')}
+          </p>
+        </div>
+      </div>
+      {plan.fairUseCap != null && (
+        <p className="-mt-2 mb-4 text-[11px] text-[#5b6573]">
+          채널 무제한은 공정사용 정책(월 {plan.fairUseCap}세트)이 적용됩니다.
+        </p>
       )}
 
       <ul className="flex-1 space-y-2 mb-6">

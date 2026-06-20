@@ -64,7 +64,7 @@ export async function GET() {
     if (isAdmin(user.email)) {
       monthlyLimit = -1;
     } else if (isPaidPlanId(profile.plan)) {
-      monthlyLimit = PLANS[profile.plan].usageLimit;
+      monthlyLimit = PLANS[profile.plan].limits.blog;
     }
 
     const planName = isPaidPlanId(profile.plan) ? PLANS[profile.plan].name : null;

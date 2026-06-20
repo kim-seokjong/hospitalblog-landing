@@ -3,7 +3,14 @@
 import { Fragment, useMemo, useState } from 'react';
 import type { MemberRow, PlanType } from '@/types/admin';
 
-type FilterKey = 'all' | 'basic' | 'standard' | 'pro' | 'expired';
+type FilterKey =
+  | 'all'
+  | 'basic'
+  | 'standard'
+  | 'pro'
+  | 'growth8_standard'
+  | 'pro12_pro'
+  | 'expired';
 
 interface MemberTableProps {
   members: MemberRow[];
@@ -11,9 +18,11 @@ interface MemberTableProps {
 
 const PLAN_LABEL: Record<PlanType, string> = {
   free: '무료',
-  basic: '베이직',
+  basic: '베이직', // 레거시
   standard: '스탠다드',
   pro: '프로',
+  growth8_standard: '그로스8+스탠다드',
+  pro12_pro: '프로12+프로',
 };
 
 const PLAN_BADGE: Record<PlanType, string> = {
@@ -21,6 +30,8 @@ const PLAN_BADGE: Record<PlanType, string> = {
   basic: 'bg-blue-50 text-blue-600',
   standard: 'bg-violet-50 text-violet-600',
   pro: 'bg-emerald-50 text-emerald-700',
+  growth8_standard: 'bg-amber-50 text-amber-700',
+  pro12_pro: 'bg-rose-50 text-rose-700',
 };
 
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -28,6 +39,8 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'basic', label: '베이직' },
   { key: 'standard', label: '스탠다드' },
   { key: 'pro', label: '프로' },
+  { key: 'growth8_standard', label: '그로스8+스탠다드' },
+  { key: 'pro12_pro', label: '프로12+프로' },
   { key: 'expired', label: '만료' },
 ];
 

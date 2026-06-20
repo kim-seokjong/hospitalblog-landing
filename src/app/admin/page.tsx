@@ -24,6 +24,8 @@ const PLAN_PRICES: Record<PlanType, number> = {
   basic: 19900,
   standard: 49000,
   pro: 119000,
+  growth8_standard: 499000,
+  pro12_pro: 699000,
 };
 
 const REGION_GOALS: { region: string; target: number }[] = [
@@ -115,6 +117,8 @@ function buildDashboardData(
     basic: 0,
     standard: 0,
     pro: 0,
+    growth8_standard: 0,
+    pro12_pro: 0,
   };
   for (const p of activeProfiles) {
     if (p.plan && p.plan !== 'free') {
@@ -123,7 +127,7 @@ function buildDashboardData(
     }
   }
   const planDist: PlanDistribution[] = (
-    ['basic', 'standard', 'pro'] as PlanType[]
+    ['basic', 'standard', 'pro', 'growth8_standard', 'pro12_pro'] as PlanType[]
   ).map((plan) => ({ plan, count: planCountMap[plan] }));
 
   // ----- 진료과별 (활성만) -----

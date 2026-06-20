@@ -1,4 +1,11 @@
-export type PlanType = 'free' | 'basic' | 'standard' | 'pro';
+// 'basic' 은 레거시(신규 판매 중단)이나 기존 구독자 집계를 위해 유지한다.
+export type PlanType =
+  | 'free'
+  | 'basic'
+  | 'standard'
+  | 'pro'
+  | 'growth8_standard'
+  | 'pro12_pro';
 
 export interface ProfileRow {
   id: string;

@@ -19,10 +19,10 @@ export async function checkAndCreateUsageWarning(
   const plan = PLANS[profile.plan];
   if (!plan) return;
 
-  // pro 플랜(-1)은 무제한이므로 알림 없음
-  if (plan.usageLimit === -1) return;
+  // 블로그 무제한(-1) 플랜은 알림 없음 (limits.blog === usageLimit deprecated 별칭)
+  if (plan.limits.blog === -1) return;
 
-  const limit = plan.usageLimit;
+  const limit = plan.limits.blog;
   const usageCount: number = profile.usage_count ?? 0;
   const usagePercent = usageCount / limit;
 

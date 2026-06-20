@@ -32,7 +32,7 @@ export async function GET() {
       plan: planInfo ? planInfo.id : null,
       planName: planInfo ? planInfo.name : null,
       price: planInfo ? planInfo.price : null,
-      usageLimit: planInfo ? planInfo.usageLimit : null,
+      usageLimit: planInfo ? planInfo.limits.blog : null, // 블로그 월 한도
       planExpiresAt: profile?.plan_expires_at ?? null,
       isActive: isActivePlan(plan, profile?.plan_expires_at ?? null),
       autoRenew,

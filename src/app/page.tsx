@@ -8,6 +8,7 @@ import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import AuthModal from '@/hr/components/AuthModal';
 import { PLANS } from '@/payment/lib/plans';
+import ClinicflixSection from '@/components/landing/ClinicflixSection';
 
 export default function LandingPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -102,6 +103,7 @@ export default function LandingPage() {
           <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-[#4a4f55]">
             <a href="#features" className="hover:text-[#ff4628] transition-colors">기능</a>
             <a href="#how" className="hover:text-[#ff4628] transition-colors">사용법</a>
+            <a href="#clinicflix" className="hover:text-[#ff4628] transition-colors">클리닉픽스</a>
             <a href="#pricing" className="hover:text-[#ff4628] transition-colors">요금제</a>
           </nav>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -389,6 +391,9 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* 클리닉픽스 멀티채널 쇼케이스 (상세페이지 수준) */}
+      <ClinicflixSection onCtaClick={handlePricingClick} />
+
       {/* 요금 섹션 */}
       <section id="pricing" className="py-16 sm:py-[84px] bg-white">
         <div className="max-w-4xl mx-auto px-5 sm:px-6">
@@ -399,21 +404,26 @@ export default function LandingPage() {
           <p className="text-center text-[#4a4f55] mt-3 mb-10 sm:mb-12 text-base">
             병원 규모에 맞게 선택하세요<br />언제든지 변경 가능합니다.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-start">
             {[
               {
-                plan: PLANS.basic, desc: "블로그 자동 작성 시작",
-                features: ["AI 블로그 작성 월 10건", "SEO 분석", "네이버 트렌드"],
-                highlight: false,
-              },
-              {
-                plan: PLANS.standard, desc: "이미지까지 한번에",
+                plan: PLANS.standard, desc: "블로그 + 이미지",
                 features: ["AI 블로그 작성 월 20건", "카드뉴스·이미지 자동 생성", "독창성 검사", "의료광고법 검수"],
                 highlight: true,
               },
               {
-                plan: PLANS.pro, desc: "모든 기능 무제한",
+                plan: PLANS.pro, desc: "블로그 무제한",
                 features: ["AI 블로그 작성 무제한", "이미지 생성 무제한", "독창성 검사 무제한", "의료광고법 검수", "우선 고객 지원"],
+                highlight: false,
+              },
+              {
+                plan: PLANS.growth8_standard, desc: "블로그+영상+멀티채널",
+                features: ["AI 블로그 월 20건", "AI 영상 월 8건", "멀티채널 세트 월 20건", "카드뉴스·이미지 자동 생성", "의료광고법 검수"],
+                highlight: false,
+              },
+              {
+                plan: PLANS.pro12_pro, desc: "올인원 무제한",
+                features: ["AI 블로그 무제한", "AI 영상 월 12건", "멀티채널 세트 무제한 (공정사용 월 60세트)", "이미지 생성 무제한", "우선 고객 지원"],
                 highlight: false,
               },
             ].map(({ plan, desc, features, highlight }) => {

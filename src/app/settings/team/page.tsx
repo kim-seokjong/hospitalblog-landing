@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
+import { PAID_PLAN_IDS } from '@/payment/lib/plans';
 
 type MemberRole = 'admin' | 'member';
 type MemberStatus = 'pending' | 'active';
@@ -43,7 +44,8 @@ const PLAN_LIMIT_INFO = [
   { plan: '프로', limit: '무제한' },
 ];
 
-const PAID_PLANS = ['basic', 'standard', 'pro'];
+// 레거시 basic 포함 모든 유료 플랜(번들 포함) — plans.ts 단일 소스 재사용
+const PAID_PLANS: string[] = PAID_PLAN_IDS;
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-';

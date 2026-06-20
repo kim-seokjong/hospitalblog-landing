@@ -100,8 +100,18 @@ export async function checkAndConsumeUsage(): Promise<UsageGuardResult> {
       }
     }
 
-    monthlyLimit = PLANS[profile.plan].usageLimit
+    // 블로그(본문) 월 한도. plan.limits.blog 와 동일(usageLimit 는 deprecated 별칭).
+    monthlyLimit = PLANS[profile.plan].limits.blog
   }
+
+  // TODO(clinicflix-integration): 번들 플랜(growth8_standard / pro12_pro)의 영상·채널
+  // 사용량은 별도 카운터로 enforce 해야 한다. ClinicFlix 생성 파이프라인이 아직
+  // 없으므로 여기서는 블로그 한도만 검사한다. 연동 시:
+  //   - plan.limits.video      (월 영상 생성 한도, -1=무제한)
+  //   - plan.limits.channels   (월 멀티채널 세트 한도, -1=무제한)
+  //   - plan.fairUseCap        (채널 무제한 플랜의 공정사용 소프트캡)
+  // 을 각각 별도 consume_usage 류 RPC(예: consume_video_usage / consume_channel_usage)로
+  // 원자적 체크+증가하도록 추가한다.
 
   const { data, error } = await admin.rpc('consume_usage', {
     p_user_id: user.id,

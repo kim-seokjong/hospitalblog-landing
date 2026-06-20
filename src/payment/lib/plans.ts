@@ -1,30 +1,89 @@
-export type PlanId = 'basic' | 'standard' | 'pro'
+// 플랜 정의 (단일 소스). 결제·사용량 가드·마이페이지·관리자·SEO 가 모두 참조한다.
+//
+// 플랜 구조 (2026-06 개편):
+//   [블로그 전용 — DoctorPost]
+//     standard  스탠다드  ₩199,000  블로그 20 + 이미지
+//     pro       프로      ₩399,000  블로그 무제한 (첫 달 ₩199,000)
+//   [번들 — ClinicFlix (블로그 + 영상 + 멀티채널)]
+//     growth8_standard  그로스8+스탠다드  ₩499,000  블로그 20 / 영상 8 / 채널 20
+//     pro12_pro         프로12+프로       ₩699,000  블로그 무제한 / 영상 12 / 채널 무제한(공정사용 소프트캡 60)
+//   [레거시 — 공개 비노출]
+//     basic     베이직    ₩99,000   블로그 10  ← 신규 판매 중단(아래 LEGACY 주석 참조)
+
+export type PlanId =
+  | 'basic' // LEGACY (hidden)
+  | 'standard'
+  | 'pro'
+  | 'growth8_standard'
+  | 'pro12_pro'
+
+export type PlanCategory = 'blog' | 'bundle'
+
+/**
+ * 분리된 사용 한도.
+ *  -1 = 무제한, 0 = 미포함
+ *   blog     월 블로그(AI 본문) 생성 건수
+ *   video    월 영상 생성 건수      (ClinicFlix 연동 전까지 enforce 미구현)
+ *   channels 월 멀티채널 세트 건수  (쓰레드·카드뉴스·인스타·스토리 등)
+ */
+export interface PlanLimits {
+  blog: number
+  video: number
+  channels: number
+}
 
 export interface Plan {
   id: PlanId
   name: string
-  price: number        // KRW 월 구독료
-  trialPrice?: number  // 첫 달 적용 가격, KRW (미설정 시 0원 무료)
-  usageLimit: number   // 월 AI 생성 건수 (-1 = 무제한)
+  category: PlanCategory
+  price: number // KRW 월 구독료
+  trialPrice?: number // 첫 달 적용 가격, KRW (미설정 시 0원 무료)
+  limits: PlanLimits
+  /**
+   * 채널 무제한 플랜의 월간 공정사용(fair-use) 소프트캡 (세트 기준).
+   * limits.channels === -1 인 플랜에만 의미가 있다. 하드 차단이 아닌 안내/모니터링용.
+   */
+  fairUseCap?: number
+  /**
+   * @deprecated 하위호환 별칭. 항상 limits.blog 와 동일하게 설정한다.
+   * 기존 코드(usage-guard, mypage, notification-service 등)가 `plan.usageLimit`(월 블로그 한도)
+   * 을 참조하므로 제거하지 않는다. 신규 코드는 limits.blog 를 직접 사용할 것.
+   */
+  usageLimit: number
   features: string[]
   recommended?: boolean
+  /** 공개 요금제(PricingSection)에 노출하지 않는 레거시/숨김 플랜 */
+  hidden?: boolean
 }
 
 export const PLANS: Record<PlanId, Plan> = {
+  // ──────────────────────────────────────────────────────────────
+  // LEGACY: 베이직은 신규 공개 판매를 중단했다(2026-06 개편).
+  // 기존 베이직 구독자(grandfathered)의 사용량/결제 enforce 를 위해 정의는 유지한다.
+  // PricingSection 등 공개 UI 에는 hidden:true 로 노출하지 않는다.
+  // DB profiles.plan / payments.plan 의 'basic' 행은 계속 유효해야 한다.
+  // ──────────────────────────────────────────────────────────────
   basic: {
     id: 'basic',
     name: '베이직',
+    category: 'blog',
     price: 99000,
     trialPrice: 0,
-    usageLimit: 10,
+    limits: { blog: 10, video: 0, channels: 0 },
+    usageLimit: 10, // = limits.blog (deprecated alias)
     features: ['AI 블로그 월 10건', 'SEO 분석', '네이버 검색 트렌드'],
+    hidden: true,
   },
+
+  // ───────────── 블로그 전용 (DoctorPost) ─────────────
   standard: {
     id: 'standard',
     name: '스탠다드',
+    category: 'blog',
     price: 199000,
     trialPrice: 0,
-    usageLimit: 20,
+    limits: { blog: 20, video: 0, channels: 0 },
+    usageLimit: 20, // = limits.blog
     features: [
       'AI 블로그 월 20건',
       '이미지 생성 (실사/카드뉴스)',
@@ -38,11 +97,55 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: 'pro',
     name: '프로',
+    category: 'blog',
     price: 399000,
     trialPrice: 199000,
-    usageLimit: -1,
+    limits: { blog: -1, video: 0, channels: 0 },
+    usageLimit: -1, // = limits.blog
     features: [
-      '전 기능 무제한',
+      'AI 블로그 무제한',
+      '이미지 생성 (실사/카드뉴스)',
+      '독창성 검사',
+      '의료광고법 검수',
+      'SEO 분석',
+      '네이버 검색 트렌드',
+      '우선 고객 지원',
+    ],
+  },
+
+  // ───────────── 번들 (ClinicFlix: 블로그 + 영상 + 멀티채널) ─────────────
+  growth8_standard: {
+    id: 'growth8_standard',
+    name: '그로스8+스탠다드',
+    category: 'bundle',
+    price: 499000,
+    trialPrice: 0,
+    limits: { blog: 20, video: 8, channels: 20 },
+    usageLimit: 20, // = limits.blog
+    features: [
+      'AI 블로그 월 20건',
+      'AI 영상 월 8건',
+      '멀티채널 세트 월 20건 (쓰레드·카드뉴스·인스타·스토리)',
+      '이미지 생성 (실사/카드뉴스)',
+      '독창성 검사',
+      '의료광고법 검수',
+      'SEO 분석',
+      '네이버 검색 트렌드',
+    ],
+  },
+  pro12_pro: {
+    id: 'pro12_pro',
+    name: '프로12+프로',
+    category: 'bundle',
+    price: 699000,
+    trialPrice: 0,
+    limits: { blog: -1, video: 12, channels: -1 },
+    fairUseCap: 60, // 채널 무제한 공정사용 소프트캡 (월 60세트)
+    usageLimit: -1, // = limits.blog
+    features: [
+      'AI 블로그 무제한',
+      'AI 영상 월 12건',
+      '멀티채널 세트 무제한 (공정사용 월 60세트)',
       '이미지 생성 (실사/카드뉴스)',
       '독창성 검사',
       '의료광고법 검수',
@@ -53,17 +156,34 @@ export const PLANS: Record<PlanId, Plan> = {
   },
 }
 
-export const PAID_PLAN_IDS: PlanId[] = ['basic', 'standard', 'pro']
+/**
+ * 유효한 유료 플랜 ID 전체 (레거시 basic 포함).
+ * 결제 검증·사용량 가드·정기결제 cron 이 참조한다. basic 구독자 enforce 를 위해 포함한다.
+ */
+export const PAID_PLAN_IDS: PlanId[] = [
+  'basic', // LEGACY: 신규 판매 중단, 기존 구독자 enforce 위해 유지
+  'standard',
+  'pro',
+  'growth8_standard',
+  'pro12_pro',
+]
+
+/**
+ * 공개 요금제(PricingSection / 랜딩)에 노출할 플랜 ID.
+ * 레거시 basic 은 제외한다.
+ */
+export const PUBLIC_PLAN_IDS: PlanId[] = ['standard', 'pro', 'growth8_standard', 'pro12_pro']
 
 export function getPlan(id: PlanId): Plan {
   return PLANS[id]
 }
 
 /**
- * 유효한 유료 플랜 ID인지 검사 (DB legacy 'free' / null 차단용)
+ * 유효한 유료 플랜 ID인지 검사 (DB legacy 'free' / null 차단용).
+ * 레거시 basic 도 유효한 유료 플랜으로 취급한다(기존 구독자 enforce).
  */
 export function isPaidPlanId(value: string | null | undefined): value is PlanId {
-  return value === 'basic' || value === 'standard' || value === 'pro'
+  return value != null && (PAID_PLAN_IDS as string[]).includes(value)
 }
 
 /**
