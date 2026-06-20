@@ -84,6 +84,31 @@ function MyPageContent() {
           </div>
         </div>
 
+        {/* 품질 안내 — 정보를 채울수록 결과물 퀄리티가 올라간다 */}
+        <div className="mb-5 rounded-xl border border-[#ff4628]/30 bg-[#ffece7] px-4 py-3.5">
+          <p className="text-sm font-semibold text-[#202020] flex items-center gap-1.5">
+            <span aria-hidden>✨</span> 정보를 채울수록 콘텐츠 퀄리티가 올라갑니다
+          </p>
+          <p className="text-xs text-[#5b6573] leading-relaxed mt-1.5">
+            {(['profile', 'brandkit', 'photos'] as const).map((t, i) => (
+              <span key={t}>
+                {i > 0 && <span className="mx-1 text-[#b4bfce]">·</span>}
+                <button
+                  type="button"
+                  onClick={() => handleTabChange(t)}
+                  className="text-[#ff4628] font-medium underline underline-offset-2 hover:text-[#e63a1c]"
+                >
+                  {t === 'profile' ? '내 정보' : t === 'brandkit' ? '콘텐츠 설정' : '사진 보관함'}
+                </button>
+              </span>
+            ))}
+            <span>
+              을 꼼꼼히 채워주세요. 로고 · 원장님 사진 · 병원 사진이 많을수록 더 우리 병원다운 영상과
+              카드뉴스가 만들어집니다.
+            </span>
+          </p>
+        </div>
+
         {/* 탭 */}
         <MyPageTabs active={activeTab} onChange={handleTabChange} />
 

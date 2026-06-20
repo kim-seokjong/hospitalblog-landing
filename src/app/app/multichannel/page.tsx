@@ -267,6 +267,21 @@ export default function MultichannelPage() {
               <p className="text-sm text-[#ff4628] font-medium">채널을 1개 이상 선택해 주세요.</p>
             )}
 
+            {/* 품질 안내 — 마이페이지 정보를 채울수록 결과물 퀄리티가 올라간다 */}
+            <div className="rounded-xl border border-[#ff4628]/30 bg-[#ffece7] px-4 py-3">
+              <p className="text-sm text-[#202020] leading-relaxed">
+                <span className="font-semibold">✨ 마이페이지 정보를 채울수록 퀄리티가 올라갑니다.</span>
+                <br />
+                로고 · 원장님 사진 · 병원 사진을 등록하면 더 우리 병원다운 영상 · 카드뉴스가 만들어져요.
+              </p>
+              <Link
+                href="/mypage?tab=brandkit"
+                className="inline-block mt-2 text-sm font-semibold text-[#ff4628] underline underline-offset-2 hover:text-[#e63a1c]"
+              >
+                마이페이지에서 채우기 →
+              </Link>
+            </div>
+
             <button
               type="button"
               disabled={selected.length === 0}
@@ -308,7 +323,7 @@ export default function MultichannelPage() {
             <div className="space-y-2">
               <p className="text-base font-bold text-[#202020]">검수 1 · 채널별 기획안 편집</p>
               <p className="text-sm text-[#5b6573] leading-relaxed">
-                생성하기 전에 채널별 문구를 직접 고칠 수 있어요. 수정한 내용이 그대로 제작에 반영됩니다.
+                생성하기 전에 채널별 문구를 직접 고칠 수 있어요. 특히 <span className="font-semibold text-[#202020]">🎬 영상 대본(컷별 내레이션)과 자막</span>을 우리 병원 멘트로 직접 작성·수정하면 그대로 영상에 반영됩니다.
               </p>
               <div className="flex flex-wrap gap-2">
                 {planChannels.map((c) => (

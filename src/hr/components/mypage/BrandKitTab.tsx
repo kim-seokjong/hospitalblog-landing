@@ -312,15 +312,15 @@ export default function BrandKitTab() {
           </div>
         </Section>
 
-        {/* 4. 원장 미디어 */}
-        <Section title="원장 미디어 (선택)">
-          <Field label="원장 사진">
+        {/* 4. 원장님 미디어 */}
+        <Section title="원장님 미디어 (선택)">
+          <Field label="원장님 사진">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               {brand.doctor_photo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={brand.doctor_photo_url}
-                  alt="원장 사진 미리보기"
+                  alt="원장님 사진 미리보기"
                   className="h-20 w-20 object-cover rounded-lg border border-[#b4bfce] bg-white"
                 />
               ) : (
@@ -359,7 +359,7 @@ export default function BrandKitTab() {
             </p>
           </Field>
 
-          <Field label="원장 영상 (선택)">
+          <Field label="원장님 영상 (선택)">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               {brand.doctor_video_url ? (
                 <video
