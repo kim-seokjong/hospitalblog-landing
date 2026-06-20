@@ -13,6 +13,7 @@ import ContentPreview from '@/content/components/ContentPreview';
 import ImageGallery from '@/content/components/ImageGallery';
 import CardNewsDesigner from '@/content/components/CardNewsDesigner';
 import TagPanel from '@/content/components/TagPanel';
+import MultichannelConverter from '@/content/components/MultichannelConverter';
 import NaverPublisher from '@/publish/components/NaverPublisher';
 import AuthModal from '@/hr/components/AuthModal';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode, TargetSite } from '@/types';
@@ -209,6 +210,8 @@ export default function AppPage() {
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 복원할 초안 (마운트 시 localStorage에서 감지)
   const [draftToRestore, setDraftToRestore] = useState<DraftData | null>(null);
+  // 멀티채널 변환 모달 (ClinicFlix)
+  const [showConverter, setShowConverter] = useState(false);
   // 복사 시 보관함 자동 저장: 첫 복사 후 글 id 보관 → 재복사는 PATCH로 갱신 (중복 insert 방지)
   const savedPostIdRef = useRef<string | null>(null);
   // 연속 복사 시 POST 중복 실행 방지용 직렬화 큐
@@ -988,6 +991,19 @@ export default function AppPage() {
                       <span className="text-emerald-700 group-hover:translate-x-1 transition-transform text-base font-extrabold">→ <span className="text-[10px] font-medium opacity-80">(새 창)</span></span>
                     </button>
 
+                    {/* 멀티채널 변환 (ClinicFlix) — 로그인 회원에게 노출. 영상 쿼터 없으면 업그레이드 모달 */}
+                    {user && content && (
+                      <button
+                        type="button"
+                        onClick={() => setShowConverter(true)}
+                        className="w-full py-3.5 sm:py-4 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm sm:text-base font-bold transition-colors flex items-center justify-center gap-2"
+                      >
+                        <span className="text-lg">🎬</span>
+                        <span>멀티채널로 변환</span>
+                        <span className="text-[10px] sm:text-[11px] font-medium opacity-90 hidden sm:inline">(영상 · 카드뉴스 · 스토리 · 쓰레드 · 피드)</span>
+                      </button>
+                    )}
+
                     {tags && (
                       <TagPanel
                         tags={tags}
@@ -1055,6 +1071,18 @@ export default function AppPage() {
       </footer>
 
       <ContactFloatingButton />
+
+      {showConverter && content && (
+        <MultichannelConverter
+          blogText={`${content.title}\n\n${content.body}`}
+          canConvert={
+            !!userPlan &&
+            isPaidPlanId(userPlan.plan) &&
+            (PLANS[userPlan.plan].limits.video ?? 0) !== 0
+          }
+          onClose={() => setShowConverter(false)}
+        />
+      )}
     </div>
   );
 }
