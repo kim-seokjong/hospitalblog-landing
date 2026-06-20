@@ -119,7 +119,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: '그로스8+스탠다드',
     category: 'bundle',
     price: 499000,
-    trialPrice: 0,
+    trialPrice: 249500, // 6월 한정 첫 달 50% 할인 (499,000 → 249,500)
     limits: { blog: 20, video: 8, channels: 20 },
     usageLimit: 20, // = limits.blog
     features: [
@@ -138,7 +138,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: '프로12+프로',
     category: 'bundle',
     price: 699000,
-    trialPrice: 0,
+    trialPrice: 349500, // 6월 한정 첫 달 50% 할인 (699,000 → 349,500)
     limits: { blog: -1, video: 12, channels: -1 },
     fairUseCap: 60, // 채널 무제한 공정사용 소프트캡 (월 60세트)
     usageLimit: -1, // = limits.blog
@@ -173,6 +173,18 @@ export const PAID_PLAN_IDS: PlanId[] = [
  * 레거시 basic 은 제외한다.
  */
 export const PUBLIC_PLAN_IDS: PlanId[] = ['standard', 'pro', 'growth8_standard', 'pro12_pro']
+
+/**
+ * 첫 달 프로모션 종료 시각 (KST, 한정 프로모션 종료 시각).
+ * 이 시각 이후로는 전 플랜이 첫 달부터 정상가(plan.price)로 결제된다.
+ */
+export const FIRST_MONTH_PROMO_UNTIL = '2026-06-30T23:59:59+09:00'
+
+/** 신규 가입자의 첫 달 결제액(KRW). 0이면 무료. 프로모 종료 후엔 정상가(plan.price). */
+export function firstMonthAmount(plan: Plan, now: Date = new Date()): number {
+  if (now.getTime() > new Date(FIRST_MONTH_PROMO_UNTIL).getTime()) return plan.price
+  return plan.trialPrice ?? 0
+}
 
 export function getPlan(id: PlanId): Plan {
   return PLANS[id]

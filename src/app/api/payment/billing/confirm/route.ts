@@ -11,7 +11,7 @@ import {
   hasAnyBillingKeyHistory,
   markPaymentTrialActivated,
 } from '@/payment/lib/repository'
-import { PLANS } from '@/payment/lib/plans'
+import { PLANS, firstMonthAmount } from '@/payment/lib/plans'
 import type { PlanId } from '@/payment/lib/plans'
 import { sendCAPIEvent } from '@/dev/lib/meta-capi'
 import { headers } from 'next/headers'
@@ -88,18 +88,24 @@ export async function POST(req: NextRequest) {
     let chargeResult: Awaited<ReturnType<typeof chargeWithBillingKey>> | null = null
 
     if (isTrialEligible) {
-      // 신규 가입자: 첫 달 가격은 plan.trialPrice 로 결정
-      //  - trialAmount === 0 (베이직/스탠다드): 0원 무료 체험 (PortOne 호출 없음)
-      //  - trialAmount  > 0 (프로): 첫 달 50% 할인가 실제 결제, 둘째 달부터 정상가
-      const trialAmount = plan.trialPrice ?? 0
+      // 신규 가입자: 첫 달 가격은 firstMonthAmount(plan) 로 결정
+      //  - trialAmount === 0 (베이직/스탠다드, 6월 한정): 0원 무료 체험 (PortOne 호출 없음)
+      //  - trialAmount  > 0 (프로·번들 50% 할인, 또는 프로모 종료 후 전 플랜 정상가): 실제 결제
+      //  - 프로모(2026-06-30 KST) 종료 후: trialAmount === plan.price → 첫 달부터 정상가 결제
+      const trialAmount = firstMonthAmount(plan)
+      // 정상가보다 낮을 때만 '할인' 라벨을 쓴다 (프로모 종료 후 오해 방지)
+      const isFirstMonthDiscounted = trialAmount < plan.price
+      const orderName = isFirstMonthDiscounted
+        ? `닥터포스트 ${plan.name} 플랜 1개월 (첫 달 50% 할인)`
+        : `닥터포스트 ${plan.name} 플랜 1개월`
 
       if (trialAmount > 0) {
-        // 프로: 첫 달 50% 할인가 실제 결제 (기존 회원 분기와 동일 패턴)
+        // 프로·번들: 첫 달 할인가 / 프로모 종료 후: 정상가 실제 결제 (기존 회원 분기와 동일 패턴)
         try {
           chargeResult = await chargeWithBillingKey({
             paymentId,
             billingKey,
-            orderName: `닥터포스트 ${plan.name} 플랜 1개월 (첫 달 50% 할인)`,
+            orderName,
             amount: trialAmount,
             customerId,
             customerEmail: user.email ?? '',

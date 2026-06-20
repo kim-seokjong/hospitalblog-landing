@@ -229,13 +229,13 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
               </>
             ) : (
               <>
-                {/* 첫 달 0원 무료 체험 안내 */}
+                {/* 6월 한정 첫 달 혜택 안내 */}
                 <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-lg px-4 py-2.5">
                   <p className="text-sm font-bold text-emerald-700">
-                    🎁 첫 달 0원 무료 체험
+                    🎁 6월 한정 첫 달 혜택
                   </p>
                   <p className="text-[11px] text-emerald-700/80 mt-1 leading-relaxed">
-                    가입 후 30일 동안 무료 이용 · <strong>30일 후부터</strong> 선택한 플랜 금액으로 매월 자동결제됩니다. 무료 기간 중 해지 시 청구 없이 즉시 종료.
+                    스탠다드 첫 달 0원 · 프로·클리닉픽스 번들 첫 달 50% 할인 · <strong>둘째 달부터</strong> 정상가 매월 자동결제. 무료/할인 기간 중 해지 시 청구 없이 즉시 종료. <strong>7월부터 정상가로 전환됩니다.</strong>
                   </p>
                 </div>
 

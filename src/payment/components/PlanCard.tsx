@@ -41,7 +41,7 @@ export default function PlanCard({
 
       {showPromo && (
         <div className="mt-3 mb-1 inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-full self-start">
-          {isDiscountPlan ? '🎁 첫 달 50% 할인' : '🎁 첫 달 무료'}
+          {isDiscountPlan ? '🎁 6월 한정 첫 달 50% 할인' : '🎁 6월 한정 첫 달 무료'}
         </div>
       )}
 

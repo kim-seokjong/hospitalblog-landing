@@ -239,6 +239,12 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
                     <span className="text-[#202020] text-sm font-bold">원</span>
                     <span className="text-[#8a93a0] text-xs sm:text-sm">/ 월</span>
                   </p>
+                  {plan.trialPrice != null && plan.trialPrice < plan.price && (
+                    <p className="mb-1 text-xs sm:text-sm font-bold" style={{ color: ACCENT }}>
+                      🎁 6월 한정 첫 달 50% 할인 {plan.trialPrice.toLocaleString('ko-KR')}원
+                      <span className="ml-1 font-medium text-[#8a93a0]">· 7월부터 정상가</span>
+                    </p>
+                  )}
                   <ul className="space-y-2.5 my-5 flex-1">
                     {bundle.features.map((f) => (
                       <li key={f} className="flex items-start gap-2 text-sm text-[#4a4f55]">

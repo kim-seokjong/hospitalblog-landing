@@ -37,10 +37,10 @@ export default function PricingSection() {
 
         <div className="mx-auto max-w-2xl bg-green-50 border border-green-200 rounded-xl px-4 py-3.5 mb-4 text-center">
           <p className="text-base sm:text-lg text-green-700 font-bold">
-            🎉 스탠다드·번들 첫 달 0원 · 프로 첫 달 50% 할인
+            🎉 6월 한정 — 스탠다드 첫 달 0원 / 프로·클리닉픽스 번들 첫 달 50% 할인
           </p>
           <p className="text-xs sm:text-sm text-green-600 mt-1.5">
-            지금 시작하면 첫 달 혜택 · <strong>둘째 달부터</strong> 매월 자동결제
+            지금 시작하면 첫 달 혜택 · <strong>둘째 달부터</strong> 매월 자동결제 · 7월부터 정상가
           </p>
         </div>
 
@@ -49,7 +49,7 @@ export default function PricingSection() {
             🔒 둘째 달부터 매월 자동결제 · 언제든 해지 가능
           </p>
           <p className="text-xs text-[#4a4f55] mt-1">
-            스탠다드·번들은 첫 달 0원, 프로는 첫 달 50% 할인가가 청구되며, 둘째 달부터 매월 같은 날 정상가로 자동 청구됩니다. 결제 7일 전 안내 메일을 보내드립니다.
+            6월 한정으로 스탠다드는 첫 달 0원, 프로·클리닉픽스 번들은 첫 달 50% 할인가가 청구되며, 둘째 달부터 매월 같은 날 정상가로 자동 청구됩니다. 7월부터는 전 플랜이 첫 달부터 정상가로 청구됩니다. 결제 7일 전 안내 메일을 보내드립니다.
           </p>
         </div>
 
@@ -107,7 +107,7 @@ export default function PricingSection() {
             />
             <span className="text-sm leading-relaxed text-[#4a4f55]">
               <strong className="text-[#202020]">
-                첫 달 혜택(스탠다드·번들 0원 / 프로 50% 할인), 둘째 달부터 매월 자동결제
+                첫 달 혜택(6월 한정 — 스탠다드 0원 / 프로·번들 50% 할인), 둘째 달부터 매월 자동결제
               </strong>에 동의하며,{' '}
               <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-[#ff4628] underline hover:text-[#e63a1c]">이용약관</a>
               {', '}
