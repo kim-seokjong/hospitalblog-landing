@@ -408,7 +408,7 @@ export default function LandingPage() {
 
           {/* 6월 한정 프로모 배너 + 마감 카운트다운 (검정 + 빛나는 황금색) */}
           <div className="mx-auto max-w-2xl bg-gradient-to-b from-[#1f1f1f] to-[#0c0c0c] border border-[#d4af37]/45 rounded-2xl px-4 py-5 mb-10 sm:mb-12 text-center shadow-[0_0_34px_-10px_rgba(212,175,55,0.55)]">
-            <p className="text-lg sm:text-xl font-extrabold bg-gradient-to-r from-[#f4dd82] via-[#fff7d6] to-[#dcb84c] bg-clip-text text-transparent drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
+            <p className="text-lg sm:text-xl font-extrabold shine-gold drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
               🎉 6월 한정 — 스탠다드 첫 달 0원 / 프로·올인원 번들 첫 달 50% 할인
             </p>
             <p className="text-xs sm:text-sm text-[#d9c690] mt-1.5">
