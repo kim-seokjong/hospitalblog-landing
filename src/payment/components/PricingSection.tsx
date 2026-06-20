@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback } from 'react'
 import { PLANS } from '@/payment/lib/plans'
 import PlanCard from './PlanCard'
+import PromoCountdown from './PromoCountdown'
 
 export default function PricingSection() {
   const [agreed, setAgreed] = useState(false)
@@ -42,6 +43,7 @@ export default function PricingSection() {
           <p className="text-xs sm:text-sm text-green-600 mt-1.5">
             지금 시작하면 첫 달 혜택 · <strong>둘째 달부터</strong> 매월 자동결제 · 7월부터 정상가
           </p>
+          <PromoCountdown />
         </div>
 
         <div className="mx-auto max-w-2xl bg-[#ffece7] border border-[#ff4628]/30 rounded-xl px-4 py-3 mb-8 text-center">
