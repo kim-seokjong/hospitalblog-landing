@@ -3,6 +3,24 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/dev/lib/supabase/client';
 import { trackEvent } from '@/dev/lib/meta-pixel';
+import { getIdentityChannelKey } from '@/hr/lib/identity-channel';
+
+// 본인인증 시도마다 고유한 식별자 생성(포트원 identityVerificationId).
+function makeIdentityVerificationId(): string {
+  const rand =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `idv_${rand}`;
+}
+
+// 010XXXXXXXX → 010-XXXX-XXXX 표기(본인인증 결과는 숫자만 내려옴).
+function formatPhone(raw: string): string {
+  const d = raw.replace(/\D/g, '');
+  if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  return raw;
+}
 
 interface AuthModalProps {
   onClose: () => void;
@@ -44,6 +62,11 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
 
+  // 휴대폰 본인인증 상태
+  const [identityVerificationId, setIdentityVerificationId] = useState('');
+  const [identityVerified, setIdentityVerified] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -62,7 +85,73 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     setHospitalName(''); setHospitalAddress(''); setPosition('');
     setHospitalType(''); setConfirmPassword('');
     setAgreeTerms(false); setAgreePrivacy(false);
+    setIdentityVerificationId(''); setIdentityVerified(false); setVerifying(false);
     setError(''); setMessage('');
+  };
+
+  // 휴대폰 본인인증 — 포트원 SDK 호출 → 서버 검증 → 성함/연락처 자동완성 + 잠금.
+  const handleIdentityVerify = async () => {
+    setError(''); setMessage('');
+
+    if (!window.PortOne || typeof window.PortOne.requestIdentityVerification !== 'function') {
+      setError('본인인증 모듈이 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도해주세요.');
+      return;
+    }
+
+    const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID;
+    if (!storeId) { setError('본인인증 설정 오류가 발생했습니다.'); return; }
+
+    let channelKey: string;
+    try {
+      channelKey = getIdentityChannelKey();
+    } catch {
+      setError('본인인증 설정 오류가 발생했습니다.');
+      return;
+    }
+
+    setVerifying(true);
+    try {
+      const newId = makeIdentityVerificationId();
+      const result = await window.PortOne.requestIdentityVerification({
+        storeId,
+        identityVerificationId: newId,
+        channelKey,
+      });
+
+      // code 가 있으면 실패/취소. 사용자가 인증창을 닫은 경우도 여기로 들어온다.
+      if (result.code) {
+        setError(result.message ?? '본인인증이 취소되었습니다.');
+        setVerifying(false);
+        return;
+      }
+
+      const verifyId = result.identityVerificationId ?? newId;
+
+      // 서버에서 포트원 결과 재검증 + DI 중복가입 차단.
+      const res = await fetch('/api/auth/identity-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identityVerificationId: verifyId }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setError((data && typeof data.error === 'string') ? data.error : '본인인증에 실패했습니다.');
+        setVerifying(false);
+        return;
+      }
+
+      // 검증된 성함/연락처로 자동완성 + 읽기전용 처리.
+      setFullName(typeof data?.name === 'string' ? data.name : '');
+      setPhone(typeof data?.phoneNumber === 'string' ? formatPhone(data.phoneNumber) : '');
+      setIdentityVerificationId(verifyId);
+      setIdentityVerified(true);
+      setMessage('✅ 본인인증이 완료되었습니다.');
+    } catch {
+      setError('본인인증 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const handleLogin = async () => {
@@ -85,7 +174,10 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
   };
 
   const handleSignup = async () => {
-    if (!fullName || !phone || !hospitalName || !position || !hospitalType) {
+    if (!identityVerified || !identityVerificationId) {
+      setError('휴대폰 본인인증을 먼저 완료해주세요.'); return;
+    }
+    if (!hospitalName || !position || !hospitalType) {
       setError('필수 항목을 모두 입력해주세요.'); return;
     }
     if (!email) { setError('이메일을 입력해주세요.'); return; }
@@ -128,7 +220,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     const registerRes = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, fullName, phone, hospitalName, hospitalAddress, position, hospitalType }),
+      body: JSON.stringify({ userId, identityVerificationId, hospitalName, hospitalAddress, position, hospitalType }),
     });
 
     if (!registerRes.ok) {
@@ -157,6 +249,8 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
   };
 
   const inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white !text-gray-900 placeholder:!text-gray-400 caret-blue-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500';
+  // 본인인증으로 잠긴 읽기전용 입력 — 흰글자 회귀 방지를 위해 !text-gray-900 유지(연한 회색 배경).
+  const readonlyInputClass = 'w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-100 !text-gray-900 cursor-not-allowed focus:outline-none';
   const labelClass = 'text-xs font-bold !text-gray-900';
   const requiredMark = <span className="text-red-500 ml-0.5">*</span>;
 
@@ -244,18 +338,42 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
                   병원 관계자 확인을 위한 정보를 입력해주세요. <span className="text-red-500">*</span> 표시는 필수 항목입니다.
                 </div>
 
-                {/* 성함 */}
+                {/* 휴대폰 본인인증 */}
+                <div className="space-y-2">
+                  <label className={labelClass}>휴대폰 본인인증{requiredMark}</label>
+                  {identityVerified ? (
+                    <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
+                      <span className="text-emerald-600 text-sm font-bold">✅ 본인인증 완료</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleIdentityVerify}
+                      disabled={verifying}
+                      className="w-full py-2.5 border border-blue-600 text-blue-600 font-bold rounded-lg text-sm bg-white hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {verifying ? '본인인증 진행 중...' : '📱 휴대폰 본인인증 하기'}
+                    </button>
+                  )}
+                  {!identityVerified && (
+                    <p className="text-[10px] text-gray-400">본인인증 후 성함·연락처가 자동 입력됩니다.</p>
+                  )}
+                </div>
+
+                {/* 성함 (본인인증 결과로 자동완성·읽기전용) */}
                 <div className="space-y-2">
                   <label className={labelClass}>성함{requiredMark}</label>
                   <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
-                    placeholder="홍길동" className={inputClass} />
+                    placeholder="본인인증 후 자동 입력" readOnly={identityVerified}
+                    className={identityVerified ? readonlyInputClass : inputClass} />
                 </div>
 
-                {/* 연락처 */}
+                {/* 연락처 (본인인증 결과로 자동완성·읽기전용) */}
                 <div className="space-y-2">
                   <label className={labelClass}>연락처{requiredMark}</label>
                   <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-                    placeholder="010-0000-0000" className={inputClass} />
+                    placeholder="본인인증 후 자동 입력" readOnly={identityVerified}
+                    className={identityVerified ? readonlyInputClass : inputClass} />
                 </div>
 
                 {/* 병원명 + 직책 */}
@@ -364,10 +482,14 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
           {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
           {message && <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg">{message}</p>}
 
+          {mode === 'signup' && !identityVerified && (
+            <p className="text-[11px] text-gray-400 text-center">휴대폰 본인인증 완료 후 가입 신청이 가능합니다.</p>
+          )}
+
           <button
             onClick={mode === 'login' ? handleLogin : handleSignup}
-            disabled={loading}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold rounded-xl text-sm transition-colors"
+            disabled={loading || (mode === 'signup' && !identityVerified)}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors"
           >
             {loading ? '처리 중...' : mode === 'login' ? '로그인' : '가입 신청하기'}
           </button>
