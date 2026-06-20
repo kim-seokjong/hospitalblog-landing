@@ -15,6 +15,7 @@ import {
   checkQuota,
   recordConversion,
 } from '@/content/lib/clinicflix-usage'
+import { isAdmin } from '@/hr/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,26 +62,33 @@ export async function POST(req: NextRequest) {
       ? body.channels.filter((c: unknown): c is string => typeof c === 'string')
       : undefined
 
+    const userIsAdmin = isAdmin(user.email)
     const profile = await getProfile(user.id)
     const planId = profile?.plan as PlanId | undefined
-    if (!planId || !PLANS[planId]) {
-      return NextResponse.json(
-        { error: '구독 플랜을 확인할 수 없습니다' },
-        { status: 400 },
-      )
+    const usageMonth = currentUsageMonth()
+
+    // 관리자는 플랜·쿼터 무관하게 전부 사용 가능(무제한). 그 외에만 플랜/한도 검사.
+    if (!userIsAdmin) {
+      if (!planId || !PLANS[planId]) {
+        return NextResponse.json(
+          { error: '구독 플랜을 확인할 수 없습니다' },
+          { status: 400 },
+        )
+      }
+      const usage = await getMonthlyUsage(user.id, usageMonth)
+      const quota = checkQuota(planId, usage)
+      if (!quota.ok) {
+        // 블로그 전용 플랜 → 업그레이드 유도(403)
+        if (quota.reason === 'upgrade_required') {
+          return NextResponse.json({ error: 'upgrade_required', message: quota.message }, { status: 403 })
+        }
+        // 월간 한도 소진 → 429
+        return NextResponse.json({ error: quota.reason, message: quota.message }, { status: 429 })
+      }
     }
 
-    const usageMonth = currentUsageMonth()
-    const usage = await getMonthlyUsage(user.id, usageMonth)
-    const quota = checkQuota(planId, usage)
-    if (!quota.ok) {
-      // 블로그 전용 플랜 → 업그레이드 유도(403)
-      if (quota.reason === 'upgrade_required') {
-        return NextResponse.json({ error: 'upgrade_required', message: quota.message }, { status: 403 })
-      }
-      // 월간 한도 소진 → 429
-      return NextResponse.json({ error: quota.reason, message: quota.message }, { status: 429 })
-    }
+    // 매핑/기록용 플랜값 (관리자가 플랜 없을 수 있으므로 폴백)
+    const effectivePlan: PlanId = planId && PLANS[planId] ? planId : 'pro12_pro'
 
     // ── brand 구성 (프로필 기반, MVP: 사진/로고/원장 미디어는 비움) ──
     const hospitalName =
@@ -120,7 +128,7 @@ export async function POST(req: NextRequest) {
         conversionId,
         userId: user.id,
         jobId: convertRes.job_id,
-        plan: planId,
+        plan: effectivePlan,
         usageMonth,
         status: convertRes.status,
       })

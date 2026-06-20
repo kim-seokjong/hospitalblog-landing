@@ -991,19 +991,6 @@ export default function AppPage() {
                       <span className="text-emerald-700 group-hover:translate-x-1 transition-transform text-base font-extrabold">→ <span className="text-[10px] font-medium opacity-80">(새 창)</span></span>
                     </button>
 
-                    {/* 멀티채널 변환 (ClinicFlix) — 로그인 회원에게 노출. 영상 쿼터 없으면 업그레이드 모달 */}
-                    {user && content && (
-                      <button
-                        type="button"
-                        onClick={() => setShowConverter(true)}
-                        className="w-full py-3.5 sm:py-4 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm sm:text-base font-bold transition-colors flex items-center justify-center gap-2"
-                      >
-                        <span className="text-lg">🎬</span>
-                        <span>멀티채널로 변환</span>
-                        <span className="text-[10px] sm:text-[11px] font-medium opacity-90 hidden sm:inline">(영상 · 카드뉴스 · 스토리 · 쓰레드 · 피드)</span>
-                      </button>
-                    )}
-
                     {tags && (
                       <TagPanel
                         tags={tags}
@@ -1037,6 +1024,19 @@ export default function AppPage() {
                         imageStyle={imageStyle}
                         onBodyCopied={handleContentCopied}
                       />
+                    )}
+
+                    {/* 멀티채널 생성 (ClinicFlix) — 맨 아래 배치. 영상 쿼터 없으면 업그레이드 모달 (관리자는 무제한) */}
+                    {user && content && (
+                      <button
+                        type="button"
+                        onClick={() => setShowConverter(true)}
+                        className="w-full py-3.5 sm:py-4 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm sm:text-base font-bold transition-colors flex items-center justify-center gap-2"
+                      >
+                        <span className="text-lg">🎬</span>
+                        <span>멀티채널 생성하기</span>
+                        <span className="text-[10px] sm:text-[11px] font-medium opacity-90 hidden sm:inline">(영상 · 카드뉴스 · 스토리 · 쓰레드 · 피드)</span>
+                      </button>
                     )}
 
                     {!user && authChecked && (
@@ -1076,9 +1076,10 @@ export default function AppPage() {
         <MultichannelConverter
           blogText={`${content.title}\n\n${content.body}`}
           canConvert={
-            !!userPlan &&
-            isPaidPlanId(userPlan.plan) &&
-            (PLANS[userPlan.plan].limits.video ?? 0) !== 0
+            isClientAdmin(user?.email) ||
+            (!!userPlan &&
+              isPaidPlanId(userPlan.plan) &&
+              (PLANS[userPlan.plan].limits.video ?? 0) !== 0)
           }
           onClose={() => setShowConverter(false)}
         />

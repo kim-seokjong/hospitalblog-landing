@@ -117,7 +117,7 @@ export default function MultichannelConverter({ blogText, canConvert, onClose }:
   // ── 업그레이드 모달 ──
   if (upgrade) {
     return (
-      <Shell onClose={onClose} title="🎬 멀티채널로 변환">
+      <Shell onClose={onClose} title="🎬 멀티채널 생성하기">
         <div className="text-center py-6 space-y-4">
           <div className="text-4xl">🚀</div>
           <p className="text-sm sm:text-base font-bold text-[#202020]">
@@ -141,7 +141,7 @@ export default function MultichannelConverter({ blogText, canConvert, onClose }:
   const planChannels = job?.plan?.channels ?? [];
 
   return (
-    <Shell onClose={onClose} title="🎬 멀티채널로 변환">
+    <Shell onClose={onClose} title="🎬 멀티채널 생성하기">
       {/* 안내 */}
       <p className="text-[11px] text-[#73808f] mb-4 leading-relaxed">
         블로그 본문을 영상(쇼츠)·카드뉴스·스토리·쓰레드·인스타 피드로 제작합니다.
