@@ -31,6 +31,10 @@ function getSupabase() {
 const BRAND_COLOR_DEFAULT = '#ff4628'
 const MAX_BLOG_TEXT = 20_000
 
+// 서비스가 받는 채널 식별자. shorts = 영상, 나머지 4개 = 멀티채널 세트.
+const ALL_CHANNELS = ['shorts', 'cardnews', 'threads', 'feed', 'story'] as const
+const NON_VIDEO_CHANNELS = ['cardnews', 'threads', 'feed', 'story'] as const
+
 /**
  * POST /api/clinicflix/convert
  * body: { blog_text: string, channels?: string[] }
@@ -58,9 +62,22 @@ export async function POST(req: NextRequest) {
     if (blogText.length > MAX_BLOG_TEXT) {
       return NextResponse.json({ error: '본문이 너무 깁니다' }, { status: 400 })
     }
-    const channels: string[] | undefined = Array.isArray(body?.channels)
+    // 선택된 채널. 누락/빈 배열이면 전체 5개로 취급한다.
+    const rawChannels: string[] = Array.isArray(body?.channels)
       ? body.channels.filter((c: unknown): c is string => typeof c === 'string')
-      : undefined
+      : []
+    const requested = rawChannels.filter((c) => (ALL_CHANNELS as readonly string[]).includes(c))
+    const channels: string[] = requested.length > 0 ? requested : [...ALL_CHANNELS]
+
+    // 차감 대상 도출: shorts → 영상 1, 비영상 채널 1개 이상 → 멀티채널 세트 1
+    const needVideo = channels.includes('shorts')
+    const needChannel = channels.some((c) => (NON_VIDEO_CHANNELS as readonly string[]).includes(c))
+    if (!needVideo && !needChannel) {
+      return NextResponse.json(
+        { error: '생성할 채널을 1개 이상 선택해 주세요' },
+        { status: 400 },
+      )
+    }
 
     const userIsAdmin = isAdmin(user.email)
     const profile = await getProfile(user.id)
@@ -76,7 +93,7 @@ export async function POST(req: NextRequest) {
         )
       }
       const usage = await getMonthlyUsage(user.id, usageMonth)
-      const quota = checkQuota(planId, usage)
+      const quota = checkQuota(planId, usage, { needVideo, needChannel })
       if (!quota.ok) {
         // 블로그 전용 플랜 → 업그레이드 유도(403)
         if (quota.reason === 'upgrade_required') {
@@ -131,6 +148,8 @@ export async function POST(req: NextRequest) {
         plan: effectivePlan,
         usageMonth,
         status: convertRes.status,
+        consumeVideo: needVideo,
+        consumeChannel: needChannel,
       })
     } catch {
       // 매핑 저장 실패 시에도 job_id 는 반환한다(폴링은 가능). 차감은 매핑이 없으면 막힌다(안전).

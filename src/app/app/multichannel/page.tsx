@@ -25,9 +25,18 @@ import {
   type EditableDraft,
 } from '@/content/components/multichannel-views';
 
-type Stage = 'loading' | 'idle' | 'planning' | 'review1' | 'approving' | 'rendering' | 'done' | 'failed';
+type Stage = 'loading' | 'idle' | 'select' | 'planning' | 'review1' | 'approving' | 'rendering' | 'done' | 'failed';
 
 const SRC_KEY = 'dp_multichannel_src';
+
+// 생성 가능한 채널. id 는 ClinicFlix 서비스 식별자(shorts = 영상).
+const CHANNEL_OPTIONS: { id: string; label: string }[] = [
+  { id: 'shorts', label: '🎬 영상' },
+  { id: 'cardnews', label: '🖼️ 카드뉴스' },
+  { id: 'threads', label: '🧵 쓰레드' },
+  { id: 'feed', label: '📰 피드' },
+  { id: 'story', label: '📱 스토리' },
+];
 
 export default function MultichannelPage() {
   const router = useRouter();
@@ -39,11 +48,11 @@ export default function MultichannelPage() {
   const draftOriginalRef = useRef<EditableDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [upgrade, setUpgrade] = useState(false);
+  // 선택된 채널 (기본: 전체 선택)
+  const [selected, setSelected] = useState<string[]>(() => CHANNEL_OPTIONS.map((c) => c.id));
   const abortRef = useRef<AbortController | null>(null);
-  // StrictMode 이중 실행 / 중복 시작 방지
-  const startedRef = useRef(false);
 
-  // 마운트 시 블로그 본문 로드 + 자동 시작
+  // 마운트 시 블로그 본문 로드 → 채널 선택 단계 노출 (자동 시작하지 않음)
   useEffect(() => {
     const src = (sessionStorage.getItem(SRC_KEY) ?? '').trim();
     if (!src) {
@@ -52,24 +61,32 @@ export default function MultichannelPage() {
       return;
     }
     setBlogText(src);
-    if (!startedRef.current) {
-      startedRef.current = true;
-      void runPlanning(src);
-    }
+    setStage('select');
     return () => {
       abortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runPlanning(src: string) {
+  function toggleChannel(id: string) {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
+    );
+  }
+
+  // 선택 순서와 무관하게 표시/전송 순서를 고정한다.
+  function orderedSelection(): string[] {
+    return CHANNEL_OPTIONS.filter((c) => selected.includes(c.id)).map((c) => c.id);
+  }
+
+  async function runPlanning(src: string, channels: string[]) {
     setError(null);
     setUpgrade(false);
     setStage('planning');
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const { job_id } = await startConvert(src);
+      const { job_id } = await startConvert(src, channels);
       const planned = await pollUntil(
         job_id,
         ['planned'],
@@ -132,11 +149,8 @@ export default function MultichannelPage() {
     setJob(null);
     setDraft(null);
     draftOriginalRef.current = null;
-    if (blogText) {
-      void runPlanning(blogText);
-    } else {
-      setStage('idle');
-    }
+    // 채널 선택 단계로 되돌아간다 (재선택 가능).
+    setStage(blogText ? 'select' : 'idle');
   }
 
   const planChannels = job?.plan?.channels ?? [];
@@ -211,6 +225,60 @@ export default function MultichannelPage() {
             >
               블로그 생성하러 가기
             </Link>
+          </div>
+        )}
+
+        {/* 채널 선택 단계 */}
+        {stage === 'select' && !upgrade && (
+          <div className="rounded-2xl border border-[#b4bfce] bg-white p-5 sm:p-7 space-y-5">
+            <div className="space-y-1.5">
+              <p className="text-base font-bold text-[#202020]">생성할 채널을 골라주세요</p>
+              <p className="text-sm text-[#5b6573] leading-relaxed">
+                선택한 채널만 제작되고, 선택한 만큼만 사용량이 차감됩니다.
+                <br />
+                🎬 영상 = 영상 1건 · 카드뉴스/쓰레드/피드/스토리 = 멀티채널 세트 1건
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {CHANNEL_OPTIONS.map((c) => {
+                const on = selected.includes(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleChannel(c.id)}
+                    aria-pressed={on}
+                    className={
+                      'px-4 py-2.5 rounded-full text-sm font-semibold border transition-colors ' +
+                      (on
+                        ? 'bg-[#ff4628] text-white border-[#ff4628]'
+                        : 'bg-white text-[#5b6573] border-[#b4bfce] hover:border-[#ff4628]/60')
+                    }
+                  >
+                    {on ? '✓ ' : ''}
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {selected.length === 0 && (
+              <p className="text-sm text-[#ff4628] font-medium">채널을 1개 이상 선택해 주세요.</p>
+            )}
+
+            <button
+              type="button"
+              disabled={selected.length === 0}
+              onClick={() => {
+                if (blogText && selected.length > 0) {
+                  void runPlanning(blogText, orderedSelection());
+                }
+              }}
+              className="w-full py-3.5 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] disabled:bg-[#d6c0bb] disabled:cursor-not-allowed text-white text-sm sm:text-base font-bold transition-colors"
+            >
+              이 채널들 생성
+            </button>
           </div>
         )}
 
