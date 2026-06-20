@@ -13,7 +13,6 @@ import ContentPreview from '@/content/components/ContentPreview';
 import ImageGallery from '@/content/components/ImageGallery';
 import CardNewsDesigner from '@/content/components/CardNewsDesigner';
 import TagPanel from '@/content/components/TagPanel';
-import MultichannelConverter from '@/content/components/MultichannelConverter';
 import NaverPublisher from '@/publish/components/NaverPublisher';
 import AuthModal from '@/hr/components/AuthModal';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode, TargetSite } from '@/types';
@@ -210,8 +209,6 @@ export default function AppPage() {
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 복원할 초안 (마운트 시 localStorage에서 감지)
   const [draftToRestore, setDraftToRestore] = useState<DraftData | null>(null);
-  // 멀티채널 변환 모달 (ClinicFlix)
-  const [showConverter, setShowConverter] = useState(false);
   // 복사 시 보관함 자동 저장: 첫 복사 후 글 id 보관 → 재복사는 PATCH로 갱신 (중복 insert 방지)
   const savedPostIdRef = useRef<string | null>(null);
   // 연속 복사 시 POST 중복 실행 방지용 직렬화 큐
@@ -1026,11 +1023,14 @@ export default function AppPage() {
                       />
                     )}
 
-                    {/* 멀티채널 생성 (ClinicFlix) — 맨 아래 배치. 영상 쿼터 없으면 업그레이드 모달 (관리자는 무제한) */}
+                    {/* 멀티채널 생성 (ClinicFlix) — 맨 아래 배치. 전용 페이지로 이동. 게이팅은 서버 + 페이지(UpgradeRequiredError)에서 처리 */}
                     {user && content && (
                       <button
                         type="button"
-                        onClick={() => setShowConverter(true)}
+                        onClick={() => {
+                          sessionStorage.setItem('dp_multichannel_src', `${content.title}\n\n${content.body}`);
+                          router.push('/app/multichannel');
+                        }}
                         className="w-full py-3.5 sm:py-4 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm sm:text-base font-bold transition-colors flex items-center justify-center gap-2"
                       >
                         <span className="text-lg">🎬</span>
@@ -1071,19 +1071,6 @@ export default function AppPage() {
       </footer>
 
       <ContactFloatingButton />
-
-      {showConverter && content && (
-        <MultichannelConverter
-          blogText={`${content.title}\n\n${content.body}`}
-          canConvert={
-            isClientAdmin(user?.email) ||
-            (!!userPlan &&
-              isPaidPlanId(userPlan.plan) &&
-              (PLANS[userPlan.plan].limits.video ?? 0) !== 0)
-          }
-          onClose={() => setShowConverter(false)}
-        />
-      )}
     </div>
   );
 }
