@@ -139,7 +139,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: msg }, { status: 502 })
     }
 
-    // 매핑 저장 (소유자 검증 + approve 멱등 차감용). 실패해도 변환 자체는 진행됐으므로 로그성 처리.
+    // 매핑 저장 (소유자 검증 + approve 멱등 차감용). 저장 실패하면 approve(승인)가 불가하므로
+    // 조용히 진행하지 않고 즉시 명확히 실패시킨다(막다른 길 방지). 보통 마이그레이션 미적용이 원인.
     try {
       await recordConversion({
         conversionId,
@@ -151,8 +152,12 @@ export async function POST(req: NextRequest) {
         consumeVideo: needVideo,
         consumeChannel: needChannel,
       })
-    } catch {
-      // 매핑 저장 실패 시에도 job_id 는 반환한다(폴링은 가능). 차감은 매핑이 없으면 막힌다(안전).
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : '변환 기록 저장 실패'
+      return NextResponse.json(
+        { error: `변환 준비에 실패했습니다. 잠시 후 다시 시도해 주세요. (${detail})` },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({
