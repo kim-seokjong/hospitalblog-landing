@@ -99,7 +99,7 @@ export default function MultichannelConverter({ blogText, canConvert, onClose }:
         job.job_id,
         ['review'],
         (j) => setJob(j),
-        { signal: controller.signal },
+        { signal: controller.signal, intervalMs: 4000, maxAttempts: 400 }, // ~27분 (영상 렌더 ~15분 여유)
       );
       if (done.status === 'failed') {
         setError(done.error || '생성에 실패했습니다.');
@@ -190,11 +190,11 @@ export default function MultichannelConverter({ blogText, canConvert, onClose }:
                 </span>
               ))}
             </div>
-            <PlanBlock label="쇼츠 (스토리보드 · 자막 · 내레이션)" value={job.plan?.shorts} />
-            <PlanBlock label="카드뉴스 (슬라이드 헤드라인)" value={job.plan?.cardnews} />
-            <PlanBlock label="쓰레드" value={job.plan?.threads} />
-            <PlanBlock label="인스타 피드" value={job.plan?.feed} />
-            <PlanBlock label="스토리" value={job.plan?.story} />
+            <PlanBlock kind="shorts" label="🎬 쇼츠 영상 (컷별 내레이션·자막)" value={job.plan?.shorts} />
+            <PlanBlock kind="cardnews" label="🖼️ 카드뉴스 (슬라이드)" value={job.plan?.cardnews} />
+            <PlanBlock kind="threads" label="🧵 쓰레드" value={job.plan?.threads} />
+            <PlanBlock kind="feed" label="📰 인스타 피드" value={job.plan?.feed} />
+            <PlanBlock kind="story" label="📱 스토리" value={job.plan?.story} />
           </div>
           {typeof job.cost_krw === 'number' && (
             <p className="text-[11px] text-[#73808f]">예상 비용: 약 {job.cost_krw.toLocaleString()}원</p>
@@ -257,8 +257,8 @@ export default function MultichannelConverter({ blogText, canConvert, onClose }:
           )}
 
           {/* 쓰레드 / 피드 텍스트 */}
-          <TextSection title="🧵 쓰레드" value={job.plan?.threads} />
-          <TextSection title="📰 인스타 피드 캡션" value={job.plan?.feed} />
+          <TextSection kind="threads" title="🧵 쓰레드" value={job.plan?.threads} />
+          <TextSection kind="feed" title="📰 인스타 피드 캡션" value={job.plan?.feed} />
 
           {typeof job.cost_krw === 'number' && (
             <p className="text-[11px] text-[#73808f]">사용 비용: 약 {job.cost_krw.toLocaleString()}원 · 이번 변환 1건이 차감되었습니다.</p>
@@ -328,27 +328,127 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function PlanBlock({ label, value }: { label: string; value: unknown }) {
+type PlanKind = 'shorts' | 'cardnews' | 'threads' | 'feed' | 'story';
+
+// 기획 JSON(unknown) 안전 접근 헬퍼 (any 회피)
+function asRec(v: unknown): Record<string, unknown> {
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+function asRecArr(v: unknown): Record<string, unknown>[] {
+  return Array.isArray(v) ? v.map(asRec) : [];
+}
+function asStrArr(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+function oneLine(v: unknown): string {
+  return str(v).replace(/\s*\n\s*/g, ' ').trim();
+}
+
+// 채널별 기획안을 읽기 좋게 렌더 (raw JSON 덤프 X)
+function PlanBody({ kind, value }: { kind: PlanKind; value: unknown }) {
+  const o = asRec(value);
+  if (kind === 'shorts') {
+    const scenes = asRecArr(o.scenes);
+    return (
+      <>
+        {scenes.map((s, i) => (
+          <div key={i} className="border-b border-[#f0f3f7] pb-1.5 last:border-0">
+            <p className="font-semibold text-[#ff4628] text-[11px]">
+              컷 {String(s.index ?? i + 1)}{s.is_doctor_shot ? ' · 원장 정면' : ' · B-roll'}
+            </p>
+            <p>{str(s.narration)}</p>
+            {str(s.caption) && <p className="text-[#5b6573] text-[11px]">자막: {str(s.caption)}</p>}
+          </div>
+        ))}
+      </>
+    );
+  }
+  if (kind === 'cardnews') {
+    const slides = asRecArr(o.slides);
+    return (
+      <>
+        {slides.map((s, i) => (
+          <div key={i} className="border-b border-[#f0f3f7] pb-1.5 last:border-0">
+            <p><span className="font-semibold text-[#ff4628]">{i + 1}.</span> <b>{oneLine(s.headline)}</b></p>
+            {str(s.body) && <p className="text-[#5b6573] text-[11px]">{oneLine(s.body)}</p>}
+          </div>
+        ))}
+      </>
+    );
+  }
+  if (kind === 'threads') {
+    const posts = asStrArr(o.posts);
+    const tags = asStrArr(o.hashtags);
+    return (
+      <>
+        {posts.map((p, i) => (
+          <p key={i} className="whitespace-pre-line"><span className="font-semibold text-[#ff4628]">{i + 1}/</span> {p}</p>
+        ))}
+        {tags.length > 0 && <p className="text-[#ff4628] text-[11px]">{tags.join(' ')}</p>}
+      </>
+    );
+  }
+  if (kind === 'feed') {
+    const tags = asStrArr(o.hashtags);
+    return (
+      <>
+        <p className="whitespace-pre-line">{str(o.caption)}</p>
+        {tags.length > 0 && <p className="text-[#ff4628] text-[11px]">{tags.join(' ')}</p>}
+      </>
+    );
+  }
+  // story
+  const frames = asRecArr(o.frames);
+  return (
+    <>
+      {frames.map((f, i) => (
+        <div key={i} className="border-b border-[#f0f3f7] pb-1.5 last:border-0">
+          <p><span className="font-semibold text-[#ff4628]">프레임 {i + 1}:</span> {str(f.text)}</p>
+          {str(f.sticker_suggestion) && <p className="text-[#5b6573] text-[11px]">스티커: {str(f.sticker_suggestion)}</p>}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function PlanBlock({ kind, label, value }: { kind: PlanKind; label: string; value: unknown }) {
   if (value == null) return null;
   return (
-    <div className="mb-2 last:mb-0">
-      <p className="text-[11px] font-semibold text-[#5b6573] mb-0.5">{label}</p>
-      <pre className="text-[11px] text-[#202020] whitespace-pre-wrap break-words bg-white rounded-lg border border-[#e2e8ef] p-2 max-h-40 overflow-y-auto">
-        {renderValue(value)}
-      </pre>
+    <div className="mb-3 last:mb-0">
+      <p className="text-[11px] font-semibold text-[#5b6573] mb-1">{label}</p>
+      <div className="bg-white rounded-lg border border-[#e2e8ef] p-2.5 max-h-56 overflow-y-auto text-[12px] text-[#202020] leading-relaxed space-y-1.5">
+        <PlanBody kind={kind} value={value} />
+      </div>
     </div>
   );
 }
 
-function TextSection({ title, value }: { title: string; value: unknown }) {
+// 쓰레드/피드 복사용 깔끔한 텍스트
+function planToCopyText(kind: PlanKind, value: unknown): string {
+  const o = asRec(value);
+  if (kind === 'threads') {
+    return [...asStrArr(o.posts), asStrArr(o.hashtags).join(' ')].filter(Boolean).join('\n\n');
+  }
+  if (kind === 'feed') {
+    return [str(o.caption), asStrArr(o.hashtags).join(' ')].filter(Boolean).join('\n\n');
+  }
+  return '';
+}
+
+function TextSection({ kind, title, value }: { kind: PlanKind; title: string; value: unknown }) {
   if (value == null) return null;
-  const text = renderValue(value);
+  const copyText = planToCopyText(kind, value);
   return (
     <Section title={title}>
-      <pre className="text-[11px] text-[#202020] whitespace-pre-wrap break-words max-h-48 overflow-y-auto">{text}</pre>
+      <div className="text-[12px] text-[#202020] leading-relaxed max-h-56 overflow-y-auto space-y-1.5">
+        <PlanBody kind={kind} value={value} />
+      </div>
       <button
         type="button"
-        onClick={() => { navigator.clipboard?.writeText(text); }}
+        onClick={() => { navigator.clipboard?.writeText(copyText); }}
         className="mt-1 px-3 py-1.5 rounded-lg bg-[#eef2f6] hover:bg-[#e2e8ef] text-[#202020] text-[11px] font-semibold border border-[#b4bfce] transition-colors"
       >
         텍스트 복사
@@ -385,13 +485,4 @@ function DownloadLink({ href, label, small }: { href: string; label: string; sma
       ⬇ {label}
     </a>
   );
-}
-
-function renderValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
 }
