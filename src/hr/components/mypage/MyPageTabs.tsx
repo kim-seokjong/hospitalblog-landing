@@ -1,16 +1,26 @@
 'use client';
 
-export type MyPageTabId = 'profile' | 'subscription' | 'usage' | 'posts';
+export type MyPageTabId =
+  | 'profile'
+  | 'subscription'
+  | 'usage'
+  | 'posts'
+  | 'brandkit'
+  | 'photos';
 
 export const MYPAGE_TABS: { id: MyPageTabId; label: string }[] = [
   { id: 'profile', label: '내 정보' },
   { id: 'subscription', label: '구독·결제' },
   { id: 'usage', label: '사용량' },
   { id: 'posts', label: '콘텐츠 보관함' },
+  { id: 'brandkit', label: '콘텐츠 설정' },
+  { id: 'photos', label: '사진 보관함' },
 ];
 
+const MYPAGE_TAB_IDS: MyPageTabId[] = MYPAGE_TABS.map((t) => t.id);
+
 export function isMyPageTabId(value: string | null): value is MyPageTabId {
-  return value === 'profile' || value === 'subscription' || value === 'usage' || value === 'posts';
+  return value !== null && (MYPAGE_TAB_IDS as string[]).includes(value);
 }
 
 interface MyPageTabsProps {

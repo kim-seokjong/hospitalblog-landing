@@ -107,9 +107,37 @@ export async function POST(req: NextRequest) {
     // 매핑/기록용 플랜값 (관리자가 플랜 없을 수 있으므로 폴백)
     const effectivePlan: PlanId = planId && PLANS[planId] ? planId : 'pro12_pro'
 
-    // ── brand 구성 (프로필 기반, MVP: 사진/로고/원장 미디어는 비움) ──
-    const hospitalName =
-      (profile as unknown as { hospital_name?: string | null })?.hospital_name?.trim() || '우리 병원'
+    // ── brand 구성 (프로필 브랜드킷 clinic_* + 사진 보관함 기반) ──
+    const clinic = (profile ?? {}) as unknown as {
+      hospital_name?: string | null
+      clinic_logo_url?: string | null
+      clinic_brand_color?: string | null
+      clinic_hashtags?: string[] | null
+      clinic_voice_gender?: string | null
+      clinic_threads_tone?: string | null
+      clinic_cardnews_style?: number | null
+      clinic_shorts_concept?: string | null
+      clinic_doctor_photo_url?: string | null
+      clinic_doctor_video_url?: string | null
+    }
+    const hospitalName = clinic.hospital_name?.trim() || '우리 병원'
+
+    // 사진 보관함 로드 (소유자 본인 행). 실패해도 변환은 진행(사진 없이) — 막다른 길 방지.
+    let clinicPhotos: { category: string; url: string; consent: boolean; note: string | null }[] = []
+    try {
+      const { data: photoRows } = await supabase
+        .from('clinic_photos')
+        .select('category, url, consent, note')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      if (Array.isArray(photoRows)) {
+        clinicPhotos = photoRows as { category: string; url: string; consent: boolean; note: string | null }[]
+      }
+    } catch {
+      clinicPhotos = []
+    }
+
+    const concept = clinic.clinic_shorts_concept || '정보형'
 
     const conversionId = randomUUID()
 
@@ -120,14 +148,24 @@ export async function POST(req: NextRequest) {
         blog_text: blogText,
         brand: {
           hospital_name: hospitalName,
-          brand_color: BRAND_COLOR_DEFAULT,
-          logo_url: null,
-          doctor_photo_url: null,
-          doctor_video_url: null,
-          photos: [],
+          brand_color: clinic.clinic_brand_color || BRAND_COLOR_DEFAULT,
+          logo_url: clinic.clinic_logo_url || null,
+          fixed_hashtags: Array.isArray(clinic.clinic_hashtags) ? clinic.clinic_hashtags : [],
+          voice_gender: clinic.clinic_voice_gender || 'female',
+          threads_tone: clinic.clinic_threads_tone || 'haeyo',
+          cardnews_style:
+            typeof clinic.clinic_cardnews_style === 'number' ? clinic.clinic_cardnews_style : 2,
+          doctor_photo_url: clinic.clinic_doctor_photo_url || null,
+          doctor_video_url: clinic.clinic_doctor_video_url || null,
+          photos: clinicPhotos.map((p) => ({
+            category: p.category,
+            url: p.url,
+            consent: p.consent,
+            note: p.note,
+          })),
         },
         channels,
-        concept: '정보형',
+        concept,
         mode: 'keyword',
         options: { video_engine: 'veo_fast' },
       })

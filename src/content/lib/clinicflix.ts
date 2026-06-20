@@ -13,13 +13,27 @@ export type ClinicflixJobStatus =
   | 'review'
   | 'failed'
 
+/** 사진 보관함 1건 (외관/내부/장비/의료진/기타). 서비스 brand.photos[] 로 전달. */
+export interface ClinicflixBrandPhoto {
+  category: string
+  url: string
+  consent: boolean
+  note?: string | null
+  width?: number
+  height?: number
+}
+
 export interface ClinicflixBrand {
   hospital_name: string
   logo_url?: string | null
   brand_color?: string
+  fixed_hashtags?: string[]
+  voice_gender?: string
+  threads_tone?: string
+  cardnews_style?: number
   doctor_photo_url?: string | null
   doctor_video_url?: string | null
-  photos?: string[]
+  photos?: ClinicflixBrandPhoto[]
 }
 
 export interface ClinicflixConvertRequest {

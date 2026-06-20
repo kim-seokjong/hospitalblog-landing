@@ -11,6 +11,8 @@ import ProfileTab from '@/hr/components/mypage/ProfileTab';
 import SubscriptionTab from '@/hr/components/mypage/SubscriptionTab';
 import UsageTab from '@/hr/components/mypage/UsageTab';
 import ContentArchiveTab from '@/hr/components/mypage/ContentArchiveTab';
+import BrandKitTab from '@/hr/components/mypage/BrandKitTab';
+import PhotoLibraryTab from '@/hr/components/mypage/PhotoLibraryTab';
 
 function MyPageContent() {
   const router = useRouter();
@@ -90,6 +92,8 @@ function MyPageContent() {
         {activeTab === 'subscription' && <SubscriptionTab />}
         {activeTab === 'usage' && <UsageTab />}
         {activeTab === 'posts' && <ContentArchiveTab />}
+        {activeTab === 'brandkit' && <BrandKitTab />}
+        {activeTab === 'photos' && <PhotoLibraryTab />}
       </div>
     </div>
   );
