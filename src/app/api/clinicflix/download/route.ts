@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 // 브라우저가 "새 탭 열기"가 아니라 "컴퓨터에 파일 저장"하도록 강제한다.
 // (외부 도메인은 a[download] 속성이 무시되어 다운로드가 안 됨 → 동일 출처 프록시로 해결.)
 
-const ALLOWED_HOST_SUFFIXES = ['.fal.media', '.up.railway.app', 'fal.media']
+const ALLOWED_HOST_SUFFIXES = ['.fal.media', '.up.railway.app', 'fal.media', '.supabase.co']
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url')

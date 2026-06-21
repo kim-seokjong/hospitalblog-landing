@@ -119,6 +119,7 @@ export async function POST(req: NextRequest) {
       clinic_shorts_concept?: string | null
       clinic_doctor_photo_url?: string | null
       clinic_doctor_video_url?: string | null
+      clinic_doctor_consent?: boolean | null
     }
     const hospitalName = clinic.hospital_name?.trim() || '우리 병원'
 
@@ -155,14 +156,20 @@ export async function POST(req: NextRequest) {
           threads_tone: clinic.clinic_threads_tone || 'haeyo',
           cardnews_style:
             typeof clinic.clinic_cardnews_style === 'number' ? clinic.clinic_cardnews_style : 2,
-          doctor_photo_url: clinic.clinic_doctor_photo_url || null,
-          doctor_video_url: clinic.clinic_doctor_video_url || null,
-          photos: clinicPhotos.map((p) => ({
-            category: p.category,
-            url: p.url,
-            consent: p.consent,
-            note: p.note,
-          })),
+          // 원장 미디어는 동의(clinic_doctor_consent=true)가 있을 때만 전송 (동의 철회 후 URL 잔존 방어)
+          doctor_photo_url:
+            clinic.clinic_doctor_consent === true ? clinic.clinic_doctor_photo_url || null : null,
+          doctor_video_url:
+            clinic.clinic_doctor_consent === true ? clinic.clinic_doctor_video_url || null : null,
+          // 의료진(staff) 사진은 동의된 것만 전송 (외관·장비 등 비-의료진 사진은 동의 불필요)
+          photos: clinicPhotos
+            .filter((p) => p.category !== 'staff' || p.consent)
+            .map((p) => ({
+              category: p.category,
+              url: p.url,
+              consent: p.consent,
+              note: p.note,
+            })),
         },
         channels,
         concept,
