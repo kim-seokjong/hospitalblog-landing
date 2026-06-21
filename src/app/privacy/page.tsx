@@ -55,6 +55,13 @@ export default function PrivacyPage() {
                   <li>쿠키(세션 유지 목적)</li>
                 </ul>
               </div>
+              <div>
+                <p className="font-medium text-[#202020] mb-2">콘텐츠 생성 시 (선택 입력)</p>
+                <ul className="list-disc list-inside space-y-1 text-[#4a4f55] ml-2">
+                  <li>병원 로고, 원장님 사진·영상, 병원 사진(외관·내부·장비·의료진·기타)</li>
+                  <li>의료진·환자가 식별되는 사진과 원장님 얼굴(사진·영상)은 이용자의 동의가 있는 경우에만 수집·이용합니다.</li>
+                </ul>
+              </div>
             </div>
           </section>
 
@@ -92,6 +99,7 @@ export default function PrivacyPage() {
                     ['결제 내역', '5년 (전자상거래 등에서의 소비자보호에 관한 법률)'],
                     ['접속 로그', '3개월'],
                     ['분쟁 관련 기록', '분쟁 해결 후 1년'],
+                    ['업로드 이미지·영상 자산', '회원 탈퇴 또는 이용자 삭제 시 즉시 삭제'],
                   ].map(([item, period]) => (
                     <tr key={item} className="border-b border-[#b4bfce]">
                       <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{item}</td>
@@ -135,6 +143,8 @@ export default function PrivacyPage() {
                   {[
                     ['Supabase Inc.', '회원 인증 및 데이터베이스 운영'],
                     ['Anthropic / OpenAI', 'AI 콘텐츠 생성 처리 (입력 데이터 임시 처리)'],
+                    ['fal.ai', 'AI 이미지·영상 생성 처리 (입력 이미지·영상 임시 처리)'],
+                    ['HeyGen', '원장님 사진·영상 기반 AI 립싱크 영상 생성 처리'],
                     ['갤럭시아머니트리', '신용/체크카드 결제 처리'],
                     ['카카오페이', '카카오페이 결제 처리'],
                     ['Vercel Inc.', '서비스 호스팅 및 배포'],
@@ -148,6 +158,7 @@ export default function PrivacyPage() {
                 </tbody>
               </table>
             </div>
+            <p className="text-xs text-[#5b6573] mt-3">위 수탁업체 중 일부(Anthropic, OpenAI, fal.ai, HeyGen, Supabase, Vercel 등)는 국외(미국 등)에 소재하며, 이용자가 입력한 데이터가 국외에서 처리될 수 있습니다.</p>
           </section>
 
           {/* 6 */}

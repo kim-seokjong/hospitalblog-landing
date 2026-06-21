@@ -27,6 +27,7 @@ interface BrandKitResponse {
   shorts_concept: string
   doctor_photo_url: string | null
   doctor_video_url: string | null
+  doctor_consent: boolean
 }
 
 /**
@@ -46,7 +47,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('profiles')
       .select(
-        'clinic_logo_url, clinic_brand_color, clinic_hashtags, clinic_voice_gender, clinic_threads_tone, clinic_cardnews_style, clinic_shorts_concept, clinic_doctor_photo_url, clinic_doctor_video_url',
+        'clinic_logo_url, clinic_brand_color, clinic_hashtags, clinic_voice_gender, clinic_threads_tone, clinic_cardnews_style, clinic_shorts_concept, clinic_doctor_photo_url, clinic_doctor_video_url, clinic_doctor_consent',
       )
       .eq('id', user.id)
       .single()
@@ -69,6 +70,7 @@ export async function GET() {
       shorts_concept: (row.clinic_shorts_concept as string | null) ?? DEFAULTS.shorts_concept,
       doctor_photo_url: (row.clinic_doctor_photo_url as string | null) ?? null,
       doctor_video_url: (row.clinic_doctor_video_url as string | null) ?? null,
+      doctor_consent: (row.clinic_doctor_consent as boolean | null) ?? false,
     }
     return NextResponse.json(body)
   } catch (e) {
@@ -132,6 +134,13 @@ function validateBody(raw: unknown): ValidationResult {
       return { ok: false, error: '쇼츠 콘셉트 값이 올바르지 않습니다.' }
     }
     updates.clinic_shorts_concept = v
+  }
+
+  // doctor_consent (boolean)
+  if ('doctor_consent' in b) {
+    const v = b.doctor_consent
+    if (typeof v !== 'boolean') return { ok: false, error: '동의 값이 올바르지 않습니다.' }
+    updates.clinic_doctor_consent = v
   }
 
   // hashtags (string[] max 10)

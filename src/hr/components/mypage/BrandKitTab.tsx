@@ -14,6 +14,7 @@ interface BrandKit {
   shorts_concept: string;
   doctor_photo_url: string | null;
   doctor_video_url: string | null;
+  doctor_consent: boolean;
 }
 
 const DEFAULT_BRANDKIT: BrandKit = {
@@ -26,6 +27,7 @@ const DEFAULT_BRANDKIT: BrandKit = {
   shorts_concept: '정보형',
   doctor_photo_url: null,
   doctor_video_url: null,
+  doctor_consent: false,
 };
 
 const VOICE_OPTIONS = [
@@ -103,6 +105,7 @@ export default function BrandKitTab() {
           shorts_concept: brand.shorts_concept,
           doctor_photo_url: brand.doctor_photo_url,
           doctor_video_url: brand.doctor_video_url,
+          doctor_consent: brand.doctor_consent,
         }),
       });
       if (!res.ok) {
@@ -314,6 +317,24 @@ export default function BrandKitTab() {
 
         {/* 4. 원장님 미디어 */}
         <Section title="원장님 미디어 (선택)">
+          <label className="flex items-start gap-2 mb-4 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={brand.doctor_consent}
+              onChange={(e) =>
+                setBrand((p) => ({ ...p, doctor_consent: e.target.checked }))
+              }
+              className="mt-0.5 h-4 w-4 accent-[#ff4628]"
+            />
+            <span className="text-sm text-[#202020] font-medium">
+              원장님 얼굴(사진·영상)을 AI 영상으로 생성하는 데 동의합니다 (필수)
+              <span className="block text-xs text-[#5b6573] mt-0.5 font-normal">
+                등록하신 원장님 사진·영상은 AI 영상(립싱크) 생성을 위해 해외 AI 처리 서비스(fal.ai·HeyGen)로
+                전송·처리되며, 생성된 영상에는 &apos;AI 생성 영상&apos; 표기가 표시됩니다. 동의를 철회하시려면 등록된
+                미디어를 삭제하세요.
+              </span>
+            </span>
+          </label>
           <Field label="원장님 사진">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               {brand.doctor_photo_url ? (
@@ -329,13 +350,19 @@ export default function BrandKitTab() {
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <label className="px-3 py-2 bg-[#eef2f6] border border-[#b4bfce] rounded-lg text-sm text-[#202020] cursor-pointer hover:bg-[#e2e8f0] transition-colors">
+                <label
+                  className={`px-3 py-2 bg-[#eef2f6] border border-[#b4bfce] rounded-lg text-sm text-[#202020] transition-colors ${
+                    !brand.doctor_consent
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'cursor-pointer hover:bg-[#e2e8f0]'
+                  }`}
+                >
                   {uploading === 'photo' ? '업로드 중...' : '사진 선택'}
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    disabled={uploading !== null}
+                    disabled={uploading !== null || !brand.doctor_consent}
                     onChange={(e) =>
                       void handleUpload(e.target.files?.[0], 'doctor', 'photo', (url) =>
                         setBrand((p) => ({ ...p, doctor_photo_url: url })),
@@ -374,13 +401,19 @@ export default function BrandKitTab() {
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <label className="px-3 py-2 bg-[#eef2f6] border border-[#b4bfce] rounded-lg text-sm text-[#202020] cursor-pointer hover:bg-[#e2e8f0] transition-colors">
+                <label
+                  className={`px-3 py-2 bg-[#eef2f6] border border-[#b4bfce] rounded-lg text-sm text-[#202020] transition-colors ${
+                    !brand.doctor_consent
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'cursor-pointer hover:bg-[#e2e8f0]'
+                  }`}
+                >
                   {uploading === 'video' ? '업로드 중...' : '영상 선택'}
                   <input
                     type="file"
                     accept="video/*"
                     className="hidden"
-                    disabled={uploading !== null}
+                    disabled={uploading !== null || !brand.doctor_consent}
                     onChange={(e) =>
                       void handleUpload(e.target.files?.[0], 'doctor', 'video', (url) =>
                         setBrand((p) => ({ ...p, doctor_video_url: url })),
