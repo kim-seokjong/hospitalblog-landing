@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { suggestClinicProfile } from '@/content/lib/clinic-profile';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,20 +60,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '이미 등록된 프로필입니다.' }, { status: 409 });
     }
 
+    // 가입 시점에 병원 소개문·키워드를 자동 생성한다(기존 회원의 "강점 자동생성"과 동일 결과).
+    // best-effort: 생성 실패·타임아웃은 가입 흐름을 절대 막지 않도록 try/catch 로 격리한다.
+    let hospitalDesc = '';
+    let hospitalKeywords: string[] = [];
+    try {
+      const s = await suggestClinicProfile({ hospitalName, specialty: hospitalType });
+      hospitalDesc = s.hospital_desc || '';
+      hospitalKeywords = Array.isArray(s.keywords) ? s.keywords : [];
+    } catch (suggestEx) {
+      // graceful: 생성 실패해도 가입은 계속 진행한다.
+      console.error(
+        'register profile-suggest 실패 — 가입은 계속 진행:',
+        userId,
+        suggestEx instanceof Error ? suggestEx.message : String(suggestEx),
+      );
+    }
+
+    // 생성 값은 있을 때만 upsert 에 포함(빈값이면 기존 컬럼 기본값 유지).
+    const profileRow: Record<string, unknown> = {
+      id: userId,
+      full_name: fullName,
+      phone,
+      hospital_name: hospitalName,
+      hospital_address: hospitalAddress,
+      position,
+      hospital_type: hospitalType,
+    };
+    if (hospitalDesc) {
+      profileRow.hospital_desc = hospitalDesc;
+    }
+    if (hospitalKeywords.length > 0) {
+      profileRow.hospital_keywords = hospitalKeywords;
+    }
+
     const { error } = await supabaseAdmin
       .from('profiles')
-      .upsert(
-        {
-          id: userId,
-          full_name: fullName,
-          phone,
-          hospital_name: hospitalName,
-          hospital_address: hospitalAddress,
-          position,
-          hospital_type: hospitalType,
-        },
-        { onConflict: 'id' },
-      );
+      .upsert(profileRow, { onConflict: 'id' });
 
     if (error) {
       // 프로필 저장 실패 시 방금 만든 auth 계정을 삭제해 가입을 원자적으로 롤백한다.
