@@ -124,7 +124,7 @@ function HospitalMarketingBanner() {
         src="/ads/hospitalmarketing-banner.jpg"
         alt="병원 마케팅 풀세팅 — 인스타그램·유튜브·네이버 스마트플레이스·전광판·버스 택시 랩핑·택배 광고"
         width={1280}
-        height={1920}
+        height={1916}
         className="ad-banner-hm-img block w-full h-auto"
         loading="lazy"
         decoding="async"
