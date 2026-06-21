@@ -121,10 +121,10 @@ function HospitalMarketingBanner() {
     >
       <span className="ad-pulse-dot absolute top-3 right-3 w-2 h-2 rounded-full bg-red-500 z-10" />
       <img
-        src="/ads/hospitalmarketing-banner.png"
+        src="/ads/hospitalmarketing-banner.jpg"
         alt="병원 마케팅 풀세팅 — 인스타그램·유튜브·네이버 스마트플레이스·전광판·버스 택시 랩핑·택배 광고"
-        width={1024}
-        height={1536}
+        width={1280}
+        height={1920}
         className="ad-banner-hm-img block w-full h-auto"
         loading="lazy"
         decoding="async"
