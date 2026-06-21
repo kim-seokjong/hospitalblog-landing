@@ -54,6 +54,10 @@ const CONCEPT_OPTIONS = [
   { value: '친근형', label: '친근형' },
 ];
 
+// 원장님 "얼굴 등록용" 30초 영상에서 읽을 중립 대본 예시 (주제 무관 — 이후 실제 영상 대본은 자동 생성).
+const DOCTOR_VIDEO_SCRIPT =
+  '안녕하세요, OO병원 원장 OOO입니다. 저희 병원은 환자 한 분 한 분을 정성껏 진료하기 위해 늘 노력하고 있습니다. 앞으로 건강에 도움이 되는 정확한 정보로 자주 찾아뵙겠습니다. 감사합니다.';
+
 export default function BrandKitTab() {
   const [brand, setBrand] = useState<BrandKit>(DEFAULT_BRANDKIT);
   const [loading, setLoading] = useState(true);
@@ -61,6 +65,8 @@ export default function BrandKitTab() {
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hashtagInput, setHashtagInput] = useState('');
   const [uploading, setUploading] = useState<'logo' | 'photo' | 'video' | null>(null);
+  const [showVideoGuide, setShowVideoGuide] = useState(false);
+  const [scriptCopied, setScriptCopied] = useState(false);
 
   const fetchBrandKit = useCallback(async () => {
     setLoading(true);
@@ -431,6 +437,63 @@ export default function BrandKitTab() {
                   </button>
                 )}
               </div>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-[#b4bfce] bg-[#f7f9fc] overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowVideoGuide((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#202020] hover:bg-[#eef2f6] transition-colors"
+              >
+                <span>🎬 원장님 영상 촬영 가이드 · 대본 보기</span>
+                <span className="text-[#5b6573] text-xs">{showVideoGuide ? '▲' : '▼'}</span>
+              </button>
+              {showVideoGuide && (
+                <div className="px-3 pb-3 pt-1 border-t border-[#dbe2ea] space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-[#202020] mb-1.5">촬영 방법</p>
+                    <ul className="list-disc list-inside space-y-1 text-xs text-[#4a4f55]">
+                      <li>길이 <strong>20~40초</strong>(30초 권장), 스마트폰 세로 촬영 OK</li>
+                      <li>
+                        얼굴이 화면 <strong>중앙·상반신</strong>, <strong>카메라 렌즈를 보며</strong>{' '}
+                        자연스럽게 말하기
+                      </li>
+                      <li>
+                        배경은 <strong>깔끔한 단색</strong>(흰 벽·진료실), <strong>역광 금지</strong>,{' '}
+                        얼굴이 밝게
+                      </li>
+                      <li>자연스러운 미소, 과한 손동작 자제, 마스크·선글라스 X</li>
+                      <li>주변이 조용한 곳에서 <strong>또박또박</strong> 말하기</li>
+                    </ul>
+                    <p className="text-[11px] text-[#5b6573] mt-1.5">
+                      ※ 이 영상은 <strong>얼굴 등록용</strong>이라 말하는 내용은 무엇이든 괜찮습니다. 이후 실제
+                      영상 대본은 자동 생성됩니다.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-xs font-semibold text-[#202020]">읽을 대본 예시 (약 30초)</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard?.writeText(DOCTOR_VIDEO_SCRIPT);
+                          setScriptCopied(true);
+                          setTimeout(() => setScriptCopied(false), 2000);
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-[#ff4628] text-white font-medium hover:bg-[#e63a1c] transition-colors"
+                      >
+                        {scriptCopied ? '복사됨 ✓' : '대본 복사'}
+                      </button>
+                    </div>
+                    <p className="text-xs text-[#4a4f55] leading-relaxed bg-white border border-[#dbe2ea] rounded-lg px-3 py-2">
+                      {DOCTOR_VIDEO_SCRIPT}
+                    </p>
+                    <p className="text-[11px] text-[#5b6573] mt-1">
+                      &apos;OO병원&apos;·&apos;OOO&apos;은 실제 병원명·원장님 성함으로 바꿔 읽어주세요.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </Field>
         </Section>
