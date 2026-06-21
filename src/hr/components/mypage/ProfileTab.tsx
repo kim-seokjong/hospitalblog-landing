@@ -3,6 +3,16 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Section, Field, Input, Select, ToggleRow } from '@/hr/components/form-controls';
 
+interface NaverLocalResult {
+  name: string;
+  category: string;
+  specialty: string;
+  address: string;
+  roadAddress: string;
+  region: string;
+  link: string;
+}
+
 interface ProfileData {
   full_name: string;
   phone: string;
@@ -57,6 +67,24 @@ const REGIONS = [
 ];
 
 /**
+ * 네이버 지역명(구/군 또는 시)을 REGIONS 목록에 best-effort 매칭한다.
+ * 매칭 실패 시 '' 반환(사용자가 직접 선택).
+ */
+function matchRegion(region: string, fullAddress: string): string {
+  if (!region && !fullAddress) return '';
+  // 1) "서울 강남구" 같은 정확/부분 매칭 — 구/군 단위
+  const byGu = REGIONS.find(r => region && r.endsWith(region));
+  if (byGu) return byGu;
+  // 2) 주소 전체에 REGIONS 토큰이 포함되는지 (서울 구 단위 우선)
+  const seoulGu = REGIONS.find(r => r.startsWith('서울 ') && fullAddress.includes(r.replace('서울 ', '')));
+  if (seoulGu && fullAddress.includes('서울')) return seoulGu;
+  // 3) 광역시·도 단위 단순 매칭
+  const wide = REGIONS.find(r => !r.includes(' ') && r !== '기타' && fullAddress.includes(r));
+  if (wide) return wide;
+  return '';
+}
+
+/**
  * 마이페이지 — 내 정보 탭.
  * 기존 /settings/profile 페이지의 폼을 탭 컴포넌트로 이전 (API는 /api/profile 그대로 사용).
  */
@@ -66,6 +94,15 @@ export default function ProfileTab() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [keywordInput, setKeywordInput] = useState('');
+
+  // 병원명으로 자동 채우기 상태
+  const [lookupQuery, setLookupQuery] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  const [lookupResults, setLookupResults] = useState<NaverLocalResult[] | null>(null);
+  const [autoFilled, setAutoFilled] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestMsg, setSuggestMsg] = useState('');
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -78,7 +115,9 @@ export default function ProfileTab() {
       const incoming = Object.fromEntries(
         Object.entries(json.profile ?? {}).filter(([, v]) => v !== null && v !== undefined)
       ) as Partial<ProfileData>;
-      setProfile({ ...DEFAULT_PROFILE, ...incoming });
+      const next = { ...DEFAULT_PROFILE, ...incoming };
+      setProfile(next);
+      setLookupQuery(next.hospital_name);
     } catch {
       setProfile(DEFAULT_PROFILE);
     } finally {
@@ -109,6 +148,89 @@ export default function ProfileTab() {
     } finally {
       setSaving(false);
       setTimeout(() => setSaveMsg(null), 3000);
+    }
+  };
+
+  const handleLookup = async () => {
+    const q = lookupQuery.trim();
+    if (!q) {
+      setLookupError('병원명을 입력해주세요.');
+      return;
+    }
+    setLookupLoading(true);
+    setLookupError('');
+    setLookupResults(null);
+    try {
+      const res = await fetch(`/api/clinic/lookup?query=${encodeURIComponent(q)}`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(json.error ?? '검색에 실패했습니다.');
+      }
+      const json = await res.json() as { results: NaverLocalResult[] };
+      setLookupResults(json.results ?? []);
+    } catch (e) {
+      setLookupError(e instanceof Error ? e.message : '검색에 실패했습니다.');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const applyCandidate = (c: NaverLocalResult) => {
+    const matchedRegion = matchRegion(c.region, c.roadAddress || c.address);
+    setProfile(prev => ({
+      ...prev,
+      hospital_name: c.name || prev.hospital_name,
+      specialty: c.specialty || prev.specialty,
+      hospital_address: c.roadAddress || c.address || prev.hospital_address,
+      region: matchedRegion || prev.region,
+    }));
+    setLookupResults(null);
+    setAutoFilled(true);
+    setSuggestMsg('');
+    setSaveMsg({ type: 'success', text: '자동 입력됨 — 확인 후 저장하세요.' });
+    setTimeout(() => setSaveMsg(null), 3000);
+  };
+
+  const handleSuggest = async () => {
+    if (!profile.hospital_name || !profile.specialty) {
+      setSuggestMsg('병원명과 진료과목을 먼저 입력해주세요.');
+      return;
+    }
+    setSuggestLoading(true);
+    setSuggestMsg('');
+    try {
+      const res = await fetch('/api/clinic/profile-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hospital_name: profile.hospital_name,
+          specialty: profile.specialty,
+          specialty_detail: profile.specialty_detail,
+          region: profile.region,
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(json.error ?? '생성에 실패했습니다.');
+      }
+      const json = await res.json() as { hospital_desc: string; keywords: string[] };
+      setProfile(prev => {
+        const merged = [...prev.hospital_keywords];
+        for (const kw of (json.keywords ?? [])) {
+          const t = kw.trim();
+          if (t && !merged.includes(t) && merged.length < 10) merged.push(t);
+        }
+        return {
+          ...prev,
+          hospital_desc: json.hospital_desc?.trim() ? json.hospital_desc.trim() : prev.hospital_desc,
+          hospital_keywords: merged,
+        };
+      });
+      setSuggestMsg('AI 초안이 채워졌습니다 — 수정 가능합니다. 확인 후 저장하세요.');
+    } catch (e) {
+      setSuggestMsg(e instanceof Error ? e.message : '생성에 실패했습니다.');
+    } finally {
+      setSuggestLoading(false);
     }
   };
 
@@ -185,6 +307,85 @@ export default function ProfileTab() {
 
         {/* 2. 병원 정보 */}
         <Section title="병원 정보">
+          {/* 병원명으로 자동 채우기 */}
+          <div className="mb-4 rounded-lg border border-[#ff4628]/30 bg-[#ffece7] px-3 py-3">
+            <p className="text-xs text-[#ff4628] mb-2 font-medium">
+              병원명으로 자동 채우기
+            </p>
+            <p className="text-xs text-[#5b6573] mb-2.5">
+              병원명을 입력하고 버튼을 누르면 네이버 등록 정보로 병원명·진료과목·주소·지역을 자동 입력합니다. (전화번호는 직접 입력)
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={lookupQuery}
+                onChange={e => setLookupQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleLookup();
+                  }
+                }}
+                placeholder="병원명 검색어"
+                className="flex-1 bg-white border border-[#b4bfce] rounded-lg px-3 py-2 text-[#202020] text-sm placeholder-[#5b6573] focus:outline-none focus:border-[#ff4628] transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => void handleLookup()}
+                disabled={lookupLoading}
+                className="shrink-0 px-3 py-2 bg-[#ff4628] text-white rounded-lg text-sm font-medium hover:bg-[#e63a1c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {lookupLoading ? '검색 중...' : '자동 채우기'}
+              </button>
+            </div>
+
+            {lookupError && (
+              <p className="mt-2 text-xs text-red-600">{lookupError}</p>
+            )}
+
+            {lookupResults !== null && lookupResults.length === 0 && !lookupError && (
+              <p className="mt-2 text-xs text-[#5b6573]">
+                검색 결과가 없습니다. 병원명을 다시 확인해주세요.
+              </p>
+            )}
+
+            {lookupResults && lookupResults.length > 0 && (
+              <ul className="mt-2.5 space-y-1.5">
+                {lookupResults.map((c, i) => (
+                  <li key={`${c.name}-${i}`}>
+                    <button
+                      type="button"
+                      onClick={() => applyCandidate(c)}
+                      className="w-full text-left bg-white border border-[#b4bfce] rounded-lg px-3 py-2 hover:border-[#ff4628] transition-colors"
+                    >
+                      <span className="block text-sm font-medium text-[#202020]">{c.name}</span>
+                      <span className="block text-xs text-[#5b6573]">
+                        {c.category}
+                        {c.roadAddress ? ` · ${c.roadAddress}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {autoFilled && (
+              <div className="mt-3 border-t border-[#ff4628]/20 pt-3">
+                <button
+                  type="button"
+                  onClick={() => void handleSuggest()}
+                  disabled={suggestLoading}
+                  className="px-3 py-2 bg-white border border-[#ff4628] text-[#ff4628] rounded-lg text-sm font-medium hover:bg-[#ffece7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {suggestLoading ? '생성 중...' : '강점·키워드 자동 생성'}
+                </button>
+                {suggestMsg && (
+                  <p className="mt-2 text-xs text-[#5b6573]">{suggestMsg}</p>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="병원명">
               <Input
