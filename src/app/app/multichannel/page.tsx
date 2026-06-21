@@ -9,6 +9,7 @@ import {
   startConvert,
   approveJob,
   pollUntil,
+  saveConversion,
   UpgradeRequiredError,
   type ClinicflixJobView,
 } from '@/content/lib/clinicflix-client';
@@ -48,6 +49,7 @@ export default function MultichannelPage() {
   const draftOriginalRef = useRef<EditableDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [upgrade, setUpgrade] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   // 선택된 채널 (기본: 전체 선택)
   const [selected, setSelected] = useState<string[]>(() => CHANNEL_OPTIONS.map((c) => c.id));
   const abortRef = useRef<AbortController | null>(null);
@@ -135,7 +137,11 @@ export default function MultichannelPage() {
         setStage('failed');
         return;
       }
+      // done 렌더를 먼저 띄우고, 결과를 영구 보관함에 저장(서버가 Storage 복사)
       setStage('done');
+      setSaveState('saving');
+      const ok = await saveConversion(job.job_id);
+      setSaveState(ok ? 'saved' : 'failed');
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return;
       setError(e instanceof Error ? e.message : '생성에 실패했습니다.');
@@ -146,6 +152,7 @@ export default function MultichannelPage() {
   function retry() {
     setError(null);
     setUpgrade(false);
+    setSaveState('idle');
     setJob(null);
     setDraft(null);
     draftOriginalRef.current = null;
@@ -407,6 +414,20 @@ export default function MultichannelPage() {
             {typeof job.cost_krw === 'number' && (
               <p className="text-sm text-[#73808f]">
                 사용 비용: 약 {job.cost_krw.toLocaleString()}원 · 이번 변환 1건이 차감되었습니다.
+              </p>
+            )}
+
+            {saveState === 'saving' && (
+              <p className="text-xs text-[#73808f]">변환 내역에 저장 중…</p>
+            )}
+            {saveState === 'saved' && (
+              <p className="text-xs text-[#73808f]">
+                ✓ 변환 내역에 저장되었습니다 (마이페이지 → 변환 내역에서 다시 볼 수 있어요)
+              </p>
+            )}
+            {saveState === 'failed' && (
+              <p className="text-xs text-[#73808f]">
+                결과는 지금 다운로드해 주세요(보관함 저장은 일시적으로 실패했습니다)
               </p>
             )}
 

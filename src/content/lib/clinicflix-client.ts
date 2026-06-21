@@ -100,6 +100,20 @@ export async function approveJob(jobId: string, edits?: PlanEdits): Promise<void
   }
 }
 
+/** 생성 완료 결과를 영구 보관함에 저장(서버가 Storage 복사). 실패해도 throw 하지 않는다(best-effort). */
+export async function saveConversion(jobId: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/clinicflix/conversions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: jobId }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export interface PollOptions {
   intervalMs?: number
   maxAttempts?: number

@@ -190,6 +190,14 @@ export async function commitUsage(
   return result ?? { ok: false, reason: 'unknown' }
 }
 
+export interface ResultAssets {
+  video_url?: string | null
+  cardnews_urls?: string[]
+  story_urls?: string[]
+  threads?: unknown
+  feed?: unknown
+}
+
 export interface ConversionRow {
   conversion_id: string
   job_id: string | null
@@ -200,15 +208,45 @@ export interface ConversionRow {
   consume_channel: boolean
   usage_committed: boolean
   created_at: string
+  result_assets: ResultAssets | null
+  result_saved_at: string | null
 }
 
 /** 회원의 최근 변환 기록 (최신순). */
 export async function getConversionsByUser(userId: string, limit = 50): Promise<ConversionRow[]> {
   const { data } = await admin()
     .from('clinicflix_conversions')
-    .select('conversion_id, job_id, plan, usage_month, status, consume_video, consume_channel, usage_committed, created_at')
+    .select('conversion_id, job_id, plan, usage_month, status, consume_video, consume_channel, usage_committed, created_at, result_assets, result_saved_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit)
   return (data ?? []) as ConversionRow[]
+}
+
+/** 결과 저장 대상 조회 (소유자·멱등 판정용). */
+export async function getConversionSaveTarget(
+  jobId: string,
+): Promise<{ conversion_id: string; user_id: string; result_saved_at: string | null } | null> {
+  const { data } = await admin()
+    .from('clinicflix_conversions')
+    .select('conversion_id, user_id, result_saved_at')
+    .eq('job_id', jobId)
+    .maybeSingle()
+  return data ?? null
+}
+
+/** 영구 저장 결과(jsonb) 기록 + result_saved_at 설정. */
+export async function saveConversionResult(
+  conversionId: string,
+  resultAssets: ResultAssets,
+): Promise<void> {
+  const { error } = await admin()
+    .from('clinicflix_conversions')
+    .update({
+      result_assets: resultAssets,
+      result_saved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('conversion_id', conversionId)
+  if (error) throw new Error(`결과 저장 실패: ${error.message}`)
 }

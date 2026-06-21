@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { ConversionRow } from '@/content/lib/clinicflix-usage';
+import type { ConversionRow, ResultAssets } from '@/content/lib/clinicflix-usage';
 import type { ClinicflixJobView } from '@/content/lib/clinicflix-client';
 import {
   DownloadLink,
@@ -37,7 +37,50 @@ function formatDate(iso: string): string {
   }).replace(/\. /g, '.').replace(/\.$/, '');
 }
 
-// ── 결과 인라인 확장 ────────────────────────────────────────────────
+// ── 저장된 결과 인라인 렌더 (영구 보관함, /jobs 재조회 없음) ─────────
+function SavedResult({ assets }: { assets: ResultAssets }) {
+  const videoUrl = assets.video_url ?? null;
+  const cardnewsUrls = assets.cardnews_urls ?? [];
+  const storyUrls = assets.story_urls ?? [];
+  const hasVideo = isPlayableUrl(videoUrl);
+  const hasThreads = assets.threads != null;
+  const hasFeed = assets.feed != null;
+  const hasAny = hasVideo || cardnewsUrls.length > 0 || storyUrls.length > 0 || hasThreads || hasFeed;
+
+  if (!hasAny) {
+    return (
+      <div className="rounded-xl border border-[#b4bfce] bg-[#eef2f6] px-4 py-3 text-sm text-[#5b6573]">
+        저장된 결과가 없습니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {hasVideo && (
+        <Section title="🎬 쇼츠 영상">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video src={videoUrl} controls playsInline className="w-full rounded-xl border border-[#e2e8ef] bg-black" />
+          <DownloadLink href={videoUrl} label="영상 저장" />
+        </Section>
+      )}
+      {cardnewsUrls.length > 0 && (
+        <Section title="🖼️ 카드뉴스">
+          <ImageCarousel urls={cardnewsUrls} />
+        </Section>
+      )}
+      {storyUrls.length > 0 && (
+        <Section title="📱 스토리">
+          <ImageCarousel urls={storyUrls} />
+        </Section>
+      )}
+      <TextSection kind="threads" title="🧵 쓰레드" value={assets.threads} />
+      <TextSection kind="feed" title="📰 인스타 피드" value={assets.feed} />
+    </div>
+  );
+}
+
+// ── 결과 인라인 확장 (best-effort /jobs 재조회 폴백) ─────────────────
 function JobResult({ jobId }: { jobId: string }) {
   const [job, setJob] = useState<ClinicflixJobView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,6 +157,9 @@ function JobResult({ jobId }: { jobId: string }) {
 // ── 행 카드 ─────────────────────────────────────────────────────────
 function ConversionCard({ row }: { row: ConversionRow }) {
   const [open, setOpen] = useState(false);
+  // 영구 저장된 결과가 있으면 /jobs 재조회 없이 그대로 표시한다.
+  const saved = row.result_saved_at != null && row.result_assets != null;
+  const canExpand = saved || row.job_id != null;
 
   return (
     <div className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] space-y-3">
@@ -135,9 +181,14 @@ function ConversionCard({ row }: { row: ConversionRow }) {
             멀티채널 세트
           </span>
         )}
+        {saved && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-[#eef2f6] text-[#5b6573] border border-[#b4bfce] font-medium">
+            🔒 영구 저장됨
+          </span>
+        )}
       </div>
 
-      {row.job_id && (
+      {canExpand && (
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -147,7 +198,8 @@ function ConversionCard({ row }: { row: ConversionRow }) {
         </button>
       )}
 
-      {open && row.job_id && <JobResult jobId={row.job_id} />}
+      {open && saved && row.result_assets && <SavedResult assets={row.result_assets} />}
+      {open && !saved && row.job_id && <JobResult jobId={row.job_id} />}
     </div>
   );
 }
