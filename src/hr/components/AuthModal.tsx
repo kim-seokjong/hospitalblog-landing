@@ -24,6 +24,49 @@ const HOSPITAL_TYPES = [
 const SAVED_EMAIL_KEY = 'dp_saved_email';
 const LEGACY_SAVED_PW_KEY = 'dp_saved_pw';
 
+interface NaverLocalResult {
+  name: string;
+  category: string;
+  specialty: string;
+  address: string;
+  roadAddress: string;
+  region: string;
+  link: string;
+}
+
+// 네이버 category 토큰 → HOSPITAL_TYPES 별칭 매핑
+const HOSPITAL_TYPE_ALIASES: Record<string, string> = {
+  소아청소년과: '소아과',
+  비뇨의학과: '비뇨기과',
+  한방: '한의원',
+  한방병원: '한의원',
+  신경정신과: '정신건강의학과',
+  정신과: '정신건강의학과',
+};
+
+/**
+ * 네이버 지역검색 category(예 "병원,의원>피부과")의 마지막 토큰을
+ * HOSPITAL_TYPES 목록에 매핑한다. 매칭 실패 시 '' 반환(사용자가 직접 선택).
+ * HOSPITAL_TYPES 에 없는 진료과(신경외과·응급의학과 등)는 매칭 실패 처리한다.
+ */
+function mapCategoryToHospitalType(category: string): string {
+  if (!category) return '';
+  const last = category.split('>').pop()?.trim() ?? '';
+  if (!last) return '';
+
+  // 정확 매칭 우선
+  if ((HOSPITAL_TYPES as readonly string[]).includes(last)) return last;
+
+  // 별칭 매칭
+  if (HOSPITAL_TYPE_ALIASES[last]) return HOSPITAL_TYPE_ALIASES[last];
+
+  // 별칭 키 부분 포함 매칭 (예: "한방병원" 류)
+  const aliasKey = Object.keys(HOSPITAL_TYPE_ALIASES).find((k) => last.includes(k));
+  if (aliasKey) return HOSPITAL_TYPE_ALIASES[aliasKey];
+
+  return '';
+}
+
 export default function AuthModal({ onClose, onSuccess, initialMode = 'login', closable = true }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
 
@@ -48,6 +91,11 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
+  // 병원명 자동 채우기(네이버 지역검색)
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupResults, setLookupResults] = useState<NaverLocalResult[] | null>(null);
+  const [lookupMsg, setLookupMsg] = useState('');
+
   const supabase = createClient();
 
   // 저장된 이메일 불러오기 + 레거시 평문 비밀번호 정리
@@ -63,6 +111,46 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     setHospitalType(''); setConfirmPassword('');
     setAgreeTerms(false); setAgreePrivacy(false);
     setError(''); setMessage('');
+    setLookupLoading(false); setLookupResults(null); setLookupMsg('');
+  };
+
+  const handleLookup = async () => {
+    const q = hospitalName.trim();
+    if (!q) {
+      setLookupMsg('병원명을 먼저 입력해주세요.');
+      setLookupResults(null);
+      return;
+    }
+    setLookupLoading(true);
+    setLookupMsg('');
+    setLookupResults(null);
+    try {
+      const res = await fetch(`/api/clinic/lookup?query=${encodeURIComponent(q)}`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(json.error ?? '검색에 실패했습니다.');
+      }
+      const json = await res.json() as { results: NaverLocalResult[] };
+      const results = json.results ?? [];
+      setLookupResults(results);
+      if (results.length === 0) {
+        setLookupMsg('검색 결과가 없어요. 직접 입력해주세요.');
+      }
+    } catch {
+      setLookupResults([]);
+      setLookupMsg('검색에 실패했어요. 직접 입력해주세요.');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const applyCandidate = (c: NaverLocalResult) => {
+    setHospitalName(c.name);
+    setHospitalAddress(c.roadAddress || c.address);
+    const matchedType = mapCategoryToHospitalType(c.category);
+    if (matchedType) setHospitalType(matchedType);
+    setLookupResults(null);
+    setLookupMsg('');
   };
 
   const handleLogin = async () => {
@@ -272,6 +360,42 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
                       {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
+                </div>
+
+                {/* 병원 정보 자동 채우기 */}
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={handleLookup}
+                    disabled={lookupLoading}
+                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 disabled:text-gray-400"
+                  >
+                    {lookupLoading ? '검색 중...' : '🔎 네이버에서 병원 정보 자동 채우기'}
+                  </button>
+                  <p className="text-[10px] text-gray-400">병원명&apos;유형&apos;주소가 자동 입력됩니다. 전화번호는 직접 입력해주세요.</p>
+
+                  {lookupMsg && (
+                    <p className="text-[11px] text-gray-500">{lookupMsg}</p>
+                  )}
+
+                  {lookupResults && lookupResults.length > 0 && (
+                    <ul className="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden">
+                      {lookupResults.slice(0, 5).map((c, i) => (
+                        <li key={`${c.name}-${i}`}>
+                          <button
+                            type="button"
+                            onClick={() => applyCandidate(c)}
+                            className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors"
+                          >
+                            <span className="block text-xs font-semibold text-gray-900 truncate">{c.name}</span>
+                            <span className="block text-[10px] text-gray-500 truncate">
+                              {[c.category, c.roadAddress || c.address].filter(Boolean).join(' · ')}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 {/* 병원 유형 */}
