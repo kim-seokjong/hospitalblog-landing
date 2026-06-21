@@ -317,7 +317,7 @@ export default function BrandKitTab() {
 
         {/* 4. 원장님 미디어 */}
         <Section title="원장님 미디어 (선택)">
-          <label className="flex items-start gap-2 mb-4 cursor-pointer select-none">
+          <label className="flex items-start gap-2 mb-4 cursor-pointer select-none bg-[#ffece7] border border-[#ff4628]/30 rounded-lg px-3 py-3">
             <input
               type="checkbox"
               checked={brand.doctor_consent}
