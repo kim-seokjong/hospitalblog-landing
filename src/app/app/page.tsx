@@ -1054,6 +1054,11 @@ export default function AppPage() {
                 )}
               </>
             )}
+
+            {/* 모바일 광고 — 데스크톱(xl) 사이드 배너 대신 본문 하단에 노출 */}
+            <div className="xl:hidden mt-6 mx-auto w-full max-w-sm">
+              <HospitalMarketingBanner />
+            </div>
           </div>
 
           <AdBanner side="right" />
