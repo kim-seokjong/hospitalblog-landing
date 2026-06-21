@@ -120,15 +120,96 @@ function HospitalMarketingBanner() {
       className="ad-banner-hm relative block w-full rounded-2xl overflow-hidden no-underline cursor-pointer"
     >
       <span className="ad-pulse-dot absolute top-3 right-3 w-2 h-2 rounded-full bg-red-500 z-10" />
-      <img
-        src="/ads/hospitalmarketing-banner.jpg"
-        alt="병원 마케팅 풀세팅 — 인스타그램·유튜브·네이버 스마트플레이스·전광판·버스 택시 랩핑·택배 광고"
-        width={1280}
-        height={1916}
-        className="ad-banner-hm-img block w-full h-auto"
-        loading="lazy"
-        decoding="async"
-      />
+      <div className="relative w-full bg-gradient-to-b from-[#0a1024] via-[#0d1a3a] to-[#0a1024] rounded-2xl border border-[#cda349]/25 p-5 text-center overflow-hidden shadow-xl transition-colors duration-300 hover:from-[#0b1230] hover:to-[#0b1230]">
+        {/* 1. 상단 라벨 */}
+        <div className="flex items-center justify-center gap-2 mb-2.5">
+          <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#cda349]/60" />
+          <span className="text-[10px] tracking-wide text-[#e6c66a] font-semibold">
+            병·의원 마케팅의 진짜 변화!
+          </span>
+          <span className="h-px w-5 bg-gradient-to-l from-transparent to-[#cda349]/60" />
+        </div>
+
+        {/* 2. 헤드라인 */}
+        <h3 className="leading-tight">
+          <span className="block text-white font-extrabold text-2xl">온라인 완성!</span>
+          <span className="block font-extrabold text-2xl bg-gradient-to-r from-[#e6c66a] to-[#b8862f] bg-clip-text text-transparent">
+            다음은 오프라인이다.
+          </span>
+        </h3>
+
+        {/* 3. 서브텍스트 */}
+        <p className="mt-2 text-[11px] text-slate-300">
+          온라인에서 만든 신뢰, 오프라인에서 완성합니다.
+        </p>
+
+        {/* 4. 섹션 헤더 — 온라인 완료 채널 */}
+        <div className="mt-5">
+          <p className="text-xs font-bold text-[#e6c66a]">온라인 완료 채널</p>
+          <div className="mt-1.5 h-px w-full bg-gradient-to-r from-transparent via-[#cda349]/40 to-transparent" />
+        </div>
+
+        {/* 5. 온라인 채널 5개 */}
+        <div className="mt-3 grid grid-cols-5 gap-1.5">
+          {[
+            { icon: '📝', label: '블로그' },
+            { icon: '🗂️', label: '카드뉴스' },
+            { icon: '▶️', label: '숏츠' },
+            { icon: '📸', label: '인스타그램' },
+            { icon: '🧵', label: '스레드' },
+          ].map((ch) => (
+            <div
+              key={ch.label}
+              className="relative rounded-lg bg-white/5 border border-white/10 py-2 px-0.5"
+            >
+              <span className="absolute top-1 right-1 text-[8px] text-[#e6c66a]">✓</span>
+              <div className="text-base leading-none">{ch.icon}</div>
+              <div className="mt-1 text-[9px] text-slate-200 leading-tight">{ch.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* 6. 섹션 헤더 — 다음은 오프라인 채널 확장 */}
+        <div className="mt-5">
+          <p className="text-xs font-bold text-[#e6c66a]">다음은 오프라인 채널 확장</p>
+          <div className="mt-1.5 h-px w-full bg-gradient-to-r from-transparent via-[#cda349]/40 to-transparent" />
+        </div>
+
+        {/* 7. 오프라인 4개 */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {[
+            { no: '01', icon: '🖥️', label: 'LED 빌보드' },
+            { no: '02', icon: '🚌', label: '버스 랩핑' },
+            { no: '03', icon: '🚕', label: '택시 랩핑' },
+            { no: '04', icon: '🚚', label: '배달차량 랩핑' },
+          ].map((item) => (
+            <div
+              key={item.no}
+              className="rounded-lg bg-white/5 border border-[#cda349]/20 p-2.5 text-left"
+            >
+              <div className="text-[10px] font-bold text-[#e6c66a]">{item.no}</div>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <span className="text-base leading-none">{item.icon}</span>
+                <span className="text-[11px] font-semibold text-white">{item.label}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 8. 브랜드 푸터 */}
+        <div className="mt-5 flex flex-col items-center">
+          <div className="flex items-center gap-1.5">
+            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-br from-[#e6c66a] to-[#b8862f] text-[11px]">
+              🛡️
+            </span>
+            <span className="text-lg font-bold text-[#e6c66a]">광고진정성</span>
+          </div>
+          <span className="mt-0.5 text-[8px] tracking-[0.3em] text-[#cda349]">AD VERACITY</span>
+          <p className="mt-1.5 text-[8px] text-slate-400 leading-relaxed">
+            의료광고 전문 대행사 · 브랜드 컨설팅 · 온·오프라인 통합 마케팅 · 성과 중심 광고
+          </p>
+        </div>
+      </div>
     </a>
   );
 }
