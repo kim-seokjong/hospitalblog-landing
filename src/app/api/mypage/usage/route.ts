@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { createAdminClient, createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { isAdmin } from '@/hr/lib/admin';
 import { PLANS, isPaidPlanId } from '@/payment/lib/plans';
-import type { MonthlyUsagePoint, UsageSummary } from '@/hr/lib/mypage-types';
+import { currentUsageMonth, getMonthlyUsage, remainingSummary } from '@/content/lib/clinicflix-usage';
+import type { ClinicflixUsageView, MonthlyUsagePoint, UsageSummary } from '@/hr/lib/mypage-types';
 
 interface UsageLogRow {
   feature: string;
@@ -111,12 +112,24 @@ export async function GET() {
     const currentKey = monthKey(now);
     const imageCount = aggregated[currentKey]?.images ?? 0;
 
+    // 번들 플랜(영상/멀티채널 포함) 한정 — 이번 달 영상/멀티채널 사용량
+    let clinicflix: ClinicflixUsageView | null = null;
+    if (!isAdmin(user.email) && isPaidPlanId(profile.plan)) {
+      const plan = PLANS[profile.plan];
+      // 블로그 전용(standard/pro)은 limits.video<=0 && channels===0 → 제외
+      if (plan.limits.video > 0 || plan.limits.channels !== 0) {
+        const usage = await getMonthlyUsage(user.id, currentUsageMonth());
+        clinicflix = remainingSummary(profile.plan, usage);
+      }
+    }
+
     const summary: UsageSummary = {
       planName,
       usageCount,
       monthlyLimit,
       imageCount,
       monthly,
+      clinicflix,
     };
 
     return NextResponse.json({ usage: summary });

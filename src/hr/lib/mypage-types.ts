@@ -24,10 +24,16 @@ export interface MonthlyUsagePoint {
   images: number; // 이미지 생성 수
 }
 
+export interface ClinicflixUsageView {
+  video: { used: number; limit: number };
+  channel: { used: number; limit: number; softCap: number | null; cap: number };
+}
+
 export interface UsageSummary {
   planName: string | null;
   usageCount: number; // 이번 달 글 생성 횟수 (월간 리셋 반영)
   monthlyLimit: number; // -1 = 무제한, 0 = 플랜 없음
   imageCount: number; // 이번 달 이미지 생성 수
   monthly: MonthlyUsagePoint[]; // 최근 6개월 추이 (과거 → 현재 순)
+  clinicflix?: ClinicflixUsageView | null; // 번들 플랜 한정 영상/멀티채널 사용량
 }

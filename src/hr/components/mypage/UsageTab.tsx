@@ -130,6 +130,79 @@ export default function UsageTab() {
         )}
       </div>
 
+      {/* 이번 달 영상/멀티채널 (번들 플랜 한정) */}
+      {usage.clinicflix && (
+        <>
+          {(() => {
+            const v = usage.clinicflix!.video;
+            const vUnlimited = v.limit === -1;
+            const vRatio = !vUnlimited && v.limit > 0 ? Math.min(v.used / v.limit, 1) : 0;
+            const vNear = !vUnlimited && v.limit > 0 && vRatio >= UPGRADE_WARNING_RATIO;
+            return (
+              <div className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <h3 className="text-sm font-semibold text-[#202020] mb-3">이번 달 영상 생성</h3>
+                <div className="flex items-end gap-2 mb-3">
+                  <span className="text-3xl font-bold text-[#202020]">{v.used}</span>
+                  <span className="text-sm text-[#5b6573] mb-1">
+                    {vUnlimited ? '건 (무제한)' : `/ ${v.limit}건`}
+                  </span>
+                </div>
+                {!vUnlimited && v.limit > 0 && (
+                  <div className="w-full h-2.5 bg-[#eef2f6] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${vNear ? 'bg-amber-500' : 'bg-[#ff4628]'}`}
+                      style={{ width: `${Math.round(vRatio * 100)}%` }}
+                      role="progressbar"
+                      aria-valuenow={v.used}
+                      aria-valuemin={0}
+                      aria-valuemax={v.limit}
+                      aria-label="이번 달 영상 생성 사용량"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {(() => {
+            const c = usage.clinicflix!.channel;
+            const cUnlimited = c.limit === -1;
+            // 상한 = 무제한이면 softCap, 아니면 limit
+            const cBound = cUnlimited ? c.softCap : c.limit;
+            const showBar = cBound != null && cBound > 0;
+            const cRatio = showBar ? Math.min(c.used / cBound, 1) : 0;
+            const cNear = showBar && cRatio >= UPGRADE_WARNING_RATIO;
+            return (
+              <div className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <h3 className="text-sm font-semibold text-[#202020] mb-3">이번 달 멀티채널 세트</h3>
+                <div className="flex items-end gap-2 mb-2">
+                  <span className="text-3xl font-bold text-[#202020]">{c.used}</span>
+                  <span className="text-sm text-[#5b6573] mb-1">
+                    {cUnlimited ? '세트 (무제한)' : `/ ${c.limit}세트`}
+                  </span>
+                </div>
+                {cUnlimited && c.softCap != null && (
+                  <p className="text-xs text-[#5b6573] mb-2">공정사용 {c.softCap}세트</p>
+                )}
+                {showBar && (
+                  <div className="w-full h-2.5 bg-[#eef2f6] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${cNear ? 'bg-amber-500' : 'bg-[#ff4628]'}`}
+                      style={{ width: `${Math.round(cRatio * 100)}%` }}
+                      role="progressbar"
+                      aria-valuenow={c.used}
+                      aria-valuemin={0}
+                      aria-valuemax={cBound}
+                      aria-label="이번 달 멀티채널 세트 사용량"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </>
+      )}
+
       {/* 이번 달 이미지 생성 */}
       <div className="bg-white border border-[#b4bfce] rounded-xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
         <h3 className="text-sm font-semibold text-[#202020] mb-3">이번 달 이미지 생성</h3>

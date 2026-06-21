@@ -11,6 +11,7 @@ import ProfileTab from '@/hr/components/mypage/ProfileTab';
 import SubscriptionTab from '@/hr/components/mypage/SubscriptionTab';
 import UsageTab from '@/hr/components/mypage/UsageTab';
 import ContentArchiveTab from '@/hr/components/mypage/ContentArchiveTab';
+import ConversionHistoryTab from '@/hr/components/mypage/ConversionHistoryTab';
 import BrandKitTab from '@/hr/components/mypage/BrandKitTab';
 import PhotoLibraryTab from '@/hr/components/mypage/PhotoLibraryTab';
 
@@ -117,6 +118,7 @@ function MyPageContent() {
         {activeTab === 'subscription' && <SubscriptionTab />}
         {activeTab === 'usage' && <UsageTab />}
         {activeTab === 'posts' && <ContentArchiveTab />}
+        {activeTab === 'conversions' && <ConversionHistoryTab />}
         {activeTab === 'brandkit' && <BrandKitTab />}
         {activeTab === 'photos' && <PhotoLibraryTab />}
       </div>

@@ -189,3 +189,26 @@ export async function commitUsage(
   const result = data as { ok: boolean; reason?: string } | null
   return result ?? { ok: false, reason: 'unknown' }
 }
+
+export interface ConversionRow {
+  conversion_id: string
+  job_id: string | null
+  plan: string
+  usage_month: string
+  status: string | null
+  consume_video: boolean
+  consume_channel: boolean
+  usage_committed: boolean
+  created_at: string
+}
+
+/** 회원의 최근 변환 기록 (최신순). */
+export async function getConversionsByUser(userId: string, limit = 50): Promise<ConversionRow[]> {
+  const { data } = await admin()
+    .from('clinicflix_conversions')
+    .select('conversion_id, job_id, plan, usage_month, status, consume_video, consume_channel, usage_committed, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  return (data ?? []) as ConversionRow[]
+}
