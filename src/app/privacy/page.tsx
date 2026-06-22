@@ -16,13 +16,13 @@ export default function PrivacyPage() {
             ← 홈으로
           </Link>
           <h1 className="text-3xl font-bold text-[#202020] mb-3">개인정보처리방침</h1>
-          <p className="text-sm text-[#5b6573]">시행일: 2026년 5월 2일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 2일</p>
+          <p className="text-sm text-[#5b6573]">시행일: 2026년 5월 2일 &nbsp;|&nbsp; 최종 수정: 2026년 6월 22일</p>
         </div>
 
         <div className="space-y-10 text-sm leading-relaxed">
 
           <p>
-            닥터포스트(이하 "서비스")를 운영하는 닥터포스트(이하 "회사")는 이용자의 개인정보를 중요하게 여기며,
+            닥터포스트(이하 "서비스")를 운영하는 광고진정성(이하 "회사")는 이용자의 개인정보를 중요하게 여기며,
             「개인정보 보호법」 및 관련 법령을 준수합니다. 본 방침은 회사가 수집하는 개인정보의 항목,
             수집 목적, 보유 기간, 제3자 제공 여부 및 이용자의 권리에 대해 설명합니다.
           </p>
@@ -43,7 +43,7 @@ export default function PrivacyPage() {
               <div>
                 <p className="font-medium text-[#202020] mb-2">결제 시</p>
                 <ul className="list-disc list-inside space-y-1 text-[#4a4f55] ml-2">
-                  <li>결제수단 정보(카드 번호 끝 4자리, 카드사명) — PG사(갤럭시아, 카카오페이)가 직접 처리하며 회사는 저장하지 않습니다</li>
+                  <li>결제수단 정보(카드 번호 끝 4자리, 카드사명) — PG사(한국결제네트웍스(KPN)) 및 결제 연동 대행사(포트원, PortOne)가 직접 처리하며 회사는 카드 정보를 저장하지 않습니다</li>
                   <li>결제 내역, 영수증 URL</li>
                 </ul>
               </div>
@@ -95,10 +95,12 @@ export default function PrivacyPage() {
                 </thead>
                 <tbody>
                   {[
-                    ['회원 정보', '회원 탈퇴 후 즉시 삭제 (단, 법령에서 정한 기간 우선)'],
-                    ['결제 내역', '5년 (전자상거래 등에서의 소비자보호에 관한 법률)'],
+                    ['회원 정보', '회원 탈퇴 후 즉시 삭제 (단, 아래 법정 보존의무 기록은 해당 기간 동안 분리 보관)'],
+                    ['계약 또는 청약철회 등에 관한 기록', '5년 (전자상거래법 시행령 제6조)'],
+                    ['대금결제 및 재화 등의 공급에 관한 기록', '5년 (전자상거래법 시행령 제6조)'],
+                    ['소비자 불만 또는 분쟁처리에 관한 기록', '3년 (전자상거래법 시행령 제6조)'],
+                    ['표시·광고에 관한 기록', '6개월 (전자상거래법 시행령 제6조)'],
                     ['접속 로그', '3개월'],
-                    ['분쟁 관련 기록', '분쟁 해결 후 1년'],
                     ['업로드 이미지·영상 자산', '회원 탈퇴 또는 이용자 삭제 시 즉시 삭제'],
                   ].map(([item, period]) => (
                     <tr key={item} className="border-b border-[#b4bfce]">
@@ -145,8 +147,8 @@ export default function PrivacyPage() {
                     ['Anthropic / OpenAI', 'AI 콘텐츠 생성 처리 (입력 데이터 임시 처리)'],
                     ['fal.ai', 'AI 이미지·영상 생성 처리 (입력 이미지·영상 임시 처리)'],
                     ['HeyGen', '원장님 사진·영상 기반 AI 립싱크 영상 생성 처리'],
-                    ['갤럭시아머니트리', '신용/체크카드 결제 처리'],
-                    ['카카오페이', '카카오페이 결제 처리'],
+                    ['한국결제네트웍스(KPN)', '신용/체크카드 결제 처리'],
+                    ['포트원(PortOne)', '결제 연동 대행(빌링키 발급·결제 게이트웨이)'],
                     ['Vercel Inc.', '서비스 호스팅 및 배포'],
                     ['Meta Platforms', '광고 성과 측정 (Meta Pixel/CAPI)'],
                   ].map(([company, task]) => (
@@ -158,7 +160,17 @@ export default function PrivacyPage() {
                 </tbody>
               </table>
             </div>
-            <p className="text-xs text-[#5b6573] mt-3">위 수탁업체 중 일부(Anthropic, OpenAI, fal.ai, HeyGen, Supabase, Vercel 등)는 국외(미국 등)에 소재하며, 이용자가 입력한 데이터가 국외에서 처리될 수 있습니다.</p>
+            <div className="mt-4 bg-[#eef2f6] border border-[#b4bfce] rounded-xl p-5 text-[#4a4f55]">
+              <p className="font-medium text-[#202020] mb-2">개인정보의 국외 이전 고지 (개인정보 보호법 제28조의8)</p>
+              <ul className="list-disc list-inside space-y-1 text-[#4a4f55] ml-1">
+                <li><span className="text-[#202020]">이전받는 자:</span> Anthropic, OpenAI, fal.ai, HeyGen, Supabase, Vercel 등</li>
+                <li><span className="text-[#202020]">이전되는 국가:</span> 미국 등</li>
+                <li><span className="text-[#202020]">이전 일시 및 방법:</span> 서비스 이용 시 정보통신망을 통한 전송</li>
+                <li><span className="text-[#202020]">이전 항목:</span> 이용자가 입력·업로드한 콘텐츠 데이터 및 이미지·영상</li>
+                <li><span className="text-[#202020]">이전 목적:</span> AI 콘텐츠 생성 및 호스팅</li>
+                <li><span className="text-[#202020]">보유·이용 기간:</span> 처리 완료 후 즉시 파기 또는 위탁계약 종료 시까지</li>
+              </ul>
+            </div>
           </section>
 
           {/* 6 */}
@@ -197,7 +209,9 @@ export default function PrivacyPage() {
               8. 개인정보 보호책임자
             </h2>
             <div className="bg-[#eef2f6] border border-[#b4bfce] rounded-xl p-5 space-y-2 text-[#4a4f55]">
+              <p><span className="text-[#202020]">회사명:</span> 광고진정성</p>
               <p><span className="text-[#202020]">서비스명:</span> 닥터포스트</p>
+              <p><span className="text-[#202020]">개인정보 보호책임자:</span> 김석종</p>
               <p><span className="text-[#202020]">이메일:</span>{' '}
                 <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
                   terro6936@gmail.com
@@ -217,8 +231,28 @@ export default function PrivacyPage() {
             </p>
           </section>
 
+          {/* 사업자 정보 */}
+          <section>
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
+              사업자 정보
+            </h2>
+            <div className="bg-[#eef2f6] border border-[#b4bfce] rounded-xl p-5 space-y-2 text-[#4a4f55]">
+              <p><span className="text-[#202020]">상호:</span> 광고진정성</p>
+              <p><span className="text-[#202020]">대표자:</span> 김석종</p>
+              <p><span className="text-[#202020]">사업자등록번호:</span> 570-60-00560</p>
+              <p><span className="text-[#202020]">주소:</span> 대구광역시 수성구 청호로422 2층</p>
+              <p><span className="text-[#202020]">전화:</span> 010-2558-1115</p>
+              <p><span className="text-[#202020]">이메일:</span>{' '}
+                <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
+                  terro6936@gmail.com
+                </a>
+              </p>
+              <p><span className="text-[#202020]">통신판매업 신고번호:</span> 신고 예정</p>
+            </div>
+          </section>
+
           <p className="text-xs text-[#5b6573] pt-6 border-t border-[#b4bfce]">
-            본 방침은 2026년 5월 2일부터 적용됩니다.
+            본 방침은 2026년 5월 2일부터 적용됩니다. (최종 수정: 2026년 6월 22일)
           </p>
         </div>
       </div>

@@ -15,7 +15,7 @@ export default function RefundPage() {
             ← 홈으로
           </Link>
           <h1 className="text-3xl font-bold text-[#202020] mb-3">환불·해지정책</h1>
-          <p className="text-sm text-[#5b6573]">시행일: 2026년 5월 8일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 8일</p>
+          <p className="text-sm text-[#5b6573]">시행일: 2026년 5월 8일 &nbsp;|&nbsp; 최종 수정: 2026년 6월 22일</p>
         </div>
 
         <div className="space-y-10 text-sm leading-relaxed">
@@ -69,7 +69,7 @@ export default function RefundPage() {
                 <tbody>
                   {[
                     ['결제 후 7일 이내 & 콘텐츠 생성 0건', '전액 환불', '청약철회권 (전자상거래법 제17조)'],
-                    ['결제 후 7일 이내 & 콘텐츠 생성 1건 이상', '환불 불가', '디지털 콘텐츠 사용 (동법 제17조 제2항 제5호)'],
+                    ['결제 후 7일 이내 & 콘텐츠 일부 생성·사용', '부분 환불 가능', '사용분은 환불 제한, 미사용분이 명확히 구분되면 회사 기준에 따라 부분 환불 (동법 제17조 제2항 제5호)'],
                     ['결제 후 8일 이후', '환불 불가', '구독 해지로 다음 결제 중단만 가능'],
                     ['서비스 장애로 이용 불가 (회사 귀책)', '장애 기간 비례 환불 또는 사용량 보상', '회사 판단 후 개별 안내'],
                   ].map(([timing, refund, note]) => (
@@ -127,7 +127,7 @@ export default function RefundPage() {
               6. 환불 불가 사유
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
-              <li>결제 후 서비스(콘텐츠 생성)를 1건 이상 사용한 경우</li>
+              <li>결제 후 이미 생성·사용한 콘텐츠 사용분 (단, 미사용분이 명확히 구분되는 경우 회사가 정한 기준에 따라 부분 환불이 가능합니다)</li>
               <li>결제일로부터 8일 이상 경과한 경우 (해지로 다음 결제 중단만 가능)</li>
               <li>이용약관 위반으로 서비스 이용이 제한된 경우</li>
               <li>허위 정보 제공 또는 부정 이용이 확인된 경우</li>
@@ -161,8 +161,27 @@ export default function RefundPage() {
             </div>
           </section>
 
+          <section>
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
+              사업자 정보
+            </h2>
+            <div className="bg-[#eef2f6] border border-[#b4bfce] rounded-xl p-5 space-y-2 text-[#4a4f55]">
+              <p><span className="text-[#202020]">상호:</span> 광고진정성</p>
+              <p><span className="text-[#202020]">대표자:</span> 김석종</p>
+              <p><span className="text-[#202020]">사업자등록번호:</span> 570-60-00560</p>
+              <p><span className="text-[#202020]">주소:</span> 대구광역시 수성구 청호로422 2층</p>
+              <p><span className="text-[#202020]">전화:</span> 010-2558-1115</p>
+              <p><span className="text-[#202020]">이메일:</span>{' '}
+                <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
+                  terro6936@gmail.com
+                </a>
+              </p>
+              <p><span className="text-[#202020]">통신판매업 신고번호:</span> 신고 예정</p>
+            </div>
+          </section>
+
           <p className="text-xs text-[#5b6573] pt-6 border-t border-[#b4bfce]">
-            본 환불·해지정책은 2026년 5월 8일부터 적용됩니다.
+            본 환불·해지정책은 2026년 5월 8일부터 적용됩니다. (최종 수정: 2026년 6월 22일)
           </p>
         </div>
       </div>

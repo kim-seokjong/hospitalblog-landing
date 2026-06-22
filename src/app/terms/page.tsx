@@ -15,7 +15,7 @@ export default function TermsPage() {
             ← 홈으로
           </Link>
           <h1 className="text-3xl font-bold text-[#202020] mb-3">이용약관</h1>
-          <p className="text-sm text-[#5b6573]">시행일: 2026년 5월 8일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 8일</p>
+          <p className="text-sm text-[#5b6573]">시행일: 2026년 5월 8일 &nbsp;|&nbsp; 최종 수정: 2026년 6월 22일</p>
         </div>
 
         <div className="space-y-10 text-sm leading-relaxed">
@@ -78,9 +78,11 @@ export default function TermsPage() {
                 </thead>
                 <tbody>
                   {[
-                    ['베이직', '99,000원/월', '월 10건'],
-                    ['스탠다드', '199,000원/월', '월 20건'],
-                    ['프로', '399,000원/월', '무제한'],
+                    ['스탠다드', '199,000원/월', '블로그 월 20건'],
+                    ['프로', '399,000원/월', '블로그 무제한'],
+                    ['올인원 그로스', '499,000원/월', '블로그 20건 · 영상 8건 · 멀티채널 20건'],
+                    ['올인원 프로', '699,000원/월', '블로그 무제한 · 영상 12건 · 멀티채널 무제한(공정사용 소프트캡 60세트)'],
+                    ['베이직', '99,000원/월', '블로그 월 10건 (※ 신규 판매 중단, 기존 가입자만 유지)'],
                   ].map(([plan, price, limit]) => (
                     <tr key={plan} className="border-b border-[#b4bfce]">
                       <td className="px-4 py-3 text-[#4a4f55] border border-[#b4bfce]">{plan}</td>
@@ -95,6 +97,9 @@ export default function TermsPage() {
               <li>사용량은 콘텐츠 본문 생성 1회를 1건으로 계산합니다.</li>
               <li>월 사용량은 매월 결제일 기준으로 초기화됩니다.</li>
               <li>요금제 변경은 즉시 적용되며, 상위 플랜 전환 시 남은 사용량은 새 플랜 한도로 대체됩니다.</li>
+              <li>영상·멀티채널 콘텐츠는 올인원 플랜에서만 제공됩니다.</li>
+              <li>베이직 플랜은 신규 판매가 중단되었으며, 기존 가입자에 한해 동일 조건으로 유지됩니다.</li>
+              <li>표기된 모든 요금은 부가가치세(VAT)가 포함된 가격입니다.</li>
             </ul>
           </section>
 
@@ -105,7 +110,7 @@ export default function TermsPage() {
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
               <li>본 서비스는 매월 동일한 날짜에 자동 청구되는 <strong className="text-[#202020]">자동갱신 구독 방식</strong>으로만 운영됩니다.</li>
               <li>최초 결제 시 등록한 카드(빌링키)로 매월 결제일에 자동으로 요금이 청구됩니다.</li>
-              <li>다음 결제일 7일 전 등록된 이메일로 사전 안내를 발송합니다(방통위 「전자상거래법」 준수).</li>
+              <li>다음 결제일 7일 전 등록된 이메일로 사전 안내를 발송합니다(「전자상거래법」 등 관련 법령 준수).</li>
               <li>결제일에 카드 한도 초과·유효기간 만료 등으로 결제가 실패할 경우, 3일 후 1회 재시도 후에도 실패 시 구독이 자동 해지될 수 있습니다.</li>
               <li>이용자는 마이페이지(<code className="text-[#ff4628]">/app/subscription</code>)에서 언제든지 1클릭으로 해지할 수 있습니다.</li>
               <li>해지하더라도 마지막 결제일로부터 1개월(이미 결제한 기간) 동안은 서비스를 계속 이용할 수 있습니다.</li>
@@ -122,7 +127,7 @@ export default function TermsPage() {
             </p>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
               <li>최초 결제일로부터 <strong className="text-[#202020]">7일 이내, 콘텐츠 생성을 1건도 사용하지 않은 경우</strong> 100% 환불됩니다.</li>
-              <li>1건 이상 콘텐츠를 생성한 경우 디지털 콘텐츠 사용으로 간주되어 환불이 제한될 수 있습니다(동법 제17조 제2항 제5호).</li>
+              <li>이미 콘텐츠를 생성·사용한 경우 해당 사용분에 대해서는 환불이 제한될 수 있으며(동법 제17조 제2항 제5호), 미사용분이 명확히 구분되는 경우 회사가 정한 기준에 따라 부분 환불이 가능합니다.</li>
               <li>자동갱신 결제 후에도 마지막 결제일 기준 7일 이내 사용분이 없다면 동일 기준으로 환불 가능합니다.</li>
               <li>구체적인 환불 절차와 기준은{' '}
                 <Link href="/refund" className="text-[#ff4628] underline hover:text-[#e63a1c]">환불정책</Link>{' '}
@@ -187,6 +192,7 @@ export default function TermsPage() {
               <li>회사는 AI 생성 콘텐츠의 정확성, 완전성, 법적 적합성을 보증하지 않습니다.</li>
               <li>이용자가 생성한 콘텐츠를 블로그 등 외부 채널에 게시함으로써 발생하는 문제에 대해 회사는 책임을 지지 않습니다.</li>
               <li>회사의 귀책 사유 없이 발생한 손해(이용자 과실, 해킹, 불가항력 등)에 대해서는 책임을 지지 않습니다.</li>
+              <li>단, 회사의 고의 또는 중대한 과실로 인한 손해에 대해서는 관련 법령에 따라 책임을 집니다.</li>
             </ul>
           </section>
 
@@ -200,8 +206,27 @@ export default function TermsPage() {
             </ul>
           </section>
 
+          <section>
+            <h2 className="text-lg font-semibold text-[#202020] mb-4 pb-2 border-b border-[#b4bfce]">
+              사업자 정보
+            </h2>
+            <div className="bg-[#eef2f6] border border-[#b4bfce] rounded-xl p-5 space-y-2 text-[#4a4f55]">
+              <p><span className="text-[#202020]">상호:</span> 광고진정성</p>
+              <p><span className="text-[#202020]">대표자:</span> 김석종</p>
+              <p><span className="text-[#202020]">사업자등록번호:</span> 570-60-00560</p>
+              <p><span className="text-[#202020]">주소:</span> 대구광역시 수성구 청호로422 2층</p>
+              <p><span className="text-[#202020]">전화:</span> 010-2558-1115</p>
+              <p><span className="text-[#202020]">이메일:</span>{' '}
+                <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
+                  terro6936@gmail.com
+                </a>
+              </p>
+              <p><span className="text-[#202020]">통신판매업 신고번호:</span> 신고 예정</p>
+            </div>
+          </section>
+
           <p className="text-xs text-[#5b6573] pt-6 border-t border-[#b4bfce]">
-            본 약관은 2026년 5월 8일부터 적용됩니다.
+            본 약관은 2026년 5월 8일부터 적용됩니다. (최종 수정: 2026년 6월 22일)
           </p>
         </div>
       </div>
