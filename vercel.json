@@ -46,6 +46,9 @@
     },
     "app/api/cron/billing-cancel/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/cron/track-rankings/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -64,6 +67,10 @@
     {
       "path": "/api/cron/billing-cancel",
       "schedule": "30 19 * * *"
+    },
+    {
+      "path": "/api/cron/track-rankings",
+      "schedule": "0 18 * * *"
     }
   ]
 }

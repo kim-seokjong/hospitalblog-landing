@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# claude code 임시 워크트리 (에이전트 격리 작업본 — 커밋 제외)
+.claude/worktrees/
+
 # vercel
 .vercel
 
