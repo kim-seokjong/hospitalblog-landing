@@ -63,12 +63,14 @@ export async function GET() {
     const blogConfigured = extractNaverBlogId(profileRow?.naver_blog_url ?? null) !== null;
 
     // 1) 최근 발행글 (RLS로 본인 것만)
+    // published_at 은 발행 시 기록되지 않아 null 인 경우가 많다 → created_at 폴백 포함.
+    const sinceIso = since.toISOString();
     const { data: postsData, error: postsErr } = await supabase
       .from('saved_posts')
-      .select('id, title, keyword, target_site, published_url, published_at')
+      .select('id, title, keyword, target_site, published_url, published_at, created_at')
       .eq('status', 'published')
-      .gte('published_at', since.toISOString())
-      .order('published_at', { ascending: false })
+      .or(`published_at.gte.${sinceIso},and(published_at.is.null,created_at.gte.${sinceIso})`)
+      .order('created_at', { ascending: false })
       .limit(100);
 
     if (postsErr) {
@@ -119,7 +121,7 @@ export async function GET() {
         keyword: p.keyword ?? null,
         targetSite,
         publishedUrl: p.published_url ?? null,
-        publishedAt: p.published_at ?? null,
+        publishedAt: p.published_at ?? p.created_at ?? null,
         latestRank,
         // 차트는 과거→현재 순이 자연스러우므로 뒤집어 반환
         history: [...history].reverse(),

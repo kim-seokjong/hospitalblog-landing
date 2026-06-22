@@ -46,12 +46,14 @@ export async function GET(req: NextRequest) {
 
   try {
     // 최근 N개월 발행글 (키워드가 있는 것만 — 순위 추적의 전제)
+    // published_at 은 현재 발행 시 기록되지 않아 null 인 경우가 많다 → created_at 폴백 포함.
+    const sinceIso = since.toISOString();
     const { data, error } = await admin
       .from('saved_posts')
       .select('id, user_id, keyword, target_site, published_url')
       .eq('status', 'published')
-      .gte('published_at', since.toISOString())
-      .order('published_at', { ascending: false })
+      .or(`published_at.gte.${sinceIso},and(published_at.is.null,created_at.gte.${sinceIso})`)
+      .order('created_at', { ascending: false })
       .limit(MAX_POSTS);
 
     if (error) {
