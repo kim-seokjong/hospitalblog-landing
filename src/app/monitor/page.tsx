@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
+import RoiSimulator from '@/content/components/RoiSimulator';
 
 interface NaverPost {
   title: string;
@@ -161,6 +162,16 @@ export default function MonitorPage() {
       setLoading(false);
     }
   }, [specialty, region, keyword]);
+
+  /** 추천 키워드 검색량 합 → ROI 시뮬레이터 prefill (데이터 없으면 0) */
+  const roiVolumePrefill = useMemo(() => {
+    if (!result) return 0;
+    const sum = Object.values(result.volumes).reduce(
+      (acc, v) => acc + (Number.isFinite(v.total) && v.total > 0 ? v.total : 0),
+      0
+    );
+    return Math.round(sum);
+  }, [result]);
 
   /** 추천 주제/키워드로 글쓰기 → prefill 후 /app 이동 */
   const writeWithTopic = useCallback((topic: string, kw: string) => {
@@ -360,6 +371,9 @@ export default function MonitorPage() {
                 </p>
               )}
             </div>
+
+            {/* ── 마케팅 ROI 추정 시뮬레이터 (계획용·추정) ── */}
+            <RoiSimulator initialMonthlyVolume={roiVolumePrefill} />
 
             {/* ── Claude 인사이트 (주제 + 키워드) ── */}
             <div className="bg-white border border-[#b4bfce] rounded-2xl p-5 sm:p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
