@@ -19,6 +19,16 @@ interface ProfileUpdateBody {
   naver_blog_url?: string
 }
 
+// 마이그레이션 028(naver_blog_url) 미적용 환경에서도 안 깨지게 base/full 분리.
+const PROFILE_COLS_BASE =
+  'full_name, phone, hospital_name, hospital_address, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage'
+const PROFILE_COLS_FULL = `${PROFILE_COLS_BASE}, naver_blog_url`
+
+function isMissingBlogUrlColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  return error.code === '42703' || (error.message?.includes('naver_blog_url') ?? false)
+}
+
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient()
@@ -28,13 +38,20 @@ export async function GET() {
       return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 })
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('profiles')
-      .select(
-        'full_name, phone, hospital_name, hospital_address, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage, naver_blog_url'
-      )
+      .select(PROFILE_COLS_FULL)
       .eq('id', user.id)
       .single()
+
+    // naver_blog_url 컬럼이 아직 없으면(마이그 028 미적용) 컬럼 제외 후 재조회
+    if (isMissingBlogUrlColumn(error)) {
+      ;({ data, error } = await supabase
+        .from('profiles')
+        .select(PROFILE_COLS_BASE)
+        .eq('id', user.id)
+        .single())
+    }
 
     if (error && error.code !== 'PGRST116') {
       return NextResponse.json({ error: '프로필 조회 실패' }, { status: 500 })
@@ -78,10 +95,20 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('profiles')
       .update(updates)
       .eq('id', user.id)
+
+    // naver_blog_url 컬럼이 아직 없으면(마이그 028 미적용) 해당 키 제외 후 재저장
+    if (isMissingBlogUrlColumn(error)) {
+      const { naver_blog_url, ...rest } = updates
+      void naver_blog_url
+      ;({ error } = await supabase
+        .from('profiles')
+        .update(rest)
+        .eq('id', user.id))
+    }
 
     if (error) {
       return NextResponse.json({ error: '프로필 저장 실패' }, { status: 500 })
