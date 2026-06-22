@@ -37,7 +37,9 @@ const KEYWORDSTOOL_URI = '/keywordstool';
 export function readSearchAdCredentials(
   env: NodeJS.ProcessEnv = process.env
 ): SearchAdCredentials | null {
-  const apiKey = env.NAVER_AD_API_KEY?.trim();
+  // 네이버 공식 용어는 '액세스 라이선스'(NAVER_AD_ACCESS_LICENSE).
+  // 과거 명명(NAVER_AD_API_KEY)도 호환 유지.
+  const apiKey = (env.NAVER_AD_ACCESS_LICENSE ?? env.NAVER_AD_API_KEY)?.trim();
   const secretKey = env.NAVER_AD_SECRET_KEY?.trim();
   const customerId = env.NAVER_AD_CUSTOMER_ID?.trim();
 
