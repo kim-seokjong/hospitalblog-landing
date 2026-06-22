@@ -158,6 +158,8 @@ export interface SavedPost {
   published_at: string | null
   /** 게시 사이트 — 마이그레이션 018 적용 전 행/구버전 행은 null (네이버로 간주) */
   target_site?: TargetSite | null
+  /** 발행된 글 URL — 마이그레이션 027 적용 전/URL 미수집 행은 null (순위 매칭은 블로그ID로 폴백) */
+  published_url?: string | null
   created_at: string
   updated_at: string
 }

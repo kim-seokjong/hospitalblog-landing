@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy, target_site, status } = body;
+    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy, target_site, status, published_url } = body;
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
       return NextResponse.json({ error: '제목은 필수입니다.' }, { status: 400 });
@@ -67,6 +67,12 @@ export async function POST(req: NextRequest) {
     const validTargetSite =
       target_site === 'naver' || target_site === 'google' ? target_site : null;
 
+    // published_url은 선택적 — http(s) URL일 때만 저장 (미전송/비정상 시 컬럼 제외해 하위 호환)
+    const validPublishedUrl =
+      typeof published_url === 'string' && /^https?:\/\//i.test(published_url.trim())
+        ? published_url.trim()
+        : null;
+
     const { data, error } = await supabase
       .from('saved_posts')
       .insert({
@@ -82,6 +88,7 @@ export async function POST(req: NextRequest) {
         sms_copy: sms_copy ?? null,
         status: validStatus,
         ...(validTargetSite ? { target_site: validTargetSite } : {}),
+        ...(validPublishedUrl ? { published_url: validPublishedUrl } : {}),
       })
       .select()
       .single();

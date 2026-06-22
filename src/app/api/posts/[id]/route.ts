@@ -50,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
 
     const body = await req.json();
-    const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score', 'target_site'];
+    const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score', 'target_site', 'published_url'];
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     for (const field of allowedFields) {
@@ -84,6 +84,15 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
             updates[field] = val;
           } else {
             return NextResponse.json({ error: 'target_site는 naver 또는 google이어야 합니다.' }, { status: 400 });
+          }
+        } else if (field === 'published_url') {
+          const val = body[field];
+          if (val === null) {
+            updates[field] = null;
+          } else if (typeof val === 'string' && /^https?:\/\//i.test(val.trim())) {
+            updates[field] = val.trim();
+          } else {
+            return NextResponse.json({ error: 'published_url은 http(s) URL이어야 합니다.' }, { status: 400 });
           }
         } else {
           updates[field] = body[field];

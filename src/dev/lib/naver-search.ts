@@ -27,6 +27,51 @@ export async function searchNaverBlogs(keyword: string, display = 5): Promise<Na
   }
 }
 
+/** 순위 추적용 블로그 검색결과 (link/bloggername 포함). */
+export interface NaverBlogRankItem {
+  link: string;
+  bloggername: string;
+}
+
+/**
+ * 순위 추적용 네이버 블로그 검색. display(최대 100)·sort=sim(관련도) 고정.
+ * 키가 없거나 실패하면 [] 반환(graceful). link/bloggername만 추린다(개인정보 최소수집).
+ */
+export async function searchNaverBlogRankItems(
+  keyword: string,
+  display = 100,
+): Promise<NaverBlogRankItem[]> {
+  const clientId = process.env.NAVER_CLIENT_ID;
+  const clientSecret = process.env.NAVER_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return [];
+  if (!keyword || keyword.trim() === '') return [];
+
+  try {
+    const params = new URLSearchParams({
+      query: keyword.trim(),
+      display: String(Math.min(Math.max(display, 1), 100)),
+      sort: 'sim',
+    });
+    const res = await fetch(`https://openapi.naver.com/v1/search/blog.json?${params}`, {
+      headers: {
+        'X-Naver-Client-Id': clientId,
+        'X-Naver-Client-Secret': clientSecret,
+      },
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      items?: { link?: string; bloggername?: string; bloggerlink?: string }[];
+    };
+    return (data.items ?? []).map((item) => ({
+      link: (item.link ?? '').trim(),
+      // bloggername 우선, 없으면 bloggerlink 도메인의 블로그 ID 추정
+      bloggername: (item.bloggername ?? '').replace(/<[^>]+>/g, '').trim(),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export function buildCompetitorInsightText(results: NaverBlogResult[]): string {
   if (results.length === 0) return '';
   return results
