@@ -149,6 +149,7 @@ function RankingCard({ item }: { item: PostRankingItem }) {
 export default function RankingsTab() {
   const [items, setItems] = useState<PostRankingItem[]>([]);
   const [volumeAvailable, setVolumeAvailable] = useState(false);
+  const [blogConfigured, setBlogConfigured] = useState(true);
   const [state, setState] = useState<FetchState>('loading');
   const [error, setError] = useState('');
 
@@ -161,9 +162,10 @@ export default function RankingsTab() {
         const json = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(json.error ?? '성과 리포트를 불러오지 못했습니다.');
       }
-      const json = await res.json() as { items: PostRankingItem[]; volumeAvailable: boolean };
+      const json = await res.json() as { items: PostRankingItem[]; volumeAvailable: boolean; blogConfigured?: boolean };
       setItems(json.items ?? []);
       setVolumeAvailable(Boolean(json.volumeAvailable));
+      setBlogConfigured(json.blogConfigured !== false);
       setState('ready');
     } catch (err) {
       setError(err instanceof Error ? err.message : '성과 리포트를 불러오지 못했습니다.');
@@ -209,6 +211,22 @@ export default function RankingsTab() {
             : '아직 추적 데이터가 없습니다. 다음 자동 추적 후 수집됩니다.'}
         </p>
       </div>
+
+      {/* 블로그 주소 미설정 안내 — 추적의 전제 (자동발행 연동과 무관) */}
+      {!blogConfigured && (
+        <div className="bg-[#ffece7] border border-[#ff4628]/30 rounded-2xl p-4 sm:p-5">
+          <p className="text-sm font-semibold text-[#202020] mb-1">내 블로그 주소를 입력하면 순위 추적이 시작됩니다</p>
+          <p className="text-xs text-[#5b6573] leading-relaxed mb-3">
+            공개 블로그 주소만 있으면 됩니다. 자동발행 연동은 필요 없습니다. 생성글을 직접 발행하는 경우에도 추적됩니다.
+          </p>
+          <a
+            href="/mypage?tab=profile"
+            className="inline-block px-4 py-2 bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm font-semibold rounded-xl transition-colors"
+          >
+            내 정보에서 블로그 주소 입력하기
+          </a>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className="py-16 text-center bg-white border border-[#b4bfce] rounded-2xl shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">

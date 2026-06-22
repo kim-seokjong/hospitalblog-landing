@@ -49,6 +49,53 @@ export function extractBlogId(rawUrl: string): string {
   return '';
 }
 
+/**
+ * 사용자가 프로필에 입력한 "공개 블로그 주소"에서 네이버 블로그 ID를 추출한다.
+ * 순위추적용(공개 검색)이라 로그인/쿠키가 전혀 불필요하며, 자동발행 연동과 무관하다.
+ *
+ * 허용 입력(모두 동일 ID로 정규화):
+ *  - 맨몸 ID:                myclinic
+ *  - 도메인 경로:            blog.naver.com/myclinic
+ *  - 프로토콜 포함:          https://blog.naver.com/myclinic
+ *  - 모바일:                 https://m.blog.naver.com/myclinic
+ *  - 포스트 경로/끝슬래시:   blog.naver.com/myclinic/223456 , blog.naver.com/myclinic/
+ *  - 쿼리형:                 blog.naver.com/PostList.naver?blogId=myclinic
+ *  - {id}.blog.me:           https://myclinic.blog.me
+ *  - 앞뒤 공백 허용
+ *
+ * 유효 ID 규칙: 네이버 블로그 ID 문자셋(영문소문자·숫자·`_`·`-`) 3~20자.
+ * 그 외/빈값/타 도메인은 null. 결과는 소문자로 정규화.
+ *
+ * @param input 사용자 입력(주소 또는 ID)
+ * @returns 추출된 블로그 ID(소문자) 또는 null
+ */
+export function extractNaverBlogId(input: unknown): string | null {
+  const raw = norm(input); // 트림 + 소문자, 비문자열은 빈 문자열
+  if (!raw) return null;
+
+  const ID_PATTERN = /^[a-z0-9_-]{3,20}$/;
+  const isValid = (candidate: string): string | null =>
+    ID_PATTERN.test(candidate) ? candidate : null;
+
+  // 1) 쿼리형 (PostList.naver?blogId=myclinic, PostView.nhn?blogId=...)
+  const byQuery = raw.match(/[?&]blogid=([a-z0-9_-]+)/);
+  if (byQuery?.[1]) return isValid(byQuery[1]);
+
+  // 2) {id}.blog.me 형태
+  const byBlogMe = raw.match(/^(?:https?:\/\/)?([a-z0-9_-]+)\.blog\.me\b/);
+  if (byBlogMe?.[1]) return isValid(byBlogMe[1]);
+
+  // 3) (m.)blog.naver.com/{id}[/...] — 경로 첫 세그먼트
+  const byDomain = raw.match(/(?:^|\/\/)(?:m\.)?blog\.naver\.com\/([a-z0-9_-]+)/);
+  if (byDomain?.[1]) return isValid(byDomain[1]);
+
+  // 4) 다른 도메인/URL이면 거부 (`/` 또는 `.`이 있는데 위에서 안 잡혔으면 타 도메인)
+  if (raw.includes('/') || raw.includes('.') || raw.includes('?')) return null;
+
+  // 5) 맨몸 ID (myclinic)
+  return isValid(raw);
+}
+
 /** 두 URL이 같은 글을 가리키는지(정확 또는 부분 일치) 판단. */
 function urlMatches(resultLink: string, publishedUrl: string): boolean {
   const a = norm(resultLink);

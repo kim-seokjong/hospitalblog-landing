@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { fetchKeywordVolumes, type KeywordVolume } from '@/content/lib/keyword-volume';
+import { extractNaverBlogId } from '@/content/lib/rank-tracking';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,8 @@ export interface PostRankingItem {
 export interface RankingsResponse {
   items: PostRankingItem[];
   volumeAvailable: boolean;
+  /** 프로필에 유효한 공개 블로그 주소가 설정돼 추적 가능한지 여부 */
+  blogConfigured: boolean;
 }
 
 export async function GET() {
@@ -50,6 +53,14 @@ export async function GET() {
 
     const since = new Date();
     since.setMonth(since.getMonth() - LOOKBACK_MONTHS);
+
+    // 0) 추적 가능 여부 — 프로필에 유효한 공개 블로그 주소가 설정됐는지
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('naver_blog_url')
+      .eq('id', user.id)
+      .single();
+    const blogConfigured = extractNaverBlogId(profileRow?.naver_blog_url ?? null) !== null;
 
     // 1) 최근 발행글 (RLS로 본인 것만)
     const { data: postsData, error: postsErr } = await supabase
@@ -65,7 +76,7 @@ export async function GET() {
     }
     const posts = postsData ?? [];
     if (posts.length === 0) {
-      return NextResponse.json({ items: [], volumeAvailable: false } satisfies RankingsResponse);
+      return NextResponse.json({ items: [], volumeAvailable: false, blogConfigured } satisfies RankingsResponse);
     }
 
     // 2) 순위 시계열 (RLS로 본인 것만). 최신순으로 가져와 글별로 그룹핑.
@@ -119,6 +130,7 @@ export async function GET() {
     return NextResponse.json({
       items,
       volumeAvailable: volumeResult.available,
+      blogConfigured,
     } satisfies RankingsResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류';
