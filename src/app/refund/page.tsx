@@ -176,7 +176,7 @@ export default function RefundPage() {
                   terro6936@gmail.com
                 </a>
               </p>
-              <p><span className="text-[#202020]">통신판매업 신고번호:</span> 신고 예정</p>
+              <p><span className="text-[#202020]">통신판매업 신고번호:</span> 제2026-대구수성구-0497호</p>
             </div>
           </section>
 
