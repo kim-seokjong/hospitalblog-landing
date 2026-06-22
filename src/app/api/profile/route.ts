@@ -16,6 +16,7 @@ interface ProfileUpdateBody {
   sms_phone?: string
   notify_expiry?: boolean
   notify_usage?: boolean
+  naver_blog_url?: string
 }
 
 export async function GET() {
@@ -30,7 +31,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('profiles')
       .select(
-        'full_name, phone, hospital_name, hospital_address, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage'
+        'full_name, phone, hospital_name, hospital_address, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage, naver_blog_url'
       )
       .eq('id', user.id)
       .single()
@@ -61,12 +62,19 @@ export async function PUT(req: NextRequest) {
       'full_name', 'phone', 'hospital_name', 'hospital_address', 'position',
       'specialty', 'specialty_detail', 'hospital_desc', 'hospital_keywords',
       'region', 'sms_enabled', 'sms_phone', 'notify_expiry', 'notify_usage',
+      'naver_blog_url',
     ]
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
     for (const key of allowed) {
       if (key in body) {
-        updates[key] = body[key]
+        // 빈 문자열은 null 로 저장 (미설정 의미 명확화)
+        if (key === 'naver_blog_url') {
+          const v = typeof body.naver_blog_url === 'string' ? body.naver_blog_url.trim() : ''
+          updates[key] = v === '' ? null : v
+        } else {
+          updates[key] = body[key]
+        }
       }
     }
 

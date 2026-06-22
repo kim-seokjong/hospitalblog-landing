@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Section, Field, Input, Select, ToggleRow } from '@/hr/components/form-controls';
+import { extractNaverBlogId } from '@/content/lib/rank-tracking';
 
 interface NaverLocalResult {
   name: string;
@@ -24,6 +25,7 @@ interface ProfileData {
   hospital_desc: string;
   hospital_keywords: string[];
   region: string;
+  naver_blog_url: string;
   sms_enabled: boolean;
   sms_phone: string;
   notify_expiry: boolean;
@@ -41,6 +43,7 @@ const DEFAULT_PROFILE: ProfileData = {
   hospital_desc: '',
   hospital_keywords: [],
   region: '',
+  naver_blog_url: '',
   sms_enabled: false,
   sms_phone: '',
   notify_expiry: true,
@@ -441,6 +444,43 @@ export default function ProfileTab() {
               className="w-full bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#5b6573] resize-none focus:outline-none focus:border-[#ff4628] transition-colors"
             />
           </Field>
+        </Section>
+
+        {/* 3.5 순위 추적용 블로그 주소 */}
+        <Section title="순위 추적 블로그">
+          <p className="text-xs text-[#5b6573] mb-2 leading-relaxed">
+            공개 블로그 주소만 있으면 발행글의 네이버 검색 순위가 자동 추적됩니다. 자동발행 연동과는 무관합니다.
+          </p>
+          <Field label="내 네이버 블로그 주소">
+            <Input
+              value={profile.naver_blog_url}
+              onChange={v => setProfile(p => ({ ...p, naver_blog_url: v }))}
+              placeholder="blog.naver.com/myclinic"
+            />
+          </Field>
+          {(() => {
+            const v = profile.naver_blog_url.trim();
+            if (!v) {
+              return (
+                <p className="mt-1.5 text-xs text-[#5b6573]">
+                  주소 또는 블로그 아이디를 입력하세요.
+                </p>
+              );
+            }
+            const id = extractNaverBlogId(v);
+            if (id) {
+              return (
+                <p className="mt-1.5 text-xs text-green-700">
+                  추적 대상 블로그: <strong>{id}</strong>
+                </p>
+              );
+            }
+            return (
+              <p className="mt-1.5 text-xs text-red-600">
+                네이버 블로그 주소 형식이 아닙니다. 예: blog.naver.com/myclinic
+              </p>
+            );
+          })()}
         </Section>
 
         {/* 4. 자주 쓰는 키워드 */}

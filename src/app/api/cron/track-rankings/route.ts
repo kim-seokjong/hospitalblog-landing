@@ -7,7 +7,7 @@ import { isAuthorizedCron } from '@/dev/lib/cron-auth';
 import { createAdminClient } from '@/dev/lib/supabase/server';
 import { getDecryptedCredentials } from '@/publish/lib/credentials';
 import { searchNaverBlogRankItems } from '@/dev/lib/naver-search';
-import { findRankInResults } from '@/content/lib/rank-tracking';
+import { findRankInResults, extractNaverBlogId } from '@/content/lib/rank-tracking';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -60,7 +60,24 @@ export async function GET(req: NextRequest) {
 
     const posts = (data ?? []) as PostRow[];
 
-    // 유저별 blogId 캐시 (자격증명 복호화 1회/유저)
+    // 프로필 naver_blog_url 배치 조회 (대상 유저 한정, N+1 방지)
+    // 추적 대상 blogId 우선순위: ① post.published_url(findRankInResults가 우선 사용)
+    //   → ② profiles.naver_blog_url(공개 블로그 주소, 자동발행 연동 불필요)
+    //   → ③ naver_credentials.naverId(기존 자동발행 연동, 하위호환)
+    const userIds = Array.from(new Set(posts.map((p) => p.user_id)));
+    const profileBlogIdCache = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: profileRows } = await admin
+        .from('profiles')
+        .select('id, naver_blog_url')
+        .in('id', userIds);
+      for (const row of (profileRows ?? []) as Array<{ id: string; naver_blog_url: string | null }>) {
+        const blogId = extractNaverBlogId(row.naver_blog_url);
+        if (blogId) profileBlogIdCache.set(row.id, blogId);
+      }
+    }
+
+    // 유저별 최종 blogId 캐시 (프로필 우선, 없으면 자격증명 복호화 1회/유저)
     const blogIdCache = new Map<string, string>();
 
     // 동일 (유저, 키워드) 검색결과 캐시 — 중복 호출 제거
@@ -74,11 +91,16 @@ export async function GET(req: NextRequest) {
       if (!keyword) continue;
 
       try {
-        // blogId 확보 (유저별 캐시)
+        // blogId 확보 (유저별 캐시) — 프로필 공개 블로그 주소 우선, 없으면 자동발행 자격증명
         let blogId = blogIdCache.get(post.user_id);
         if (blogId === undefined) {
-          const creds = await getDecryptedCredentials(post.user_id);
-          blogId = creds?.naverId?.trim() ?? '';
+          const fromProfile = profileBlogIdCache.get(post.user_id);
+          if (fromProfile) {
+            blogId = fromProfile;
+          } else {
+            const creds = await getDecryptedCredentials(post.user_id);
+            blogId = creds?.naverId?.trim() ?? '';
+          }
           blogIdCache.set(post.user_id, blogId);
         }
         // blogId·publishedUrl 둘 다 없으면 매칭 불가 → 스킵

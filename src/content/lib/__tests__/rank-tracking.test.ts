@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   findRankInResults,
   extractBlogId,
+  extractNaverBlogId,
   type BlogSearchResult,
 } from '../rank-tracking.ts';
 
@@ -26,6 +27,73 @@ test('extractBlogId: {id}.blog.me 형태', () => {
 test('extractBlogId: 비블로그 URL/빈값은 빈문자열', () => {
   assert.equal(extractBlogId('https://example.com/post'), '');
   assert.equal(extractBlogId(''), '');
+});
+
+// ── extractNaverBlogId (프로필 입력 → 추적 대상 ID) ──
+test('extractNaverBlogId: 맨몸 ID', () => {
+  assert.equal(extractNaverBlogId('myclinic'), 'myclinic');
+});
+
+test('extractNaverBlogId: 도메인 경로 (프로토콜 없음)', () => {
+  assert.equal(extractNaverBlogId('blog.naver.com/myclinic'), 'myclinic');
+});
+
+test('extractNaverBlogId: https 프로토콜 포함', () => {
+  assert.equal(extractNaverBlogId('https://blog.naver.com/myclinic'), 'myclinic');
+});
+
+test('extractNaverBlogId: http/모바일(m.) 도메인', () => {
+  assert.equal(extractNaverBlogId('http://m.blog.naver.com/myclinic'), 'myclinic');
+  assert.equal(extractNaverBlogId('https://m.blog.naver.com/myclinic'), 'myclinic');
+});
+
+test('extractNaverBlogId: 포스트 경로/끝슬래시', () => {
+  assert.equal(extractNaverBlogId('blog.naver.com/myclinic/223456'), 'myclinic');
+  assert.equal(extractNaverBlogId('https://blog.naver.com/myclinic/'), 'myclinic');
+});
+
+test('extractNaverBlogId: 쿼리형 PostList.naver?blogId=', () => {
+  assert.equal(extractNaverBlogId('blog.naver.com/PostList.naver?blogId=myclinic'), 'myclinic');
+  assert.equal(extractNaverBlogId('https://blog.naver.com/PostView.nhn?blogId=myclinic&logNo=1'), 'myclinic');
+});
+
+test('extractNaverBlogId: {id}.blog.me 형태', () => {
+  assert.equal(extractNaverBlogId('https://myclinic.blog.me'), 'myclinic');
+  assert.equal(extractNaverBlogId('myclinic.blog.me/223'), 'myclinic');
+});
+
+test('extractNaverBlogId: 앞뒤 공백·대문자 정규화', () => {
+  assert.equal(extractNaverBlogId('  MyClinic  '), 'myclinic');
+  assert.equal(extractNaverBlogId(' https://blog.naver.com/MyClinic '), 'myclinic');
+});
+
+test('extractNaverBlogId: 허용 문자셋(영문·숫자·_·-)', () => {
+  assert.equal(extractNaverBlogId('happy_clinic-2'), 'happy_clinic-2');
+});
+
+test('extractNaverBlogId: 빈값/비문자열은 null', () => {
+  assert.equal(extractNaverBlogId(''), null);
+  assert.equal(extractNaverBlogId('   '), null);
+  assert.equal(extractNaverBlogId(undefined), null);
+  assert.equal(extractNaverBlogId(null), null);
+  assert.equal(extractNaverBlogId(123), null);
+});
+
+test('extractNaverBlogId: 타 도메인은 null', () => {
+  assert.equal(extractNaverBlogId('https://example.com/myclinic'), null);
+  assert.equal(extractNaverBlogId('tistory.com/myclinic'), null);
+  assert.equal(extractNaverBlogId('https://blog.daum.net/myclinic'), null);
+});
+
+test('extractNaverBlogId: 길이/문자셋 위반은 null', () => {
+  assert.equal(extractNaverBlogId('ab'), null);                 // 2자 (3자 미만)
+  assert.equal(extractNaverBlogId('a'.repeat(21)), null);       // 21자 (20자 초과)
+  assert.equal(extractNaverBlogId('my clinic'), null);          // 공백 포함 → /·. 없지만 패턴 불일치
+  assert.equal(extractNaverBlogId('한글블로그'), null);          // 비허용 문자
+});
+
+test('extractNaverBlogId: 도메인은 맞지만 ID 형식 위반은 null', () => {
+  assert.equal(extractNaverBlogId('blog.naver.com/ab'), null);  // 경로 ID 2자
 });
 
 // ── findRankInResults: 우선순위 ──
