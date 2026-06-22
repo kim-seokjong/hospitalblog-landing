@@ -42,6 +42,8 @@ function getPlanUsageLimit(plan: string | null | undefined, isAdminUser: boolean
 const KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_xefMRX';
 const CONTACT_DISMISSED_KEY = 'dp_contact_dismissed';
 const DRAFT_KEY = 'dp_draft_v1';
+// 경쟁분석(monitor) → 글쓰기 prefill 전달 키. { topic, keyword } 포맷.
+const TOPIC_PREFILL_KEY = 'dp_topic_prefill';
 
 type DraftData = {
   keyword: string;
@@ -445,6 +447,10 @@ export default function AppPage() {
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 복원할 초안 (마운트 시 localStorage에서 감지)
   const [draftToRestore, setDraftToRestore] = useState<DraftData | null>(null);
+  // 경쟁분석에서 넘어온 prefill 키워드 (KeywordInput 초기값으로 주입)
+  const [prefillKeyword, setPrefillKeyword] = useState<string>('');
+  // prefill 적용 시 KeywordInput 을 강제 리마운트하기 위한 키
+  const [keywordInputKey, setKeywordInputKey] = useState(0);
   // 복사 시 보관함 자동 저장: 첫 복사 후 글 id 보관 → 재복사는 PATCH로 갱신 (중복 insert 방지)
   const savedPostIdRef = useRef<string | null>(null);
   // 연속 복사 시 POST 중복 실행 방지용 직렬화 큐
@@ -542,6 +548,27 @@ export default function AppPage() {
       if (draft.keyword || draft.content || draft.titles.length > 0) setDraftToRestore(draft);
     } catch {
       localStorage.removeItem(DRAFT_KEY);
+    }
+  }, []);
+
+  // 마운트 시 경쟁분석 prefill 감지 → 키워드 입력란 자동 채움
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TOPIC_PREFILL_KEY);
+      if (!raw) return;
+      localStorage.removeItem(TOPIC_PREFILL_KEY);
+      const parsed = JSON.parse(raw) as { topic?: unknown; keyword?: unknown };
+      const kw =
+        (typeof parsed.keyword === 'string' && parsed.keyword.trim()) ||
+        (typeof parsed.topic === 'string' && parsed.topic.trim()) ||
+        '';
+      if (!kw) return;
+      setPrefillKeyword(kw);
+      setKeyword(kw);
+      // KeywordInput 은 defaultKeyword 를 초기값으로만 쓰므로 리마운트해서 반영
+      setKeywordInputKey((k) => k + 1);
+    } catch {
+      localStorage.removeItem(TOPIC_PREFILL_KEY);
     }
   }, []);
 
@@ -1127,8 +1154,10 @@ export default function AppPage() {
                   <div className={`grid gap-4 sm:gap-5 ${titles.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-full sm:max-w-md mx-auto'}`}>
                     <div className="space-y-4">
                       <KeywordInput
+                        key={keywordInputKey}
                         onSubmit={handleKeywordSubmit}
                         isLoading={loadingTitles}
+                        defaultKeyword={prefillKeyword || undefined}
                         lockedHospitalType={userPlan?.hospital_type ?? undefined}
                         defaultRegion={profileRegion}
                       />
