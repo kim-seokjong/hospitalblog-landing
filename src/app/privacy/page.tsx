@@ -188,7 +188,7 @@ export default function PrivacyPage() {
               <li>회원 탈퇴(개인정보 삭제)</li>
             </ul>
             <p className="text-[#4a4f55] mt-3">
-              권리 행사는 <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">terro6936@gmail.com</a> 으로 이메일 문의하시면 처리해 드립니다.
+              권리 행사는 <a href="mailto:terro6936@naver.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">terro6936@naver.com</a> 으로 이메일 문의하시면 처리해 드립니다.
             </p>
           </section>
 
@@ -213,8 +213,8 @@ export default function PrivacyPage() {
               <p><span className="text-[#202020]">서비스명:</span> 닥터포스트</p>
               <p><span className="text-[#202020]">개인정보 보호책임자:</span> 김석종</p>
               <p><span className="text-[#202020]">이메일:</span>{' '}
-                <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
-                  terro6936@gmail.com
+                <a href="mailto:terro6936@naver.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
+                  terro6936@naver.com
                 </a>
               </p>
             </div>
@@ -243,8 +243,8 @@ export default function PrivacyPage() {
               <p><span className="text-[#202020]">주소:</span> 대구광역시 수성구 청호로422 2층</p>
               <p><span className="text-[#202020]">전화:</span> 010-2558-1115</p>
               <p><span className="text-[#202020]">이메일:</span>{' '}
-                <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
-                  terro6936@gmail.com
+                <a href="mailto:terro6936@naver.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
+                  terro6936@naver.com
                 </a>
               </p>
               <p><span className="text-[#202020]">통신판매업 신고번호:</span> 제2026-대구수성구-0497호</p>

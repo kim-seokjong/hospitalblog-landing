@@ -201,7 +201,7 @@ export default function TermsPage() {
               제12조 (분쟁 해결 및 준거법)
             </h2>
             <ul className="list-disc list-inside space-y-2 text-[#4a4f55] ml-2">
-              <li>서비스 이용과 관련한 분쟁은 먼저 이메일(<a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">terro6936@gmail.com</a>)로 협의를 시도합니다.</li>
+              <li>서비스 이용과 관련한 분쟁은 먼저 이메일(<a href="mailto:terro6936@naver.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">terro6936@naver.com</a>)로 협의를 시도합니다.</li>
               <li>협의가 이루어지지 않는 경우 대한민국 법률을 준거법으로 하며, 관할법원은 민사소송법에 따릅니다.</li>
             </ul>
           </section>
@@ -217,8 +217,8 @@ export default function TermsPage() {
               <p><span className="text-[#202020]">주소:</span> 대구광역시 수성구 청호로422 2층</p>
               <p><span className="text-[#202020]">전화:</span> 010-2558-1115</p>
               <p><span className="text-[#202020]">이메일:</span>{' '}
-                <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
-                  terro6936@gmail.com
+                <a href="mailto:terro6936@naver.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
+                  terro6936@naver.com
                 </a>
               </p>
               <p><span className="text-[#202020]">통신판매업 신고번호:</span> 제2026-대구수성구-0497호</p>

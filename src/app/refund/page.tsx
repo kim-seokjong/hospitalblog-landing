@@ -22,7 +22,7 @@ export default function RefundPage() {
 
           <div className="bg-[#ffece7] border border-[#ff4628]/30 rounded-xl px-5 py-4 text-[#ff4628] text-sm">
             닥터포스트는 「전자상거래 등에서의 소비자보호에 관한 법률」 및 관련 법령을 준수하여 환불·해지 정책을 운영합니다.
-            결제 관련 문의는 <a href="mailto:terro6936@gmail.com" className="underline hover:text-[#e63a1c]">terro6936@gmail.com</a>으로 연락해 주세요.
+            결제 관련 문의는 <a href="mailto:terro6936@naver.com" className="underline hover:text-[#e63a1c]">terro6936@naver.com</a>으로 연락해 주세요.
           </div>
 
           <section>
@@ -94,8 +94,8 @@ export default function RefundPage() {
             <ol className="list-decimal list-inside space-y-3 text-[#4a4f55] ml-2">
               <li>
                 <strong className="text-[#202020]">이메일 접수:</strong>{' '}
-                <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
-                  terro6936@gmail.com
+                <a href="mailto:terro6936@naver.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
+                  terro6936@naver.com
                 </a>으로 아래 정보와 함께 환불 요청
               </li>
               <li>
@@ -153,8 +153,8 @@ export default function RefundPage() {
               <p><span className="text-[#202020]">서비스명:</span> 닥터포스트</p>
               <p>
                 <span className="text-[#202020]">이메일:</span>{' '}
-                <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
-                  terro6936@gmail.com
+                <a href="mailto:terro6936@naver.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
+                  terro6936@naver.com
                 </a>
               </p>
               <p className="text-xs text-[#5b6573]">평일 09:00 ~ 18:00 (주말·공휴일 제외)</p>
@@ -172,8 +172,8 @@ export default function RefundPage() {
               <p><span className="text-[#202020]">주소:</span> 대구광역시 수성구 청호로422 2층</p>
               <p><span className="text-[#202020]">전화:</span> 010-2558-1115</p>
               <p><span className="text-[#202020]">이메일:</span>{' '}
-                <a href="mailto:terro6936@gmail.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
-                  terro6936@gmail.com
+                <a href="mailto:terro6936@naver.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
+                  terro6936@naver.com
                 </a>
               </p>
               <p><span className="text-[#202020]">통신판매업 신고번호:</span> 제2026-대구수성구-0497호</p>
