@@ -5,7 +5,7 @@ import type { WritingStyle, OptimizationMode, TargetSite, Readability } from '@/
 import SpecialtyKeywordSuggester from '@/content/components/SpecialtyKeywordSuggester';
 
 interface KeywordInputProps {
-  onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle, region: string, optimizationMode: OptimizationMode, targetSite: TargetSite, readability: Readability, useVoiceDna: boolean) => void;
+  onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle, region: string, optimizationMode: OptimizationMode, targetSite: TargetSite, readability: Readability, useVoiceDna: boolean, viralHook: boolean, storytelling: boolean) => void;
   isLoading: boolean;
   defaultKeyword?: string;
   defaultHospitalType?: string;
@@ -15,6 +15,8 @@ interface KeywordInputProps {
   defaultTargetSite?: TargetSite;
   defaultReadability?: Readability;
   defaultUseVoiceDna?: boolean;
+  defaultViralHook?: boolean;
+  defaultStorytelling?: boolean;
   lockedHospitalType?: string;
   defaultRegion?: string;
 }
@@ -41,7 +43,7 @@ const TARGET_SITES: { value: TargetSite; label: string; desc: string; icon: stri
   { value: 'google', label: '구글',          desc: '구글·AI 검색 최적화', icon: '🔍' },
 ];
 
-export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle, defaultOptimizationMode, defaultTargetSite, defaultReadability, defaultUseVoiceDna, lockedHospitalType, defaultRegion }: KeywordInputProps) {
+export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle, defaultOptimizationMode, defaultTargetSite, defaultReadability, defaultUseVoiceDna, defaultViralHook, defaultStorytelling, lockedHospitalType, defaultRegion }: KeywordInputProps) {
   const [keyword, setKeyword] = useState(defaultKeyword ?? '');
   const [hospitalType, setHospitalType] = useState(lockedHospitalType || defaultHospitalType || '피부과');
   const keywordInputRef = useRef<HTMLInputElement>(null);
@@ -54,13 +56,16 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
   const [readability, setReadability] = useState<Readability>(defaultReadability || 'easy');
   // VOICE-DNA 우리 병원 문체 적용 — 기본 ON. 명시적 false 일 때만 OFF
   const [useVoiceDna, setUseVoiceDna] = useState<boolean>(defaultUseVoiceDna !== false);
+  // VIRAL-HOOKS·STORYTELLING — 의료광고법 리스크 선택 기능, 기본 OFF
+  const [viralHook, setViralHook] = useState<boolean>(defaultViralHook === true);
+  const [storytelling, setStorytelling] = useState<boolean>(defaultStorytelling === true);
 
   const effectiveHospitalType = lockedHospitalType || hospitalType;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyword.trim()) return;
-    onSubmit(keyword.trim(), effectiveHospitalType, additionalInfo.trim(), writingStyle, region.trim(), optimizationMode, targetSite, readability, useVoiceDna);
+    onSubmit(keyword.trim(), effectiveHospitalType, additionalInfo.trim(), writingStyle, region.trim(), optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling);
   };
 
   return (
@@ -242,6 +247,70 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
               <span
                 className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
                   useVoiceDna ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </span>
+          </button>
+        </div>
+
+        {/* 몰입형 도입 (VIRAL-HOOKS — 선택, 기본 OFF) */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setViralHook((prev) => !prev)}
+            disabled={isLoading}
+            aria-pressed={viralHook}
+            className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
+              viralHook
+                ? 'border-[#ff4628] bg-[#ffece7]'
+                : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
+            }`}
+          >
+            <span className="text-xl leading-none flex-shrink-0">🎬</span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">몰입형 도입(후킹) <span className="text-[9px] font-medium text-[#73808f]">· 선택</span></span>
+              <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">첫 문장으로 끌어들이기 (과장·공포 없이, 의료광고법 우선)</span>
+            </span>
+            <span
+              className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
+                viralHook ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
+              }`}
+            >
+              <span
+                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  viralHook ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </span>
+          </button>
+        </div>
+
+        {/* 이야기 구조 (STORYTELLING — 선택, 기본 OFF) */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setStorytelling((prev) => !prev)}
+            disabled={isLoading}
+            aria-pressed={storytelling}
+            className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
+              storytelling
+                ? 'border-[#ff4628] bg-[#ffece7]'
+                : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
+            }`}
+          >
+            <span className="text-xl leading-none flex-shrink-0">📖</span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">이야기 구조 <span className="text-[9px] font-medium text-[#73808f]">· 선택</span></span>
+              <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">증상→원인→관리 흐름 (환자 후기·사례 없이, 의료광고법 우선)</span>
+            </span>
+            <span
+              className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
+                storytelling ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
+              }`}
+            >
+              <span
+                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  storytelling ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
             </span>

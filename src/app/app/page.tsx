@@ -54,6 +54,8 @@ type DraftData = {
   targetSite: TargetSite;
   readability: Readability;
   useVoiceDna: boolean;
+  viralHook: boolean;
+  storytelling: boolean;
   titles: BlogTitle[];
   selectedTitle: BlogTitle | null;
   content: BlogContent | null;
@@ -430,6 +432,9 @@ export default function AppPage() {
   const [readability, setReadability] = useState<Readability>('easy');
   // VOICE-DNA 우리 병원 문체 적용 — 기본 ON
   const [useVoiceDna, setUseVoiceDna] = useState<boolean>(true);
+  // VIRAL-HOOKS·STORYTELLING — 의료광고법 리스크 선택 기능, 기본 OFF
+  const [viralHook, setViralHook] = useState<boolean>(false);
+  const [storytelling, setStorytelling] = useState<boolean>(false);
   const [titles, setTitles] = useState<BlogTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>(null);
   const [content, setContent] = useState<BlogContent | null>(null);
@@ -551,6 +556,9 @@ export default function AppPage() {
         readability: parsed.readability === 'standard' ? 'standard' : 'easy',
         // 구버전 초안에는 useVoiceDna가 없으므로 true(기본 ON) 기본값으로 하위 호환
         useVoiceDna: parsed.useVoiceDna !== false,
+        // 구버전 초안에는 viralHook·storytelling이 없으므로 false(기본 OFF) 기본값으로 하위 호환
+        viralHook: parsed.viralHook === true,
+        storytelling: parsed.storytelling === true,
         titles: Array.isArray(parsed.titles) ? parsed.titles : [],
         selectedTitle: parsed.selectedTitle ?? null,
         content: parsed.content ?? null,
@@ -592,7 +600,7 @@ export default function AppPage() {
     draftSaveTimerRef.current = setTimeout(() => {
       try {
         const draft: DraftData = {
-          keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna,
+          keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling,
           titles, selectedTitle, content, tags, viewStep,
           savedAt: new Date().toISOString(),
         };
@@ -602,7 +610,7 @@ export default function AppPage() {
     return () => {
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
     };
-  }, [keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna, titles, selectedTitle, content, tags, viewStep]);
+  }, [keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling, titles, selectedTitle, content, tags, viewStep]);
 
   const restoreDraft = () => {
     if (!draftToRestore) return;
@@ -614,6 +622,8 @@ export default function AppPage() {
     setTargetSite(draftToRestore.targetSite);
     setReadability(draftToRestore.readability);
     setUseVoiceDna(draftToRestore.useVoiceDna);
+    setViralHook(draftToRestore.viralHook);
+    setStorytelling(draftToRestore.storytelling);
     setTitles(draftToRestore.titles);
     setSelectedTitle(draftToRestore.selectedTitle);
     setContent(draftToRestore.content);
@@ -644,7 +654,7 @@ export default function AppPage() {
     router.push('/');
   };
 
-  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode, ts: TargetSite, rd: Readability, uvd: boolean) => {
+  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode, ts: TargetSite, rd: Readability, uvd: boolean, vh: boolean, st: boolean) => {
     // 새 작업 시작 시 저장된 초안 삭제
     localStorage.removeItem(DRAFT_KEY);
     setDraftToRestore(null);
@@ -656,6 +666,8 @@ export default function AppPage() {
     setTargetSite(ts);
     setReadability(rd);
     setUseVoiceDna(uvd);
+    setViralHook(vh);
+    setStorytelling(st);
     setTitles([]);
     setSelectedTitle(null);
     setContent(null);
@@ -716,7 +728,7 @@ export default function AppPage() {
         body: JSON.stringify({
           title: selectedTitle.title, keyword, hospitalType, additionalInfo,
           titleFormat: selectedTitle.seoDetails?.format, writingStyle,
-          region: effectiveRegion, hospitalName, optimizationMode, targetSite, readability, useVoiceDna,
+          region: effectiveRegion, hospitalName, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling,
         }),
       });
 
@@ -764,7 +776,7 @@ export default function AppPage() {
     setError(null);
     setRetryAction(null);
     setBlocked(false);
-    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna);
+    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling);
     else if (action === 'content') handleGenerateContent();
   };
 
@@ -1198,6 +1210,8 @@ export default function AppPage() {
                         defaultKeyword={prefillKeyword || undefined}
                         defaultReadability={readability}
                         defaultUseVoiceDna={useVoiceDna}
+                        defaultViralHook={viralHook}
+                        defaultStorytelling={storytelling}
                         lockedHospitalType={userPlan?.hospital_type ?? undefined}
                         defaultRegion={profileRegion}
                       />
@@ -1213,7 +1227,7 @@ export default function AppPage() {
                           isLoading={loadingContent}
                         />
                         <button
-                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna)}
+                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling)}
                           disabled={loadingTitles}
                           className="w-full py-2.5 text-xs text-[#5b6573] hover:text-[#202020] border border-[#b4bfce] hover:border-[#ff4628]/40 bg-white hover:bg-[#eef2f6] rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
                         >

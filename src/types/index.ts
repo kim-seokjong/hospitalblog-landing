@@ -108,6 +108,18 @@ export type TargetSite = 'naver' | 'google';
  */
 export type Readability = 'easy' | 'standard';
 
+/**
+ * 본문 생성 선택 옵션 — 의료광고법 리스크가 있어 기본 OFF인 작문 강화 토글.
+ * ANTI-AI/DUMBIFY/VOICE-DNA·SEO/GEO와 독립으로 곱해지며, 의료광고법이 항상 최종 우선.
+ * - viralHook: "검색의도 즉답형 인트로"(과장·공포·클릭베이트·수치단정 금지) ON/OFF.
+ * - storytelling: "증상→원인→관리 서사 흐름"(환자 후기·치료경험담·가공 사례 금지, 의료법 제56조) ON/OFF.
+ * 미지정/구버전 하위호환 시 둘 다 false(끔).
+ */
+export interface ContentEnhancers {
+  viralHook: boolean;
+  storytelling: boolean;
+}
+
 export interface SlideStyleConfig {
   name: string;
   emoji: string;

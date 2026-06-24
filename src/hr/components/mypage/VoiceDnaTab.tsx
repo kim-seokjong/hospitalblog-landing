@@ -56,6 +56,10 @@ export default function VoiceDnaTab() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // 네이버 블로그 주소 학습 상태
+  const [blogUrl, setBlogUrl] = useState('');
+  const [blogLoading, setBlogLoading] = useState(false);
+
   // 붙여넣기 분석 상태
   const [pasteText, setPasteText] = useState('');
   const [pasteLoading, setPasteLoading] = useState(false);
@@ -93,6 +97,27 @@ export default function VoiceDnaTab() {
     void fetchCard();
   }, [fetchCard]);
 
+  // 프로필의 기존 네이버 블로그 주소(순위추적용)를 블로그 학습 입력란 기본값으로 자동 채움
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/profile');
+        if (!res.ok) return;
+        const json = (await res.json()) as { profile?: { naver_blog_url?: string | null } };
+        const url = json.profile?.naver_blog_url;
+        if (active && typeof url === 'string' && url.trim() !== '') {
+          setBlogUrl(url.trim());
+        }
+      } catch {
+        // 자동 채움 실패는 무시 — 사용자가 직접 입력
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const flash = (type: 'success' | 'error', text: string) => {
     setMsg({ type, text });
     setTimeout(() => setMsg(null), 3500);
@@ -129,6 +154,34 @@ export default function VoiceDnaTab() {
       flash('error', e instanceof Error ? e.message : '저장 실패');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAnalyzeBlog = async () => {
+    const url = blogUrl.trim();
+    if (!url) {
+      flash('error', '네이버 블로그 주소를 입력해주세요.');
+      return;
+    }
+    setBlogLoading(true);
+    try {
+      const res = await fetch('/api/voice-dna/url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blogUrl: url }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? '블로그 학습에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      }
+      const json = (await res.json()) as { card: VoiceDnaCard; updatedAt: string; collected: number };
+      applyCard(json.card);
+      setUpdatedAt(json.updatedAt);
+      flash('success', `블로그에서 글 ${json.collected}편을 모아 문체를 학습했습니다.`);
+    } catch (e) {
+      flash('error', e instanceof Error ? e.message : '블로그 학습에 실패했습니다.');
+    } finally {
+      setBlogLoading(false);
     }
   };
 
@@ -350,11 +403,58 @@ export default function VoiceDnaTab() {
           )}
         </Section>
 
-        {/* 기존 글 붙여넣기 분석 */}
-        <Section title="기존 글로 문체 분석하기">
+        {/* 네이버 블로그 주소로 학습 (메인 입력) */}
+        <Section title="네이버 블로그 주소로 학습 (가장 정확)">
+          <p className="text-xs text-[#5b6573] mb-1 leading-relaxed">
+            <strong className="text-[#202020]">본인 병원</strong>의 네이버 블로그 주소를 입력하면 최근 글 여러 편을
+            자동으로 모아 문체를 학습합니다. 자료가 많아 가장 정확해요.
+          </p>
+          <p className="text-[11px] text-[#73808f] mb-3 leading-relaxed">
+            반드시 본인이 운영하는 공개 블로그 주소만 입력하세요. 수집된 글은 문체 분석에만 사용됩니다.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={blogUrl}
+              onChange={(e) => setBlogUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleAnalyzeBlog();
+                }
+              }}
+              placeholder="blog.naver.com/myclinic"
+              disabled={blogLoading}
+              style={{ colorScheme: 'light' }}
+              className="flex-1 bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#5b6573] focus:outline-none focus:border-[#ff4628] transition-colors disabled:opacity-60"
+            />
+            <button
+              type="button"
+              onClick={() => void handleAnalyzeBlog()}
+              disabled={blogLoading || blogUrl.trim().length === 0}
+              className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#ff4628] text-white rounded-xl font-semibold text-sm hover:bg-[#e63a1c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {blogLoading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  수집·분석 중...
+                </>
+              ) : (
+                '이 블로그로 문체 학습하기'
+              )}
+            </button>
+          </div>
+        </Section>
+
+        {/* 기존 글 붙여넣기 분석 (보조) */}
+        <Section title="또는 글을 직접 붙여넣기">
           <p className="text-xs text-[#5b6573] mb-2 leading-relaxed">
-            병원이 직접 쓴(또는 원하는 말투의) 블로그 글 1~3편을 붙여넣으면 문체를 바로 분석해 반영합니다. 여러 편은
-            빈 줄 2번 이상으로 구분해주세요. (의학적 사실·광고 문구가 아니라 말투만 추출됩니다)
+            블로그 주소가 없거나 특정 글의 말투만 쓰고 싶다면, 병원이 직접 쓴(또는 원하는 말투의) 글 1~3편을 붙여넣어
+            분석할 수 있습니다. 여러 편은 빈 줄 2번 이상으로 구분해주세요. (의학적 사실·광고 문구가 아니라 말투만
+            추출됩니다)
           </p>
           <textarea
             value={pasteText}

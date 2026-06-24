@@ -354,9 +354,12 @@ export async function analyzeEdits(pairs: readonly EditPair[]): Promise<Partial<
   }
 }
 
-/** 붙여넣기 샘플 1편당 프롬프트에 넣을 길이 상한(토큰 보호). */
+/** 샘플 1편당 프롬프트에 넣을 길이 상한(토큰 보호). */
 const SAMPLE_EXCERPT_CHARS = 2000;
+/** 붙여넣기(수동) 경로 최대 편수. */
 const MAX_SAMPLES_IN_PROMPT = 3;
+/** 블로그 자동수집 경로 최대 편수(자료가 더 많아 정확도↑). */
+const MAX_BLOG_SAMPLES_IN_PROMPT = 5;
 
 const PASTED_SYSTEM_PROMPT = `당신은 병의원 블로그 글의 문체를 추출하는 한국어 문체 분석가입니다.
 입력으로 이 병원이 직접 쓴(또는 원하는) 기존 블로그 글 1~3편을 받습니다.
@@ -382,15 +385,13 @@ const PASTED_SYSTEM_PROMPT = `당신은 병의원 블로그 글의 문체를 추
 ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}`;
 
 /**
- * 사용자가 붙여넣은 기존 블로그 글 1~3편에서 문체를 직접 추출한다(source:'pasted').
- * 빈/공백만 샘플은 제외하고 각 샘플은 길이 상한을 적용한다.
- * 실패·타임아웃·파싱 실패·유효 샘플 없음 시 null 을 반환한다(graceful, never throws).
- *
- * @param samples 붙여넣은 글 본문 배열
- * @returns 카드 부분(source:'pasted') 또는 null
+ * 글 본문 샘플들을 Claude로 분석해 문체 카드 부분(source:'pasted')을 반환하는 공용 코어.
+ * 빈/공백 샘플 제외, 각 샘플 길이 상한 적용, maxSamples 까지만 사용.
+ * 실패·타임아웃·파싱 실패·유효 샘플 없음 시 null(graceful, never throws).
  */
-export async function analyzePastedSamples(
+async function analyzeStyleSamples(
   samples: readonly string[],
+  maxSamples: number,
 ): Promise<Partial<VoiceDnaCard> | null> {
   if (!Array.isArray(samples)) return null;
 
@@ -398,7 +399,7 @@ export async function analyzePastedSamples(
     .filter((s): s is string => typeof s === 'string')
     .map((s) => s.trim())
     .filter((s) => s !== '')
-    .slice(0, MAX_SAMPLES_IN_PROMPT);
+    .slice(0, maxSamples);
 
   if (cleaned.length === 0) return null;
 
@@ -441,6 +442,30 @@ export async function analyzePastedSamples(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * 사용자가 붙여넣은 기존 블로그 글 1~3편에서 문체를 직접 추출한다(source:'pasted').
+ * 실패·타임아웃·파싱 실패·유효 샘플 없음 시 null(graceful, never throws).
+ *
+ * @param samples 붙여넣은 글 본문 배열
+ */
+export async function analyzePastedSamples(
+  samples: readonly string[],
+): Promise<Partial<VoiceDnaCard> | null> {
+  return analyzeStyleSamples(samples, MAX_SAMPLES_IN_PROMPT);
+}
+
+/**
+ * 네이버 블로그에서 자동 수집한 글 본문(여러 편, 최대 5)에서 문체를 추출한다(source:'pasted').
+ * 자료가 붙여넣기보다 많아 정확도가 높다. graceful 패턴·의료광고법/AI상투어 제약은 동일.
+ *
+ * @param samples 수집한 글 본문 배열
+ */
+export async function analyzeBlogSamples(
+  samples: readonly string[],
+): Promise<Partial<VoiceDnaCard> | null> {
+  return analyzeStyleSamples(samples, MAX_BLOG_SAMPLES_IN_PROMPT);
 }
 
 /** 임의 입력(jsonb)을 VoiceDnaCard 로 안전 파싱. 형태가 안 맞으면 null. */

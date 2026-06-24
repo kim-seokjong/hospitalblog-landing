@@ -96,6 +96,42 @@ function buildReadabilityPrompt(readability: Readability): string {
 - 위 의료광고법·SEO 구조·자연스러운 자연체 규칙과 충돌하지 말 것 — 쉬운 표현으로 풀되 그 규칙들은 그대로 지킨다`;
 }
 
+/**
+ * VIRAL-HOOKS — "검색의도 즉답형 인트로" 지시 빌더 (의료광고법 안전 버전).
+ *
+ * 기본 OFF(옵션). ON일 때만 도입부 후킹 규칙을 추가한다. 자극·과장·공포·
+ * 클릭베이트·수치 단정·치료효과 약속은 명시적으로 금지하며, 의료광고법·
+ * 자연체(ANTI-AI)·SEO 규칙이 항상 최종 우선한다.
+ */
+function buildViralHookPrompt(on: boolean): string {
+  if (!on) return '';
+  return `【선택 강화: 몰입형 도입(후킹) — 검색의도 즉답형 인트로, 단 과장·자극 금지】
+- 첫 1~2문장으로 독자를 잡되, 클릭베이트가 아니라 "검색의도 즉답·핵심 선제시·공감 질문"으로 자연스럽게 끌어들인다
+  좋은 예: "허리 한쪽이 아침마다 묵직하신가요? 그 통증, 의외로 흔한 신호입니다."
+  좋은 예: "보톡스 맞으면 표정이 어색해질까 걱정되시죠. 그 부분부터 짚어보겠습니다."
+- 도입에서 이 글이 어떤 궁금증을 풀어주는지 빠르게 감 잡히게 — 결론·핵심을 살짝 먼저 보여줘도 좋다
+- ❌ 절대 금지: 과장·공포 조장("방치하면 큰일", "충격적인"), 최상급·단정, 수치 단정("90% 호전"), 치료효과 약속, 낚시성 도입
+- ❌ 기존 "AI 티 나는 도입"("이번에는 ○○에 대해 알아보겠습니다" 류)도 그대로 금지 — 후킹은 사람이 쓴 자연스러운 문장으로
+- 의료광고법·자연스러운 자연체·SEO 규칙이 항상 우선한다. 후킹이 이 규칙들과 충돌하면 후킹을 약화시킨다`;
+}
+
+/**
+ * STORYTELLING — "증상→원인→관리 서사 흐름" 지시 빌더 (의료광고법 안전 버전).
+ *
+ * 기본 OFF(옵션). ON일 때만 서사 구조 규칙을 추가한다. 1인칭 환자 치료경험담·
+ * 후기 형식·가공된 특정 환자 사례는 의료법 제56조 위반이므로 절대 금지하고,
+ * 일반화된 임상 관찰만 허용한다. 의료광고법이 항상 최종 우선.
+ */
+function buildStorytellingPrompt(on: boolean): string {
+  if (!on) return '';
+  return `【선택 강화: 이야기 구조(서사) — 증상→원인→관리 흐름, 단 환자 후기·사례 금지】
+- 끝까지 읽게 만드는 자연스러운 서사로 구성: 흔한 증상·상황에서 시작 → 그 원인·메커니즘 → 진단·관리·예방으로 자연스럽게 이어지게
+- 허용: 일반화된 임상 관찰 톤("진료실에서 자주 보는 패턴은…", "이런 증상으로 오시는 분들이 많은데…") — 기존 "1인칭 임상 관찰" 톤과 일관
+- 🚨 절대 금지(의료법 제56조): 1인칭 환자 치료경험담·후기 형식("저는 ~받고 나았어요", "한 환자분이 ~해서 완치"), 가공된 특정 환자 사례·치료 전후 스토리, 특정인을 지목한 성공담
+- 일반화·익명·다수 관찰로만 서술한다. 개별 환자를 특정하거나 치료 결과를 약속하는 서사는 만들지 않는다
+- 의료광고법·자연스러운 자연체·SEO 규칙이 항상 우선한다. 서사가 이 규칙들과 충돌하면 서사를 양보한다`;
+}
+
 export async function POST(req: NextRequest) {
   let consumedUserId: string | null = null;
   try {
@@ -104,6 +140,7 @@ export async function POST(req: NextRequest) {
       writingStyle = '전문가', region = '', hospitalName = '',
       optimizationMode = 'seo+geo', targetSite: rawTargetSite,
       readability: rawReadability, useVoiceDna: rawUseVoiceDna,
+      viralHook: rawViralHook, storytelling: rawStorytelling,
     } = await req.json();
 
     const isGeoMode = optimizationMode === 'seo+geo';
@@ -114,6 +151,9 @@ export async function POST(req: NextRequest) {
     const readability: Readability = rawReadability === 'standard' ? 'standard' : 'easy';
     // VOICE-DNA 주입 토글 — 미지정 기본 ON (다음 단계 UI 토글 대비), 명시적 false 만 OFF
     const useVoiceDna: boolean = rawUseVoiceDna !== false;
+    // VIRAL-HOOKS·STORYTELLING — 의료광고법 리스크 옵션, 기본 OFF. 명시적 true 만 ON
+    const viralHook: boolean = rawViralHook === true;
+    const storytelling: boolean = rawStorytelling === true;
 
     if (!title || !keyword) {
       return NextResponse.json({ error: '제목과 키워드를 입력해주세요.' }, { status: 400 });
@@ -163,6 +203,11 @@ export async function POST(req: NextRequest) {
     const writingStyleGuide = buildWritingStylePrompt(writingStyle);
     // DUMBIFY 난이도 가이드 — 시점과 독립으로 곱해짐 (기본 'easy')
     const readabilityGuide = buildReadabilityPrompt(readability);
+    // VIRAL-HOOKS·STORYTELLING 가이드 — 기본 OFF면 빈 문자열(기존 동작 100% 유지)
+    const viralHookGuide = buildViralHookPrompt(viralHook);
+    const storytellingGuide = buildStorytellingPrompt(storytelling);
+    // 두 옵션 블록 결합 — OFF면 빈 문자열이라 프롬프트에 영향 없음
+    const enhancerBlock = [viralHookGuide, storytellingGuide].filter(Boolean).join('\n\n');
 
     const longtailKeywords = [
       `${keyword} 원인`,
@@ -207,7 +252,7 @@ export async function POST(req: NextRequest) {
       title, keyword, hospitalType, additionalInfo,
       writingStyleGuide, writingStyleLabel, formatGuide, longtailKeywords,
       competitorText, region, hospitalName, isGeoMode, readabilityGuide,
-      voiceDnaBlock,
+      voiceDnaBlock, enhancerBlock,
     };
 
     const systemPrompt = isGoogle ? buildGoogleContentSystemPrompt(googlePromptParams) : `당신은 동네 단골 병원의 따뜻한 원장님입니다. 진료실에서 환자분과 마주 앉아 편하게 풀어 설명하듯이 글을 씁니다.
@@ -216,6 +261,8 @@ export async function POST(req: NextRequest) {
 ${writingStyleGuide}
 
 ${readabilityGuide}
+
+${enhancerBlock}
 ${voiceDnaBlock}
 
 ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}

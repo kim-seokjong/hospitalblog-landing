@@ -28,10 +28,12 @@ export interface GoogleContentPromptParams {
   readabilityGuide: string;
   /** VOICE-DNA 문체 카드 프롬프트 블록 — 카드 없거나 토글 OFF면 빈 문자열 (기존 동작 유지) */
   voiceDnaBlock?: string;
+  /** VIRAL-HOOKS·STORYTELLING 결합 블록 — 두 옵션 OFF면 빈 문자열 (기본 OFF, 기존 동작 유지) */
+  enhancerBlock?: string;
 }
 
 export function buildGoogleContentSystemPrompt(params: GoogleContentPromptParams): string {
-  const { writingStyleGuide, isGeoMode, readabilityGuide, voiceDnaBlock = '' } = params;
+  const { writingStyleGuide, isGeoMode, readabilityGuide, voiceDnaBlock = '', enhancerBlock = '' } = params;
 
   const geoBlock = isGeoMode ? `
 
@@ -52,6 +54,8 @@ export function buildGoogleContentSystemPrompt(params: GoogleContentPromptParams
 ${writingStyleGuide}
 
 ${readabilityGuide}
+
+${enhancerBlock}
 ${voiceDnaBlock}
 
 ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}

@@ -39,6 +39,14 @@ const FORBIDDEN_WORDS: Array<{ word: string; rule: string; suggestion: string; s
   { word: '경쟁병원', rule: '비교 광고 금지', suggestion: '일반적으로', severity: 'MEDIUM' },
   { word: '실제 치료 후기', rule: '환자 후기 광고 금지 (의료법 제56조)', suggestion: '치료 안내', severity: 'MEDIUM' },
   { word: '환자 사례', rule: '개인 사례 광고 금지', suggestion: '일반적인 치료 과정', severity: 'MEDIUM' },
+
+  // STORYTELLING/VIRAL-HOOKS 가드 — 후기·경험담·과장 도입 표현 (보수적: 명백한 광고성 어구만)
+  // 일반화된 임상 관찰("진료실에서 보면", "환자분들 보면")은 정상 톤이므로 절대 매칭하지 않는다.
+  { word: '치료 후기', rule: '환자 후기 광고 금지 (의료법 제56조)', suggestion: '치료 안내', severity: 'MEDIUM' },
+  { word: '치료 경험담', rule: '환자 경험담 광고 금지 (의료법 제56조)', suggestion: '치료 안내', severity: 'MEDIUM' },
+  { word: '환자 후기', rule: '환자 후기 광고 금지 (의료법 제56조)', suggestion: '치료 안내', severity: 'MEDIUM' },
+  { word: '후기 모음', rule: '환자 후기 광고 금지 (의료법 제56조)', suggestion: '치료 안내', severity: 'MEDIUM' },
+  { word: '생생한 후기', rule: '환자 후기 광고 금지 (의료법 제56조)', suggestion: '치료 안내', severity: 'MEDIUM' },
 ];
 
 const WARNING_PATTERNS: Array<{ pattern: RegExp; message: string }> = [
@@ -47,6 +55,12 @@ const WARNING_PATTERNS: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /전후\s*사진|비포애프터|before.?after/i, message: '시술 전후 비교 사진은 의료광고 심의가 필요합니다.' },
   { pattern: /유명인|연예인|스타/, message: '유명인 언급 광고는 별도 심의가 필요합니다.' },
   { pattern: /할인|이벤트|특가|무료 상담/, message: '가격 할인 광고는 의료광고 심의 대상입니다.' },
+  // STORYTELLING 가드 — 1인칭 환자 치료경험담·후기 서사 (의료법 제56조). 검출만(autoFix 미개입).
+  // 보수적: "저는/제가" 뒤에 치료·시술 + 나았다/효과 가 함께 올 때만 매칭 (정상 1인칭 임상관찰 보호).
+  { pattern: /(저는|제가)[^.!?\n]{0,40}(치료|시술|수술|받|맞)[^.!?\n]{0,40}(나았|완치|호전|효과를 봤|좋아졌)/, message: '1인칭 환자 치료경험담·후기 서사는 의료법 제56조 위반 소지가 있습니다(일반화된 임상 관찰로 서술 권장).' },
+  // VIRAL-HOOKS 가드 — 공포 조장형 도입. 검출만.
+  { pattern: /(방치하면|放置)[^.!?\n]{0,20}(큰일|위험|악화|늦)/, message: '공포 조장형 도입은 과장 광고로 해석될 수 있습니다.' },
+  { pattern: /충격(적인|적|!)|경악|소름/, message: '자극적·과장 도입 표현은 의료광고 심의 대상입니다.' },
 ];
 
 /**
