@@ -43,12 +43,27 @@ const PROOFREAD_SYSTEM_PROMPT = `당신은 의료 블로그 글을 다듬는 한
 
 /**
  * 본문을 교정한다. 실패 시 원본을 그대로 반환한다(graceful fallback).
+ *
+ * ANTI-AI 보강: aiCliches(문단 첫머리에서 검출된 AI 상투어)가 있으면, 의미를
+ * 보존하며 자연스럽게 풀어쓰라는 지시를 user 프롬프트에 추가한다. 기존
+ * "비문·오타만 교정, 구조·길이·서식 보존" 규칙은 그대로 유지되며, ANTI-AI
+ * 지시는 보강일 뿐 보존 규칙을 깨지 않는다.
+ *
+ * @param body 교정 대상 본문
+ * @param aiCliches 문단 첫머리에서 검출된 AI 상투어 목록(선택)
  */
-export async function proofreadContent(body: string): Promise<string> {
+export async function proofreadContent(body: string, aiCliches?: readonly string[]): Promise<string> {
   // 빈 본문은 교정할 것이 없음
   if (!body || body.trim() === '') {
     return body;
   }
+
+  const antiAiInstruction =
+    aiCliches && aiCliches.length > 0
+      ? `\n\n【추가 지시 — ANTI-AI】다음 AI 상투어가 문단 첫머리에서 검출되었습니다: ${aiCliches.join(
+          ', ',
+        )}. 의미를 보존하면서 자연스러운 한국어로 풀어쓰세요(억지로 남기지 말 것). 단, 위의 모든 보존 규칙(구조·길이·서식·의학 정보)은 그대로 지키세요.`
+      : '';
 
   try {
     const anthropic = getAnthropicClient();
@@ -59,7 +74,7 @@ export async function proofreadContent(body: string): Promise<string> {
       messages: [
         {
           role: 'user',
-          content: `다음 의료 블로그 본문을 위 규칙에 따라 교정해주세요. 교정본 본문만 출력하세요.\n\n${body}`,
+          content: `다음 의료 블로그 본문을 위 규칙에 따라 교정해주세요. 교정본 본문만 출력하세요.${antiAiInstruction}\n\n${body}`,
         },
       ],
     });

@@ -100,6 +100,14 @@ export type OptimizationMode = 'seo+geo' | 'seo';
 
 export type TargetSite = 'naver' | 'google';
 
+/**
+ * 글 난이도(가독성) 축 — 글쓰기 시점(WritingStyle)과 독립(직교)으로 곱해진다.
+ * - 'easy'     = DUMBIFY ON / L1 균형: 중학생도 이해할 쉬운 말로 풀되 전문성·신뢰는 유지.
+ * - 'standard' = 끔: 난이도 조정 없음.
+ * 미지정/구버전 하위호환 시 기본값은 'easy'(쉬운 쪽).
+ */
+export type Readability = 'easy' | 'standard';
+
 export interface SlideStyleConfig {
   name: string;
   emoji: string;

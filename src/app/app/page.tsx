@@ -15,7 +15,7 @@ import CardNewsDesigner from '@/content/components/CardNewsDesigner';
 import TagPanel from '@/content/components/TagPanel';
 import NaverPublisher from '@/publish/components/NaverPublisher';
 import AuthModal from '@/hr/components/AuthModal';
-import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode, TargetSite } from '@/types';
+import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode, TargetSite, Readability } from '@/types';
 import { PLANS, isPaidPlanId } from '@/payment/lib/plans';
 import { safeFetchJson } from '@/content/lib/safe-fetch';
 import { checkCompliance } from '@/content/lib/medical-compliance';
@@ -52,6 +52,8 @@ type DraftData = {
   writingStyle: WritingStyle;
   optimizationMode: OptimizationMode;
   targetSite: TargetSite;
+  readability: Readability;
+  useVoiceDna: boolean;
   titles: BlogTitle[];
   selectedTitle: BlogTitle | null;
   content: BlogContent | null;
@@ -424,6 +426,10 @@ export default function AppPage() {
   const [writingStyle, setWritingStyle] = useState<WritingStyle>('전문가');
   const [optimizationMode, setOptimizationMode] = useState<OptimizationMode>('seo+geo');
   const [targetSite, setTargetSite] = useState<TargetSite>('naver');
+  // DUMBIFY 난이도 — 기본 ON('easy')
+  const [readability, setReadability] = useState<Readability>('easy');
+  // VOICE-DNA 우리 병원 문체 적용 — 기본 ON
+  const [useVoiceDna, setUseVoiceDna] = useState<boolean>(true);
   const [titles, setTitles] = useState<BlogTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>(null);
   const [content, setContent] = useState<BlogContent | null>(null);
@@ -453,6 +459,9 @@ export default function AppPage() {
   const [keywordInputKey, setKeywordInputKey] = useState(0);
   // 복사 시 보관함 자동 저장: 첫 복사 후 글 id 보관 → 재복사는 PATCH로 갱신 (중복 insert 방지)
   const savedPostIdRef = useRef<string | null>(null);
+  // VOICE-DNA: AI 생성 직후 원본 본문 스냅샷 보관 (편집 학습용 {원본, 수정본} 쌍의 원본).
+  // 복사 저장 시 original_content 로 전송. savedPostIdRef 와 동일 시점에 리셋한다.
+  const originalBodyRef = useRef<string | null>(null);
   // 연속 복사 시 POST 중복 실행 방지용 직렬화 큐
   const copySaveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -538,6 +547,10 @@ export default function AppPage() {
         optimizationMode: parsed.optimizationMode ?? 'seo+geo',
         // 구버전 초안에는 targetSite가 없으므로 'naver' 기본값으로 하위 호환
         targetSite: parsed.targetSite === 'google' ? 'google' : 'naver',
+        // 구버전 초안에는 readability가 없으므로 'easy'(기본 ON) 기본값으로 하위 호환
+        readability: parsed.readability === 'standard' ? 'standard' : 'easy',
+        // 구버전 초안에는 useVoiceDna가 없으므로 true(기본 ON) 기본값으로 하위 호환
+        useVoiceDna: parsed.useVoiceDna !== false,
         titles: Array.isArray(parsed.titles) ? parsed.titles : [],
         selectedTitle: parsed.selectedTitle ?? null,
         content: parsed.content ?? null,
@@ -579,7 +592,7 @@ export default function AppPage() {
     draftSaveTimerRef.current = setTimeout(() => {
       try {
         const draft: DraftData = {
-          keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite,
+          keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna,
           titles, selectedTitle, content, tags, viewStep,
           savedAt: new Date().toISOString(),
         };
@@ -589,7 +602,7 @@ export default function AppPage() {
     return () => {
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
     };
-  }, [keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, titles, selectedTitle, content, tags, viewStep]);
+  }, [keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna, titles, selectedTitle, content, tags, viewStep]);
 
   const restoreDraft = () => {
     if (!draftToRestore) return;
@@ -599,6 +612,8 @@ export default function AppPage() {
     setWritingStyle(draftToRestore.writingStyle);
     setOptimizationMode(draftToRestore.optimizationMode);
     setTargetSite(draftToRestore.targetSite);
+    setReadability(draftToRestore.readability);
+    setUseVoiceDna(draftToRestore.useVoiceDna);
     setTitles(draftToRestore.titles);
     setSelectedTitle(draftToRestore.selectedTitle);
     setContent(draftToRestore.content);
@@ -607,6 +622,8 @@ export default function AppPage() {
     setDraftToRestore(null);
     // 복원된 초안은 다른 글이므로 복사-저장 id 리셋
     savedPostIdRef.current = null;
+    // VOICE-DNA 원본 스냅샷도 리셋 (복원본은 AI 원본을 알 수 없으므로 학습 대상 제외)
+    originalBodyRef.current = null;
   };
 
   const dismissDraft = () => {
@@ -627,7 +644,7 @@ export default function AppPage() {
     router.push('/');
   };
 
-  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode, ts: TargetSite) => {
+  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode, ts: TargetSite, rd: Readability, uvd: boolean) => {
     // 새 작업 시작 시 저장된 초안 삭제
     localStorage.removeItem(DRAFT_KEY);
     setDraftToRestore(null);
@@ -637,6 +654,8 @@ export default function AppPage() {
     setWritingStyle(ws);
     setOptimizationMode(om);
     setTargetSite(ts);
+    setReadability(rd);
+    setUseVoiceDna(uvd);
     setTitles([]);
     setSelectedTitle(null);
     setContent(null);
@@ -648,6 +667,8 @@ export default function AppPage() {
     setLoadingTitles(true);
     // 새 글 시작 → 복사-저장 id 리셋 (다음 복사는 새 글로 insert)
     savedPostIdRef.current = null;
+    // VOICE-DNA 원본 스냅샷 리셋 (새 작업)
+    originalBodyRef.current = null;
 
     const effectiveRegion = inputRegion || profileRegion;
 
@@ -680,6 +701,8 @@ export default function AppPage() {
     setLoadingContent(true);
     // 제목 변경/본문 재생성 → 새 글이므로 복사-저장 id 리셋
     savedPostIdRef.current = null;
+    // VOICE-DNA 원본 스냅샷 리셋 (재생성 → 새 원본을 아래에서 다시 채움)
+    originalBodyRef.current = null;
 
     try {
       const effectiveRegion = profileRegion;
@@ -693,7 +716,7 @@ export default function AppPage() {
         body: JSON.stringify({
           title: selectedTitle.title, keyword, hospitalType, additionalInfo,
           titleFormat: selectedTitle.seoDetails?.format, writingStyle,
-          region: effectiveRegion, hospitalName, optimizationMode, targetSite,
+          region: effectiveRegion, hospitalName, optimizationMode, targetSite, readability, useVoiceDna,
         }),
       });
 
@@ -707,6 +730,8 @@ export default function AppPage() {
         throw err;
       }
       setContent(result.data);
+      // VOICE-DNA: AI 원본 본문 스냅샷 보관 (이후 사용자 편집본과 쌍을 이뤄 학습)
+      originalBodyRef.current = result.data.body;
       setViewStep('content');
 
       // 2. generate-tags 별도 실행 (실패해도 content는 보존)
@@ -739,7 +764,7 @@ export default function AppPage() {
     setError(null);
     setRetryAction(null);
     setBlocked(false);
-    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite);
+    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna);
     else if (action === 'content') handleGenerateContent();
   };
 
@@ -856,6 +881,8 @@ export default function AppPage() {
       keyword,
       targetSite,
     };
+    // VOICE-DNA: AI 원본 스냅샷 (편집 학습용). null이면 컬럼 제외(하위 호환은 API가 처리).
+    const originalContent = originalBodyRef.current;
     copySaveQueueRef.current = copySaveQueueRef.current.then(async () => {
       try {
         const existingId = savedPostIdRef.current;
@@ -869,8 +896,10 @@ export default function AppPage() {
               keyword: payload.keyword,
               target_site: payload.targetSite,
               status: 'published',
+              ...(originalContent ? { original_content: originalContent } : {}),
             }),
           });
+          triggerVoiceDnaRefresh();
           return;
         }
         const res = await fetch('/api/posts', {
@@ -882,16 +911,25 @@ export default function AppPage() {
             keyword: payload.keyword,
             target_site: payload.targetSite,
             status: 'published',
+            ...(originalContent ? { original_content: originalContent } : {}),
           }),
         });
         if (res.ok) {
           const json = await res.json() as { post?: { id?: string } };
           if (typeof json.post?.id === 'string') savedPostIdRef.current = json.post.id;
+          triggerVoiceDnaRefresh();
         }
       } catch {
         // 백그라운드 저장 실패 무시 — 복사 자체는 이미 성공했고 UX를 막지 않는다
       }
     });
+  };
+
+  // VOICE-DNA 카드 갱신 트리거 — 복사 저장 성공 후 fire-and-forget.
+  // 서버가 임계(의미 있는 편집쌍 3개 이상)를 판단하므로 매번 호출해도 안전하다.
+  // 실패는 조용히 무시 — 복사 UX를 막지 않는다.
+  const triggerVoiceDnaRefresh = () => {
+    void fetch('/api/voice-dna/refresh', { method: 'POST' }).catch(() => {});
   };
 
   const STYLE_LABEL: Record<WritingStyle, string> = {
@@ -1158,6 +1196,8 @@ export default function AppPage() {
                         onSubmit={handleKeywordSubmit}
                         isLoading={loadingTitles}
                         defaultKeyword={prefillKeyword || undefined}
+                        defaultReadability={readability}
+                        defaultUseVoiceDna={useVoiceDna}
                         lockedHospitalType={userPlan?.hospital_type ?? undefined}
                         defaultRegion={profileRegion}
                       />
@@ -1173,7 +1213,7 @@ export default function AppPage() {
                           isLoading={loadingContent}
                         />
                         <button
-                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite)}
+                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna)}
                           disabled={loadingTitles}
                           className="w-full py-2.5 text-xs text-[#5b6573] hover:text-[#202020] border border-[#b4bfce] hover:border-[#ff4628]/40 bg-white hover:bg-[#eef2f6] rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
                         >

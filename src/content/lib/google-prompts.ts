@@ -24,10 +24,14 @@ export interface GoogleContentPromptParams {
   region: string;
   hospitalName: string;
   isGeoMode: boolean;
+  /** DUMBIFY 난이도 지시 — 'easy'면 L1 균형 블록, 'standard'면 빈 문자열 (시점과 독립) */
+  readabilityGuide: string;
+  /** VOICE-DNA 문체 카드 프롬프트 블록 — 카드 없거나 토글 OFF면 빈 문자열 (기존 동작 유지) */
+  voiceDnaBlock?: string;
 }
 
 export function buildGoogleContentSystemPrompt(params: GoogleContentPromptParams): string {
-  const { writingStyleGuide, isGeoMode } = params;
+  const { writingStyleGuide, isGeoMode, readabilityGuide, voiceDnaBlock = '' } = params;
 
   const geoBlock = isGeoMode ? `
 
@@ -46,6 +50,9 @@ export function buildGoogleContentSystemPrompt(params: GoogleContentPromptParams
 의학 지식은 정확하지만, 말투는 가까운 사람이 알려주듯 부드럽고 자연스럽습니다. 학술 논문이나 보고서가 아니라, 실제 사람이 직접 쓴 진솔한 블로그 글을 만듭니다.
 
 ${writingStyleGuide}
+
+${readabilityGuide}
+${voiceDnaBlock}
 
 ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 

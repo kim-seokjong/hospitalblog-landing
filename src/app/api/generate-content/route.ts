@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL, proofreadContent } from '@/content/lib/anthropic';
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/content/lib/medical-compliance';
+import { stripAiCliches } from '@/content/lib/anti-ai';
 import { logUsage } from '@/dev/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
 import { checkAndConsumeUsage, refundUsage } from '@/payment/lib/usage-guard';
 import { buildGoogleContentSystemPrompt, buildGoogleContentUserPrompt } from '@/content/lib/google-prompts';
-import type { TargetSite } from '@/types';
+import { buildVoiceDnaPrompt, parseVoiceDnaCard } from '@/content/lib/voice-dna';
+import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import type { TargetSite, Readability } from '@/types';
 
 export const maxDuration = 300;
 
@@ -70,6 +73,29 @@ function buildWritingStylePrompt(style: string): string {
   }
 }
 
+/**
+ * DUMBIFY — 글 난이도(가독성) 지시 빌더.
+ *
+ * 글쓰기 시점(WritingStyle)과 독립(직교)으로 곱해지는 난이도 축.
+ * 어떤 시점(전문가/고객이해/사무장)이든 이 규칙을 곱해서 적용한다 —
+ * 시점이 정한 화자·관점은 유지하고 "표현 난이도"만 낮춘다.
+ *
+ * - 'easy'(L1 균형, 기본 ON): 의학용어를 버리지 않고 즉시 쉬운 말로 병기/풀이.
+ *   핵심 메커니즘은 일상 비유로. 문장은 짧고 명확하게(중학생도 이해).
+ *   단, 전문성·신뢰감 유지 — 유치한 말투/과한 감탄/초등 어휘는 금지.
+ * - 'standard': 빈 문자열(난이도 조정 없음).
+ */
+function buildReadabilityPrompt(readability: Readability): string {
+  if (readability !== 'easy') return '';
+  return `【난이도: 쉽게 풀어쓰기 (중학생도 이해, 단 병원 글의 신뢰감 유지) — 글쓰기 시점과 독립 적용】
+- 의학용어는 버리지 말고 쓰되, 처음 나올 때 즉시 쉬운 말로 풀거나 괄호로 병기 (예: "추간판(척추뼈 사이의 쿠션)", "염증 반응(몸이 스스로를 지키려는 작용)")
+- 어려운 메커니즘은 일상 비유로 풀이 (예: "고무 호스가 안에서 부풀어 신경을 누르듯", "필터가 막혀 물이 안 빠지는 것처럼")
+- 한 문장에는 한 가지 생각만 — 문장을 짧게 끊어 중학생이 한 번 읽고 이해할 수준으로
+- 단, 전문성·신뢰는 유지: 유치한 말투·과한 감탄("정말 대단해요!")·초등학생 수준 어휘는 금지. "쉽게 풀되 병원 글의 무게는 유지"
+- 글쓰기 시점(전문가/고객이해/사무장)이 정한 화자·관점은 그대로 두고, 표현의 난이도만 낮춘다 (시점과 곱해서 적용)
+- 위 의료광고법·SEO 구조·자연스러운 자연체 규칙과 충돌하지 말 것 — 쉬운 표현으로 풀되 그 규칙들은 그대로 지킨다`;
+}
+
 export async function POST(req: NextRequest) {
   let consumedUserId: string | null = null;
   try {
@@ -77,12 +103,17 @@ export async function POST(req: NextRequest) {
       title, keyword, hospitalType, additionalInfo, titleFormat,
       writingStyle = '전문가', region = '', hospitalName = '',
       optimizationMode = 'seo+geo', targetSite: rawTargetSite,
+      readability: rawReadability, useVoiceDna: rawUseVoiceDna,
     } = await req.json();
 
     const isGeoMode = optimizationMode === 'seo+geo';
     // 게시 사이트 검증 — 미지정·잘못된 값은 'naver' 기본값 (하위 호환)
     const targetSite: TargetSite = rawTargetSite === 'google' ? 'google' : 'naver';
     const isGoogle = targetSite === 'google';
+    // DUMBIFY 난이도 — 미지정·잘못된 값은 'easy' 기본값 (기본 ON, 하위 호환)
+    const readability: Readability = rawReadability === 'standard' ? 'standard' : 'easy';
+    // VOICE-DNA 주입 토글 — 미지정 기본 ON (다음 단계 UI 토글 대비), 명시적 false 만 OFF
+    const useVoiceDna: boolean = rawUseVoiceDna !== false;
 
     if (!title || !keyword) {
       return NextResponse.json({ error: '제목과 키워드를 입력해주세요.' }, { status: 400 });
@@ -98,6 +129,26 @@ export async function POST(req: NextRequest) {
     }
     consumedUserId = guard.userId;
 
+    // VOICE-DNA 문체 카드 주입 블록 — 카드 있고 토글 ON일 때만. 조회 실패는 graceful(무시).
+    // 카드 없으면 빈 문자열 → 기존 동작 그대로 유지.
+    let voiceDnaBlock = '';
+    if (useVoiceDna) {
+      try {
+        const supabase = await createServerSupabaseClient();
+        const { data: vdRow } = await supabase
+          .from('profiles')
+          .select('voice_dna')
+          .eq('id', guard.userId)
+          .single();
+        const card = parseVoiceDnaCard(vdRow?.voice_dna);
+        if (card) {
+          voiceDnaBlock = `\n\n${buildVoiceDnaPrompt(card)}`;
+        }
+      } catch {
+        // 카드 조회 실패는 무시 — 본문 생성은 기존 동작 그대로 진행
+      }
+    }
+
     // 경쟁 블로그 분석 — 실패해도 본문 생성은 계속 진행 (사용량 보호)
     let competitorResults: Awaited<ReturnType<typeof searchNaverBlogs>> = [];
     try {
@@ -110,6 +161,8 @@ export async function POST(req: NextRequest) {
     const format: TitleFormat = titleFormat || '정보형';
     const formatGuide = buildFormatSpecificStructure(format, keyword);
     const writingStyleGuide = buildWritingStylePrompt(writingStyle);
+    // DUMBIFY 난이도 가이드 — 시점과 독립으로 곱해짐 (기본 'easy')
+    const readabilityGuide = buildReadabilityPrompt(readability);
 
     const longtailKeywords = [
       `${keyword} 원인`,
@@ -153,13 +206,17 @@ export async function POST(req: NextRequest) {
     const googlePromptParams = {
       title, keyword, hospitalType, additionalInfo,
       writingStyleGuide, writingStyleLabel, formatGuide, longtailKeywords,
-      competitorText, region, hospitalName, isGeoMode,
+      competitorText, region, hospitalName, isGeoMode, readabilityGuide,
+      voiceDnaBlock,
     };
 
     const systemPrompt = isGoogle ? buildGoogleContentSystemPrompt(googlePromptParams) : `당신은 동네 단골 병원의 따뜻한 원장님입니다. 진료실에서 환자분과 마주 앉아 편하게 풀어 설명하듯이 글을 씁니다.
 의학 지식은 정확하지만, 말투는 가까운 사람이 알려주듯 부드럽고 자연스럽습니다. 학술 논문이나 보고서가 아니라, 실제 사람이 직접 쓴 진솔한 블로그 글을 만듭니다.
 
 ${writingStyleGuide}
+
+${readabilityGuide}
+${voiceDnaBlock}
 
 ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 
@@ -406,12 +463,17 @@ ${formatGuide}
       .replace(/\n{3,}/g, '\n\n')            // 3줄 이상 빈줄 → 2줄로
       .trim();
 
+    // ANTI-AI 항상 ON (보수적) — 문단 첫머리 AI 접속 상투어만 결정론 제거,
+    // 마무리 인사 상투어는 검출만 해서 교정 패스에 전달. 문맥은 보호한다.
+    const { cleaned: deCliched, detected: aiCliches } = stripAiCliches(mdCleaned);
+
     // 의료광고법 금지어 자동 교체 — Claude가 생성했더라도 100% 필터링
-    const { fixed: cleanedBody, replaced: autoReplaced } = autoFix(mdCleaned);
+    const { fixed: cleanedBody, replaced: autoReplaced } = autoFix(deCliched);
 
     // 교정(프루프리드) 패스 — 비문·오타·글리치·억지 키워드만 정리. 실패 시 원본 유지(graceful).
+    // ANTI-AI 검출 상투어는 의미 보존하며 자연스럽게 풀어쓰도록 함께 전달.
     // 의료광고법 금지어가 다시 들어올 일은 없도록 교정 후 autoFix 한 번 더 적용.
-    const proofread = await proofreadContent(cleanedBody);
+    const proofread = await proofreadContent(cleanedBody, aiCliches);
     const { fixed: body } = proofread === cleanedBody ? { fixed: cleanedBody } : autoFix(proofread);
 
     const bodyForCount = body.replace(/\[이미지\s*\d+:[^\]]*\]/g, '');

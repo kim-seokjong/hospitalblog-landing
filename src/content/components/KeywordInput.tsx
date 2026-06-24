@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import type { WritingStyle, OptimizationMode, TargetSite } from '@/types';
+import type { WritingStyle, OptimizationMode, TargetSite, Readability } from '@/types';
 import SpecialtyKeywordSuggester from '@/content/components/SpecialtyKeywordSuggester';
 
 interface KeywordInputProps {
-  onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle, region: string, optimizationMode: OptimizationMode, targetSite: TargetSite) => void;
+  onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle, region: string, optimizationMode: OptimizationMode, targetSite: TargetSite, readability: Readability, useVoiceDna: boolean) => void;
   isLoading: boolean;
   defaultKeyword?: string;
   defaultHospitalType?: string;
@@ -13,6 +13,8 @@ interface KeywordInputProps {
   defaultWritingStyle?: WritingStyle;
   defaultOptimizationMode?: OptimizationMode;
   defaultTargetSite?: TargetSite;
+  defaultReadability?: Readability;
+  defaultUseVoiceDna?: boolean;
   lockedHospitalType?: string;
   defaultRegion?: string;
 }
@@ -39,7 +41,7 @@ const TARGET_SITES: { value: TargetSite; label: string; desc: string; icon: stri
   { value: 'google', label: '구글',          desc: '구글·AI 검색 최적화', icon: '🔍' },
 ];
 
-export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle, defaultOptimizationMode, defaultTargetSite, lockedHospitalType, defaultRegion }: KeywordInputProps) {
+export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle, defaultOptimizationMode, defaultTargetSite, defaultReadability, defaultUseVoiceDna, lockedHospitalType, defaultRegion }: KeywordInputProps) {
   const [keyword, setKeyword] = useState(defaultKeyword ?? '');
   const [hospitalType, setHospitalType] = useState(lockedHospitalType || defaultHospitalType || '피부과');
   const keywordInputRef = useRef<HTMLInputElement>(null);
@@ -48,13 +50,17 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
   const [writingStyle, setWritingStyle] = useState<WritingStyle>(defaultWritingStyle || '전문가');
   const [optimizationMode, setOptimizationMode] = useState<OptimizationMode>(defaultOptimizationMode || 'seo+geo');
   const [targetSite, setTargetSite] = useState<TargetSite>(defaultTargetSite || 'naver');
+  // DUMBIFY 난이도 — 기본 ON('easy'). 끄면 'standard'
+  const [readability, setReadability] = useState<Readability>(defaultReadability || 'easy');
+  // VOICE-DNA 우리 병원 문체 적용 — 기본 ON. 명시적 false 일 때만 OFF
+  const [useVoiceDna, setUseVoiceDna] = useState<boolean>(defaultUseVoiceDna !== false);
 
   const effectiveHospitalType = lockedHospitalType || hospitalType;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyword.trim()) return;
-    onSubmit(keyword.trim(), effectiveHospitalType, additionalInfo.trim(), writingStyle, region.trim(), optimizationMode, targetSite);
+    onSubmit(keyword.trim(), effectiveHospitalType, additionalInfo.trim(), writingStyle, region.trim(), optimizationMode, targetSite, readability, useVoiceDna);
   };
 
   return (
@@ -176,6 +182,70 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 쉽게 풀어쓰기 (DUMBIFY 난이도 — 시점과 독립, 기본 ON) */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setReadability((prev) => (prev === 'easy' ? 'standard' : 'easy'))}
+            disabled={isLoading}
+            aria-pressed={readability === 'easy'}
+            className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
+              readability === 'easy'
+                ? 'border-[#ff4628] bg-[#ffece7]'
+                : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
+            }`}
+          >
+            <span className="text-xl leading-none flex-shrink-0">🎓</span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">쉽게 풀어쓰기</span>
+              <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">중학생도 이해할 쉬운 말로 (전문성·신뢰감은 유지)</span>
+            </span>
+            <span
+              className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
+                readability === 'easy' ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
+              }`}
+            >
+              <span
+                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  readability === 'easy' ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </span>
+          </button>
+        </div>
+
+        {/* 우리 병원 문체 적용 (VOICE-DNA — 기본 ON) */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setUseVoiceDna((prev) => !prev)}
+            disabled={isLoading}
+            aria-pressed={useVoiceDna}
+            className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
+              useVoiceDna
+                ? 'border-[#ff4628] bg-[#ffece7]'
+                : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
+            }`}
+          >
+            <span className="text-xl leading-none flex-shrink-0">🧬</span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">우리 병원 문체 적용</span>
+              <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">그동안 고쳐온 말투를 반영 (의료광고법·자연체 규칙은 항상 우선)</span>
+            </span>
+            <span
+              className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
+                useVoiceDna ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
+              }`}
+            >
+              <span
+                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  useVoiceDna ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </span>
+          </button>
         </div>
 
         {/* 문단 구성 (최적화 방식) */}

@@ -309,6 +309,12 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
 
       {/* 본문 */}
       <div className="p-4 sm:p-5">
+        {/* VOICE-DNA 학습 안내 ① — 본문 편집 영역 근처 상시 안내 (부드러운 톤) */}
+        {onContentChange && (
+          <p className="mb-2 text-[10px] sm:text-[11px] text-[#73808f] leading-snug bg-[#f4f7fa] border border-[#e1e7ee] rounded-lg px-2.5 py-1.5">
+            💡 여기서 직접 수정하시면, 그 고친 방향을 AI가 학습해 다음 글부터 우리 병원 말투에 맞춰갑니다. (복사 후 외부 블로그에서 고치면 학습되지 않아요)
+          </p>
+        )}
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] text-[#73808f]">본문 내용</span>
           {!isEditing && onContentChange && (
@@ -379,6 +385,10 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
 
       {/* 액션 */}
       <div className="p-4 sm:p-5 pt-3 space-y-3">
+        {/* VOICE-DNA 학습 안내 ② — 복사/발행 버튼 근처 행동 시점 안내 (부드러운 톤) */}
+        <p className="text-[10px] sm:text-[11px] text-[#73808f] leading-snug text-center">
+          ✏️ 우리 사이트에서 수정 → 복사해야 문체 학습에 반영됩니다
+        </p>
         <button
           onClick={handleCopy}
           className="w-full py-3 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-emerald-500/20 min-h-[48px]"

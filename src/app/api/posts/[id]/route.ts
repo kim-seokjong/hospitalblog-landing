@@ -53,6 +53,28 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score', 'target_site', 'published_url'];
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
+    // original_content(VOICE-DNA 원본 스냅샷)는 불변 — 최초 1회만 채운다.
+    // 재복사(PATCH)로 들어와도 이미 값이 있으면 절대 덮지 않는다. 미전송 시 건드리지 않음(하위 호환).
+    const incomingOriginal =
+      typeof body.original_content === 'string' && body.original_content.trim() !== ''
+        ? body.original_content.trim()
+        : null;
+    if (incomingOriginal) {
+      // 현재 값 확인 — 비어 있을 때만 채운다. 조회 실패(컬럼 미존재 등) 시 graceful 하게 건너뜀.
+      const { data: current } = await supabase
+        .from('saved_posts')
+        .select('original_content')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single();
+      const hasOriginal =
+        current && typeof (current as { original_content?: unknown }).original_content === 'string'
+          && (current as { original_content: string }).original_content.trim() !== '';
+      if (current && !hasOriginal) {
+        updates.original_content = incomingOriginal;
+      }
+    }
+
     for (const field of allowedFields) {
       if (field in body) {
         if (field === 'title') {

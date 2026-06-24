@@ -14,6 +14,7 @@ import ContentArchiveTab from '@/hr/components/mypage/ContentArchiveTab';
 import RankingsTab from '@/hr/components/mypage/RankingsTab';
 import ConversionHistoryTab from '@/hr/components/mypage/ConversionHistoryTab';
 import BrandKitTab from '@/hr/components/mypage/BrandKitTab';
+import VoiceDnaTab from '@/hr/components/mypage/VoiceDnaTab';
 import PhotoLibraryTab from '@/hr/components/mypage/PhotoLibraryTab';
 
 function MyPageContent() {
@@ -122,6 +123,7 @@ function MyPageContent() {
         {activeTab === 'rankings' && <RankingsTab />}
         {activeTab === 'conversions' && <ConversionHistoryTab />}
         {activeTab === 'brandkit' && <BrandKitTab />}
+        {activeTab === 'voice' && <VoiceDnaTab />}
         {activeTab === 'photos' && <PhotoLibraryTab />}
       </div>
     </div>

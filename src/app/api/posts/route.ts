@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy, target_site, status, published_url } = body;
+    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy, target_site, status, published_url, original_content } = body;
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
       return NextResponse.json({ error: '제목은 필수입니다.' }, { status: 400 });
@@ -73,6 +73,13 @@ export async function POST(req: NextRequest) {
         ? published_url.trim()
         : null;
 
+    // original_content: AI 생성 직후 원본 스냅샷(VOICE-DNA 편집 학습용).
+    // 미전송 시 컬럼 자체를 insert에서 제외해 하위 호환(마이그 029 미적용 환경 보호).
+    const validOriginalContent =
+      typeof original_content === 'string' && original_content.trim() !== ''
+        ? original_content.trim()
+        : null;
+
     const { data, error } = await supabase
       .from('saved_posts')
       .insert({
@@ -89,6 +96,7 @@ export async function POST(req: NextRequest) {
         status: validStatus,
         ...(validTargetSite ? { target_site: validTargetSite } : {}),
         ...(validPublishedUrl ? { published_url: validPublishedUrl } : {}),
+        ...(validOriginalContent ? { original_content: validOriginalContent } : {}),
       })
       .select()
       .single();
