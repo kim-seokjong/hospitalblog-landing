@@ -53,6 +53,13 @@ export default function MultichannelPage() {
   // 선택된 채널 (기본: 전체 선택)
   const [selected, setSelected] = useState<string[]>(() => CHANNEL_OPTIONS.map((c) => c.id));
   const abortRef = useRef<AbortController | null>(null);
+  // #2 블로그 없이 진입: 입력 방식(키워드 / 본문 붙여넣기) + 각 입력값
+  const [entryMode, setEntryMode] = useState<'keyword' | 'paste'>('keyword');
+  const [keywordInput, setKeywordInput] = useState('');
+  const [pasteInput, setPasteInput] = useState('');
+  const [entryError, setEntryError] = useState<string | null>(null);
+  // 키워드 진입일 때만 서비스로 함께 전달하는 키워드 (블로그/붙여넣기 진입은 undefined)
+  const [keyword, setKeyword] = useState<string | null>(null);
 
   // 마운트 시 블로그 본문 로드 → 채널 선택 단계 노출 (자동 시작하지 않음)
   useEffect(() => {
@@ -81,6 +88,31 @@ export default function MultichannelPage() {
     return CHANNEL_OPTIONS.filter((c) => selected.includes(c.id)).map((c) => c.id);
   }
 
+  // #2 입력 폼 제출: 키워드/붙여넣기 검증 후 소스를 세팅하고 채널 선택 단계로 이동한다.
+  function submitEntry() {
+    setEntryError(null);
+    if (entryMode === 'keyword') {
+      const kw = keywordInput.trim();
+      if (!kw) {
+        setEntryError('키워드를 입력해 주세요.');
+        return;
+      }
+      // 키워드 단독 진입: 키워드 텍스트를 소스(blog_text)로도 사용하고, keyword 로도 함께 전달한다.
+      setBlogText(kw);
+      setKeyword(kw);
+      setStage('select');
+      return;
+    }
+    const text = pasteInput.trim();
+    if (!text) {
+      setEntryError('본문을 붙여넣어 주세요.');
+      return;
+    }
+    setBlogText(text);
+    setKeyword(null);
+    setStage('select');
+  }
+
   async function runPlanning(src: string, channels: string[]) {
     setError(null);
     setUpgrade(false);
@@ -88,7 +120,7 @@ export default function MultichannelPage() {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const { job_id } = await startConvert(src, channels);
+      const { job_id } = await startConvert(src, channels, keyword ?? undefined);
       const planned = await pollUntil(
         job_id,
         ['planned'],
@@ -218,20 +250,120 @@ export default function MultichannelPage() {
           </div>
         )}
 
-        {/* 소스 없음 안내 */}
+        {/* 소스 없음 → 블로그 없이 입력으로 시작 (#2) */}
         {stage === 'idle' && !upgrade && (
-          <div className="rounded-2xl border border-[#b4bfce] bg-white p-6 sm:p-8 text-center space-y-4">
-            <div className="text-4xl">📝</div>
-            <p className="text-base font-bold text-[#202020]">먼저 블로그를 생성해 주세요</p>
-            <p className="text-sm text-[#5b6573] leading-relaxed">
-              블로그 본문이 있어야 영상·카드뉴스·스토리·쓰레드·피드를 만들 수 있어요.
-            </p>
-            <Link
-              href="/app"
-              className="inline-block px-6 py-3 bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm font-bold rounded-xl transition-colors"
+          <div className="rounded-2xl border border-[#b4bfce] bg-white p-5 sm:p-7 space-y-5">
+            <div className="space-y-1.5">
+              <p className="text-base font-bold text-[#202020]">무엇으로 만들까요?</p>
+              <p className="text-sm text-[#5b6573] leading-relaxed">
+                블로그가 없어도 괜찮아요. <span className="font-semibold text-[#202020]">키워드</span>만 입력하거나
+                <span className="font-semibold text-[#202020]"> 기존 본문</span>을 붙여넣으면 영상·카드뉴스·스토리·쓰레드·피드를 만들 수 있어요.
+              </p>
+            </div>
+
+            {/* 입력 방식 토글 */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEntryMode('keyword');
+                  setEntryError(null);
+                }}
+                aria-pressed={entryMode === 'keyword'}
+                className={
+                  'py-2.5 rounded-xl text-sm font-semibold border transition-colors ' +
+                  (entryMode === 'keyword'
+                    ? 'bg-[#ff4628] text-white border-[#ff4628]'
+                    : 'bg-white text-[#5b6573] border-[#b4bfce] hover:border-[#ff4628]/60')
+                }
+              >
+                🔑 키워드 입력
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEntryMode('paste');
+                  setEntryError(null);
+                }}
+                aria-pressed={entryMode === 'paste'}
+                className={
+                  'py-2.5 rounded-xl text-sm font-semibold border transition-colors ' +
+                  (entryMode === 'paste'
+                    ? 'bg-[#ff4628] text-white border-[#ff4628]'
+                    : 'bg-white text-[#5b6573] border-[#b4bfce] hover:border-[#ff4628]/60')
+                }
+              >
+                📋 본문 붙여넣기
+              </button>
+            </div>
+
+            {/* 키워드 입력 */}
+            {entryMode === 'keyword' && (
+              <div className="space-y-1.5">
+                <label htmlFor="mc-keyword" className="block text-sm font-semibold text-[#202020]">
+                  키워드 / 주제
+                </label>
+                <input
+                  id="mc-keyword"
+                  type="text"
+                  value={keywordInput}
+                  onChange={(e) => setKeywordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      submitEntry();
+                    }
+                  }}
+                  placeholder="예: 보톡스 시술 전 주의사항"
+                  style={{ colorScheme: 'light' }}
+                  className="w-full rounded-xl border border-[#b4bfce] bg-white px-4 py-3 text-base text-[#202020] placeholder:text-[#9aa6b4] outline-none focus:border-[#ff4628] focus:ring-2 focus:ring-[#ff4628]/20"
+                />
+                <p className="text-xs text-[#73808f] leading-relaxed">
+                  키워드만 입력하면 우리 병원 정보를 바탕으로 채널별 기획안을 자동으로 만들어 드려요.
+                </p>
+              </div>
+            )}
+
+            {/* 본문 붙여넣기 */}
+            {entryMode === 'paste' && (
+              <div className="space-y-1.5">
+                <label htmlFor="mc-paste" className="block text-sm font-semibold text-[#202020]">
+                  본문 붙여넣기
+                </label>
+                <textarea
+                  id="mc-paste"
+                  value={pasteInput}
+                  onChange={(e) => setPasteInput(e.target.value)}
+                  rows={8}
+                  placeholder="이미 작성한 블로그·안내문 등 본문을 그대로 붙여넣어 주세요."
+                  style={{ colorScheme: 'light' }}
+                  className="w-full rounded-xl border border-[#b4bfce] bg-white px-4 py-3 text-base text-[#202020] placeholder:text-[#9aa6b4] outline-none resize-y focus:border-[#ff4628] focus:ring-2 focus:ring-[#ff4628]/20 leading-relaxed"
+                />
+                <p className="text-xs text-[#73808f] leading-relaxed">
+                  붙여넣은 본문을 바탕으로 채널별 콘텐츠를 만들어 드려요.
+                </p>
+              </div>
+            )}
+
+            {entryError && (
+              <p className="text-sm text-[#ff4628] font-medium">{entryError}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={submitEntry}
+              className="w-full py-3.5 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm sm:text-base font-bold transition-colors"
             >
-              블로그 생성하러 가기
-            </Link>
+              다음 · 채널 선택
+            </button>
+
+            <p className="text-xs text-[#73808f] text-center">
+              이미 블로그 본문이 있다면{' '}
+              <Link href="/app" className="font-semibold text-[#ff4628] underline underline-offset-2 hover:text-[#e63a1c]">
+                블로그에서 멀티채널 생성
+              </Link>
+              으로도 시작할 수 있어요.
+            </p>
           </div>
         )}
 

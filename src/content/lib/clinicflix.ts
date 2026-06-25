@@ -43,6 +43,9 @@ export interface ClinicflixConvertRequest {
   channels?: string[]
   concept?: string
   mode?: string
+  // 키워드 진입(#2): 블로그 없이 키워드만으로 생성할 때 서비스(ConvertIn.keyword)로 전달.
+  // mode==='keyword' 일 때만 서비스가 사용한다.
+  keyword?: string
   options?: { video_engine?: string }
   callback_url?: string
 }

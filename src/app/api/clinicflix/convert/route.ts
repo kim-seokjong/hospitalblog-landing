@@ -62,6 +62,9 @@ export async function POST(req: NextRequest) {
     if (blogText.length > MAX_BLOG_TEXT) {
       return NextResponse.json({ error: '본문이 너무 깁니다' }, { status: 400 })
     }
+    // 키워드 진입(#2): 선택값. 있으면 서비스 키워드 생성에 사용한다(mode=keyword).
+    // blog_text 는 그대로 필수 유지(키워드 단독 진입은 프런트가 keyword 텍스트를 blog_text 로도 보낸다).
+    const keyword = typeof body?.keyword === 'string' ? body.keyword.trim() : ''
     // 선택된 채널. 누락/빈 배열이면 전체 5개로 취급한다.
     const rawChannels: string[] = Array.isArray(body?.channels)
       ? body.channels.filter((c: unknown): c is string => typeof c === 'string')
@@ -174,6 +177,7 @@ export async function POST(req: NextRequest) {
         channels,
         concept,
         mode: 'keyword',
+        ...(keyword ? { keyword } : {}),
         options: { video_engine: 'veo_fast' },
       })
     } catch (e) {
