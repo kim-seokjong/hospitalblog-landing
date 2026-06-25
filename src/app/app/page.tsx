@@ -1256,6 +1256,32 @@ export default function AppPage() {
                         </span>
                       ))}
                     </div>
+
+                    {/* #2 블로그 없이 멀티채널: 블로그를 아직 만들지 않아도 키워드/본문 붙여넣기로 바로 영상·멀티채널 제작 */}
+                    {user && (
+                      <div className="mt-8 max-w-full sm:max-w-md mx-auto">
+                        <div className="flex items-center gap-3 mb-4" aria-hidden>
+                          <span className="h-px flex-1 bg-[#cdd6e1]" />
+                          <span className="text-xs text-[#73808f]">또는</span>
+                          <span className="h-px flex-1 bg-[#cdd6e1]" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // 소스를 비워 idle 단계(키워드/붙여넣기 폼)로 진입한다. dp_multichannel_src 를 설정하지 않는다.
+                            sessionStorage.removeItem('dp_multichannel_src');
+                            router.push('/app/multichannel');
+                          }}
+                          className="w-full py-3.5 sm:py-4 rounded-xl bg-white hover:bg-[#fff1ee] text-[#ff4628] text-sm sm:text-base font-bold border border-[#ff4628]/40 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <span className="text-lg">🎬</span>
+                          <span>블로그 없이 멀티채널 만들기</span>
+                        </button>
+                        <p className="mt-2 text-xs text-[#73808f] leading-relaxed">
+                          키워드만 입력하거나 기존 본문을 붙여넣어 영상 · 카드뉴스 · 스토리 · 쓰레드 · 피드를 만들 수 있어요.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </>
@@ -1343,6 +1369,7 @@ export default function AppPage() {
                     )}
 
                     {/* 멀티채널 생성 (ClinicFlix) — 맨 아래 배치. 전용 페이지로 이동. 게이팅은 서버 + 페이지(UpgradeRequiredError)에서 처리 */}
+                    {/* #1 블로그 → 멀티채널: 생성된 블로그 본문이 있을 때만 노출 (기존 동작 유지) */}
                     {user && content && (
                       <button
                         type="button"
