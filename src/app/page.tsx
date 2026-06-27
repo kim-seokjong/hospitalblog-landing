@@ -9,6 +9,7 @@ import type { User } from '@supabase/supabase-js';
 import AuthModal from '@/hr/components/AuthModal';
 import { PLANS } from '@/payment/lib/plans';
 import ClinicflixSection from '@/components/landing/ClinicflixSection';
+import Logo from '@/components/landing/Logo';
 import PromoCountdown from '@/payment/components/PromoCountdown';
 
 export default function LandingPage() {
@@ -95,12 +96,9 @@ export default function LandingPage() {
       {/* 헤더 — 솔리드 화이트 + blur (그라데이션 금지) */}
       <header className="sticky top-0 z-40 border-b border-[#dbe2ea] bg-white/85 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#ff4628] to-[#e63a1c] shadow-[0_8px_24px_-12px_rgba(255,70,40,0.5)]">
-              <span className="text-white text-sm">▦</span>
-            </div>
-            <span className="font-extrabold text-[#202020] text-base md:text-lg truncate">닥터포스트</span>
-          </div>
+          <a href="/" aria-label="닥터포스트 홈" className="flex items-center min-w-0">
+            <Logo variant="light" />
+          </a>
           <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-[#4a4f55]">
             <a href="#features" className="hover:text-[#ff4628] transition-colors">기능</a>
             <a href="#how" className="hover:text-[#ff4628] transition-colors">사용법</a>
