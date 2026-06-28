@@ -7,7 +7,8 @@ export type FeatureType =
   | 'generate-images'
   | 'generate-cardnews-slides'
   | 'check-originality'
-  | 'regenerate-image';
+  | 'regenerate-image'
+  | 'free-sample';
 
 export type ApiProvider = 'anthropic' | 'fal' | 'pexels' | 'openai';
 
