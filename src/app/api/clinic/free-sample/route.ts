@@ -6,6 +6,7 @@ import {
   generateFreeSample,
   normalizeClinicKey,
   isFullSample,
+  inferSpecialtyFromName,
 } from '@/content/lib/free-sample';
 
 export const dynamic = 'force-dynamic';
@@ -99,16 +100,27 @@ export async function POST(req: NextRequest) {
       // 디렉터리 조회 실패는 무시 — 병원명만으로 생성
     }
 
+    // 3-1) lookup이 진료과를 못 주면 병원명에서 추론(일시 실패 방어).
+    //      예: "서울스마트피부과의원" → 피부과. 잘못된 과의 글 생성·캐시를 막는다.
+    if (!specialty) {
+      specialty = inferSpecialtyFromName(clinic);
+    }
+
     // 4) 전체 글 생성(의료광고법 2차 필터 포함)
     const { sample, usage } = await generateFreeSample({ clinicName: clinic, specialty, region });
 
-    // 5) 캐시 저장 + 생성 이벤트 기록(레이트리밋용). 저장 실패는 응답을 막지 않음.
-    await supabase
-      .from('clinic_free_samples')
-      .upsert(
-        { clinic_key: clinicKey, clinic_name: clinic, sample },
-        { onConflict: 'clinic_key' },
-      );
+    // 5) 캐시 저장 — 단, 진료과가 확인된 경우에만 영구 저장한다.
+    //    진료과가 끝내 빈값이면 lookup 일시 실패 가능성이 있으므로 캐시하지 않고
+    //    다음 방문 때 lookup을 재시도하게 둔다(엉뚱한 과의 글 영구 캐시 방지).
+    //    생성 이벤트(레이트리밋용)는 항상 기록한다. 저장 실패는 응답을 막지 않음.
+    if (specialty) {
+      await supabase
+        .from('clinic_free_samples')
+        .upsert(
+          { clinic_key: clinicKey, clinic_name: clinic, sample },
+          { onConflict: 'clinic_key' },
+        );
+    }
     await supabase
       .from('clinic_free_sample_events')
       .insert({ ip, clinic_key: clinicKey });

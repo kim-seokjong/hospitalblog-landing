@@ -31,8 +31,10 @@ export interface FreeSample {
 }
 
 /**
- * 임의의 캐시 값이 "전체 글(version 2)" 형태인지 검사한다.
- * 과거 티저 캐시(sections 없음 / version 없음)는 false → 호출부에서 재생성.
+ * 임의의 캐시 값이 "재사용 가능한 전체 글(version 2)" 형태인지 검사한다.
+ * - 과거 티저 캐시(sections 없음 / version 없음)는 false → 재생성.
+ * - 진료과(specialty)가 빈값/누락이면 stale로 간주(false) → 재생성.
+ *   (lookup 일시 실패로 진료과 없이 엉뚱한 과의 글이 박힌 캐시를 자동 치유한다.)
  */
 export function isFullSample(value: unknown): value is FreeSample {
   if (!value || typeof value !== 'object') return false;
@@ -42,9 +44,58 @@ export function isFullSample(value: unknown): value is FreeSample {
     typeof v.title === 'string' &&
     typeof v.intro === 'string' &&
     typeof v.closing === 'string' &&
+    typeof v.specialty === 'string' &&
+    v.specialty.trim().length > 0 &&
     Array.isArray(v.sections) &&
     v.sections.length > 0
   );
+}
+
+/**
+ * 진료과 키워드 매핑. 한국 병원명에는 대개 진료과가 포함되므로
+ * (예: "서울스마트피부과의원" → 피부과), 디렉터리 lookup이 일시 실패해
+ * 진료과를 못 줄 때 병원명 문자열에서 진료과를 추론하는 폴백으로 쓴다.
+ *
+ * 순서 주의: 더 구체적인 키워드를 먼저 둬 부분문자열 오매칭을 막는다.
+ * 예) "외과"는 성형/정형/신경외과보다 뒤에, "신경과"는 "신경외과" 뒤에 둔다.
+ * 출력 진료과명은 프로젝트 지원 15개 과 명칭에 맞춘다(소아과·비뇨기과 등).
+ */
+const SPECIALTY_KEYWORDS: ReadonlyArray<{ match: string; specialty: string }> = [
+  { match: '성형외과', specialty: '성형외과' },
+  { match: '피부과', specialty: '피부과' },
+  { match: '치과', specialty: '치과' },
+  { match: '한의원', specialty: '한의원' },
+  { match: '한방', specialty: '한의원' },
+  { match: '안과', specialty: '안과' },
+  { match: '정형외과', specialty: '정형외과' },
+  { match: '신경외과', specialty: '신경외과' },
+  { match: '비뇨', specialty: '비뇨기과' },
+  { match: '산부인과', specialty: '산부인과' },
+  { match: '여성의원', specialty: '산부인과' },
+  { match: '이비인후과', specialty: '이비인후과' },
+  { match: '가정의학과', specialty: '가정의학과' },
+  { match: '통증의학과', specialty: '재활의학과' },
+  { match: '마취통증', specialty: '재활의학과' },
+  { match: '정신건강의학과', specialty: '정신건강의학과' },
+  { match: '정신과', specialty: '정신건강의학과' },
+  { match: '재활의학과', specialty: '재활의학과' },
+  { match: '신경과', specialty: '신경과' },
+  { match: '소아청소년과', specialty: '소아과' },
+  { match: '소아', specialty: '소아과' },
+  { match: '내과', specialty: '내과' },
+  { match: '외과', specialty: '외과' },
+];
+
+/**
+ * 병원명 문자열에서 진료과를 추론한다. 매칭이 없으면 빈 문자열을 반환한다.
+ * 디렉터리 lookup이 진료과를 못 줄 때의 폴백 — 절대 예외를 던지지 않는다.
+ */
+export function inferSpecialtyFromName(name: string): string {
+  const normalized = (name || '').replace(/\s/g, '');
+  for (const { match, specialty } of SPECIALTY_KEYWORDS) {
+    if (normalized.includes(match)) return specialty;
+  }
+  return '';
 }
 
 /**
@@ -102,6 +153,11 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 
 function buildUserPrompt({ clinicName, specialty, region }: GenerateInput): string {
   const specialtyHint = specialty ? `진료과목: ${specialty}` : '진료과목: (일반 병원)';
+  // 진료과가 확정된 경우, 글 주제를 그 진료과 범위로 강하게 못 박는다
+  // (lookup 일시 실패 후 폴백 추론한 진료과를 반드시 반영시키기 위함).
+  const specialtyScope = specialty
+    ? `\n\n🚩 이 병원은 "${specialty}" 병원입니다. 글 주제는 반드시 ${specialty} 진료 범위(이 과에서 흔히 다루는 증상·질환·관리)로만 작성하세요. 다른 진료과(예: 내과 감기 등)의 주제로 새지 마세요.`
+    : '';
   const regionHint = region ? `지역: ${region}` : '';
   const regionRule = region
     ? `- 지역명("${region}")을 본문 단락 안에 자연스럽게 1~2회만 녹입니다(소제목에는 넣지 않음).`
@@ -110,7 +166,7 @@ function buildUserPrompt({ clinicName, specialty, region }: GenerateInput): stri
 
 병원명: ${clinicName}
 ${specialtyHint}
-${regionHint}
+${regionHint}${specialtyScope}
 
 작성 요구사항:
 - 제목 1개: 25~38자, 검색 의도가 분명한 정보형/가이드형. 과장·최상급 금지.
