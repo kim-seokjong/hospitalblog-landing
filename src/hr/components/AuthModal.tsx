@@ -9,6 +9,8 @@ interface AuthModalProps {
   onSuccess: () => void;
   initialMode?: 'login' | 'signup';
   closable?: boolean;
+  /** 외부(딥링크 등)에서 회원가입 병원명을 미리 채울 때 사용. 사용자가 자유롭게 수정 가능. */
+  initialHospitalName?: string;
 }
 
 type Mode = 'login' | 'signup';
@@ -67,7 +69,7 @@ function mapCategoryToHospitalType(category: string): string {
   return '';
 }
 
-export default function AuthModal({ onClose, onSuccess, initialMode = 'login', closable = true }: AuthModalProps) {
+export default function AuthModal({ onClose, onSuccess, initialMode = 'login', closable = true, initialHospitalName = '' }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
 
   // 로그인 필드
@@ -78,7 +80,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
   // 회원가입 추가 필드
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [hospitalName, setHospitalName] = useState('');
+  const [hospitalName, setHospitalName] = useState(initialHospitalName.trim());
   const [hospitalAddress, setHospitalAddress] = useState('');
   const [position, setPosition] = useState('');
   const [hospitalType, setHospitalType] = useState('');
@@ -152,6 +154,15 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     setLookupResults(null);
     setLookupMsg('');
   };
+
+  // 딥링크 프리필: 병원명이 주어진 채 회원가입으로 열리면 1회 자동 조회해
+  // 유형/주소까지 채워준다. 실패해도 무해(사용자가 직접 입력 가능).
+  useEffect(() => {
+    if (initialMode === 'signup' && initialHospitalName.trim()) {
+      void handleLookup();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) { setError('이메일과 비밀번호를 입력해주세요.'); return; }

@@ -2,8 +2,8 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import AuthModal from '@/hr/components/AuthModal';
@@ -12,11 +12,29 @@ import ClinicflixSection from '@/components/landing/ClinicflixSection';
 import Logo from '@/components/landing/Logo';
 import PromoCountdown from '@/payment/components/PromoCountdown';
 
+/**
+ * `?clinic=` 쿼리 파라미터를 읽어 상위로 전달한다.
+ * useSearchParams는 반드시 <Suspense> 경계 안에서만 사용해야 빌드가 깨지지 않으므로
+ * 별도 컴포넌트로 분리해 Suspense로 감싼다.
+ */
+function ClinicParamReader({ onClinic }: { onClinic: (name: string) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    // useSearchParams는 이미 디코딩된 값을 반환한다(한글·공백·특수문자 안전).
+    const raw = searchParams.get('clinic');
+    const name = raw?.trim() ?? '';
+    if (name) onClinic(name);
+  }, [searchParams, onClinic]);
+  return null;
+}
+
 export default function LandingPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
+  const [clinicName, setClinicName] = useState('');
+  const [clinicAutoOpened, setClinicAutoOpened] = useState(false);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -31,6 +49,15 @@ export default function LandingPage() {
     });
     return () => subscription.unsubscribe();
   }, [supabase]);
+
+  // 영업 딥링크(?clinic=병원명): 비로그인 방문자에게 병원명이 프리필된
+  // 회원가입 모달을 자동으로 띄워 마찰을 없앤다. (로그인 상태/값 없음 → 기존 동작 유지)
+  useEffect(() => {
+    if (!authChecked || clinicAutoOpened || !clinicName || user) return;
+    setAuthMode('signup');
+    setShowAuthModal(true);
+    setClinicAutoOpened(true);
+  }, [authChecked, clinicAutoOpened, clinicName, user]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -78,11 +105,16 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-[#202020]">
+      <Suspense fallback={null}>
+        <ClinicParamReader onClinic={setClinicName} />
+      </Suspense>
+
       {showAuthModal && (
         <AuthModal
           onClose={() => setShowAuthModal(false)}
           onSuccess={handleAuthSuccess}
           initialMode={authMode}
+          initialHospitalName={clinicName}
         />
       )}
 
