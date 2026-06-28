@@ -2,19 +2,25 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense, type SyntheticEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthModal from '@/hr/components/AuthModal';
 import Logo from '@/components/landing/Logo';
 
+interface FreeSampleSection {
+  heading: string;
+  body: string;
+}
+
 interface FreeSample {
+  version: number;
   clinicName: string;
   specialty: string;
   region: string;
   title: string;
   intro: string;
-  subheadings: string[];
-  sampleSection: { heading: string; body: string };
+  sections: FreeSampleSection[];
+  closing: string;
 }
 
 /**
@@ -150,7 +156,8 @@ function SamplePageInner() {
         )}
         {clinic && (
           <p className="text-sm sm:text-base text-[#5b6470] mb-7">
-            병원명만으로 만든 미리보기예요. 실제 발행 글은 가입 후 더 풍성하게 제공됩니다.
+            병원명만으로 만든 완성 글 전체예요. 의료광고법은 자동 검수됩니다.
+            발행·이미지·멀티채널은 가입 후 이용하실 수 있어요.
           </p>
         )}
 
@@ -197,75 +204,123 @@ function LoadingView({ clinic }: { clinic: string }) {
   );
 }
 
+/**
+ * 본문 단락 렌더 — 줄바꿈을 단락으로 분리해 자연스러운 아티클 흐름을 만든다.
+ */
+function BodyParagraphs({ text }: { text: string }) {
+  const paras = text
+    .split(/\n{2,}|\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return (
+    <>
+      {paras.map((p, i) => (
+        <p key={i} className="text-[15px] sm:text-base leading-[1.85] text-[#3a414b]">
+          {p}
+        </p>
+      ))}
+    </>
+  );
+}
+
 function SampleView({ sample, onSignup }: { sample: FreeSample; onSignup: () => void }) {
   const meta = [sample.specialty, sample.region].filter(Boolean).join(' · ');
+  // 읽기전용 미리보기 — 캐주얼 복사 차단(완벽 차단은 불가, 진입장벽 수준).
+  const preventCopy = (e: SyntheticEvent) => e.preventDefault();
   return (
     <div>
-      {/* 샘플 카드 */}
-      <article className="rounded-2xl border border-[#e6ebf1] shadow-sm overflow-hidden">
-        <div className="px-5 sm:px-7 pt-6 pb-5 border-b border-[#eef1f5]">
-          {meta && <p className="text-xs font-semibold text-[#8a929c] mb-2">{meta}</p>}
-          <h2 className="text-xl sm:text-2xl font-bold leading-snug">{sample.title}</h2>
+      <article
+        className="relative rounded-2xl border border-[#e6ebf1] shadow-sm overflow-hidden select-none"
+        style={{ WebkitUserSelect: 'none', MozUserSelect: 'none', userSelect: 'none' }}
+        onCopy={preventCopy}
+        onCut={preventCopy}
+        onContextMenu={preventCopy}
+        onDragStart={preventCopy}
+      >
+        {/* 상단 미리보기 표식 */}
+        <div
+          className="text-center text-[11px] font-semibold tracking-wide py-2 border-b border-[#f1e3df]"
+          style={{ background: '#fff7f5', color: '#caa79e' }}
+        >
+          닥터포스트 미리보기 · 읽기 전용
         </div>
 
-        <div className="px-5 sm:px-7 py-6 space-y-6">
-          <p className="text-[15px] sm:text-base leading-relaxed text-[#3a414b]">
-            {sample.intro}
-          </p>
+        <div className="px-5 sm:px-8 pt-7 pb-5 border-b border-[#eef1f5]">
+          {meta && <p className="text-xs font-semibold text-[#8a929c] mb-2">{meta}</p>}
+          <h2 className="text-xl sm:text-[26px] font-bold leading-snug">{sample.title}</h2>
+        </div>
 
-          {/* 목차(소제목) */}
-          <div>
-            <p className="text-xs font-semibold text-[#8a929c] mb-3">이 글의 목차</p>
-            <ul className="space-y-2">
-              {sample.subheadings.map((h, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-[15px] text-[#202020]">
-                  <span
-                    className="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-md text-[11px] font-bold text-white flex-shrink-0"
-                    style={{ background: CORAL }}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="font-medium">{h}</span>
-                </li>
-              ))}
-            </ul>
+        <div className="px-5 sm:px-8 py-7 space-y-7">
+          {/* 인트로 */}
+          <div className="space-y-4">
+            <BodyParagraphs text={sample.intro} />
           </div>
 
-          {/* 예시 본문 섹션 */}
-          {sample.sampleSection.body && (
-            <div className="rounded-xl bg-[#fafbfc] border border-[#eef1f5] p-4 sm:p-5">
-              <p className="font-semibold mb-2" style={{ color: CORAL }}>
-                {sample.sampleSection.heading}
-              </p>
-              <p className="text-[15px] leading-relaxed text-[#3a414b]">
-                {sample.sampleSection.body}
-              </p>
-              <p className="mt-3 text-xs text-[#a4abb4]">
-                ※ 나머지 본문·이미지·발행은 가입 후 전체 제공됩니다.
-              </p>
-            </div>
+          {/* 본문 섹션 전체 */}
+          {sample.sections.map((sec, i) => (
+            <section key={i} className="space-y-3.5">
+              <h3 className="text-[17px] sm:text-[19px] font-bold leading-snug text-[#202020] pt-1">
+                <span style={{ color: CORAL }}>·</span> {sec.heading}
+              </h3>
+              <div className="space-y-4">
+                <BodyParagraphs text={sec.body} />
+              </div>
+            </section>
+          ))}
+
+          {/* 마무리 */}
+          {sample.closing && (
+            <p className="text-[15px] sm:text-base leading-[1.85] text-[#5b6470] pt-2 border-t border-[#f1f3f6]">
+              {sample.closing}
+            </p>
           )}
+        </div>
+
+        {/* 하단 미리보기 표식 */}
+        <div
+          className="text-center text-[11px] font-medium py-2.5 border-t border-[#f1e3df]"
+          style={{ background: '#fff7f5', color: '#caa79e' }}
+        >
+          이 글은 닥터포스트가 생성한 미리보기입니다 · 복사·다운로드·발행은 가입 후 제공
         </div>
       </article>
 
-      {/* 가입 CTA */}
+      {/* 가입 CTA — 전환 게이팅 */}
       <div
         className="mt-7 rounded-2xl p-6 sm:p-8 text-center"
         style={{ background: '#fff0ed' }}
       >
         <p className="text-lg sm:text-xl font-bold mb-2">
-          마음에 드시나요? 전체 글은 1분이면 완성돼요
+          이 글, 마음에 드시나요? 우리 병원 글로 바로 발행하세요
         </p>
-        <p className="text-sm text-[#5b6470] mb-5">
-          전체 본문·이미지·네이버 발행·멀티채널(인스타·쓰레드)은 가입 후 이용하실 수 있어요.
-          의료광고법은 자동으로 검수됩니다.
+        <p className="text-sm text-[#5b6470] mb-4">
+          지금 보시는 건 글 텍스트 미리보기예요. 가입하시면 아래 기능까지 모두 열립니다.
         </p>
+        <ul className="text-left max-w-md mx-auto text-sm text-[#3a414b] mb-6 space-y-2">
+          {[
+            '네이버 블로그 자동 발행',
+            'AI 이미지 자동 생성·삽입',
+            '멀티채널 5종(영상·카드뉴스·스토리·쓰레드·인스타)',
+            '글 무제한 추가 생성',
+            '문장 수정·재생성 편집',
+          ].map((t) => (
+            <li key={t} className="flex items-start gap-2.5">
+              <span
+                className="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold text-white flex-shrink-0"
+                style={{ background: CORAL }}
+              >
+                ✓
+              </span>
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
         <button
           onClick={onSignup}
           className="text-base font-bold text-white px-7 py-3.5 rounded-xl w-full sm:w-auto"
           style={{ background: CORAL }}
         >
-          무료로 가입하고 전체 글 만들기
+          무료로 가입하고 전체 기능 열기
         </button>
       </div>
     </div>

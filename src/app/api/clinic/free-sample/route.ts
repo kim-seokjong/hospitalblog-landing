@@ -5,14 +5,17 @@ import { logUsage } from '@/dev/lib/usage-logger';
 import {
   generateFreeSample,
   normalizeClinicKey,
-  type FreeSample,
+  isFullSample,
 } from '@/content/lib/free-sample';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-/** IP당 신규 생성(캐시 미스) 시간당 허용 횟수 — 남용 방어. */
-const MAX_NEW_GENERATIONS_PER_HOUR = 10;
+/**
+ * IP당 신규 생성(캐시 미스) 시간당 허용 횟수 — 남용 방어.
+ * 전체 글은 티저보다 비싸므로 하향(과거 10 → 5).
+ */
+const MAX_NEW_GENERATIONS_PER_HOUR = 5;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 /** 요청 IP 추출 (Vercel/프록시 환경: x-forwarded-for 우선). */
@@ -26,10 +29,11 @@ function getClientIp(req: NextRequest): string {
  * POST /api/clinic/free-sample  (공개·비인증)
  *
  * 영업 콜드메일 CTA(/sample?clinic=병원명) 진입 시, 가입 없이 보여줄
- * "맞춤 블로그 티저 샘플"을 생성/반환한다.
+ * "맞춤 블로그 전체 글 샘플"을 생성/반환한다.
  *
  * 비용·악용 방어:
  *  1) 캐시: 정규화 병원명당 1회만 Claude 생성, 이후 같은 병원은 DB 캐시 재사용.
+ *     단, 과거 티저 모양 캐시(version 2 아님)는 전체 글로 재생성한다.
  *  2) 레이트리밋: 동일 IP가 1시간 내 신규 생성을 N회 초과하지 못하게 차단(429).
  * 공개 디렉터리 정보(병원명·유형·지역)만 사용하며 개인정보는 다루지 않는다.
  */
@@ -52,15 +56,16 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // 1) 캐시 조회 — 있으면 즉시 반환(재생성 없음)
+    // 1) 캐시 조회 — 전체 글(version 2) 캐시만 즉시 반환.
+    //    과거 티저 모양 캐시는 isFullSample=false → 무시하고 아래에서 전체 글로 재생성.
     const { data: cached } = await supabase
       .from('clinic_free_samples')
       .select('sample')
       .eq('clinic_key', clinicKey)
       .maybeSingle();
 
-    if (cached?.sample) {
-      return NextResponse.json({ sample: cached.sample as FreeSample, cached: true });
+    if (cached?.sample && isFullSample(cached.sample)) {
+      return NextResponse.json({ sample: cached.sample, cached: true });
     }
 
     // 2) 레이트리밋 — 동일 IP의 최근 1시간 신규 생성 횟수 집계
@@ -94,7 +99,7 @@ export async function POST(req: NextRequest) {
       // 디렉터리 조회 실패는 무시 — 병원명만으로 생성
     }
 
-    // 4) 티저 생성(의료광고법 2차 필터 포함)
+    // 4) 전체 글 생성(의료광고법 2차 필터 포함)
     const { sample, usage } = await generateFreeSample({ clinicName: clinic, specialty, region });
 
     // 5) 캐시 저장 + 생성 이벤트 기록(레이트리밋용). 저장 실패는 응답을 막지 않음.
