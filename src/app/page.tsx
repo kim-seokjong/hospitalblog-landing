@@ -9,8 +9,12 @@ import type { User } from '@supabase/supabase-js';
 import AuthModal from '@/hr/components/AuthModal';
 import { PLANS } from '@/payment/lib/plans';
 import ClinicflixSection from '@/components/landing/ClinicflixSection';
+import HomeFaqSection from '@/components/landing/HomeFaqSection';
 import Logo from '@/components/landing/Logo';
 import PromoCountdown from '@/payment/components/PromoCountdown';
+import JsonLd from '@/dev/lib/seo/JsonLd';
+import { buildFaqPageJsonLd } from '@/dev/lib/seo/schemas';
+import { HOME_FAQS } from '@/dev/lib/seo/homeFaq';
 
 /**
  * `?clinic=` 쿼리 파라미터를 읽어 상위로 전달한다.
@@ -105,6 +109,9 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-[#202020]">
+      {/* 홈 FAQ FAQPage JSON-LD (GEO/AEO) — 화면 FAQ(HomeFaqSection)와 동일 데이터 사용 */}
+      <JsonLd data={buildFaqPageJsonLd(HOME_FAQS)} />
+
       <Suspense fallback={null}>
         <ClinicParamReader onClinic={setClinicName} />
       </Suspense>
@@ -547,6 +554,9 @@ export default function LandingPage() {
           </p>
         </div>
       </section>
+
+      {/* 자주 묻는 질문 (FAQ) — 반론 대응 Q&A + FAQPage JSON-LD 단일 소스 */}
+      <HomeFaqSection />
 
       {/* CTA — 블랙 띠 */}
       <section className="py-16 sm:py-[84px] bg-[#202020]">
