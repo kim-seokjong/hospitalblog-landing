@@ -4,6 +4,7 @@ import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/co
 import { stripAiCliches } from '@/content/lib/anti-ai';
 import { logUsage } from '@/dev/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
+import { buildSerpBenchmark, buildBenchmarkPromptBlock, type SerpBenchmark } from '@/content/lib/serp-benchmark';
 import { checkAndConsumeUsage, refundUsage } from '@/payment/lib/usage-guard';
 import { buildGoogleContentSystemPrompt, buildGoogleContentUserPrompt } from '@/content/lib/google-prompts';
 import { buildVoiceDnaPrompt, parseVoiceDnaCard } from '@/content/lib/voice-dna';
@@ -198,6 +199,18 @@ export async function POST(req: NextRequest) {
     }
     const competitorText = buildCompetitorInsightText(competitorResults);
 
+    // 상위노출 역분석 — 키워드 상위 글의 공통 골격(목표 글자수/소제목/이미지/하위주제).
+    // 어떤 실패도 null 로 폴백(생성 플로우 보호). 산출되면 프롬프트 목표치로 주입한다.
+    let serpBenchmark: SerpBenchmark | null = null;
+    try {
+      serpBenchmark = await buildSerpBenchmark(keyword);
+    } catch {
+      serpBenchmark = null;
+    }
+    const benchmarkSection = serpBenchmark
+      ? `\n${buildBenchmarkPromptBlock(serpBenchmark, keyword)}\n`
+      : '';
+
     const format: TitleFormat = titleFormat || '정보형';
     const formatGuide = buildFormatSpecificStructure(format, keyword);
     const writingStyleGuide = buildWritingStylePrompt(writingStyle);
@@ -252,7 +265,7 @@ export async function POST(req: NextRequest) {
       title, keyword, hospitalType, additionalInfo,
       writingStyleGuide, writingStyleLabel, formatGuide, longtailKeywords,
       competitorText, region, hospitalName, isGeoMode, readabilityGuide,
-      voiceDnaBlock, enhancerBlock,
+      voiceDnaBlock, enhancerBlock, benchmarkBlock: benchmarkSection,
     };
 
     const systemPrompt = isGoogle ? buildGoogleContentSystemPrompt(googlePromptParams) : `당신은 동네 단골 병원의 따뜻한 원장님입니다. 진료실에서 환자분과 마주 앉아 편하게 풀어 설명하듯이 글을 씁니다.
@@ -398,7 +411,7 @@ A3. (답변 2~3문장)
 연관 롱테일 키워드 (본문 전체에 자연스럽게 분산 포함): ${longtailKeywords.join(', ')}
 병원 유형: ${hospitalType || '일반 병원'}
 추가 정보: ${additionalInfo || '없음'}
-${competitorSection}${regionSection}${hospitalSection}
+${competitorSection}${benchmarkSection}${regionSection}${hospitalSection}
 ${formatGuide}
 
 【네이버 SEO 키워드 배치 — 자연스러움 우선, 비문 금지】
@@ -631,6 +644,8 @@ ${formatGuide}
         authoritySignalCount,
         geoScore,
       },
+      // 상위노출 역분석 벤치마크 (없으면 null) — SeoAnalysis 동적 기준에 사용
+      serpBenchmark,
     });
   } catch (error) {
     console.error('본문 생성 오류:', error);

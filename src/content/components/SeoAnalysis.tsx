@@ -30,13 +30,27 @@ function ScoreRing({ score, label }: { score: number; label: string }) {
   );
 }
 
+// 고정(기본) 기준 — 벤치마크가 없거나 confidence='estimated'면 이 값으로 안전 폴백.
+const FIXED_CHAR_TARGET = 1500;
+const FIXED_H2_TARGET = 4;
+const FIXED_H3_TARGET = 2;
+const FIXED_IMAGE_TARGET = 5;
+
 export default function SeoAnalysis({ content }: SeoAnalysisProps) {
-  const { seoAnalysis, imageGuidelines } = content;
+  const { seoAnalysis, imageGuidelines, serpBenchmark } = content;
+
+  // 벤치마크 실측('measured')일 때만 키워드별 동적 기준 적용. 그 외엔 고정 기준 폴백.
+  const useBenchmark = !!serpBenchmark && serpBenchmark.confidence === 'measured';
+  const charTarget = useBenchmark ? serpBenchmark!.targetCharCount : FIXED_CHAR_TARGET;
+  const h2Target = useBenchmark ? serpBenchmark!.targetH2 : FIXED_H2_TARGET;
+  const h3Target = useBenchmark ? Math.max(serpBenchmark!.targetH3, FIXED_H3_TARGET) : FIXED_H3_TARGET;
+  const imageTarget = useBenchmark ? serpBenchmark!.targetImages : FIXED_IMAGE_TARGET;
+  const basisNote = useBenchmark ? '이 키워드 상위 글 기준' : '권장 기준';
 
   const keywordOk = seoAnalysis.keywordCount >= 4 && seoAnalysis.keywordCount <= 6;
-  const h2Ok = seoAnalysis.h2Count >= 4;
-  const h3Ok = seoAnalysis.h3Count >= 2;
-  const charOk = content.charCount >= 1500;
+  const h2Ok = seoAnalysis.h2Count >= h2Target;
+  const h3Ok = seoAnalysis.h3Count >= h3Target;
+  const charOk = content.charCount >= charTarget;
   const firstParaOk = seoAnalysis.firstParaKeyword;
   const subheadingOk = seoAnalysis.subheadingWithKeyword >= 2;
   const longtailOk = seoAnalysis.longtailCoverage >= 3;
@@ -64,22 +78,37 @@ export default function SeoAnalysis({ content }: SeoAnalysisProps) {
           <ScoreRing score={overallScore} label="종합 SEO" />
           <ScoreRing score={seoAnalysis.structureScore} label="구조 점수" />
           <ScoreRing score={content.compliance.isCompliant ? 100 : Math.max(0, 100 - content.compliance.violations.length * 20)} label="광고법 준수" />
-          <ScoreRing score={charOk ? 100 : Math.round((content.charCount / 1400) * 100)} label="글자수" />
+          <ScoreRing score={charOk ? 100 : Math.round((content.charCount / charTarget) * 100)} label="글자수" />
         </div>
+
+        {/* 상위노출 역분석 근거 배너 — 실측 벤치마크가 있을 때만 표시 */}
+        {useBenchmark && (
+          <div className="mb-4 bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+            <p className="text-xs font-bold text-indigo-800">상위노출 역분석 적용됨</p>
+            <p className="text-xs text-indigo-700 mt-0.5 leading-relaxed">
+              이 키워드 상위 글을 분석해 목표 기준을 보정했습니다 (글자수 {charTarget.toLocaleString()}자 · H2 {h2Target}개 · H3 {h3Target}개 · 이미지 {imageTarget}개 기준).
+            </p>
+            {serpBenchmark!.subtopics.length > 0 && (
+              <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
+                상위 글 공통 하위주제: {serpBenchmark!.subtopics.slice(0, 5).join(', ')}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* 체크리스트 */}
         <div className="space-y-2 mb-4">
           <h4 className="text-xs font-bold text-[#202020] mb-2">상위노출 체크리스트</h4>
           {[
-            { ok: charOk, label: `글자수 ${content.charCount.toLocaleString()}자`, sub: '1,500자 이상 권장' },
-            { ok: h2Ok, label: `H2 소제목 ${seoAnalysis.h2Count}개`, sub: '4~5개 권장' },
-            { ok: h3Ok, label: `H3 세부소제목 ${seoAnalysis.h3Count}개`, sub: '2개 이상 권장' },
+            { ok: charOk, label: `글자수 ${content.charCount.toLocaleString()}자`, sub: `${charTarget.toLocaleString()}자 이상 ${basisNote}` },
+            { ok: h2Ok, label: `H2 소제목 ${seoAnalysis.h2Count}개`, sub: `${h2Target}개 이상 ${basisNote}` },
+            { ok: h3Ok, label: `H3 세부소제목 ${seoAnalysis.h3Count}개`, sub: `${h3Target}개 이상 ${basisNote}` },
             { ok: keywordOk, label: `핵심 키워드 ${seoAnalysis.keywordCount}회`, sub: '4~6회 권장' },
             { ok: firstParaOk, label: '첫 단락 키워드 포함', sub: 'D.I.A+ 200자 가산점' },
             { ok: subheadingOk, label: `소제목 키워드 포함 ${seoAnalysis.subheadingWithKeyword}개`, sub: '2개 이상 권장' },
             { ok: longtailOk, label: `롱테일 키워드 ${seoAnalysis.longtailCoverage}/${seoAnalysis.longtailTotal}개`, sub: '3개 이상 권장' },
             { ok: content.compliance.isCompliant, label: '의료광고법 준수', sub: '금지어 없음' },
-            { ok: imageGuidelines.placementHints.length >= 4, label: `이미지 위치 ${imageGuidelines.placementHints.length}곳`, sub: '5곳 이상 권장' },
+            { ok: imageGuidelines.placementHints.length >= imageTarget, label: `이미지 위치 ${imageGuidelines.placementHints.length}곳`, sub: `${imageTarget}곳 이상 ${basisNote}` },
           ].map(({ ok, label, sub }, i) => (
             <div key={i} className={`flex items-center gap-2 p-2 rounded-lg border ${ok ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
               <span className={`text-sm flex-shrink-0 ${ok ? 'text-emerald-600' : 'text-amber-600'}`}>

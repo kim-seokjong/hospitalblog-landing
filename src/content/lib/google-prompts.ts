@@ -30,6 +30,8 @@ export interface GoogleContentPromptParams {
   voiceDnaBlock?: string;
   /** VIRAL-HOOKS·STORYTELLING 결합 블록 — 두 옵션 OFF면 빈 문자열 (기본 OFF, 기존 동작 유지) */
   enhancerBlock?: string;
+  /** 상위노출 역분석 벤치마크 주입 블록 — 산출 실패 시 빈 문자열 (기존 동작 유지) */
+  benchmarkBlock?: string;
 }
 
 export function buildGoogleContentSystemPrompt(params: GoogleContentPromptParams): string {
@@ -103,7 +105,11 @@ export function buildGoogleContentUserPrompt(params: GoogleContentPromptParams):
     title, keyword, hospitalType, additionalInfo,
     writingStyleLabel, formatGuide, longtailKeywords,
     competitorText, region, hospitalName, isGeoMode,
+    benchmarkBlock = '',
   } = params;
+
+  // 상위노출 역분석 벤치마크 — 산출됐을 때만 주입 (없으면 기존 동작 유지)
+  const benchmarkSection = benchmarkBlock ? `\n${benchmarkBlock}\n` : '';
 
   const competitorSection = competitorText
     ? `\n【경쟁 콘텐츠 분석 — 검색 의도 파악 후 차별화 필수】\n현재 "${keyword}"으로 상위 노출된 블로그들이 다루는 주제:\n${competitorText}\n→ 위 경쟁 글들이 공통으로 다루는 핵심 주제는 반드시 포함하되, 의학적 깊이와 직접 경험 서술로 차별화하세요.\n→ 경쟁 글에서 빠진 관점이나 더 구체적인 정보를 발굴하여 독자에게 추가 가치를 제공하세요.\n`
@@ -170,7 +176,7 @@ A3. (답변 2~3문장)
 연관 키워드 (본문 전체에 자연스럽게 분산 포함): ${longtailKeywords.join(', ')}
 병원 유형: ${hospitalType || '일반 병원'}
 추가 정보: ${additionalInfo || '없음'}
-${competitorSection}${regionSection}${hospitalSection}
+${competitorSection}${benchmarkSection}${regionSection}${hospitalSection}
 ${formatGuide}
 
 【구글 SEO 키워드 사용 — 반드시 준수】

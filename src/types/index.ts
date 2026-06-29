@@ -1,3 +1,7 @@
+import type { SerpBenchmark } from '@/content/lib/serp-benchmark';
+
+export type { SerpBenchmark } from '@/content/lib/serp-benchmark';
+
 export interface SeoDetails {
   keywordPlacement: number;  // 키워드 앞배치 점수
   titleLength: number;        // 제목 길이 적정성
@@ -70,6 +74,11 @@ export interface BlogContent {
     authoritySignalCount: number;
     geoScore: number;
   };
+  /**
+   * 상위노출 역분석 벤치마크 — 키워드 상위 글의 공통 골격(목표 글자수/소제목/이미지 등).
+   * 분석 실패·키워드 없음 등으로 산출 불가 시 null/undefined (SeoAnalysis 는 고정 기준 폴백).
+   */
+  serpBenchmark?: SerpBenchmark | null;
 }
 
 export interface BlogTag {
