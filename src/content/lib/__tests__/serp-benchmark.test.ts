@@ -10,6 +10,7 @@ import {
   estimateBenchmark,
   buildBenchmarkPromptBlock,
   toMobilePostUrl,
+  isAllowedBlogUrl,
   fetchTopBlogPosts,
   buildSerpBenchmark,
   type SerpPost,
@@ -305,4 +306,80 @@ test('buildSerpBenchmark: 검색 결과 없으면 null', async () => {
     new Response(JSON.stringify({ total: 0, items: [] }), { status: 200 })) as unknown as typeof fetch;
   const bm = await buildSerpBenchmark('키워드', { env: NAVER_ENV, fetchImpl, analyze: async () => [] });
   assert.equal(bm, null);
+});
+
+// ── isAllowedBlogUrl (SSRF allowlist) ──
+test('isAllowedBlogUrl: 네이버 블로그 호스트만 허용', () => {
+  assert.equal(isAllowedBlogUrl('https://m.blog.naver.com/abc/123'), true);
+  assert.equal(isAllowedBlogUrl('https://blog.naver.com/abc/123'), true);
+});
+
+test('isAllowedBlogUrl: 비네이버/위장 도메인 차단', () => {
+  assert.equal(isAllowedBlogUrl('https://attacker.com/abc/1'), false);
+  // 서브도메인 위장 (정확 매칭이므로 차단)
+  assert.equal(isAllowedBlogUrl('https://evil-blog.naver.com.attacker.com/x'), false);
+  assert.equal(isAllowedBlogUrl('https://naver.com/abc/1'), false);
+  assert.equal(isAllowedBlogUrl('https://blog.naver.com.evil.com/x'), false);
+  // 내부망/메타데이터 등 임의 호스트
+  assert.equal(isAllowedBlogUrl('http://169.254.169.254/latest/meta-data'), false);
+  assert.equal(isAllowedBlogUrl('http://localhost:8080/'), false);
+});
+
+test('isAllowedBlogUrl: 파싱 실패는 false', () => {
+  assert.equal(isAllowedBlogUrl('not a url'), false);
+  assert.equal(isAllowedBlogUrl(''), false);
+});
+
+test('buildSerpBenchmark: 비허용 호스트 링크는 본문 fetch 안 함(추정 폴백)', async () => {
+  const fetchedUrls: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    if (url.includes('openapi.naver.com')) {
+      return new Response(JSON.stringify({
+        total: 100,
+        // 네이버 API 가 임의(비네이버) 호스트 링크를 준 경우.
+        // toMobilePostUrl 의 passthrough 분기(경로가 /{id}/{숫자} 형태가 아님)를 타 원본 호스트 유지.
+        items: [{ title: 'T', description: 'D', link: 'https://attacker.com/evil-path', postdate: '20260601', bloggername: 'A' }],
+      }), { status: 200 });
+    }
+    // 본문 fetch 시도가 있으면 URL 기록 (있으면 안 됨)
+    fetchedUrls.push(url);
+    return new Response(buildBodyHtml({ chars: 1600 }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const bm = await buildSerpBenchmark('키워드', {
+    env: NAVER_ENV,
+    fetchImpl,
+    analyze: async () => ['주제'],
+  });
+  assert.ok(bm);
+  // 비허용 호스트라 본문 fetch 를 시도하지 않았어야 함
+  assert.equal(fetchedUrls.length, 0);
+  // 본문 측정 없음 → 추정 폴백
+  assert.equal(bm!.confidence, 'estimated');
+  assert.equal(bm!.sampleSize, 0);
+});
+
+test('buildSerpBenchmark: 네이버 호스트 링크는 정상적으로 본문 fetch', async () => {
+  const fetchedUrls: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    if (url.includes('openapi.naver.com')) {
+      return new Response(JSON.stringify({
+        total: 100,
+        items: [{ title: 'T', description: 'D', link: 'https://blog.naver.com/abc/123', postdate: '20260601', bloggername: 'A' }],
+      }), { status: 200 });
+    }
+    fetchedUrls.push(url);
+    return new Response(buildBodyHtml({ chars: 1600 }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const bm = await buildSerpBenchmark('키워드', {
+    env: NAVER_ENV,
+    fetchImpl,
+    analyze: async () => ['주제'],
+  });
+  assert.ok(bm);
+  // 허용 호스트(m.blog.naver.com 로 변환)로 본문 fetch 1회
+  assert.equal(fetchedUrls.length, 1);
+  assert.match(fetchedUrls[0], /^https:\/\/m\.blog\.naver\.com\//);
+  assert.equal(bm!.confidence, 'measured');
 });

@@ -351,6 +351,25 @@ export function toMobilePostUrl(link: string): string {
   }
 }
 
+/** 본문 fetch 를 허용할 네이버 블로그 호스트(정확 매칭). */
+const ALLOWED_BLOG_HOSTS: ReadonlySet<string> = new Set(['blog.naver.com', 'm.blog.naver.com']);
+
+/**
+ * 본문 fetch 대상 URL 이 네이버 블로그 호스트 allowlist 인지 검사(SSRF 방어).
+ * - new URL().hostname 정확 매칭만 허용 → 'evil-blog.naver.com.attacker.com' 같은
+ *   서브도메인 위장이나 임의 호스트를 차단.
+ * - URL 파싱 실패는 false.
+ * parsePostBodyMetrics 가 어차피 네이버 블로그 HTML 구조만 해석하므로 기능 손실 없음.
+ */
+export function isAllowedBlogUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return ALLOWED_BLOG_HOSTS.has(hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function fetchBodyWithTimeout(
   url: string,
   timeoutMs: number,
@@ -457,10 +476,14 @@ export async function buildSerpBenchmark(
     }
 
     // 권위 상위 소수만 본문 측정 (best-effort)
+    // SSRF 방어: toMobilePostUrl 변환 후 호스트가 네이버 블로그 allowlist 일 때만 fetch.
+    // 비허용 호스트(네이버 API 가 임의 호스트 링크를 주는 경우)는 null 처리 → 측정 제외.
     const targets = ranked.slice(0, Math.max(0, bodyFetchLimit)).filter((p) => p.link);
-    const htmls = await mapLimit(targets, concurrency, (p) =>
-      fetchBodyWithTimeout(toMobilePostUrl(p.link), timeoutMs, fetchImpl)
-    );
+    const htmls = await mapLimit(targets, concurrency, (p) => {
+      const url = toMobilePostUrl(p.link);
+      if (!isAllowedBlogUrl(url)) return Promise.resolve(null);
+      return fetchBodyWithTimeout(url, timeoutMs, fetchImpl);
+    });
     const measured = htmls
       .map((html) => (html ? parsePostBodyMetrics(html) : null))
       .filter((m): m is PostBodyMetrics => m !== null);
