@@ -49,6 +49,9 @@
     },
     "app/api/cron/track-rankings/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/cron/warm-serp-cache/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -71,6 +74,10 @@
     {
       "path": "/api/cron/track-rankings",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/warm-serp-cache",
+      "schedule": "0 20 * * 0"
     }
   ]
 }

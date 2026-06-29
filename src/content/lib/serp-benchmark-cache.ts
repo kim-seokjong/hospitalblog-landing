@@ -111,3 +111,164 @@ export async function getOrComputeBenchmark(opts: GetOrComputeOptions): Promise<
 
   return fresh;
 }
+
+// ─────────────────────────────────────────────────────────────
+// 캐시 워밍 (주 1회 Cron) — 자주 쓰는 키워드의 벤치마크를 미리 계산·캐시
+//
+// 이 파일에 두는 이유: normalizeCacheKey/normalizeTargetSite/TTL 을 같은 파일에서
+// 재사용하면 단위테스트 러너(node --experimental-strip-types)가 @/ alias 를 해석하지
+// 못하는 제약을 피하면서 중복 구현 없이 캐시 로직을 공유할 수 있다.
+// ─────────────────────────────────────────────────────────────
+
+/** 워밍 대상 키워드 상한(비용 가드). */
+export const WARM_KEYWORD_LIMIT = 30;
+/** 워밍 대상 게시 사이트. 벤치마크는 사이트 무관하게 동일 산출이라 1회 계산 후 양쪽에 upsert. */
+export const WARM_TARGET_SITES: readonly string[] = ['naver', 'google'];
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : 'unknown';
+}
+
+/**
+ * 워밍 대상 키워드 선정.
+ * 1) 실제 글 키워드를 정규화·빈도 집계해 많이 쓰인 순으로 고른다(대표 표기는 첫 등장 원문).
+ * 2) limit 에 못 미치면 진료과별 시드 키워드로 채운다(데이터 부족 폴백, 중복 제외).
+ * 반환은 limit 개 이하의 대표 키워드(검색에 쓸 원문 형태).
+ */
+export function selectWarmKeywords(
+  postKeywords: readonly (string | null | undefined)[],
+  seedKeywords: readonly string[],
+  limit: number = WARM_KEYWORD_LIMIT
+): string[] {
+  const chosen: string[] = [];
+  const seen = new Set<string>();
+
+  // 1) 실제 글 키워드 빈도 집계 (정규화 키 기준 중복 합산)
+  const counts = new Map<string, { rep: string; count: number; order: number }>();
+  let order = 0;
+  for (const raw of postKeywords) {
+    if (typeof raw !== 'string') continue;
+    const rep = raw.trim();
+    if (rep === '') continue;
+    const norm = normalizeCacheKey(rep);
+    if (norm === '') continue;
+    const existing = counts.get(norm);
+    if (existing) {
+      counts.set(norm, { ...existing, count: existing.count + 1 });
+    } else {
+      counts.set(norm, { rep, count: 1, order: order++ });
+    }
+  }
+
+  const ranked = Array.from(counts.entries()).sort(
+    (a, b) => b[1].count - a[1].count || a[1].order - b[1].order
+  );
+  for (const [norm, v] of ranked) {
+    if (chosen.length >= limit) break;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    chosen.push(v.rep);
+  }
+
+  // 2) 부족하면 시드로 채움
+  for (const seed of seedKeywords) {
+    if (chosen.length >= limit) break;
+    if (typeof seed !== 'string') continue;
+    const rep = seed.trim();
+    if (rep === '') continue;
+    const norm = normalizeCacheKey(rep);
+    if (norm === '' || seen.has(norm)) continue;
+    seen.add(norm);
+    chosen.push(rep);
+  }
+
+  return chosen;
+}
+
+export interface WarmResult {
+  /** 시도한 키워드 수 */
+  attempted: number;
+  /** 벤치마크 산출+캐시 저장에 성공한 키워드 수 */
+  succeeded: number;
+  /** 벤치마크 산출 불가(compute null)로 건너뛴 키워드 수 */
+  skipped: number;
+  /** 처리 중 예외가 난 키워드 수 */
+  failed: number;
+  /** store.set 성공 건수(키워드 × 사이트) */
+  cachedEntries: number;
+  failures: Array<{ keyword: string; reason: string }>;
+}
+
+export interface WarmSerpCacheOptions {
+  keywords: readonly string[];
+  targetSites: readonly string[];
+  store: BenchmarkCacheStore;
+  /** 키워드별 벤치마크 산출기(buildSerpBenchmark 주입). null 반환 가능. */
+  compute: (keyword: string) => Promise<SerpBenchmark | null>;
+  concurrency?: number;
+  now?: number;
+  ttlMs?: number;
+}
+
+/**
+ * 키워드 목록의 벤치마크를 강제 재계산해 캐시에 upsert(만료 무관 갱신).
+ * 벤치마크는 사이트 무관 동일 산출이므로 키워드당 1회 계산 후 모든 사이트 키에 저장(비용 절감).
+ * 키워드별 try/catch 로 일부 실패해도 계속 진행하며, 어떤 실패도 throw 하지 않는다(graceful).
+ */
+export async function warmSerpCache(opts: WarmSerpCacheOptions): Promise<WarmResult> {
+  const now = opts.now ?? Date.now();
+  const ttlMs = opts.ttlMs ?? SERP_BENCHMARK_TTL_MS;
+  const concurrency = Math.max(1, opts.concurrency ?? 2);
+  const sites = opts.targetSites.length > 0 ? opts.targetSites : ['naver'];
+  const keywords = opts.keywords;
+
+  const result: WarmResult = {
+    attempted: 0,
+    succeeded: 0,
+    skipped: 0,
+    failed: 0,
+    cachedEntries: 0,
+    failures: [],
+  };
+
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= keywords.length) break;
+      const keyword = keywords[idx];
+      result.attempted++;
+      try {
+        const benchmark = await opts.compute(keyword);
+        if (!benchmark) {
+          result.skipped++;
+          continue;
+        }
+        const key = normalizeCacheKey(keyword);
+        if (key === '') {
+          result.skipped++;
+          continue;
+        }
+        for (const site of sites) {
+          try {
+            await opts.store.set(key, normalizeTargetSite(site), {
+              benchmark,
+              expiresAt: now + ttlMs,
+            });
+            result.cachedEntries++;
+          } catch (e) {
+            result.failures.push({ keyword, reason: `set ${site}: ${errMsg(e)}` });
+          }
+        }
+        result.succeeded++;
+      } catch (e) {
+        result.failed++;
+        result.failures.push({ keyword, reason: errMsg(e) });
+      }
+    }
+  };
+
+  const workerCount = Math.min(concurrency, Math.max(1, keywords.length));
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return result;
+}
