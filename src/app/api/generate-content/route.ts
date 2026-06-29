@@ -5,10 +5,12 @@ import { stripAiCliches } from '@/content/lib/anti-ai';
 import { logUsage } from '@/dev/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
 import { buildSerpBenchmark, buildBenchmarkPromptBlock, type SerpBenchmark } from '@/content/lib/serp-benchmark';
+import { getOrComputeBenchmark, shouldRunReverseAnalysis, type BenchmarkCacheStore } from '@/content/lib/serp-benchmark-cache';
+import { createSupabaseBenchmarkStore } from '@/content/lib/serp-benchmark-store';
 import { checkAndConsumeUsage, refundUsage } from '@/payment/lib/usage-guard';
 import { buildGoogleContentSystemPrompt, buildGoogleContentUserPrompt } from '@/content/lib/google-prompts';
 import { buildVoiceDnaPrompt, parseVoiceDnaCard } from '@/content/lib/voice-dna';
-import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
 import type { TargetSite, Readability } from '@/types';
 
 export const maxDuration = 300;
@@ -142,6 +144,7 @@ export async function POST(req: NextRequest) {
       optimizationMode = 'seo+geo', targetSite: rawTargetSite,
       readability: rawReadability, useVoiceDna: rawUseVoiceDna,
       viralHook: rawViralHook, storytelling: rawStorytelling,
+      reverseAnalysis: rawReverseAnalysis,
     } = await req.json();
 
     const isGeoMode = optimizationMode === 'seo+geo';
@@ -155,6 +158,8 @@ export async function POST(req: NextRequest) {
     // VIRAL-HOOKS·STORYTELLING — 의료광고법 리스크 옵션, 기본 OFF. 명시적 true 만 ON
     const viralHook: boolean = rawViralHook === true;
     const storytelling: boolean = rawStorytelling === true;
+    // 상위노출 역분석 — 기본 ON. 명시적 false 만 OFF (OFF면 벤치마크 산출/주입/동적체크 전부 스킵)
+    const reverseAnalysis: boolean = shouldRunReverseAnalysis(rawReverseAnalysis);
 
     if (!title || !keyword) {
       return NextResponse.json({ error: '제목과 키워드를 입력해주세요.' }, { status: 400 });
@@ -200,12 +205,27 @@ export async function POST(req: NextRequest) {
     const competitorText = buildCompetitorInsightText(competitorResults);
 
     // 상위노출 역분석 — 키워드 상위 글의 공통 골격(목표 글자수/소제목/이미지/하위주제).
+    // 토글 OFF면 산출/주입/동적체크 전부 스킵(기존 동작). ON이면 캐시 우선(키워드+사이트, TTL).
     // 어떤 실패도 null 로 폴백(생성 플로우 보호). 산출되면 프롬프트 목표치로 주입한다.
     let serpBenchmark: SerpBenchmark | null = null;
-    try {
-      serpBenchmark = await buildSerpBenchmark(keyword);
-    } catch {
-      serpBenchmark = null;
+    if (reverseAnalysis) {
+      try {
+        // 캐시 저장소는 service role(전역 비민감 캐시). 구성 실패는 무시하고 캐시 없이 진행.
+        let store: BenchmarkCacheStore | null = null;
+        try {
+          store = createSupabaseBenchmarkStore(createAdminClient());
+        } catch {
+          store = null;
+        }
+        serpBenchmark = await getOrComputeBenchmark({
+          keyword,
+          targetSite,
+          store,
+          compute: () => buildSerpBenchmark(keyword),
+        });
+      } catch {
+        serpBenchmark = null;
+      }
     }
     const benchmarkSection = serpBenchmark
       ? `\n${buildBenchmarkPromptBlock(serpBenchmark, keyword)}\n`

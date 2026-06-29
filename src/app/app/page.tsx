@@ -56,6 +56,7 @@ type DraftData = {
   useVoiceDna: boolean;
   viralHook: boolean;
   storytelling: boolean;
+  reverseAnalysis: boolean;
   titles: BlogTitle[];
   selectedTitle: BlogTitle | null;
   content: BlogContent | null;
@@ -435,6 +436,8 @@ export default function AppPage() {
   // VIRAL-HOOKS·STORYTELLING — 의료광고법 리스크 선택 기능, 기본 OFF
   const [viralHook, setViralHook] = useState<boolean>(false);
   const [storytelling, setStorytelling] = useState<boolean>(false);
+  // 상위노출 역분석 — 상위 글 골격 반영, 기본 ON
+  const [reverseAnalysis, setReverseAnalysis] = useState<boolean>(true);
   const [titles, setTitles] = useState<BlogTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<BlogTitle | null>(null);
   const [content, setContent] = useState<BlogContent | null>(null);
@@ -559,6 +562,8 @@ export default function AppPage() {
         // 구버전 초안에는 viralHook·storytelling이 없으므로 false(기본 OFF) 기본값으로 하위 호환
         viralHook: parsed.viralHook === true,
         storytelling: parsed.storytelling === true,
+        // 구버전 초안에는 reverseAnalysis가 없으므로 true(기본 ON) 기본값으로 하위 호환
+        reverseAnalysis: parsed.reverseAnalysis !== false,
         titles: Array.isArray(parsed.titles) ? parsed.titles : [],
         selectedTitle: parsed.selectedTitle ?? null,
         content: parsed.content ?? null,
@@ -600,7 +605,7 @@ export default function AppPage() {
     draftSaveTimerRef.current = setTimeout(() => {
       try {
         const draft: DraftData = {
-          keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling,
+          keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling, reverseAnalysis,
           titles, selectedTitle, content, tags, viewStep,
           savedAt: new Date().toISOString(),
         };
@@ -610,7 +615,7 @@ export default function AppPage() {
     return () => {
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
     };
-  }, [keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling, titles, selectedTitle, content, tags, viewStep]);
+  }, [keyword, hospitalType, additionalInfo, writingStyle, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling, reverseAnalysis, titles, selectedTitle, content, tags, viewStep]);
 
   const restoreDraft = () => {
     if (!draftToRestore) return;
@@ -624,6 +629,7 @@ export default function AppPage() {
     setUseVoiceDna(draftToRestore.useVoiceDna);
     setViralHook(draftToRestore.viralHook);
     setStorytelling(draftToRestore.storytelling);
+    setReverseAnalysis(draftToRestore.reverseAnalysis);
     setTitles(draftToRestore.titles);
     setSelectedTitle(draftToRestore.selectedTitle);
     setContent(draftToRestore.content);
@@ -654,7 +660,7 @@ export default function AppPage() {
     router.push('/');
   };
 
-  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode, ts: TargetSite, rd: Readability, uvd: boolean, vh: boolean, st: boolean) => {
+  const handleKeywordSubmit = async (kw: string, ht: string, ai: string, ws: WritingStyle, inputRegion: string, om: OptimizationMode, ts: TargetSite, rd: Readability, uvd: boolean, vh: boolean, st: boolean, ra: boolean) => {
     // 새 작업 시작 시 저장된 초안 삭제
     localStorage.removeItem(DRAFT_KEY);
     setDraftToRestore(null);
@@ -668,6 +674,7 @@ export default function AppPage() {
     setUseVoiceDna(uvd);
     setViralHook(vh);
     setStorytelling(st);
+    setReverseAnalysis(ra);
     setTitles([]);
     setSelectedTitle(null);
     setContent(null);
@@ -728,7 +735,7 @@ export default function AppPage() {
         body: JSON.stringify({
           title: selectedTitle.title, keyword, hospitalType, additionalInfo,
           titleFormat: selectedTitle.seoDetails?.format, writingStyle,
-          region: effectiveRegion, hospitalName, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling,
+          region: effectiveRegion, hospitalName, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling, reverseAnalysis,
         }),
       });
 
@@ -776,7 +783,7 @@ export default function AppPage() {
     setError(null);
     setRetryAction(null);
     setBlocked(false);
-    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling);
+    if (action === 'titles') handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling, reverseAnalysis);
     else if (action === 'content') handleGenerateContent();
   };
 
@@ -1212,6 +1219,7 @@ export default function AppPage() {
                         defaultUseVoiceDna={useVoiceDna}
                         defaultViralHook={viralHook}
                         defaultStorytelling={storytelling}
+                        defaultReverseAnalysis={reverseAnalysis}
                         lockedHospitalType={userPlan?.hospital_type ?? undefined}
                         defaultRegion={profileRegion}
                       />
@@ -1227,7 +1235,7 @@ export default function AppPage() {
                           isLoading={loadingContent}
                         />
                         <button
-                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling)}
+                          onClick={() => handleKeywordSubmit(keyword, hospitalType, additionalInfo, writingStyle, profileRegion, optimizationMode, targetSite, readability, useVoiceDna, viralHook, storytelling, reverseAnalysis)}
                           disabled={loadingTitles}
                           className="w-full py-2.5 text-xs text-[#5b6573] hover:text-[#202020] border border-[#b4bfce] hover:border-[#ff4628]/40 bg-white hover:bg-[#eef2f6] rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
                         >
