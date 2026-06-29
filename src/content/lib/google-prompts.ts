@@ -1,4 +1,5 @@
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT } from '@/content/lib/medical-compliance';
+import { GEO_ANSWER_FIRST_RULES } from '@/content/lib/geo-answer-first';
 
 /**
  * 게시 사이트 = '구글' 선택 시 사용하는 프롬프트 빌더 모음.
@@ -44,7 +45,8 @@ export function buildGoogleContentSystemPrompt(params: GoogleContentPromptParams
   좋은 예: "허리 디스크는 척추뼈 사이의 쿠션이 제자리에서 밀려나 신경을 누르는 상태입니다."
   다만 한자어·학술체 남발 금지 — 평이한 표현으로 풀어쓸 것
 - 주요 소제목(H2)의 절반 이상을 검색자가 실제 입력할 법한 질문형으로 작성
-  (예: "허리 디스크는 왜 생기나요", "치료는 얼마나 걸리나요") — 질문 소제목 바로 아래 첫 문장에서 직접 답할 것
+  (예: "허리 디스크는 왜 생기나요", "치료는 얼마나 걸리나요")
+${GEO_ANSWER_FIRST_RULES}
 - 사실은 명확하고 인용 가능하게: 모호한 표현 대신 구체적 기준·범위·수치를 제시 (의료광고법 한도 내)
 - 통계·수치 2~3개를 자연스럽게 녹임 (강박적 나열 금지)
 - 권위 출처 표현 1~2회 부드럽게: "최근 학회 권고에서는", "임상 권고안에서는" — 직접 URL 금지
