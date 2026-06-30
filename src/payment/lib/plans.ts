@@ -186,6 +186,14 @@ export function firstMonthAmount(plan: Plan, now: Date = new Date()): number {
   return plan.trialPrice ?? 0
 }
 
+/**
+ * 첫 달 프로모가 아직 유효한지(표시·UI용). 과금 로직(firstMonthAmount)과 동일 기준.
+ * 마감시각 이후로는 false → 전 플랜이 첫 달부터 정상가.
+ */
+export function isFirstMonthPromoActive(now: Date = new Date()): boolean {
+  return now.getTime() <= new Date(FIRST_MONTH_PROMO_UNTIL).getTime()
+}
+
 export function getPlan(id: PlanId): Plan {
   return PLANS[id]
 }
