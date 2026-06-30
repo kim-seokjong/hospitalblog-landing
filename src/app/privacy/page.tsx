@@ -58,8 +58,8 @@ export default function PrivacyPage() {
               <div>
                 <p className="font-medium text-[#202020] mb-2">콘텐츠 생성 시 (선택 입력)</p>
                 <ul className="list-disc list-inside space-y-1 text-[#4a4f55] ml-2">
-                  <li>병원 로고, 원장님 사진·영상, 병원 사진(외관·내부·장비·의료진·기타)</li>
-                  <li>의료진·환자가 식별되는 사진과 원장님 얼굴(사진·영상)은 이용자의 동의가 있는 경우에만 수집·이용합니다.</li>
+                  <li>병원 로고, 병원 사진(외관·내부·장비·의료진·기타), AI 가상 진행자 설정값 및 생성된 가상 진행자 이미지</li>
+                  <li>영상 진행자는 실존 인물이 아닌 <strong>AI 가상 진행자</strong>로 생성됩니다(실제 원장님 얼굴 미사용). 의료진·환자가 식별되는 사진은 이용자의 동의가 있는 경우에만 수집·이용합니다.</li>
                 </ul>
               </div>
             </div>
@@ -145,8 +145,7 @@ export default function PrivacyPage() {
                   {[
                     ['Supabase Inc.', '회원 인증 및 데이터베이스 운영'],
                     ['Anthropic / OpenAI', 'AI 콘텐츠 생성 처리 (입력 데이터 임시 처리)'],
-                    ['fal.ai', 'AI 이미지·영상 생성 처리 (입력 이미지·영상 임시 처리)'],
-                    ['HeyGen', '원장님 사진·영상 기반 AI 립싱크 영상 생성 처리'],
+                    ['fal.ai', 'AI 이미지·영상 및 AI 가상 진행자 립싱크 영상 생성 처리 (입력 데이터 임시 처리)'],
                     ['한국결제네트웍스(KPN)', '신용/체크카드 결제 처리'],
                     ['포트원(PortOne)', '결제 연동 대행(빌링키 발급·결제 게이트웨이)'],
                     ['Vercel Inc.', '서비스 호스팅 및 배포'],
@@ -163,7 +162,7 @@ export default function PrivacyPage() {
             <div className="mt-4 bg-[#eef2f6] border border-[#b4bfce] rounded-xl p-5 text-[#4a4f55]">
               <p className="font-medium text-[#202020] mb-2">개인정보의 국외 이전 고지 (개인정보 보호법 제28조의8)</p>
               <ul className="list-disc list-inside space-y-1 text-[#4a4f55] ml-1">
-                <li><span className="text-[#202020]">이전받는 자:</span> Anthropic, OpenAI, fal.ai, HeyGen, Supabase, Vercel 등</li>
+                <li><span className="text-[#202020]">이전받는 자:</span> Anthropic, OpenAI, fal.ai, Supabase, Vercel 등</li>
                 <li><span className="text-[#202020]">이전되는 국가:</span> 미국 등</li>
                 <li><span className="text-[#202020]">이전 일시 및 방법:</span> 서비스 이용 시 정보통신망을 통한 전송</li>
                 <li><span className="text-[#202020]">이전 항목:</span> 이용자가 입력·업로드한 콘텐츠 데이터 및 이미지·영상</li>

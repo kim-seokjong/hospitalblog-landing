@@ -54,9 +54,45 @@ const CONCEPT_OPTIONS = [
   { value: '친근형', label: '친근형' },
 ];
 
-// 원장님 "얼굴 등록용" 30초 영상에서 읽을 중립 대본 예시 (주제 무관 — 이후 실제 영상 대본은 자동 생성).
-const DOCTOR_VIDEO_SCRIPT =
-  '안녕하세요, OO병원 원장 OOO입니다. 저희 병원은 환자 한 분 한 분을 정성껏 진료하기 위해 늘 노력하고 있습니다. 앞으로 건강에 도움이 되는 정확한 정보로 자주 찾아뵙겠습니다. 감사합니다.';
+// AI 가상 진행자 프리셋 (서비스 /presenter 화이트리스트와 일치)
+const PRESENTER_GENDER_OPTIONS = [
+  { value: 'male', label: '남성' },
+  { value: 'female', label: '여성' },
+];
+const PRESENTER_AGE_OPTIONS = [
+  { value: '30s', label: '30대' },
+  { value: '40s', label: '40대' },
+  { value: '50s', label: '50대' },
+  { value: '20s', label: '20대' },
+];
+const PRESENTER_VIBE_OPTIONS = [
+  { value: 'trustworthy', label: '신뢰감 있는' },
+  { value: 'friendly', label: '친근한' },
+  { value: 'energetic', label: '활기찬' },
+];
+const PRESENTER_ATTIRE_OPTIONS = [
+  { value: 'smart_casual', label: '스마트 캐주얼' },
+  { value: 'suit', label: '정장' },
+  { value: 'clinical', label: '클리닉 톤(가운 느낌)' },
+];
+
+interface PresenterState {
+  urls: string[];
+  gender: string;
+  age: string;
+  vibe: string;
+  attire: string;
+  extra: string;
+}
+
+const DEFAULT_PRESENTER: PresenterState = {
+  urls: [],
+  gender: 'male',
+  age: '40s',
+  vibe: 'trustworthy',
+  attire: 'smart_casual',
+  extra: '',
+};
 
 export default function BrandKitTab() {
   const [brand, setBrand] = useState<BrandKit>(DEFAULT_BRANDKIT);
@@ -65,8 +101,12 @@ export default function BrandKitTab() {
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hashtagInput, setHashtagInput] = useState('');
   const [uploading, setUploading] = useState<'logo' | 'photo' | 'video' | null>(null);
-  const [showVideoGuide, setShowVideoGuide] = useState(false);
-  const [scriptCopied, setScriptCopied] = useState(false);
+
+  // AI 가상 진행자
+  const [presenter, setPresenter] = useState<PresenterState>(DEFAULT_PRESENTER);
+  const [candidates, setCandidates] = useState<string[]>([]);
+  const [genBusy, setGenBusy] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   const fetchBrandKit = useCallback(async () => {
     setLoading(true);
@@ -85,9 +125,109 @@ export default function BrandKitTab() {
     }
   }, []);
 
+  const fetchPresenter = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clinicflix/presenter');
+      if (!res.ok) return;
+      const j = (await res.json()) as {
+        virtual_presenter_urls?: string[];
+        gender?: string | null;
+        age?: string | null;
+        vibe?: string | null;
+        attire?: string | null;
+        extra?: string | null;
+      };
+      setPresenter((p) => ({
+        urls: Array.isArray(j.virtual_presenter_urls) ? j.virtual_presenter_urls : [],
+        gender: j.gender || p.gender,
+        age: j.age || p.age,
+        vibe: j.vibe || p.vibe,
+        attire: j.attire || p.attire,
+        extra: j.extra || '',
+      }));
+    } catch {
+      /* 무시 — 진행자 미설정 상태로 둠 */
+    }
+  }, []);
+
   useEffect(() => {
     void fetchBrandKit();
-  }, [fetchBrandKit]);
+    void fetchPresenter();
+  }, [fetchBrandKit, fetchPresenter]);
+
+  const generatePresenter = async () => {
+    setGenBusy(true);
+    setCandidates([]);
+    try {
+      const res = await fetch('/api/clinicflix/presenter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate',
+          gender: presenter.gender,
+          age: presenter.age,
+          vibe: presenter.vibe,
+          attire: presenter.attire,
+          extra: presenter.extra,
+          count: 2,
+        }),
+      });
+      const j = (await res.json()) as { presenter_urls?: string[]; error?: string };
+      if (!res.ok) throw new Error(j.error ?? '진행자 생성 실패');
+      setCandidates(Array.isArray(j.presenter_urls) ? j.presenter_urls : []);
+    } catch (e) {
+      showError(e instanceof Error ? e.message : '진행자 생성 실패');
+    } finally {
+      setGenBusy(false);
+    }
+  };
+
+  const confirmPresenter = async (url: string) => {
+    setConfirmBusy(true);
+    try {
+      const res = await fetch('/api/clinicflix/presenter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'confirm',
+          urls: [url],
+          gender: presenter.gender,
+          age: presenter.age,
+          vibe: presenter.vibe,
+          attire: presenter.attire,
+          extra: presenter.extra,
+        }),
+      });
+      const j = (await res.json()) as { virtual_presenter_urls?: string[]; error?: string };
+      if (!res.ok) throw new Error(j.error ?? '진행자 저장 실패');
+      setPresenter((p) => ({ ...p, urls: j.virtual_presenter_urls ?? [] }));
+      setCandidates([]);
+      setSaveMsg({ type: 'success', text: '가상 진행자가 확정되었습니다. 모든 영상에 이 진행자가 나옵니다.' });
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch (e) {
+      showError(e instanceof Error ? e.message : '진행자 저장 실패');
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
+  const clearPresenter = async () => {
+    setConfirmBusy(true);
+    try {
+      const res = await fetch('/api/clinicflix/presenter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear' }),
+      });
+      const j = (await res.json()) as { virtual_presenter_urls?: string[]; error?: string };
+      if (!res.ok) throw new Error(j.error ?? '초기화 실패');
+      setPresenter((p) => ({ ...p, urls: j.virtual_presenter_urls ?? [] }));
+    } catch (e) {
+      showError(e instanceof Error ? e.message : '초기화 실패');
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
 
   const showError = (text: string) => {
     setSaveMsg({ type: 'error', text });
@@ -321,181 +461,122 @@ export default function BrandKitTab() {
           </div>
         </Section>
 
-        {/* 4. 원장님 미디어 */}
-        <Section title="원장님 미디어 (선택)">
-          <label className="flex items-start gap-2 mb-4 cursor-pointer select-none bg-[#ffece7] border border-[#ff4628]/30 rounded-lg px-3 py-3">
-            <input
-              type="checkbox"
-              checked={brand.doctor_consent}
-              onChange={(e) =>
-                setBrand((p) => ({ ...p, doctor_consent: e.target.checked }))
-              }
-              className="mt-0.5 h-4 w-4 accent-[#ff4628]"
-            />
-            <span className="text-sm text-[#202020] font-medium">
-              원장님 얼굴(사진·영상)을 AI 영상으로 생성하는 데 동의합니다 (필수)
-              <span className="block text-xs text-[#5b6573] mt-0.5 font-normal">
-                등록하신 원장님 사진·영상은 AI 영상(립싱크) 생성을 위해 해외 AI 처리 서비스(fal.ai·HeyGen)로
-                전송·처리되며, 생성된 영상에는 &apos;AI 생성 영상&apos; 표기가 표시됩니다. 동의를 철회하시려면 등록된
-                미디어를 삭제하세요.
-              </span>
-            </span>
-          </label>
-          <Field label="원장님 사진">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              {brand.doctor_photo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
+        {/* 4. AI 가상 진행자 */}
+        <Section title="AI 가상 진행자">
+          <p className="text-xs text-[#5b6573] mb-3 leading-relaxed">
+            영상에 나와서 설명하는 진행자입니다. <strong>한 번 만들면 모든 영상에 같은 얼굴</strong>로
+            나옵니다. 실제 원장님 얼굴은 사용하지 않으며, 생성 영상에는 &apos;AI 생성 영상&apos; 표기가
+            표시됩니다.
+          </p>
+
+          {presenter.urls.length > 0 ? (
+            <div className="mb-2 rounded-lg border border-green-200 bg-green-50 px-3 py-3">
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={brand.doctor_photo_url}
-                  alt="원장님 사진 미리보기"
+                  src={presenter.urls[0]}
+                  alt="확정된 가상 진행자"
                   className="h-20 w-20 object-cover rounded-lg border border-[#b4bfce] bg-white"
                 />
-              ) : (
-                <div className="h-20 w-20 flex items-center justify-center rounded-lg border border-dashed border-[#b4bfce] text-[10px] text-[#5b6573] text-center">
-                  미등록
-                </div>
-              )}
-              <div className="flex flex-wrap items-center gap-2">
-                <label
-                  className={`px-3 py-2 bg-[#eef2f6] border border-[#b4bfce] rounded-lg text-sm text-[#202020] transition-colors ${
-                    !brand.doctor_consent
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'cursor-pointer hover:bg-[#e2e8f0]'
-                  }`}
-                >
-                  {uploading === 'photo' ? '업로드 중...' : '사진 선택'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={uploading !== null || !brand.doctor_consent}
-                    onChange={(e) =>
-                      void handleUpload(e.target.files?.[0], 'doctor', 'photo', (url) =>
-                        setBrand((p) => ({ ...p, doctor_photo_url: url })),
-                      )
-                    }
-                  />
-                </label>
-                {brand.doctor_photo_url && (
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-green-700">진행자가 확정되었습니다 ✓</p>
+                  <p className="text-xs text-[#5b6573] mt-0.5">
+                    모든 영상에 이 진행자가 동일하게 나옵니다.
+                  </p>
                   <button
                     type="button"
-                    onClick={() => setBrand((p) => ({ ...p, doctor_photo_url: null }))}
-                    className="text-xs text-[#5b6573] hover:text-red-600 transition-colors"
+                    onClick={() => void clearPresenter()}
+                    disabled={confirmBusy}
+                    className="mt-2 text-xs text-[#5b6573] hover:text-red-600 transition-colors disabled:opacity-50"
                   >
-                    제거
+                    진행자 삭제 · 다시 만들기
                   </button>
-                )}
+                </div>
               </div>
             </div>
-            <p className="text-xs text-[#ff4628] mt-2 bg-[#ffece7] border border-[#ff4628]/30 rounded-lg px-3 py-2">
-              원장님 사진을 등록하면 영상에 원장님이 직접 말하는 장면이 생성됩니다(선택).
-            </p>
-          </Field>
-
-          <Field label="원장님 영상 (선택)">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              {brand.doctor_video_url ? (
-                <video
-                  src={brand.doctor_video_url}
-                  className="h-20 w-32 object-cover rounded-lg border border-[#b4bfce] bg-black"
-                  muted
-                  playsInline
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-1">
+                <Field label="성별">
+                  <Select
+                    value={presenter.gender}
+                    onChange={(v) => setPresenter((p) => ({ ...p, gender: v }))}
+                    options={PRESENTER_GENDER_OPTIONS}
+                  />
+                </Field>
+                <Field label="연령대">
+                  <Select
+                    value={presenter.age}
+                    onChange={(v) => setPresenter((p) => ({ ...p, age: v }))}
+                    options={PRESENTER_AGE_OPTIONS}
+                  />
+                </Field>
+                <Field label="분위기">
+                  <Select
+                    value={presenter.vibe}
+                    onChange={(v) => setPresenter((p) => ({ ...p, vibe: v }))}
+                    options={PRESENTER_VIBE_OPTIONS}
+                  />
+                </Field>
+                <Field label="복장">
+                  <Select
+                    value={presenter.attire}
+                    onChange={(v) => setPresenter((p) => ({ ...p, attire: v }))}
+                    options={PRESENTER_ATTIRE_OPTIONS}
+                  />
+                </Field>
+              </div>
+              <Field label="추가 설명 (선택)">
+                <input
+                  type="text"
+                  value={presenter.extra}
+                  maxLength={300}
+                  onChange={(e) => setPresenter((p) => ({ ...p, extra: e.target.value }))}
+                  placeholder="예: 안경 착용, 단정한 짧은 머리, 밝은 인상"
+                  className="w-full bg-white border border-[#b4bfce] rounded-lg px-3 py-2 text-[#202020] text-sm placeholder-[#5b6573] focus:outline-none focus:border-[#ff4628] transition-colors"
                 />
-              ) : (
-                <div className="h-20 w-32 flex items-center justify-center rounded-lg border border-dashed border-[#b4bfce] text-[10px] text-[#5b6573] text-center">
-                  미등록
-                </div>
-              )}
-              <div className="flex flex-wrap items-center gap-2">
-                <label
-                  className={`px-3 py-2 bg-[#eef2f6] border border-[#b4bfce] rounded-lg text-sm text-[#202020] transition-colors ${
-                    !brand.doctor_consent
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'cursor-pointer hover:bg-[#e2e8f0]'
-                  }`}
-                >
-                  {uploading === 'video' ? '업로드 중...' : '영상 선택'}
-                  <input
-                    type="file"
-                    accept="video/*"
-                    className="hidden"
-                    disabled={uploading !== null || !brand.doctor_consent}
-                    onChange={(e) =>
-                      void handleUpload(e.target.files?.[0], 'doctor', 'video', (url) =>
-                        setBrand((p) => ({ ...p, doctor_video_url: url })),
-                      )
-                    }
-                  />
-                </label>
-                {brand.doctor_video_url && (
-                  <button
-                    type="button"
-                    onClick={() => setBrand((p) => ({ ...p, doctor_video_url: null }))}
-                    className="text-xs text-[#5b6573] hover:text-red-600 transition-colors"
-                  >
-                    제거
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-3 rounded-lg border border-[#b4bfce] bg-[#f7f9fc] overflow-hidden">
+              </Field>
               <button
                 type="button"
-                onClick={() => setShowVideoGuide((v) => !v)}
-                className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#202020] hover:bg-[#eef2f6] transition-colors"
+                onClick={() => void generatePresenter()}
+                disabled={genBusy}
+                className="mt-3 px-4 py-2 bg-[#ff4628] text-white rounded-lg text-sm font-medium hover:bg-[#e63a1c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                <span>🎬 원장님 영상 촬영 가이드 · 대본 보기</span>
-                <span className="text-[#5b6573] text-xs">{showVideoGuide ? '▲' : '▼'}</span>
+                {genBusy ? '생성 중... (수십 초)' : candidates.length > 0 ? '다시 생성' : '진행자 후보 생성'}
               </button>
-              {showVideoGuide && (
-                <div className="px-3 pb-3 pt-1 border-t border-[#dbe2ea] space-y-3">
-                  <div>
-                    <p className="text-xs font-semibold text-[#202020] mb-1.5">촬영 방법</p>
-                    <ul className="list-disc list-inside space-y-1 text-xs text-[#4a4f55]">
-                      <li>길이 <strong>20~40초</strong>(30초 권장), 스마트폰 세로 촬영 OK</li>
-                      <li>
-                        얼굴이 화면 <strong>중앙·상반신</strong>, <strong>카메라 렌즈를 보며</strong>{' '}
-                        자연스럽게 말하기
-                      </li>
-                      <li>
-                        배경은 <strong>깔끔한 단색</strong>(흰 벽·진료실), <strong>역광 금지</strong>,{' '}
-                        얼굴이 밝게
-                      </li>
-                      <li>자연스러운 미소, 과한 손동작 자제, 마스크·선글라스 X</li>
-                      <li>주변이 조용한 곳에서 <strong>또박또박</strong> 말하기</li>
-                    </ul>
-                    <p className="text-[11px] text-[#5b6573] mt-1.5">
-                      ※ 이 영상은 <strong>얼굴 등록용</strong>이라 말하는 내용은 무엇이든 괜찮습니다. 이후 실제
-                      영상 대본은 자동 생성됩니다.
-                    </p>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-xs font-semibold text-[#202020]">읽을 대본 예시 (약 30초)</p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void navigator.clipboard?.writeText(DOCTOR_VIDEO_SCRIPT);
-                          setScriptCopied(true);
-                          setTimeout(() => setScriptCopied(false), 2000);
-                        }}
-                        className="text-xs px-2 py-1 rounded-md bg-[#ff4628] text-white font-medium hover:bg-[#e63a1c] transition-colors"
+
+              {candidates.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs text-[#5b6573] mb-2">
+                    마음에 드는 진행자를 고르세요. 확정하면 이후 모든 영상에 이 얼굴이 나옵니다.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {candidates.map((url, i) => (
+                      <div
+                        key={i}
+                        className="rounded-lg border border-[#b4bfce] bg-white overflow-hidden"
                       >
-                        {scriptCopied ? '복사됨 ✓' : '대본 복사'}
-                      </button>
-                    </div>
-                    <p className="text-xs text-[#4a4f55] leading-relaxed bg-white border border-[#dbe2ea] rounded-lg px-3 py-2">
-                      {DOCTOR_VIDEO_SCRIPT}
-                    </p>
-                    <p className="text-[11px] text-[#5b6573] mt-1">
-                      &apos;OO병원&apos;·&apos;OOO&apos;은 실제 병원명·원장님 성함으로 바꿔 읽어주세요.
-                    </p>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt={`진행자 후보 ${i + 1}`}
+                          className="w-full aspect-[3/4] object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void confirmPresenter(url)}
+                          disabled={confirmBusy}
+                          className="w-full px-2 py-2 bg-[#ff4628] text-white text-xs font-medium hover:bg-[#e63a1c] disabled:opacity-50 transition-colors"
+                        >
+                          {confirmBusy ? '저장 중...' : '이 진행자로 확정'}
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
-            </div>
-          </Field>
+            </>
+          )}
         </Section>
       </div>
 

@@ -123,8 +123,15 @@ export async function POST(req: NextRequest) {
       clinic_doctor_photo_url?: string | null
       clinic_doctor_video_url?: string | null
       clinic_doctor_consent?: boolean | null
+      clinic_virtual_presenter_urls?: unknown
     }
     const hospitalName = clinic.hospital_name?.trim() || '우리 병원'
+    // AI 가상 진행자: 저장된 동일 인물 이미지(들) → 영상 진행자 컷에 재사용(일관성).
+    const virtualPresenterUrls = Array.isArray(clinic.clinic_virtual_presenter_urls)
+      ? (clinic.clinic_virtual_presenter_urls as unknown[]).filter(
+          (u): u is string => typeof u === 'string',
+        )
+      : []
 
     // 사진 보관함 로드 (소유자 본인 행). 실패해도 변환은 진행(사진 없이) — 막다른 길 방지.
     let clinicPhotos: { category: string; url: string; consent: boolean; note: string | null }[] = []
@@ -159,7 +166,9 @@ export async function POST(req: NextRequest) {
           threads_tone: clinic.clinic_threads_tone || 'haeyo',
           cardnews_style:
             typeof clinic.clinic_cardnews_style === 'number' ? clinic.clinic_cardnews_style : 2,
-          // 원장 미디어는 동의(clinic_doctor_consent=true)가 있을 때만 전송 (동의 철회 후 URL 잔존 방어)
+          // 영상 진행자 = AI 가상 진행자(저장본). 실존 원장 사진/영상은 영상 진행자로 미사용.
+          virtual_presenter_urls: virtualPresenterUrls,
+          // [레거시] 원장 미디어는 카드뉴스 실사용으로만 동의 시 전송 (영상 진행자로는 미사용)
           doctor_photo_url:
             clinic.clinic_doctor_consent === true ? clinic.clinic_doctor_photo_url || null : null,
           doctor_video_url:

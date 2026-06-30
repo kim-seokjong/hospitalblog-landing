@@ -33,7 +33,24 @@ export interface ClinicflixBrand {
   cardnews_style?: number
   doctor_photo_url?: string | null
   doctor_video_url?: string | null
+  // AI 가상 진행자: 병원당 저장된 동일 인물 이미지 URL(들). 영상 진행자 컷에 재사용 → 얼굴 일관성.
+  virtual_presenter_urls?: string[]
   photos?: ClinicflixBrandPhoto[]
+}
+
+/** 가상 진행자 후보 이미지 생성 요청 (프리셋 + 자유설명). */
+export interface ClinicflixPresenterRequest {
+  gender?: string
+  age?: string | null
+  vibe?: string | null
+  attire?: string | null
+  extra?: string | null
+  count?: number
+}
+
+export interface ClinicflixPresenterResponse {
+  presenter_urls: string[]
+  prompt: string
 }
 
 export interface ClinicflixConvertRequest {
@@ -166,6 +183,16 @@ export async function clinicflixConvert(
   body: ClinicflixConvertRequest,
 ): Promise<ClinicflixConvertResponse> {
   return callClinicflix<ClinicflixConvertResponse>('/convert', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** 가상 진행자 후보 이미지 생성 (서비스 /presenter). 확정·영구저장은 호출부(API 라우트) 책임. */
+export async function clinicflixGeneratePresenter(
+  body: ClinicflixPresenterRequest,
+): Promise<ClinicflixPresenterResponse> {
+  return callClinicflix<ClinicflixPresenterResponse>('/presenter', {
     method: 'POST',
     body: JSON.stringify(body),
   })
