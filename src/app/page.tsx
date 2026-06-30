@@ -387,9 +387,9 @@ export default function LandingPage() {
                 <div className="w-16" />
               </div>
 
-              {/* 영상 */}
+              {/* 영상 — 실제 사용 화면(현행 UI 색감) 데모 */}
               <video
-                src="/0503.mp4"
+                src="/demo_2026.mp4"
                 autoPlay
                 loop
                 muted
