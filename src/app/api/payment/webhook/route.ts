@@ -52,9 +52,18 @@ export async function POST(req: NextRequest) {
     console.error('webhook_events upsert error:', upsertError)
   }
 
-  // BUG-03: ignoreDuplicates=true 에서 중복이면 data가 빈 배열 → 이미 처리됐으므로 재처리 방지
+  // 중복 수신(upsert가 빈 배열 반환): 이미 '처리 완료'면 스킵, 미처리(이전 처리 실패 등)면 재처리.
+  // BUG-03 후속: 무조건 스킵하면 1차 처리 중 verifyAndActivate가 실패한 이벤트가 영영 재처리되지 않음.
   if (!upsertError && (!upsertData || upsertData.length === 0)) {
-    return NextResponse.json({ ok: true })
+    const { data: existing } = await admin
+      .from('webhook_events')
+      .select('processed')
+      .match({ provider: 'portone', event_type: eventType, payment_id: paymentId ?? null, signature })
+      .maybeSingle()
+    if (existing?.processed) {
+      return NextResponse.json({ ok: true })
+    }
+    // 미처리 → 아래 이벤트 핸들러로 폴스루하여 재처리 (verifyAndActivate/cancelAndDeactivate는 멱등)
   }
 
   // Transaction.Paid — 결제 활성화

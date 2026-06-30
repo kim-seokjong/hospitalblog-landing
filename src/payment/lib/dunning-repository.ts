@@ -99,6 +99,47 @@ export async function markNotifySent(billingKeyId: string, sentAt: string): Prom
     .eq('id', billingKeyId)
 }
 
+/**
+ * 정기결제(billing-charge) 과금 직전 원자적 선점(claim).
+ * `last_charge_attempt_at`을 now로 조건부 UPDATE — 오늘 아직 시도 안 한 경우에만 성공.
+ * Postgres READ COMMITTED가 WHERE를 잠금 후 재평가하므로, 동시 실행 시 한 쪽만 true.
+ * @returns true=내가 선점함(과금 진행), false=다른 실행이 이미 선점(스킵)
+ */
+export async function claimChargeAttempt(billingKeyId: string, now: Date): Promise<boolean> {
+  const todayStart = new Date(now)
+  todayStart.setUTCHours(0, 0, 0, 0)
+  const { data, error } = await getAdmin()
+    .from('billing_keys')
+    .update({ last_charge_attempt_at: now.toISOString(), updated_at: now.toISOString() })
+    .eq('id', billingKeyId)
+    .or(`last_charge_attempt_at.is.null,last_charge_attempt_at.lt.${todayStart.toISOString()}`)
+    .select('id')
+  if (error) throw new Error(`claim 실패(charge): ${error.message}`)
+  return (data?.length ?? 0) > 0
+}
+
+/**
+ * 재시도(billing-retry) 과금 직전 원자적 선점(claim).
+ * 1차 실패(failure_count=1) + 마지막 시도가 retryCutoff(3일 전) 이전인 경우에만 선점 성공.
+ */
+export async function claimRetryAttempt(billingKeyId: string, now: Date): Promise<boolean> {
+  const todayStart = new Date(now)
+  todayStart.setUTCHours(0, 0, 0, 0)
+  const retryCutoff = new Date(todayStart)
+  retryCutoff.setUTCDate(retryCutoff.getUTCDate() - 3)
+  const { data, error } = await getAdmin()
+    .from('billing_keys')
+    .update({ last_charge_attempt_at: now.toISOString(), updated_at: now.toISOString() })
+    .eq('id', billingKeyId)
+    .eq('status', 'ACTIVE')
+    .eq('last_charge_status', 'FAILED')
+    .eq('failure_count', 1)
+    .lt('last_charge_attempt_at', retryCutoff.toISOString())
+    .select('id')
+  if (error) throw new Error(`claim 실패(retry): ${error.message}`)
+  return (data?.length ?? 0) > 0
+}
+
 export async function recordChargeAttempt(params: {
   billingKeyId: string
   status: 'SUCCESS' | 'FAILED'

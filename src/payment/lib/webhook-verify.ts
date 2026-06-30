@@ -1,3 +1,14 @@
+// 상수시간 문자열 비교 (타이밍 사이드채널 방어).
+// 길이가 다르면 즉시 false, 같으면 모든 문자를 XOR 누적해 비교한다.
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return diff === 0
+}
+
 // 포트원 Standard Webhooks 서명 검증 (HMAC-SHA256)
 export async function verifyWebhookSignature(
   rawBody: string,
@@ -42,6 +53,6 @@ export async function verifyWebhookSignature(
   const signatures = webhookSignature.split(' ')
   return signatures.some((s) => {
     const [, value] = s.split(',')
-    return value === computed
+    return typeof value === 'string' && timingSafeEqualStr(value, computed)
   })
 }
