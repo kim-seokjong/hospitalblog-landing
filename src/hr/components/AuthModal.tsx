@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/dev/lib/supabase/client';
 import { trackEvent } from '@/dev/lib/meta-pixel';
+import { isFirstMonthPromoActive } from '@/payment/lib/plans';
 
 interface AuthModalProps {
   onClose: () => void;
@@ -71,6 +72,9 @@ function mapCategoryToHospitalType(category: string): string {
 
 export default function AuthModal({ onClose, onSuccess, initialMode = 'login', closable = true, initialHospitalName = '' }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
+  // 첫 달 프로모 유효 여부(마감시각 연동). 초기 true → 마운트 후 보정(자정 후 자동 false).
+  const [promoActive, setPromoActive] = useState(true);
+  useEffect(() => { setPromoActive(isFirstMonthPromoActive()); }, []);
 
   // 로그인 필드
   const [email, setEmail] = useState('');
@@ -328,15 +332,17 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
               </>
             ) : (
               <>
-                {/* 6월 한정 첫 달 혜택 안내 */}
-                <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-lg px-4 py-2.5">
-                  <p className="text-sm font-bold text-emerald-700">
-                    🎁 6월 한정 첫 달 혜택
-                  </p>
-                  <p className="text-[11px] text-emerald-700/80 mt-1 leading-relaxed">
-                    스탠다드 첫 달 0원 · 프로·클리닉픽스 번들 첫 달 50% 할인 · <strong>둘째 달부터</strong> 정상가 매월 자동결제. 무료/할인 기간 중 해지 시 청구 없이 즉시 종료. <strong>7월부터 정상가로 전환됩니다.</strong>
-                  </p>
-                </div>
+                {/* 6월 한정 첫 달 혜택 안내 (마감시각 이후 자동 숨김) */}
+                {promoActive && (
+                  <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-lg px-4 py-2.5">
+                    <p className="text-sm font-bold text-emerald-700">
+                      🎁 6월 한정 첫 달 혜택
+                    </p>
+                    <p className="text-[11px] text-emerald-700/80 mt-1 leading-relaxed">
+                      스탠다드 첫 달 0원 · 프로·클리닉픽스 번들 첫 달 50% 할인 · <strong>둘째 달부터</strong> 정상가 매월 자동결제. 무료/할인 기간 중 해지 시 청구 없이 즉시 종료. <strong>7월부터 정상가로 전환됩니다.</strong>
+                    </p>
+                  </div>
+                )}
 
                 {/* 안내 문구 */}
                 <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5 text-xs text-blue-700">
