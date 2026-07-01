@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL, proofreadContent } from '@/content/lib/anthropic';
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/content/lib/medical-compliance';
+import { reviewComplianceWithAI, type AiComplianceReview } from '@/content/lib/medical-compliance-ai';
 import { stripAiCliches } from '@/content/lib/anti-ai';
 import { logUsage } from '@/dev/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
@@ -558,7 +559,33 @@ ${formatGuide}
 
     const bodyForCount = body.replace(/\[이미지\s*\d+:[^\]]*\]/g, '');
     const charCount = bodyForCount.length;
-    const compliance = checkCompliance(body);
+    const keywordCompliance = checkCompliance(body);
+
+    // Layer B — LLM 심의관(best-effort). 실패해도 응답 전체를 막지 않는다(reviewed=false 로 진행).
+    // reviewComplianceWithAI 는 throw 하지 않지만, 만일을 대비해 한 번 더 감싼다.
+    let aiReview: AiComplianceReview = { findings: [], reviewed: false };
+    try {
+      aiReview = await reviewComplianceWithAI(body);
+    } catch {
+      aiReview = { findings: [], reviewed: false, error: 'review_failed' };
+    }
+
+    // AI 심의 지적을 기존 표시 경로(compliance.warnings)로 흘려보낸다("위반 소지/심의 필요" 톤).
+    // isCompliant(키워드 기준)는 AI 결과로 뒤집지 않는다 — 최종 판단은 검수팀 몫.
+    const aiWarningStrings = aiReview.findings.map(
+      (f) => `[AI 심의·${f.severity}] ${f.category}: ${f.reason || '심의 필요'}${f.snippet ? ` — "${f.snippet}"` : ''} (위반 소지·검수 필요)`,
+    );
+    const compliance = {
+      ...keywordCompliance,
+      warnings: [...keywordCompliance.warnings, ...aiWarningStrings],
+    };
+
+    // 발행 게이트 권고(하드 차단 아님) — Layer A HIGH 위반 또는 Layer B HIGH 지적이 하나라도 있으면 검수 권고.
+    const hasKeywordHigh = keywordCompliance.violations.some(
+      (v) => v.severity === 'HIGH' || v.severity === 'CRITICAL',
+    );
+    const hasAiHigh = aiReview.findings.some((f) => f.severity === 'HIGH');
+    const needsManualReview = hasKeywordHigh || hasAiHigh;
 
     // SEO 분석은 본문 영역만 (TL;DR, FAQ 블록 제외)
     const bodyForSeo = body
@@ -638,6 +665,10 @@ ${formatGuide}
       body,
       charCount,
       compliance,
+      // Layer B 심의 결과 — 수행됐을 때만 포함(UI 는 '심의 필요/위반 소지'로 표시).
+      aiReview: aiReview.reviewed ? aiReview : undefined,
+      // 발행 게이트 권고 플래그 — HIGH 위반/지적 존재 시 발행 전 검수 권고(하드 차단 아님).
+      needsManualReview,
       autoReplaced: autoReplaced.length > 0 ? autoReplaced : undefined,
       imageGuidelines: {
         recommendedCount: Math.max(6, placementHints.length),

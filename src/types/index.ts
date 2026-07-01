@@ -1,6 +1,8 @@
 import type { SerpBenchmark } from '@/content/lib/serp-benchmark';
+import type { AiComplianceReview } from '@/content/lib/medical-compliance-ai';
 
 export type { SerpBenchmark } from '@/content/lib/serp-benchmark';
+export type { AiComplianceReview, AiComplianceFinding, AiViolationSeverity } from '@/content/lib/medical-compliance-ai';
 
 export interface SeoDetails {
   keywordPlacement: number;  // 키워드 앞배치 점수
@@ -79,6 +81,16 @@ export interface BlogContent {
    * 분석 실패·키워드 없음 등으로 산출 불가 시 null/undefined (SeoAnalysis 는 고정 기준 폴백).
    */
   serpBenchmark?: SerpBenchmark | null;
+  /**
+   * Layer B — LLM 심의관 결과. 심의를 수행하지 못했거나(reviewed=false) 구버전 응답은 undefined.
+   * "위반 소지/심의 필요" 톤의 지적 목록이며, 최종 판단은 검수팀 몫(isCompliant 를 뒤집지 않음).
+   */
+  aiReview?: AiComplianceReview | null;
+  /**
+   * 발행 게이트 권고 플래그 — Layer A HIGH/CRITICAL 위반 또는 Layer B HIGH 지적이 있으면 true.
+   * 하드 차단이 아니라 "발행 전 검수팀 확인 권장" 권고 플래그.
+   */
+  needsManualReview?: boolean;
 }
 
 export interface BlogTag {
