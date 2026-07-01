@@ -478,12 +478,12 @@ export default function LandingPage() {
               },
               {
                 plan: PLANS.growth8_standard, desc: "블로그+영상+멀티채널",
-                features: ["AI 블로그 월 20건", "AI 영상 월 8건", "멀티채널 세트 월 20건", "카드뉴스·이미지 자동 생성", "의료광고법 검수"],
+                features: ["AI 블로그 월 20건", "AI 영상 월 6건", "멀티채널 세트 월 20건", "카드뉴스·이미지 자동 생성", "의료광고법 검수"],
                 highlight: true,
               },
               {
                 plan: PLANS.pro12_pro, desc: "올인원 무제한",
-                features: ["AI 블로그 무제한", "AI 영상 월 12건", "멀티채널 세트 무제한 (공정사용 월 60세트)", "이미지 생성 무제한", "우선 고객 지원"],
+                features: ["AI 블로그 무제한", "AI 영상 월 10건", "멀티채널 세트 무제한 (공정사용 월 60세트)", "이미지 생성 무제한", "우선 고객 지원"],
                 highlight: false,
               },
             ].map(({ plan, desc, features, highlight }) => {

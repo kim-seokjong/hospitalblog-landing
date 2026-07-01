@@ -5,8 +5,8 @@
 //     standard  스탠다드  ₩199,000  블로그 20 + 이미지
 //     pro       프로      ₩399,000  블로그 무제한 (첫 달 ₩199,000)
 //   [번들 — ClinicFlix (블로그 + 영상 + 멀티채널)]
-//     growth8_standard  올인원 그로스  ₩499,000  블로그 20 / 영상 8 / 채널 20
-//     pro12_pro         올인원 프로     ₩699,000  블로그 무제한 / 영상 12 / 채널 무제한(공정사용 소프트캡 60)
+//     growth8_standard  올인원 그로스  ₩499,000  블로그 20 / 영상 6 / 채널 20
+//     pro12_pro         올인원 프로     ₩699,000  블로그 무제한 / 영상 10 / 채널 무제한(공정사용 소프트캡 60)
 //   [레거시 — 공개 비노출]
 //     basic     베이직    ₩99,000   블로그 10  ← 신규 판매 중단(아래 LEGACY 주석 참조)
 
@@ -120,11 +120,11 @@ export const PLANS: Record<PlanId, Plan> = {
     category: 'bundle',
     price: 499000,
     trialPrice: 249500, // 6월 한정 첫 달 50% 할인 (499,000 → 249,500)
-    limits: { blog: 20, video: 8, channels: 20 },
+    limits: { blog: 20, video: 6, channels: 20 },
     usageLimit: 20, // = limits.blog
     features: [
       'AI 블로그 월 20건',
-      'AI 영상 월 8건',
+      'AI 영상 월 6건',
       '멀티채널 세트 월 20건 (쓰레드·카드뉴스·인스타·스토리)',
       '이미지 생성 (실사/카드뉴스)',
       '독창성 검사',
@@ -139,12 +139,12 @@ export const PLANS: Record<PlanId, Plan> = {
     category: 'bundle',
     price: 699000,
     trialPrice: 349500, // 6월 한정 첫 달 50% 할인 (699,000 → 349,500)
-    limits: { blog: -1, video: 12, channels: -1 },
+    limits: { blog: -1, video: 10, channels: -1 },
     fairUseCap: 60, // 채널 무제한 공정사용 소프트캡 (월 60세트)
     usageLimit: -1, // = limits.blog
     features: [
       'AI 블로그 무제한',
-      'AI 영상 월 12건',
+      'AI 영상 월 10건',
       '멀티채널 세트 무제한 (공정사용 월 60세트)',
       '이미지 생성 (실사/카드뉴스)',
       '독창성 검사',
