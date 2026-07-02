@@ -239,7 +239,7 @@ export default async function AdminPage() {
     admin
       .from('profiles')
       .select(
-        'id,email,full_name,phone,position,hospital_type,hospital_address,hospital_name,specialty,region,plan,plan_expires_at,usage_count,created_at'
+        'id,email,full_name,phone,position,hospital_type,hospital_address,hospital_name,specialty,region,plan,plan_expires_at,usage_count,usage_reset_at,created_at'
       )
       .order('created_at', { ascending: false }),
     admin
@@ -255,7 +255,15 @@ export default async function AdminPage() {
     throw new Error(`payments fetch failed: ${paymentsRes.error.message}`);
   }
 
-  const profiles = (profilesRes.data ?? []) as ProfileRow[];
+  // 월간 리셋 보정: consume_usage 는 다음 생성 시점에 게으르게 리셋하므로,
+  // 이번 달 활동이 없는 회원의 usage_count 원값은 지난달 숫자 → 0으로 보정
+  // (/api/admin/users · mypage/usage 와 동일 기준 — 화면 전체에서 "이번 달 사용량"으로 통일)
+  const monthStartDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const rawProfiles = (profilesRes.data ?? []) as ProfileRow[];
+  const profiles: ProfileRow[] = rawProfiles.map((p) => {
+    const resetAt = p.usage_reset_at ? new Date(p.usage_reset_at) : null;
+    return { ...p, usage_count: resetAt && resetAt >= monthStartDate ? (p.usage_count ?? 0) : 0 };
+  });
   const payments = (paymentsRes.data ?? []) as PaymentRow[];
 
   const data = buildDashboardData(profiles, payments);

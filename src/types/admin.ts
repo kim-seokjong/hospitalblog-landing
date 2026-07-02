@@ -20,7 +20,9 @@ export interface ProfileRow {
   region: string | null;
   plan: PlanType | null;
   plan_expires_at: string | null;
+  /** 이번 달 사용량 (usage_reset_at 월간 리셋 보정 적용 후 값) */
   usage_count: number | null;
+  usage_reset_at: string | null;
   created_at: string;
 }
 
