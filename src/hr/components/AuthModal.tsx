@@ -6,7 +6,8 @@ import { trackEvent } from '@/dev/lib/meta-pixel';
 
 interface AuthModalProps {
   onClose: () => void;
-  onSuccess: () => void;
+  /** 인증 성공 시 호출. 신규 가입('signup')이면 요금제로 유도하는 등 후속 라우팅에 사용. */
+  onSuccess: (completedMode: 'login' | 'signup') => void;
   initialMode?: 'login' | 'signup';
   closable?: boolean;
   /** 외부(딥링크 등)에서 회원가입 병원명을 미리 채울 때 사용. 사용자가 자유롭게 수정 가능. */
@@ -178,7 +179,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
       }
       localStorage.removeItem(LEGACY_SAVED_PW_KEY);
       localStorage.removeItem('dp_contact_dismissed');
-      onSuccess(); onClose();
+      onSuccess('login'); onClose();
     }
     setLoading(false);
   };
@@ -250,7 +251,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
       return;
     }
 
-    onSuccess();
+    onSuccess('signup');
     onClose();
     setLoading(false);
   };

@@ -16,7 +16,7 @@ import TagPanel from '@/content/components/TagPanel';
 import NaverPublisher from '@/publish/components/NaverPublisher';
 import AuthModal from '@/hr/components/AuthModal';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode, TargetSite, Readability } from '@/types';
-import { PLANS, isPaidPlanId } from '@/payment/lib/plans';
+import { PLANS, isPaidPlanId, isActivePlan } from '@/payment/lib/plans';
 import { safeFetchJson } from '@/content/lib/safe-fetch';
 import { checkCompliance } from '@/content/lib/medical-compliance';
 
@@ -536,7 +536,7 @@ export default function AppPage() {
     }
     let cancelled = false;
     supabase.from('profiles')
-      .select('plan, usage_count, hospital_type, hospital_name, hospital_address, full_name, phone, position')
+      .select('plan, usage_count, hospital_type, hospital_name, hospital_address, full_name, phone, position, plan_expires_at')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -545,6 +545,7 @@ export default function AppPage() {
           plan: string; usage_count: number; hospital_type?: string | null;
           hospital_name?: string | null; hospital_address?: string | null;
           full_name?: string | null; phone?: string | null; position?: string | null;
+          plan_expires_at?: string | null;
         } | null;
 
         const incomplete =
@@ -560,6 +561,14 @@ export default function AppPage() {
 
         if (profile) {
           setUserPlan({ plan: profile.plan, usage_count: profile.usage_count, hospital_type: profile.hospital_type });
+
+          // 미구독(free)·만료 회원: 생성 시도를 기다리지 않고 진입 즉시 구독 안내 배너 노출
+          // (가입 직후 결제 안내를 한 번도 못 보고 이탈하는 전환 누수 방지 — 관리자·프로필 미완성 모달과 중복 제외)
+          if (!isClientAdmin(user.email) && !incomplete && !isActivePlan(profile.plan, profile.plan_expires_at ?? null)) {
+            setBlocked(true);
+            setError('아직 구독 중인 플랜이 없거나 만료되었습니다. 구독하면 바로 글 생성을 시작할 수 있어요.');
+          }
+
           if (profile.hospital_type) setHospitalType(profile.hospital_type);
           if (profile.hospital_name) setHospitalName(profile.hospital_name);
           if (profile.hospital_address) {

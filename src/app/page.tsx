@@ -83,10 +83,13 @@ export default function LandingPage() {
 
   const [pendingPricingRedirect, setPendingPricingRedirect] = useState(false);
 
-  const handleAuthSuccess = () => {
+  const handleAuthSuccess = (completedMode: 'login' | 'signup') => {
     setShowAuthModal(false);
     if (pendingPricingRedirect) {
       setPendingPricingRedirect(false);
+      router.push('/pricing');
+    } else if (completedMode === 'signup') {
+      // 신규 가입: 무료 플랜으로는 이용 불가하므로 구독 페이지로 바로 유도 (전환 누수 방지)
       router.push('/pricing');
     } else {
       router.push('/app');
