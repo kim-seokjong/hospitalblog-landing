@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, type ReactNode } from 'react';
 import type { WritingStyle, OptimizationMode, TargetSite, Readability } from '@/types';
 import SpecialtyKeywordSuggester from '@/content/components/SpecialtyKeywordSuggester';
 
@@ -44,6 +44,64 @@ const TARGET_SITES: { value: TargetSite; label: string; desc: string; icon: stri
   { value: 'google', label: '구글',          desc: '구글·AI 검색 최적화', icon: '🔍' },
 ];
 
+/** 공용 토글 행 (스위치 UI) — 아코디언 내부에서 사용 */
+function ToggleRow({ icon, title, desc, value, onChange, disabled }: {
+  icon: string; title: string; desc: string; value: boolean;
+  onChange: (next: boolean) => void; disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      disabled={disabled}
+      aria-pressed={value}
+      className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
+        value
+          ? 'border-[#ff4628] bg-[#ffece7]'
+          : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
+      }`}
+    >
+      <span className="text-xl leading-none flex-shrink-0">{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">{title}</span>
+        <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">{desc}</span>
+      </span>
+      <span className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${value ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'}`}>
+        <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`} />
+      </span>
+    </button>
+  );
+}
+
+/** 접히는 설정 그룹 헤더 — 요약 배지로 현재 상태를 보여준다 */
+function AccordionSection({ icon, title, summary, isDefault, open, onToggle, children }: {
+  icon: string; title: string; summary: string; isDefault: boolean;
+  open: boolean; onToggle: () => void; children: ReactNode;
+}) {
+  return (
+    <div className={`rounded-xl border-2 transition-colors ${open ? 'border-[#ff4628]/40' : 'border-[#e3e9f0]'}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2.5 py-3 px-3 sm:px-4 text-left"
+      >
+        <span className="text-base leading-none flex-shrink-0">{icon}</span>
+        <span className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+          <span className="text-[12px] sm:text-[13px] font-bold text-[#202020]">{title}</span>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+            isDefault ? 'bg-[#eef2f6] text-[#5b6573]' : 'bg-[#ffece7] text-[#ff4628]'
+          }`}>
+            {summary}
+          </span>
+        </span>
+        <span className={`flex-shrink-0 text-[#5b6573] text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+      {open && <div className="px-3 sm:px-4 pb-3 space-y-2.5">{children}</div>}
+    </div>
+  );
+}
+
 export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defaultHospitalType, defaultAdditionalInfo, defaultWritingStyle, defaultOptimizationMode, defaultTargetSite, defaultReadability, defaultUseVoiceDna, defaultViralHook, defaultStorytelling, defaultReverseAnalysis, lockedHospitalType, defaultRegion }: KeywordInputProps) {
   const [keyword, setKeyword] = useState(defaultKeyword ?? '');
   const [hospitalType, setHospitalType] = useState(lockedHospitalType || defaultHospitalType || '피부과');
@@ -62,6 +120,18 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
   const [storytelling, setStorytelling] = useState<boolean>(defaultStorytelling === true);
   // 상위노출 역분석 — 상위 글 골격 반영, 기본 ON. 명시적 false 일 때만 OFF
   const [reverseAnalysis, setReverseAnalysis] = useState<boolean>(defaultReverseAnalysis !== false);
+
+  // 아코디언 접기 상태 — 비기본값이 저장돼 있으면 처음부터 펼쳐서 보여준다(내 설정이 적용 중임을 인지)
+  const [styleOpen, setStyleOpen] = useState<boolean>(defaultViralHook === true || defaultStorytelling === true);
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
+
+  // 요약 배지 계산
+  const styleActive = [viralHook && '몰입형 도입', storytelling && '이야기 구조'].filter(Boolean) as string[];
+  const styleSummary = styleActive.length > 0 ? styleActive.join(' · ') : '기본 (정보형)';
+  const advancedChanged =
+    (readability !== 'easy' ? 1 : 0) + (!useVoiceDna ? 1 : 0) + (!reverseAnalysis ? 1 : 0) +
+    (optimizationMode !== 'seo+geo' ? 1 : 0) + (targetSite !== 'naver' ? 1 : 0);
+  const advancedSummary = advancedChanged === 0 ? '권장 기본값' : `${advancedChanged}개 변경됨`;
 
   const effectiveHospitalType = lockedHospitalType || hospitalType;
 
@@ -192,213 +262,119 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
           </div>
         </div>
 
-        {/* 쉽게 풀어쓰기 (DUMBIFY 난이도 — 시점과 독립, 기본 ON) */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setReadability((prev) => (prev === 'easy' ? 'standard' : 'easy'))}
+        {/* ✨ 글 스타일 (선택 기능 — 접힘, 기본 OFF) */}
+        <AccordionSection
+          icon="✨"
+          title="글 스타일"
+          summary={styleSummary}
+          isDefault={styleActive.length === 0}
+          open={styleOpen}
+          onToggle={() => setStyleOpen((v) => !v)}
+        >
+          <ToggleRow
+            icon="🎬"
+            title="몰입형 도입(후킹)"
+            desc="첫 문장으로 끌어들이기 (과장·공포 없이, 의료광고법 우선)"
+            value={viralHook}
+            onChange={setViralHook}
             disabled={isLoading}
-            aria-pressed={readability === 'easy'}
-            className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
-              readability === 'easy'
-                ? 'border-[#ff4628] bg-[#ffece7]'
-                : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
-            }`}
-          >
-            <span className="text-xl leading-none flex-shrink-0">🎓</span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">쉽게 풀어쓰기</span>
-              <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">중학생도 이해할 쉬운 말로 (전문성·신뢰감은 유지)</span>
-            </span>
-            <span
-              className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
-                readability === 'easy' ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
-              }`}
-            >
-              <span
-                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                  readability === 'easy' ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </span>
-          </button>
-        </div>
-
-        {/* 우리 병원 문체 적용 (VOICE-DNA — 기본 ON) */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setUseVoiceDna((prev) => !prev)}
+          />
+          <ToggleRow
+            icon="📖"
+            title="이야기 구조"
+            desc="증상→원인→관리 흐름 (환자 후기·사례 없이, 의료광고법 우선)"
+            value={storytelling}
+            onChange={setStorytelling}
             disabled={isLoading}
-            aria-pressed={useVoiceDna}
-            className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
-              useVoiceDna
-                ? 'border-[#ff4628] bg-[#ffece7]'
-                : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
-            }`}
-          >
-            <span className="text-xl leading-none flex-shrink-0">🧬</span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">우리 병원 문체 적용</span>
-              <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">그동안 고쳐온 말투를 반영 (의료광고법·자연체 규칙은 항상 우선)</span>
-            </span>
-            <span
-              className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
-                useVoiceDna ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
-              }`}
-            >
-              <span
-                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                  useVoiceDna ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </span>
-          </button>
-        </div>
+          />
+        </AccordionSection>
 
-        {/* 상위노출 역분석 (SERP 역분석 — 기본 ON) */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setReverseAnalysis((prev) => !prev)}
+        {/* ⚙️ 고급 설정 (기본값 권장 — 접힘) */}
+        <AccordionSection
+          icon="⚙️"
+          title="고급 설정"
+          summary={advancedSummary}
+          isDefault={advancedChanged === 0}
+          open={advancedOpen}
+          onToggle={() => setAdvancedOpen((v) => !v)}
+        >
+          <ToggleRow
+            icon="🎓"
+            title="쉽게 풀어쓰기"
+            desc="중학생도 이해할 쉬운 말로 (전문성·신뢰감은 유지)"
+            value={readability === 'easy'}
+            onChange={(next) => setReadability(next ? 'easy' : 'standard')}
             disabled={isLoading}
-            aria-pressed={reverseAnalysis}
-            className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
-              reverseAnalysis
-                ? 'border-[#ff4628] bg-[#ffece7]'
-                : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
-            }`}
-          >
-            <span className="text-xl leading-none flex-shrink-0">📊</span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">상위노출 역분석</span>
-              <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">상위 글 골격(분량·소제목·하위주제)을 분석해 목표 반영 (의료광고법 우선)</span>
-            </span>
-            <span
-              className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
-                reverseAnalysis ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
-              }`}
-            >
-              <span
-                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                  reverseAnalysis ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </span>
-          </button>
-        </div>
-
-        {/* 몰입형 도입 (VIRAL-HOOKS — 선택, 기본 OFF) */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setViralHook((prev) => !prev)}
+          />
+          <ToggleRow
+            icon="🧬"
+            title="우리 병원 문체 적용"
+            desc="그동안 고쳐온 말투를 반영 (의료광고법·자연체 규칙은 항상 우선)"
+            value={useVoiceDna}
+            onChange={setUseVoiceDna}
             disabled={isLoading}
-            aria-pressed={viralHook}
-            className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
-              viralHook
-                ? 'border-[#ff4628] bg-[#ffece7]'
-                : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
-            }`}
-          >
-            <span className="text-xl leading-none flex-shrink-0">🎬</span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">몰입형 도입(후킹) <span className="text-[9px] font-medium text-[#73808f]">· 선택</span></span>
-              <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">첫 문장으로 끌어들이기 (과장·공포 없이, 의료광고법 우선)</span>
-            </span>
-            <span
-              className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
-                viralHook ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
-              }`}
-            >
-              <span
-                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                  viralHook ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </span>
-          </button>
-        </div>
-
-        {/* 이야기 구조 (STORYTELLING — 선택, 기본 OFF) */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setStorytelling((prev) => !prev)}
+          />
+          <ToggleRow
+            icon="📊"
+            title="상위노출 역분석"
+            desc="상위 글 골격(분량·소제목·하위주제)을 분석해 목표 반영 (의료광고법 우선)"
+            value={reverseAnalysis}
+            onChange={setReverseAnalysis}
             disabled={isLoading}
-            aria-pressed={storytelling}
-            className={`w-full flex items-center gap-3 py-3 px-3 sm:px-4 rounded-xl border-2 transition-all text-left ${
-              storytelling
-                ? 'border-[#ff4628] bg-[#ffece7]'
-                : 'border-[#b4bfce] bg-white hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
-            }`}
-          >
-            <span className="text-xl leading-none flex-shrink-0">📖</span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-[12px] sm:text-[13px] font-bold leading-tight text-[#202020]">이야기 구조 <span className="text-[9px] font-medium text-[#73808f]">· 선택</span></span>
-              <span className="block text-[10px] sm:text-[11px] leading-snug text-[#5b6573] mt-0.5">증상→원인→관리 흐름 (환자 후기·사례 없이, 의료광고법 우선)</span>
-            </span>
-            <span
-              className={`flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
-                storytelling ? 'bg-[#ff4628]' : 'bg-[#b4bfce]'
-              }`}
-            >
-              <span
-                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                  storytelling ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </span>
-          </button>
-        </div>
+          />
 
-        {/* 문단 구성 (최적화 방식) */}
-        <div>
-          <label className="block text-xs font-semibold text-[#5b6573] mb-2">문단 구성</label>
-          <div className="grid grid-cols-2 gap-2">
-            {OPTIMIZATION_MODES.map((mode) => (
-              <button
-                key={mode.value}
-                type="button"
-                onClick={() => setOptimizationMode(mode.value)}
-                disabled={isLoading}
-                className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all text-center min-h-[72px] ${
-                  optimizationMode === mode.value
-                    ? 'border-[#ff4628] bg-[#ffece7] text-[#202020]'
-                    : 'border-[#b4bfce] bg-white text-[#5b6573] hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
-                }`}
-              >
-                <span className="text-xl leading-none">{mode.icon}</span>
-                <span className="text-[11px] font-bold leading-tight">{mode.label}</span>
-                <span className="text-[9px] opacity-70 leading-tight">{mode.desc}</span>
-              </button>
-            ))}
+          {/* 문단 구성 (최적화 방식) */}
+          <div>
+            <label className="block text-xs font-semibold text-[#5b6573] mb-2 mt-1">문단 구성</label>
+            <div className="grid grid-cols-2 gap-2">
+              {OPTIMIZATION_MODES.map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  onClick={() => setOptimizationMode(mode.value)}
+                  disabled={isLoading}
+                  className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all text-center min-h-[72px] ${
+                    optimizationMode === mode.value
+                      ? 'border-[#ff4628] bg-[#ffece7] text-[#202020]'
+                      : 'border-[#b4bfce] bg-white text-[#5b6573] hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
+                  }`}
+                >
+                  <span className="text-xl leading-none">{mode.icon}</span>
+                  <span className="text-[11px] font-bold leading-tight">{mode.label}</span>
+                  <span className="text-[9px] opacity-70 leading-tight">{mode.desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* 게시 사이트 */}
-        <div>
-          <label className="block text-xs font-semibold text-[#5b6573] mb-2">게시 사이트</label>
-          <div className="grid grid-cols-2 gap-2">
-            {TARGET_SITES.map((site) => (
-              <button
-                key={site.value}
-                type="button"
-                onClick={() => setTargetSite(site.value)}
-                disabled={isLoading}
-                className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all text-center min-h-[72px] ${
-                  targetSite === site.value
-                    ? 'border-[#ff4628] bg-[#ffece7] text-[#202020]'
-                    : 'border-[#b4bfce] bg-white text-[#5b6573] hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
-                }`}
-              >
-                <span className="text-xl leading-none">{site.icon}</span>
-                <span className="text-[11px] font-bold leading-tight">{site.label}</span>
-                <span className="text-[9px] opacity-70 leading-tight">{site.desc}</span>
-              </button>
-            ))}
+          {/* 게시 사이트 */}
+          <div>
+            <label className="block text-xs font-semibold text-[#5b6573] mb-2 mt-1">게시 사이트</label>
+            <div className="grid grid-cols-2 gap-2">
+              {TARGET_SITES.map((site) => (
+                <button
+                  key={site.value}
+                  type="button"
+                  onClick={() => setTargetSite(site.value)}
+                  disabled={isLoading}
+                  className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all text-center min-h-[72px] ${
+                    targetSite === site.value
+                      ? 'border-[#ff4628] bg-[#ffece7] text-[#202020]'
+                      : 'border-[#b4bfce] bg-white text-[#5b6573] hover:border-[#ff4628]/40 active:bg-[#eef2f6]'
+                  }`}
+                >
+                  <span className="text-xl leading-none">{site.icon}</span>
+                  <span className="text-[11px] font-bold leading-tight">{site.label}</span>
+                  <span className="text-[9px] opacity-70 leading-tight">{site.desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+
+          <p className="text-[10px] text-[#73808f] pt-0.5">
+            변경한 설정은 자동 저장되어 다음 글 생성에도 그대로 적용됩니다.
+          </p>
+        </AccordionSection>
 
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
           <div className="flex items-start gap-2">

@@ -42,6 +42,39 @@ function getPlanUsageLimit(plan: string | null | undefined, isAdminUser: boolean
 const KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_xefMRX';
 const CONTACT_DISMISSED_KEY = 'dp_contact_dismissed';
 const DRAFT_KEY = 'dp_draft_v1';
+
+// 글 생성 옵션 기억: 한 번 바꾼 선택(말투·스타일·고급 설정)을 저장해 다음 생성에 자동 적용
+const GEN_PREFS_KEY = 'dp_gen_prefs_v1';
+
+interface GenPrefs {
+  writingStyle: WritingStyle;
+  optimizationMode: OptimizationMode;
+  targetSite: TargetSite;
+  readability: Readability;
+  useVoiceDna: boolean;
+  viralHook: boolean;
+  storytelling: boolean;
+  reverseAnalysis: boolean;
+}
+
+/** localStorage 값 검증 — 허용된 유니언 값만 통과 (외부 데이터 신뢰 금지) */
+function parseGenPrefs(raw: string): Partial<GenPrefs> {
+  try {
+    const p = JSON.parse(raw) as Record<string, unknown>;
+    const out: Partial<GenPrefs> = {};
+    if (p.writingStyle === '전문가' || p.writingStyle === '고객이해' || p.writingStyle === '사무장') out.writingStyle = p.writingStyle;
+    if (p.optimizationMode === 'seo+geo' || p.optimizationMode === 'seo') out.optimizationMode = p.optimizationMode;
+    if (p.targetSite === 'naver' || p.targetSite === 'google') out.targetSite = p.targetSite;
+    if (p.readability === 'easy' || p.readability === 'standard') out.readability = p.readability;
+    if (typeof p.useVoiceDna === 'boolean') out.useVoiceDna = p.useVoiceDna;
+    if (typeof p.viralHook === 'boolean') out.viralHook = p.viralHook;
+    if (typeof p.storytelling === 'boolean') out.storytelling = p.storytelling;
+    if (typeof p.reverseAnalysis === 'boolean') out.reverseAnalysis = p.reverseAnalysis;
+    return out;
+  } catch {
+    return {};
+  }
+}
 // 경쟁분석(monitor) → 글쓰기 prefill 전달 키. { topic, keyword } 포맷.
 const TOPIC_PREFILL_KEY = 'dp_topic_prefill';
 
@@ -540,6 +573,29 @@ export default function AppPage() {
     return () => { cancelled = true; };
   }, [user, supabase]);
 
+  // 마운트 시 저장된 생성 옵션 복원 (SSR 하이드레이션 안전을 위해 useEffect에서 적용 후 리마운트)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(GEN_PREFS_KEY);
+      if (!raw) return;
+      const p = parseGenPrefs(raw);
+      if (Object.keys(p).length === 0) return;
+      if (p.writingStyle !== undefined) setWritingStyle(p.writingStyle);
+      if (p.optimizationMode !== undefined) setOptimizationMode(p.optimizationMode);
+      if (p.targetSite !== undefined) setTargetSite(p.targetSite);
+      if (p.readability !== undefined) setReadability(p.readability);
+      if (p.useVoiceDna !== undefined) setUseVoiceDna(p.useVoiceDna);
+      if (p.viralHook !== undefined) setViralHook(p.viralHook);
+      if (p.storytelling !== undefined) setStorytelling(p.storytelling);
+      if (p.reverseAnalysis !== undefined) setReverseAnalysis(p.reverseAnalysis);
+      // KeywordInput 은 default* 를 초기값으로만 쓰므로 리마운트해서 반영
+      setKeywordInputKey((k) => k + 1);
+    } catch {
+      // 복원 실패는 무시 — 기본값으로 진행
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 마운트 시 저장된 초안 감지
   useEffect(() => {
     try {
@@ -664,6 +720,16 @@ export default function AppPage() {
     // 새 작업 시작 시 저장된 초안 삭제
     localStorage.removeItem(DRAFT_KEY);
     setDraftToRestore(null);
+    // 이번 생성에 쓴 옵션을 저장 → 다음 생성부터 자동 적용 (실패해도 생성은 계속)
+    try {
+      const prefs: GenPrefs = {
+        writingStyle: ws, optimizationMode: om, targetSite: ts, readability: rd,
+        useVoiceDna: uvd, viralHook: vh, storytelling: st, reverseAnalysis: ra,
+      };
+      localStorage.setItem(GEN_PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // storage 불가 환경(프라이빗 모드 등) 무시
+    }
     setKeyword(kw);
     setHospitalType(ht);
     setAdditionalInfo(ai);
@@ -1215,6 +1281,9 @@ export default function AppPage() {
                         onSubmit={handleKeywordSubmit}
                         isLoading={loadingTitles}
                         defaultKeyword={prefillKeyword || undefined}
+                        defaultWritingStyle={writingStyle}
+                        defaultOptimizationMode={optimizationMode}
+                        defaultTargetSite={targetSite}
                         defaultReadability={readability}
                         defaultUseVoiceDna={useVoiceDna}
                         defaultViralHook={viralHook}
