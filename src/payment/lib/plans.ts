@@ -3,7 +3,7 @@
 // 플랜 구조 (2026-06 개편):
 //   [블로그 전용 — DoctorPost]
 //     standard  스탠다드  ₩199,000  블로그 20 + 이미지
-//     pro       프로      ₩399,000  블로그 무제한 (첫 달 ₩199,000)
+//     pro       프로      ₩399,000  블로그 무제한
 //   [번들 — ClinicFlix (블로그 + 영상 + 멀티채널)]
 //     growth8_standard  올인원 그로스  ₩499,000  블로그 20 / 영상 6 / 채널 20
 //     pro12_pro         올인원 프로     ₩699,000  블로그 무제한 / 영상 10 / 채널 무제한(공정사용 소프트캡 60)
@@ -36,8 +36,7 @@ export interface Plan {
   id: PlanId
   name: string
   category: PlanCategory
-  price: number // KRW 월 구독료
-  trialPrice?: number // 첫 달 적용 가격, KRW (미설정 시 0원 무료)
+  price: number // KRW 월 구독료 (첫 달 포함 항상 정상가 — 2026-07 프로모 전면 종료)
   limits: PlanLimits
   /**
    * 채널 무제한 플랜의 월간 공정사용(fair-use) 소프트캡 (세트 기준).
@@ -68,7 +67,6 @@ export const PLANS: Record<PlanId, Plan> = {
     name: '베이직',
     category: 'blog',
     price: 99000,
-    trialPrice: 0,
     limits: { blog: 10, video: 0, channels: 0 },
     usageLimit: 10, // = limits.blog (deprecated alias)
     features: ['AI 블로그 월 10건', 'SEO 분석', '네이버 검색 트렌드'],
@@ -81,7 +79,6 @@ export const PLANS: Record<PlanId, Plan> = {
     name: '스탠다드',
     category: 'blog',
     price: 199000,
-    trialPrice: 0,
     limits: { blog: 20, video: 0, channels: 0 },
     usageLimit: 20, // = limits.blog
     features: [
@@ -99,7 +96,6 @@ export const PLANS: Record<PlanId, Plan> = {
     name: '프로',
     category: 'blog',
     price: 399000,
-    trialPrice: 199000,
     limits: { blog: -1, video: 0, channels: 0 },
     usageLimit: -1, // = limits.blog
     features: [
@@ -119,7 +115,6 @@ export const PLANS: Record<PlanId, Plan> = {
     name: '올인원 그로스',
     category: 'bundle',
     price: 499000,
-    trialPrice: 249500, // 6월 한정 첫 달 50% 할인 (499,000 → 249,500)
     limits: { blog: 20, video: 6, channels: 20 },
     usageLimit: 20, // = limits.blog
     features: [
@@ -138,7 +133,6 @@ export const PLANS: Record<PlanId, Plan> = {
     name: '올인원 프로',
     category: 'bundle',
     price: 699000,
-    trialPrice: 349500, // 6월 한정 첫 달 50% 할인 (699,000 → 349,500)
     limits: { blog: -1, video: 10, channels: -1 },
     fairUseCap: 60, // 채널 무제한 공정사용 소프트캡 (월 60세트)
     usageLimit: -1, // = limits.blog
@@ -174,25 +168,12 @@ export const PAID_PLAN_IDS: PlanId[] = [
  */
 export const PUBLIC_PLAN_IDS: PlanId[] = ['standard', 'pro', 'growth8_standard', 'pro12_pro']
 
-/**
- * 첫 달 프로모션 종료 시각 (KST, 한정 프로모션 종료 시각).
- * 이 시각 이후로는 전 플랜이 첫 달부터 정상가(plan.price)로 결제된다.
- */
-export const FIRST_MONTH_PROMO_UNTIL = '2026-06-30T23:59:59+09:00'
-
-/** 신규 가입자의 첫 달 결제액(KRW). 0이면 무료. 프로모 종료 후엔 정상가(plan.price). */
-export function firstMonthAmount(plan: Plan, now: Date = new Date()): number {
-  if (now.getTime() > new Date(FIRST_MONTH_PROMO_UNTIL).getTime()) return plan.price
-  return plan.trialPrice ?? 0
-}
-
-/**
- * 첫 달 프로모가 아직 유효한지(표시·UI용). 과금 로직(firstMonthAmount)과 동일 기준.
- * 마감시각 이후로는 false → 전 플랜이 첫 달부터 정상가.
- */
-export function isFirstMonthPromoActive(now: Date = new Date()): boolean {
-  return now.getTime() <= new Date(FIRST_MONTH_PROMO_UNTIL).getTime()
-}
+// ─────────────────────────────────────────────────────────────
+// 프로모션 전면 종료 (2026-07-02 정책): 할인/무료체험 신규 부여 없음.
+// 전 플랜이 첫 달부터 정상가(plan.price)로 결제된다.
+// 6월 프로모 기간에 가입한 기존 무료체험 회원의 trial_until 처리(해지·cron·표시)는
+// repository/cron/change-plan 에 남아 있으며 이는 기존 가입자 보호용 — 제거 금지.
+// ─────────────────────────────────────────────────────────────
 
 export function getPlan(id: PlanId): Plan {
   return PLANS[id]

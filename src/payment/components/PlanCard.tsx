@@ -5,7 +5,6 @@ interface Props {
   plan: Plan
   currentPlan?: string
   requestAgreement?: () => boolean
-  showPromo?: boolean
 }
 
 /** 분리 한도(-1=무제한, 0=미포함)를 한국어 표기로 변환 */
@@ -18,12 +17,9 @@ export default function PlanCard({
   plan,
   currentPlan,
   requestAgreement,
-  showPromo = true,
 }: Props) {
   const isCurrentPlan = currentPlan === plan.id
   const recommended = plan.recommended
-  // 첫 달 할인 결제 플랜(프로): trialPrice > 0
-  const isDiscountPlan = (plan.trialPrice ?? 0) > 0
 
   return (
     <div className={`relative flex flex-col rounded-2xl p-6
@@ -39,64 +35,14 @@ export default function PlanCard({
 
       <h3 className="text-lg font-bold text-[#202020]">{plan.name}</h3>
 
-      {showPromo && (
-        <div className="mt-3 mb-1 inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-full self-start">
-          {isDiscountPlan ? '🎁 6월 한정 첫 달 50% 할인' : '🎁 6월 한정 첫 달 무료'}
-        </div>
-      )}
-
-      {showPromo ? (
-        isDiscountPlan ? (
-          // 프로: 정상가 취소선 + 첫 달 할인가 강조
-          <>
-            <div className="mt-2 mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="text-base sm:text-lg font-semibold text-[#5b6573] line-through">
-                {plan.price.toLocaleString('ko-KR')}원
-              </span>
-              <span className="inline-flex items-center bg-green-50 border border-green-200 text-green-700 text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full">
-                첫 달 50% 할인
-              </span>
-            </div>
-            <div className="mb-1 flex flex-wrap items-baseline gap-x-1">
-              <span className="text-2xl sm:text-3xl font-extrabold text-[#202020]">
-                {(plan.trialPrice ?? 0).toLocaleString('ko-KR')}
-              </span>
-              <span className="text-[#202020] text-sm">원</span>
-              <span className="text-[#5b6573] text-xs sm:text-sm">/ 첫 달</span>
-            </div>
-            <p className="text-[11px] text-[#5b6573] mb-5">
-              둘째 달부터 매월 {plan.price.toLocaleString('ko-KR')}원 자동결제
-            </p>
-          </>
-        ) : (
-          // 베이직/스탠다드: 정상가 취소선 + "첫 달 무료" 강조
-          <>
-            <div className="mt-2 mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="text-base sm:text-lg font-semibold text-[#5b6573] line-through">
-                {plan.price.toLocaleString('ko-KR')}원
-              </span>
-              <span className="text-[#5b6573] text-xs sm:text-sm">/월</span>
-            </div>
-            <div className="mb-1">
-              <span className="text-2xl sm:text-3xl font-extrabold text-green-700">첫 달 무료</span>
-            </div>
-            <p className="text-[11px] text-[#5b6573] mb-5">
-              둘째 달부터 매월 {plan.price.toLocaleString('ko-KR')}원 자동결제
-            </p>
-          </>
-        )
-      ) : (
-        // 로그인 회원: 정상가만 표시
-        <>
-          <div className="mt-3 mb-1">
-            <span className="text-3xl font-extrabold text-[#202020]">
-              {plan.price.toLocaleString('ko-KR')}
-            </span>
-            <span className="text-[#5b6573] text-sm ml-1">원/월</span>
-          </div>
-          <p className="text-xs text-[#5b6573] mb-5">매월 자동결제</p>
-        </>
-      )}
+      {/* 정상가 단일 표시 (2026-07 프로모 전면 종료) */}
+      <div className="mt-3 mb-1">
+        <span className="text-3xl font-extrabold text-[#202020]">
+          {plan.price.toLocaleString('ko-KR')}
+        </span>
+        <span className="text-[#5b6573] text-sm ml-1">원/월</span>
+      </div>
+      <p className="text-xs text-[#5b6573] mb-5">매월 자동결제</p>
 
       {/* 분리 한도 요약 (블로그/영상/채널) */}
       <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-[#f6f8fb] border border-[#e3e9f0] p-2.5 text-center">
