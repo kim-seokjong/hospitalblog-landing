@@ -103,9 +103,10 @@ function SamplePageInner() {
       {showAuth && (
         <AuthModal
           onClose={() => setShowAuth(false)}
-          onSuccess={() => {
+          onSuccess={(completedMode) => {
             setShowAuth(false);
-            router.push('/app');
+            // 신규 가입은 구독 페이지로 (랜딩과 동일 정책 — free로는 이용 불가)
+            router.push(completedMode === 'signup' ? '/pricing' : '/app');
           }}
           initialMode="signup"
           initialHospitalName={clinic}
