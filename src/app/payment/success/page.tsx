@@ -30,10 +30,10 @@ export default function PaymentSuccessPage({ searchParams }: Props) {
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
-            href="/app"
+            href="/app?welcome=1"
             className="px-6 py-3 bg-[#ff4628] hover:bg-[#e63a1c] text-white rounded-lg font-semibold transition-colors"
           >
-            서비스 이용하기
+            ✍️ 첫 글 만들기 (3분이면 충분해요)
           </Link>
           <Link
             href="/app/subscription"

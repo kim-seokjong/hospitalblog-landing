@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import KeywordInput from '@/content/components/KeywordInput';
+import ContentGapSuggestions from '@/content/components/ContentGapSuggestions';
 import TitleSelector from '@/content/components/TitleSelector';
 import ContentPreview from '@/content/components/ContentPreview';
 import ImageGallery from '@/content/components/ImageGallery';
@@ -77,6 +78,8 @@ function parseGenPrefs(raw: string): Partial<GenPrefs> {
 }
 // 경쟁분석(monitor) → 글쓰기 prefill 전달 키. { topic, keyword } 포맷.
 const TOPIC_PREFILL_KEY = 'dp_topic_prefill';
+// 온보딩 완주 가이드 — 첫 글을 완성하면 다시 보이지 않는다
+const WELCOME_DONE_KEY = 'dp_welcome_done_v1';
 
 type DraftData = {
   keyword: string;
@@ -496,6 +499,8 @@ export default function AppPage() {
   const [draftToRestore, setDraftToRestore] = useState<DraftData | null>(null);
   // 경쟁분석에서 넘어온 prefill 키워드 (KeywordInput 초기값으로 주입)
   const [prefillKeyword, setPrefillKeyword] = useState<string>('');
+  // 온보딩 완주 가이드 배너 (결제 직후 ?welcome=1 또는 유료+사용량 0)
+  const [showWelcome, setShowWelcome] = useState(false);
   // prefill 적용 시 KeywordInput 을 강제 리마운트하기 위한 키
   const [keywordInputKey, setKeywordInputKey] = useState(0);
   // 복사 시 보관함 자동 저장: 첫 복사 후 글 id 보관 → 재복사는 PATCH로 갱신 (중복 insert 방지)
@@ -642,6 +647,39 @@ export default function AppPage() {
     }
   }, []);
 
+  // 온보딩 완주 가이드: ?welcome=1(결제 직후) 감지 → 첫 글 가이드 배너. URL은 즉시 정리.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(WELCOME_DONE_KEY)) return;
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('welcome') === '1') {
+        setShowWelcome(true);
+        params.delete('welcome');
+        const qs = params.toString();
+        window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+      }
+    } catch {
+      // storage/URL 접근 실패는 무시 — 가이드는 부가 기능
+    }
+  }, []);
+
+  // 유료 플랜인데 아직 글 0건이면(결제 후 이탈했다 돌아온 경우 포함) 가이드 배너 노출
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(WELCOME_DONE_KEY)) return;
+      if (userPlan && isPaidPlanId(userPlan.plan) && (userPlan.usage_count ?? 0) === 0) {
+        setShowWelcome(true);
+      }
+    } catch {
+      // 무시
+    }
+  }, [userPlan]);
+
+  const dismissWelcome = () => {
+    setShowWelcome(false);
+    try { localStorage.setItem(WELCOME_DONE_KEY, '1'); } catch { /* 무시 */ }
+  };
+
   // 마운트 시 경쟁분석 prefill 감지 → 키워드 입력란 자동 채움
   useEffect(() => {
     try {
@@ -786,6 +824,8 @@ export default function AppPage() {
 
   const handleGenerateContent = async () => {
     if (!selectedTitle) return;
+    // 본문 생성 = 온보딩 완주 — 가이드 배너 영구 종료
+    if (showWelcome) dismissWelcome();
     setContent(null);
     setImages([]);
     setTags(null);
@@ -1282,6 +1322,35 @@ export default function AppPage() {
               <>
                 {loadingContent && <GeneratingSpinner />}
 
+                {/* 온보딩 완주 가이드 — 첫 글 3단계 (첫 본문 생성 시 영구 종료) */}
+                {!loadingContent && showWelcome && titles.length === 0 && (
+                  <div className="mb-4 sm:mb-5 max-w-full sm:max-w-md mx-auto bg-[#14182a] text-white rounded-2xl p-4 sm:p-5 relative">
+                    <button
+                      onClick={dismissWelcome}
+                      className="absolute top-3 right-3 text-white/50 hover:text-white text-xl leading-none"
+                      aria-label="가이드 닫기"
+                    >
+                      ×
+                    </button>
+                    <p className="font-bold text-base mb-0.5">🎉 구독을 시작하셨네요! 첫 글, 3분이면 됩니다</p>
+                    <p className="text-xs text-white/60 mb-3">첫 글을 발행해 본 병원이 검색 노출도 빨리 시작됩니다.</p>
+                    <ol className="space-y-1.5 text-sm">
+                      <li className="flex items-start gap-2">
+                        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#ff4628] text-white text-[11px] font-bold flex items-center justify-center mt-0.5">1</span>
+                        <span>아래에 <b>시술·질환 키워드 하나</b>만 입력 (예: 레이저 토닝) — 추천 키워드를 눌러도 돼요</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#ff4628] text-white text-[11px] font-bold flex items-center justify-center mt-0.5">2</span>
+                        <span>생성된 <b>제목 5개 중 하나</b>를 고르면 본문·이미지가 자동으로</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#ff4628] text-white text-[11px] font-bold flex items-center justify-center mt-0.5">3</span>
+                        <span><b>복사 버튼</b>으로 네이버 블로그에 붙여넣으면 발행 끝</span>
+                      </li>
+                    </ol>
+                  </div>
+                )}
+
                 {!loadingContent && (
                   <div className={`grid gap-4 sm:gap-5 ${titles.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-full sm:max-w-md mx-auto'}`}>
                     <div className="space-y-4">
@@ -1301,6 +1370,19 @@ export default function AppPage() {
                         lockedHospitalType={userPlan?.hospital_type ?? undefined}
                         defaultRegion={profileRegion}
                       />
+
+                      {/* 주간 갭 리포트 — 경쟁 블로그는 다루는데 우리 글엔 없는 주제 (클릭 → 키워드 채움) */}
+                      {userPlan?.hospital_type && profileRegion && (
+                        <ContentGapSuggestions
+                          specialty={userPlan.hospital_type}
+                          region={profileRegion}
+                          onSelect={(kw) => {
+                            setPrefillKeyword(kw);
+                            setKeyword(kw);
+                            setKeywordInputKey((k) => k + 1);
+                          }}
+                        />
+                      )}
                     </div>
 
                     {titles.length > 0 && (
