@@ -12,6 +12,7 @@ import { checkAndConsumeUsage, refundUsage } from '@/payment/lib/usage-guard';
 import { buildGoogleContentSystemPrompt, buildGoogleContentUserPrompt } from '@/content/lib/google-prompts';
 import { buildVoiceDnaPrompt, parseVoiceDnaCard } from '@/content/lib/voice-dna';
 import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
+import { fetchTopPostPatterns, buildPerformanceDnaBlock } from '@/content/lib/performance-dna';
 import type { TargetSite, Readability } from '@/types';
 
 export const maxDuration = 300;
@@ -228,9 +229,19 @@ export async function POST(req: NextRequest) {
         serpBenchmark = null;
       }
     }
-    const benchmarkSection = serpBenchmark
+    let benchmarkSection = serpBenchmark
       ? `\n${buildBenchmarkPromptBlock(serpBenchmark, keyword)}\n`
       : '';
+
+    // 성과-DNA — 이 병원에서 실제 상위노출된 글 패턴 역주입 (기록 없으면 빈 문자열, 실패 무시)
+    // benchmarkSection 에 합쳐 네이버·구글 프롬프트 양쪽에 동일 전달된다.
+    try {
+      const dnaPatterns = await fetchTopPostPatterns(createAdminClient(), guard.userId);
+      const dnaBlock = buildPerformanceDnaBlock(dnaPatterns);
+      if (dnaBlock) benchmarkSection = `${benchmarkSection}\n${dnaBlock}\n`;
+    } catch {
+      // 성과-DNA 조회 실패는 무시 — 본문 생성은 기존 동작 그대로
+    }
 
     const format: TitleFormat = titleFormat || '정보형';
     const formatGuide = buildFormatSpecificStructure(format, keyword);
@@ -374,7 +385,7 @@ ${baseStyleBlock}`;
       : '';
 
     const regionSection = region
-      ? `\n【지역 SEO — 자연스럽게 2~3회 삽입】\n대상 지역: ${region}\n예시: "${region} 환자분들의 경우", "${region} 인근에서", "${region}에 위치한 병원에서는"\n소제목에 지역명 포함 금지 (부자연스러움). 본문 단락 안에만 자연스럽게 삽입.\n`
+      ? `\n【지역 SEO — 자연스럽게 2~3회 삽입】\n대상 지역: ${region}\n예시: "${region} 환자분들의 경우", "${region} 인근에서", "${region}에 위치한 병원에서는"\n소제목에 지역명 포함 금지 (부자연스러움). 본문 단락 안에만 자연스럽게 삽입.\n\n【지역 인텐트 — 실제 환자 검색 패턴 대응】\n환자는 "${region} ${keyword}"처럼 지역+시술로 검색하고, 병원 선택 시 접근성(위치·주차·진료시간)을 함께 고려한다.\n- 본문 마지막 H2 섹션 직전 또는 마무리 단락에서, 병원 방문 전 확인하면 좋은 실용 정보(위치 확인 방법, 주차·진료시간은 내원 전 전화 확인 권장 등)를 1~2문장으로 자연스럽게 안내.\n- ⚠️ 주차 가능 여부·진료시간·역과의 거리 등 제공되지 않은 사실을 지어내지 말 것 — "내원 전 전화로 확인" 형태의 안내만 허용.\n`
       : '';
 
     const hospitalSection = hospitalName
@@ -408,7 +419,7 @@ A1. (의학적으로 정확한 답변 2~3문장, 자족 문장 위주, 수치 �
 Q2. (질문 2 — Q1과 다른 관점, 예: 치료/비용/일상생활/예방)
 A2. (답변 2~3문장)
 
-Q3. (질문 3 — 임상 현장에서 자주 받는 질문)
+Q3. (질문 3 — ${region ? `지역 인텐트 질문: "${region}에서 ${keyword} 진료 병원을 고를 때 무엇을 확인해야 하나요?" 류의 지역+병원 선택 기준 질문. 답변은 일반적 선택 기준(전문의 여부·상담 충분성·접근성)만 서술하고 특정 병원 추천·비교 금지` : '임상 현장에서 자주 받는 질문'})
 A3. (답변 2~3문장)
 [/자주 묻는 질문]
 
@@ -555,7 +566,15 @@ ${formatGuide}
     // ANTI-AI 검출 상투어는 의미 보존하며 자연스럽게 풀어쓰도록 함께 전달.
     // 의료광고법 금지어가 다시 들어올 일은 없도록 교정 후 autoFix 한 번 더 적용.
     const proofread = await proofreadContent(cleanedBody, aiCliches);
-    const { fixed: body } = proofread === cleanedBody ? { fixed: cleanedBody } : autoFix(proofread);
+    const { fixed: proofedBody } = proofread === cleanedBody ? { fixed: cleanedBody } : autoFix(proofread);
+
+    // E-E-A-T 저자 블록 — 프롬프트가 아닌 결정론적 후처리(환각 0)로 글 말미에 저자 표기.
+    // 네이버 C-Rank 전문성 신호 + GEO(AI 인용 시 출처 신뢰) 강화. 사실 정보(병원명·진료과·지역)만 사용.
+    // 이후 compliance 검사도 이 블록을 포함해 수행된다.
+    const authorBlock = hospitalName
+      ? `\n\n본 글은 ${region ? `${region}에 위치한 ` : ''}${hospitalType ? `${hospitalType} ` : ''}${hospitalName}에서 직접 작성하고 의학적 내용을 검토했습니다. 증상이 계속되면 가까운 의료기관에서 진료를 받아보시기 바랍니다.`
+      : '';
+    const body = `${proofedBody}${authorBlock}`;
 
     const bodyForCount = body.replace(/\[이미지\s*\d+:[^\]]*\]/g, '');
     const charCount = bodyForCount.length;

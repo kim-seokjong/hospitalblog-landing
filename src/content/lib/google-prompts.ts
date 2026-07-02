@@ -119,7 +119,7 @@ export function buildGoogleContentUserPrompt(params: GoogleContentPromptParams):
     : '';
 
   const regionSection = region
-    ? `\n【지역 SEO — 자연스럽게 2~3회 삽입】\n대상 지역: ${region}\n예시: "${region} 환자분들의 경우", "${region} 인근에서", "${region}에 위치한 병원에서는"\n소제목에 지역명 포함 금지 (부자연스러움). 본문 단락 안에만 자연스럽게 삽입.\n`
+    ? `\n【지역 SEO — 자연스럽게 2~3회 삽입】\n대상 지역: ${region}\n예시: "${region} 환자분들의 경우", "${region} 인근에서", "${region}에 위치한 병원에서는"\n소제목에 지역명 포함 금지 (부자연스러움). 본문 단락 안에만 자연스럽게 삽입.\n\n【지역 인텐트 — 실제 환자 검색 패턴 대응】\n환자는 "${region} ${keyword}"처럼 지역+시술로 검색하고, 병원 선택 시 접근성(위치·주차·진료시간)을 함께 고려한다.\n- 마무리 단락에서 병원 방문 전 확인하면 좋은 실용 정보(위치 확인, 주차·진료시간은 내원 전 전화 확인 권장 등)를 1~2문장으로 자연스럽게 안내.\n- ⚠️ 주차 가능 여부·진료시간·역과의 거리 등 제공되지 않은 사실을 지어내지 말 것 — "내원 전 전화로 확인" 형태의 안내만 허용.\n`
     : '';
 
   const hospitalSection = hospitalName
