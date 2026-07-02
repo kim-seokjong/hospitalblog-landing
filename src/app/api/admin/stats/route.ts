@@ -20,7 +20,14 @@ export async function GET() {
     // 전체 프로필 조회
     const { data: profiles } = await admin
       .from('profiles')
-      .select('id, email, plan, usage_count, plan_expires_at, created_at');
+      .select('id, email, plan, usage_count, usage_reset_at, plan_expires_at, created_at');
+
+    // 월간 리셋 보정: consume_usage 는 다음 생성 시점에 게으르게 리셋하므로,
+    // 이번 달 활동이 없는 회원의 usage_count 원값은 지난달 숫자 → 0으로 보정 (mypage/usage 와 동일 기준)
+    const effectiveUsage = (p: { usage_count: number | null; usage_reset_at: string | null }): number => {
+      const resetAt = p.usage_reset_at ? new Date(p.usage_reset_at) : null;
+      return resetAt && resetAt.toISOString() >= monthStart ? (p.usage_count ?? 0) : 0;
+    };
 
     // 집계용 결제 조회 (limit 없음 — 전체 매출 정확 집계)
     const { data: allPayments } = await admin
@@ -56,12 +63,12 @@ export async function GET() {
       .filter(p => p.paid_at && p.paid_at >= monthStart)
       .reduce((sum, p) => sum + (p.amount ?? 0), 0);
 
-    // 사용량 상위 10명
+    // 이번 달 사용량 상위 10명 (월간 리셋 보정 적용)
     const topUsers = (profiles ?? [])
-      .filter(p => (p.usage_count ?? 0) > 0)
-      .sort((a, b) => (b.usage_count ?? 0) - (a.usage_count ?? 0))
-      .slice(0, 10)
-      .map(p => ({ email: p.email, plan: p.plan ?? 'free', usage_count: p.usage_count ?? 0 }));
+      .map(p => ({ email: p.email, plan: p.plan ?? 'free', usage_count: effectiveUsage(p) }))
+      .filter(p => p.usage_count > 0)
+      .sort((a, b) => b.usage_count - a.usage_count)
+      .slice(0, 10);
 
     return NextResponse.json({
       totalUsers,

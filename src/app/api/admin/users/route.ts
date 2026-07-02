@@ -19,8 +19,21 @@ export interface AdminUserRow {
   hospital_type: string | null;
   plan: string | null;
   plan_expires_at: string | null;
+  /** 이번 달 사용량 (usage_reset_at 월간 리셋 보정 적용 — 지난달 잔여 카운터는 0으로 표시) */
   usage_count: number | null;
   created_at: string | null;
+}
+
+/**
+ * 월간 리셋 보정: usage_reset_at이 이번 달 이전이면 이번 달 사용량은 0.
+ * consume_usage RPC 는 다음 생성 시점에 게으르게 리셋하므로, 이번 달 활동이 없는
+ * 회원의 usage_count 원값은 "지난달 숫자"다 — 표시 계층에서 mypage/usage 와 동일 기준으로 보정한다.
+ */
+function effectiveMonthlyUsage(usageCount: number | null, usageResetAt: string | null): number {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const resetAt = usageResetAt ? new Date(usageResetAt) : null;
+  return resetAt && resetAt >= monthStart ? (usageCount ?? 0) : 0;
 }
 
 export interface AdminUsersResponse {
@@ -52,7 +65,7 @@ export async function GET(req: NextRequest) {
     let query = admin
       .from('profiles')
       .select(
-        'id, email, full_name, phone, hospital_name, hospital_address, position, hospital_type, plan, plan_expires_at, usage_count, created_at',
+        'id, email, full_name, phone, hospital_name, hospital_address, position, hospital_type, plan, plan_expires_at, usage_count, usage_reset_at, created_at',
         { count: 'exact' },
       )
       .order('created_at', { ascending: false })
@@ -77,8 +90,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '회원 정보를 불러올 수 없습니다.' }, { status: 500 });
     }
 
+    // usage_count 를 "이번 달 사용량"으로 보정 (usage_reset_at 은 응답에서 제외)
+    const normalized: AdminUserRow[] = (users ?? []).map((u) => {
+      const { usage_reset_at, ...rest } = u as AdminUserRow & { usage_reset_at: string | null };
+      return { ...rest, usage_count: effectiveMonthlyUsage(u.usage_count, usage_reset_at) };
+    });
+
     const response: AdminUsersResponse = {
-      users: (users ?? []) as AdminUserRow[],
+      users: normalized,
       total: count ?? 0,
       page,
       pageSize: PAGE_SIZE,
