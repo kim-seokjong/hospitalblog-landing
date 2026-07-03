@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import sampleText from '../../../public/clinicflix-samples/sample-text.json';
 
 /**
@@ -189,6 +189,29 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
 /* ────────────────────────── 하위 컴포넌트 ────────────────────────── */
 
 function SampleVideo() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // 스크롤로 화면에 들어오면 자동재생, 벗어나면 일시정지.
+  // 브라우저 자동재생 정책상 muted가 필수 — 소리는 컨트롤에서 켤 수 있다.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.play().catch(() => {
+            /* 자동재생이 차단돼도 controls로 수동 재생 가능 — 무시 */
+          });
+        } else {
+          el.pause();
+        }
+      },
+      { threshold: 0.35 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
     <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       <figcaption className="flex items-center gap-2 mb-4">
@@ -200,10 +223,13 @@ function SampleVideo() {
       </figcaption>
       <div className="mx-auto w-full max-w-[280px] rounded-xl overflow-hidden border border-[#dbe2ea] bg-black">
         <video
+          ref={videoRef}
           src={`${SAMPLE_BASE}/sample-video.mp4`}
           controls
           playsInline
-          preload="none"
+          muted
+          loop
+          preload="metadata"
           className="w-full aspect-[9/16] object-cover"
         />
       </div>
