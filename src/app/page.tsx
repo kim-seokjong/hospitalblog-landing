@@ -11,6 +11,10 @@ import { PLANS } from '@/payment/lib/plans';
 import ClinicflixSection from '@/components/landing/ClinicflixSection';
 import HomeFaqSection from '@/components/landing/HomeFaqSection';
 import Logo from '@/components/landing/Logo';
+import HeroMockup from '@/components/landing/HeroMockup';
+import FloatingCta from '@/components/landing/FloatingCta';
+import BlindTestSection from '@/components/landing/BlindTestSection';
+import WhyDoctorPostSection from '@/components/landing/WhyDoctorPostSection';
 import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildFaqPageJsonLd } from '@/dev/lib/seo/schemas';
 import { HOME_FAQS } from '@/dev/lib/seo/homeFaq';
@@ -185,43 +189,53 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* 히어로 */}
+      {/* 히어로 — 데스크톱 2컬럼(카피+CTA | 제품 미니 목업), 모바일 세로 스택 */}
       <section
-        className="relative overflow-hidden text-center"
+        className="relative overflow-hidden"
         style={{
           background:
             'radial-gradient(820px 360px at 50% -30px, #eef2f6, transparent 70%), linear-gradient(180deg,#fbfcfe,#ffffff)',
         }}
       >
-        <div className="relative max-w-4xl mx-auto px-5 sm:px-6 pt-16 sm:pt-24 pb-16 sm:pb-20">
-          <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#202020] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-            <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628]" />
-            Claude AI · 네이버·구글 SEO · AI검색(GEO) 최적화
-          </span>
+        <div className="relative max-w-6xl mx-auto px-5 sm:px-6 pt-16 sm:pt-24 pb-16 sm:pb-20">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-center gap-12 lg:gap-10">
+            {/* 왼쪽: 기존 카피 + CTA (모바일 중앙, 데스크톱 좌측 정렬) */}
+            <div className="text-center lg:text-left">
+              <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#202020] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+                <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628]" />
+                Claude AI · 네이버·구글 SEO · AI검색(GEO) 최적화
+              </span>
 
-          <h1 className="text-[34px] sm:text-5xl md:text-[62px] font-black text-[#202020] leading-[1.12] mt-6 sm:mt-7" style={{ letterSpacing: '-1px' }}>
-            병원 블로그,<br />
-            <span className="text-[#ff4628]">AI가 대신</span> 써드려요.
-          </h1>
+              <h1 className="text-[34px] sm:text-5xl md:text-[56px] font-black text-[#202020] leading-[1.12] mt-6 sm:mt-7" style={{ letterSpacing: '-1px' }}>
+                병원 블로그,<br />
+                <span className="text-[#ff4628]">AI가 대신</span> 써드려요.
+              </h1>
 
-          <p className="text-base sm:text-lg md:text-[19px] text-[#4a4f55] max-w-2xl mx-auto mt-5 leading-relaxed">
-            복잡한 설정 없이, 60초 안에<br />
-            네이버 상위 노출용 블로그를 자동으로 작성해드려요.
-          </p>
+              <p className="text-base sm:text-lg md:text-[19px] text-[#4a4f55] max-w-2xl mx-auto lg:mx-0 mt-5 leading-relaxed">
+                복잡한 설정 없이, 60초 안에<br />
+                네이버 상위 노출용 블로그를 자동으로 작성해드려요.
+              </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
-            <button
-              onClick={handleStart}
-              className="px-7 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 hover:-translate-y-0.5"
-            >
-              회원가입하기 →
-            </button>
-            <a
-              href="#features"
-              className="px-7 sm:px-8 py-3.5 sm:py-4 bg-white border border-[#dbe2ea] text-[#202020] font-semibold text-base sm:text-lg rounded-xl hover:bg-[#eef2f6] transition-colors"
-            >
-              기능 살펴보기
-            </a>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mt-8">
+                <button
+                  onClick={handleStart}
+                  className="px-7 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 hover:-translate-y-0.5"
+                >
+                  회원가입하기 →
+                </button>
+                <a
+                  href="#features"
+                  className="px-7 sm:px-8 py-3.5 sm:py-4 bg-white border border-[#dbe2ea] text-[#202020] font-semibold text-base sm:text-lg rounded-xl hover:bg-[#eef2f6] transition-colors text-center"
+                >
+                  기능 살펴보기
+                </a>
+              </div>
+            </div>
+
+            {/* 오른쪽: 제품 미니 목업 (모바일에선 CTA 다음 순서) */}
+            <div className="px-2 sm:px-0 pt-2 pb-2">
+              <HeroMockup />
+            </div>
           </div>
 
           {/* 스탯 3 */}
@@ -310,6 +324,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* 신뢰 섹션: 블라인드 비교 (다크 — 내부 요소 명시적 다크 스타일) */}
+      <BlindTestSection />
 
       {/* 섹션 3: 해결 매핑 */}
       <section className="py-16 sm:py-[84px] bg-[#eef2f6]">
@@ -434,6 +451,9 @@ export default function LandingPage() {
       {/* 클리닉픽스 멀티채널 쇼케이스 (상세페이지 수준) */}
       <ClinicflixSection onCtaClick={handlePricingClick} />
 
+      {/* 왜 닥터포스트인가 — 이유 응집 섹션 */}
+      <WhyDoctorPostSection />
+
       {/* 요금 섹션 */}
       <section id="pricing" className="py-16 sm:py-[84px] bg-white">
         <div className="max-w-4xl mx-auto px-5 sm:px-6">
@@ -551,6 +571,9 @@ export default function LandingPage() {
           <a href="/refund" className="hover:text-[#ff4628] transition-colors">환불정책</a>
         </div>
       </footer>
+
+      {/* 플로팅 CTA — 히어로 "회원가입하기"와 동일 핸들러 재사용 (랜딩 전용) */}
+      <FloatingCta onClick={handleStart} />
     </div>
   );
 }
