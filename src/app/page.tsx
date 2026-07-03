@@ -14,6 +14,7 @@ import Logo from '@/components/landing/Logo';
 import HeroMockup from '@/components/landing/HeroMockup';
 import FloatingCta from '@/components/landing/FloatingCta';
 import BlindTestSection from '@/components/landing/BlindTestSection';
+import WhyDoctorPostSection from '@/components/landing/WhyDoctorPostSection';
 import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildFaqPageJsonLd } from '@/dev/lib/seo/schemas';
 import { HOME_FAQS } from '@/dev/lib/seo/homeFaq';
@@ -449,6 +450,9 @@ export default function LandingPage() {
 
       {/* 클리닉픽스 멀티채널 쇼케이스 (상세페이지 수준) */}
       <ClinicflixSection onCtaClick={handlePricingClick} />
+
+      {/* 왜 닥터포스트인가 — 이유 응집 섹션 */}
+      <WhyDoctorPostSection />
 
       {/* 요금 섹션 */}
       <section id="pricing" className="py-16 sm:py-[84px] bg-white">
