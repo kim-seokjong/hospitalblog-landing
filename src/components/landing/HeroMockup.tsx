@@ -85,7 +85,7 @@ export default function HeroMockup() {
       <span className="dp-float-a absolute -top-3 -left-2 sm:-left-5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white border border-[#c9ead2] text-[12px] font-extrabold text-[#1c7c3d] shadow-[0_10px_26px_-12px_rgba(28,124,61,0.35)]">
         의료광고법 준수 ✓
       </span>
-      <span className="dp-float-b absolute top-[38%] -right-2 sm:-right-5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-[12px] font-extrabold text-white shadow-[0_10px_26px_-12px_rgba(255,70,40,0.5)]">
+      <span className="dp-float-b absolute top-[52%] -right-2 sm:-right-5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-[12px] font-extrabold text-white shadow-[0_10px_26px_-12px_rgba(255,70,40,0.5)]">
         ⚡ 60초 생성
       </span>
       <span className="dp-float-c absolute -bottom-3 left-4 sm:left-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#202020] text-[12px] font-extrabold text-white shadow-[0_10px_26px_-12px_rgba(32,32,32,0.5)]">
