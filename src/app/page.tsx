@@ -12,6 +12,7 @@ import ClinicflixSection from '@/components/landing/ClinicflixSection';
 import HomeFaqSection from '@/components/landing/HomeFaqSection';
 import Logo from '@/components/landing/Logo';
 import HeroMockup from '@/components/landing/HeroMockup';
+import FloatingCta from '@/components/landing/FloatingCta';
 import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildFaqPageJsonLd } from '@/dev/lib/seo/schemas';
 import { HOME_FAQS } from '@/dev/lib/seo/homeFaq';
@@ -562,6 +563,9 @@ export default function LandingPage() {
           <a href="/refund" className="hover:text-[#ff4628] transition-colors">환불정책</a>
         </div>
       </footer>
+
+      {/* 플로팅 CTA — 히어로 "회원가입하기"와 동일 핸들러 재사용 (랜딩 전용) */}
+      <FloatingCta onClick={handleStart} />
     </div>
   );
 }
