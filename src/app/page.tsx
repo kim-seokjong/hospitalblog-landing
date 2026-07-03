@@ -13,6 +13,7 @@ import HomeFaqSection from '@/components/landing/HomeFaqSection';
 import Logo from '@/components/landing/Logo';
 import HeroMockup from '@/components/landing/HeroMockup';
 import FloatingCta from '@/components/landing/FloatingCta';
+import BlindTestSection from '@/components/landing/BlindTestSection';
 import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildFaqPageJsonLd } from '@/dev/lib/seo/schemas';
 import { HOME_FAQS } from '@/dev/lib/seo/homeFaq';
@@ -322,6 +323,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* 신뢰 섹션: 블라인드 비교 (다크 — 내부 요소 명시적 다크 스타일) */}
+      <BlindTestSection />
 
       {/* 섹션 3: 해결 매핑 */}
       <section className="py-16 sm:py-[84px] bg-[#eef2f6]">
