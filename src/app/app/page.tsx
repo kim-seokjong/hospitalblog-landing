@@ -491,6 +491,8 @@ export default function AppPage() {
   const [error, setError] = useState<string | null>(null);
   const [retryAction, setRetryAction] = useState<'titles' | 'content' | null>(null);
   const [blocked, setBlocked] = useState(false);
+  // 무료 체험 잔여 횟수 (유료/관리자=null → 배지 미표시)
+  const [freeCredits, setFreeCredits] = useState<number | null>(null);
   // 세션 갱신 중 일시적 null → 홈 리다이렉트 방지용 (한 번이라도 로그인됐으면 true)
   const wasEverLoggedInRef = useRef(false);
   // 자동저장 디바운스 타이머
@@ -541,7 +543,7 @@ export default function AppPage() {
     }
     let cancelled = false;
     supabase.from('profiles')
-      .select('plan, usage_count, hospital_type, hospital_name, hospital_address, full_name, phone, position, plan_expires_at')
+      .select('plan, usage_count, hospital_type, hospital_name, hospital_address, full_name, phone, position, plan_expires_at, free_credits')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -551,6 +553,7 @@ export default function AppPage() {
           hospital_name?: string | null; hospital_address?: string | null;
           full_name?: string | null; phone?: string | null; position?: string | null;
           plan_expires_at?: string | null;
+          free_credits?: number | null;
         } | null;
 
         const incomplete =
@@ -570,8 +573,15 @@ export default function AppPage() {
           // 미구독(free)·만료 회원: 생성 시도를 기다리지 않고 진입 즉시 구독 안내 배너 노출
           // (가입 직후 결제 안내를 한 번도 못 보고 이탈하는 전환 누수 방지 — 관리자·프로필 미완성 모달과 중복 제외)
           if (!isClientAdmin(user.email) && !incomplete && !isActivePlan(profile.plan, profile.plan_expires_at ?? null)) {
-            setBlocked(true);
-            setError('아직 구독 중인 플랜이 없거나 만료되었습니다. 구독하면 바로 글 생성을 시작할 수 있어요.');
+            // 무료 2회 크레딧(2026-07-04): 잔여가 있으면 차단하지 않고 체험 배지로 안내,
+            // 소진했을 때만 결제 유도 차단 배너
+            const fc = profile.free_credits ?? 0;
+            if (fc > 0) {
+              setFreeCredits(fc);
+            } else {
+              setBlocked(true);
+              setError('무료 체험 2회를 모두 사용하셨어요. 구독하면 매달 계속 이용할 수 있어요.');
+            }
           }
 
           if (profile.hospital_type) setHospitalType(profile.hospital_type);
@@ -652,7 +662,7 @@ export default function AppPage() {
     try {
       if (localStorage.getItem(WELCOME_DONE_KEY)) return;
       const params = new URLSearchParams(window.location.search);
-      if (params.get('welcome') === '1') {
+      if (params.get('welcome') === '1' || params.get('welcome') === 'free') {
         setShowWelcome(true);
         params.delete('welcome');
         const qs = params.toString();
@@ -1244,7 +1254,21 @@ export default function AppPage() {
         </div>
       )}
 
-      {/* 구독 플랜 필요 알림 (한도 초과 / 미구독 / 만료) */}
+      {/* 무료 체험 잔여 배지 (미구독 + 크레딧 보유) — 차단 대신 체험으로 안내 */}
+      {!blocked && freeCredits !== null && freeCredits > 0 && (
+        <div className="max-w-screen-2xl mx-auto px-4 pt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-[#eafaf0] border border-[#c9ead2] rounded-2xl px-4 py-3">
+            <span className="inline-flex items-center gap-1.5 text-sm font-extrabold text-[#1c7c3d]">
+              🎁 무료 체험 {freeCredits}회 남음
+            </span>
+            <span className="text-xs sm:text-sm text-[#3f5468]">
+              키워드만 입력하면 의료광고법 검수까지 끝난 글이 60초 안에 나와요. 지금 바로 써보세요.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 구독 플랜 필요 알림 (한도 초과 / 미구독 / 만료 / 무료 소진) */}
       {blocked && (
         <div className="max-w-screen-2xl mx-auto px-4 pt-4">
           <div className="bg-[#ffece7] border border-[#ff4628]/40 rounded-2xl p-5 sm:p-6">

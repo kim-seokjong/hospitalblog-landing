@@ -139,6 +139,7 @@ function buildStorytellingPrompt(on: boolean): string {
 
 export async function POST(req: NextRequest) {
   let consumedUserId: string | null = null;
+  let consumedFreeCredit = false;
   try {
     const {
       title, keyword, hospitalType, additionalInfo, titleFormat,
@@ -176,6 +177,7 @@ export async function POST(req: NextRequest) {
       );
     }
     consumedUserId = guard.userId;
+    consumedFreeCredit = guard.freeCredit === true;
 
     // VOICE-DNA 문체 카드 주입 블록 — 카드 있고 토글 ON일 때만. 조회 실패는 graceful(무시).
     // 카드 없으면 빈 문자열 → 기존 동작 그대로 유지.
@@ -534,7 +536,7 @@ ${formatGuide}
 
     const textContent = response.content.find((b) => b.type === 'text');
     if (!textContent || textContent.type !== 'text') {
-      if (consumedUserId) await refundUsage(consumedUserId);
+      if (consumedUserId) await refundUsage(consumedUserId, { freeCredit: consumedFreeCredit });
       return NextResponse.json({ error: '본문 생성에 실패했습니다.' }, { status: 500 });
     }
 
@@ -719,7 +721,7 @@ ${formatGuide}
     });
   } catch (error) {
     console.error('본문 생성 오류:', error);
-    if (consumedUserId) await refundUsage(consumedUserId);
+    if (consumedUserId) await refundUsage(consumedUserId, { freeCredit: consumedFreeCredit });
     const raw = error instanceof Error ? error.message : '';
     const userMessage = raw.includes('Internal server error') || raw.includes('500') || raw.includes('529')
       ? 'AI 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요.'

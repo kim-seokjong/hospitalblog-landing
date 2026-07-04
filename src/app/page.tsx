@@ -94,8 +94,9 @@ export default function LandingPage() {
       setPendingPricingRedirect(false);
       router.push('/pricing');
     } else if (completedMode === 'signup') {
-      // 신규 가입: 무료 플랜으로는 이용 불가하므로 구독 페이지로 바로 유도 (전환 누수 방지)
-      router.push('/pricing');
+      // 신규 가입: 무료 2회 크레딧(2026-07-04 정책)으로 바로 생성 경험 → 소진 시 결제 유도.
+      // (구 퍼널: /pricing 직행 — 무료 2회 도입으로 사용자(대표) 지시에 따라 변경)
+      router.push('/app?welcome=free');
     } else {
       router.push('/app');
     }
@@ -238,7 +239,7 @@ export default function LandingPage() {
                   onClick={handleStart}
                   className="px-7 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 hover:-translate-y-0.5"
                 >
-                  회원가입하기 →
+                  무료로 시작하기 →
                 </button>
                 <a
                   href="#features"
@@ -247,6 +248,9 @@ export default function LandingPage() {
                   기능 살펴보기
                 </a>
               </div>
+              <p className="mt-3 text-[13px] text-[#8a93a0] text-center lg:text-left">
+                가입하면 블로그 글 <b className="text-[#ff4628]">2회 무료 생성</b> · 카드 등록 없음
+              </p>
             </div>
 
             {/* 오른쪽: 제품 미니 목업 (모바일에선 CTA 다음 순서) */}
