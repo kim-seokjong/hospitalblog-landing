@@ -65,6 +65,8 @@ export interface ClinicflixConvertRequest {
   keyword?: string
   options?: { video_engine?: string }
   callback_url?: string
+  // 쇼츠 제작법: 'v1'(컷 기반) | 'v2'(사건→궁금증 시퀀스+네이티브 대사, 2026-07-04 기본)
+  recipe?: 'v1' | 'v2'
 }
 
 export interface ClinicflixConvertResponse {
@@ -76,6 +78,8 @@ export interface ClinicflixConvertResponse {
 export interface ClinicflixJobPlan {
   channels?: string[]
   shorts?: unknown
+  // v2 제작법 시퀀스 대본 (recipe='v2'면 shorts 대신 채워짐)
+  shorts_v2?: unknown
   cardnews?: unknown
   threads?: unknown
   feed?: unknown
@@ -95,6 +99,8 @@ export interface ClinicflixJobAssets {
  */
 export interface ClinicflixPlanEdits {
   shorts?: { scenes?: { narration?: string; caption?: string }[] }
+  // v2: sequences[i].dialogue 는 그 시퀀스의 대사들을 순서대로 담은 평탄 배열
+  shorts_v2?: { sequences?: { caption?: string; narration?: string; dialogue?: string[] }[] }
   cardnews?: { slides?: { headline?: string; body?: string }[]; caption?: string }
   threads?: { posts?: string[] }
   feed?: { caption?: string }

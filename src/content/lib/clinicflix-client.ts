@@ -13,6 +13,8 @@ export interface ClinicflixJobView {
   plan: {
     channels?: string[]
     shorts?: unknown
+    // v2 제작법 시퀀스 대본 (recipe='v2'면 shorts 대신 채워짐)
+    shorts_v2?: unknown
     cardnews?: unknown
     threads?: unknown
     feed?: unknown
@@ -38,6 +40,8 @@ export interface ConvertResult {
  */
 export interface PlanEdits {
   shorts?: { scenes?: { narration?: string; caption?: string }[] }
+  // v2: sequences[i].dialogue 는 그 시퀀스의 대사들을 순서대로 담은 평탄 배열
+  shorts_v2?: { sequences?: { caption?: string; narration?: string; dialogue?: string[] }[] }
   cardnews?: { slides?: { headline?: string; body?: string }[]; caption?: string }
   threads?: { posts?: string[] }
   feed?: { caption?: string }

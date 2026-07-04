@@ -188,6 +188,9 @@ export async function POST(req: NextRequest) {
         mode: 'keyword',
         ...(keyword ? { keyword } : {}),
         options: { video_engine: 'veo_fast' },
+        // 쇼츠 제작법 v2(사건→궁금증 시퀀스+네이티브 대사, 2026-07-04)가 기본.
+        // 문제 시 env CLINICFLIX_RECIPE=v1 으로 즉시 롤백 가능(서비스 v1 경로 보존됨).
+        recipe: process.env.CLINICFLIX_RECIPE === 'v1' ? 'v1' : 'v2',
       })
     } catch (e) {
       if (e instanceof ClinicflixUnavailableError) {

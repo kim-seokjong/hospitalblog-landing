@@ -41,6 +41,36 @@ export function oneLine(v: unknown): string {
 export function PlanBody({ kind, value }: { kind: PlanKind; value: unknown }) {
   const o = asRec(value);
   if (kind === 'shorts') {
+    // v2 제작법(사건→궁금증): sequences 구조 — 시퀀스별 대사/내레이션 표시
+    if (Array.isArray(o.sequences)) {
+      const seqs = asRecArr(o.sequences);
+      return (
+        <>
+          {seqs.map((s, i) => {
+            const shots = asRecArr(s.shots);
+            const lines = shots.flatMap((sh) =>
+              (Array.isArray(sh.dialogue) ? sh.dialogue : []).map((d) =>
+                Array.isArray(d) && d.length === 2 ? String(d[1]) : ''
+              )
+            ).filter(Boolean);
+            return (
+              <div key={i} className="border-b border-[#eef2f6] pb-2 last:border-0">
+                <p className="font-semibold text-[#ff4628] text-xs">
+                  시퀀스 {String(s.index ?? i + 1)}
+                  {str(s.mode) === 'dialogue' ? ' · 대사' : ' · 내레이션'}
+                  {typeof s.duration_sec === 'number' ? ` · ${Math.round(s.duration_sec)}초` : ''}
+                </p>
+                {lines.map((line, k) => (
+                  <p key={k}>💬 {line}</p>
+                ))}
+                {str(s.narration) && <p>{str(s.narration)}</p>}
+                {str(s.caption) && <p className="text-[#5b6573] text-xs">자막: {str(s.caption)}</p>}
+              </div>
+            );
+          })}
+        </>
+      );
+    }
     const scenes = asRecArr(o.scenes);
     return (
       <>
@@ -133,19 +163,23 @@ export function planToCopyText(kind: PlanKind, value: unknown): string {
 // 채널별 텍스트만 편집 가능한 드래프트. (internal image_prompt/영문 필드는 노출하지 않는다)
 export interface EditableDraft {
   shorts: { scenes: { narration: string; caption: string }[] };
+  // v2 시퀀스 대본 — 시퀀스별 자막·내레이션·대사(순서 평탄화, 화자는 읽기전용 라벨)
+  shortsV2: { sequences: { caption: string; narration: string; dialogue: { speaker: string; line: string }[] }[] };
   cardnews: { slides: { headline: string; body: string }[]; caption: string };
   threads: { posts: string[] };
   feed: { caption: string };
   story: { frames: { text: string }[] };
   // 어떤 채널이 기획에 존재하는지 (없으면 카드 자체를 숨김)
-  present: Record<PlanKind, boolean>;
+  present: Record<PlanKind | 'shortsV2', boolean>;
 }
 
 /** job.plan 으로부터 편집 드래프트 초기화. 존재하지 않는 채널은 present=false. */
 export function buildDraft(plan: {
-  shorts?: unknown; cardnews?: unknown; threads?: unknown; feed?: unknown; story?: unknown;
+  shorts?: unknown; shorts_v2?: unknown; cardnews?: unknown; threads?: unknown;
+  feed?: unknown; story?: unknown;
 } | null | undefined): EditableDraft {
   const shortsO = asRec(plan?.shorts);
+  const shortsV2O = asRec(plan?.shorts_v2);
   const cardnewsO = asRec(plan?.cardnews);
   const threadsO = asRec(plan?.threads);
   const feedO = asRec(plan?.feed);
@@ -155,6 +189,17 @@ export function buildDraft(plan: {
       scenes: asRecArr(shortsO.scenes).map((s) => ({
         narration: str(s.narration),
         caption: str(s.caption),
+      })),
+    },
+    shortsV2: {
+      sequences: asRecArr(shortsV2O.sequences).map((s) => ({
+        caption: str(s.caption),
+        narration: str(s.narration),
+        dialogue: asRecArr(s.shots).flatMap((sh) =>
+          (Array.isArray(sh.dialogue) ? sh.dialogue : [])
+            .filter((d): d is [unknown, unknown] => Array.isArray(d) && d.length === 2)
+            .map((d) => ({ speaker: String(d[0]), line: String(d[1]) }))
+        ),
       })),
     },
     cardnews: {
@@ -169,6 +214,7 @@ export function buildDraft(plan: {
     story: { frames: asRecArr(storyO.frames).map((f) => ({ text: str(f.text) })) },
     present: {
       shorts: plan?.shorts != null,
+      shortsV2: plan?.shorts_v2 != null,
       cardnews: plan?.cardnews != null,
       threads: plan?.threads != null,
       feed: plan?.feed != null,
@@ -183,6 +229,15 @@ export function draftToEdits(d: EditableDraft): PlanEdits {
   if (d.present.shorts) {
     edits.shorts = {
       scenes: d.shorts.scenes.map((s) => ({ narration: s.narration, caption: s.caption })),
+    };
+  }
+  if (d.present.shortsV2) {
+    edits.shorts_v2 = {
+      sequences: d.shortsV2.sequences.map((s) => ({
+        caption: s.caption,
+        narration: s.narration,
+        dialogue: s.dialogue.map((dl) => dl.line),
+      })),
     };
   }
   if (d.present.cardnews) {
@@ -274,6 +329,59 @@ export function EditablePlan({
                   onChange={(e) => {
                     const scenes = draft.shorts.scenes.map((x, j) => (j === i ? { ...x, caption: e.target.value } : x));
                     onChange({ ...draft, shorts: { scenes } });
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </EditCard>
+      )}
+
+      {/* 🎬 쇼츠 v2 (사건→궁금증 시퀀스) */}
+      {draft.present.shortsV2 && (
+        <EditCard title="🎬 쇼츠 영상 (시퀀스별 대사·자막)" onReset={() => resetChannel('shortsV2')}>
+          {draft.shortsV2.sequences.map((s, i) => (
+            <div key={i} className="space-y-1.5 border-b border-[#eef2f6] pb-3 last:border-0 last:pb-0">
+              <p className="text-xs font-semibold text-[#ff4628]">시퀀스 {i + 1}</p>
+              {s.dialogue.map((dl, k) => (
+                <div key={k} className="space-y-1">
+                  <label className={editLabel}>대사 {k + 1} (10단어 이내 — 짧을수록 발음이 좋아요)</label>
+                  <input
+                    className={editInput}
+                    value={dl.line}
+                    onChange={(e) => {
+                      const sequences = draft.shortsV2.sequences.map((x, j) =>
+                        j === i
+                          ? { ...x, dialogue: x.dialogue.map((y, m) => (m === k ? { ...y, line: e.target.value } : y)) }
+                          : x
+                      );
+                      onChange({ ...draft, shortsV2: { sequences } });
+                    }}
+                  />
+                </div>
+              ))}
+              {s.narration && (
+                <div className="space-y-1">
+                  <label className={editLabel}>내레이션</label>
+                  <textarea
+                    className={editTextarea}
+                    rows={2}
+                    value={s.narration}
+                    onChange={(e) => {
+                      const sequences = draft.shortsV2.sequences.map((x, j) => (j === i ? { ...x, narration: e.target.value } : x));
+                      onChange({ ...draft, shortsV2: { sequences } });
+                    }}
+                  />
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className={editLabel}>자막</label>
+                <input
+                  className={editInput}
+                  value={s.caption}
+                  onChange={(e) => {
+                    const sequences = draft.shortsV2.sequences.map((x, j) => (j === i ? { ...x, caption: e.target.value } : x));
+                    onChange({ ...draft, shortsV2: { sequences } });
                   }}
                 />
               </div>
