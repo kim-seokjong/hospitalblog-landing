@@ -1,17 +1,110 @@
+'use client';
+
 /**
- * HeroMockup — 히어로 우측 제품 미니 목업 (HTML/CSS 재현, AI 이미지 미사용).
+ * HeroMockup — 히어로 우측 "라이브" 제품 목업 (HTML/CSS 재현, AI 이미지 미사용).
  *
- * 브라우저 창 프레임 안에 "키워드 입력 → 글 생성" 흐름을 축소 재현하고,
- * 그 위에 플로팅 배지 칩 3개가 떠 있는 비주얼.
+ * 정적 목업 → 라이브 데모(2026-07-04 고급화): 키워드가 실시간 타이핑되고,
+ * 생성 버튼이 눌리며 글 제목·본문 스켈레톤이 차오르고, 의료광고법 검수 배지가
+ * 탁 찍히는 사이클이 반복된다. 제품의 핵심 마법(키워드→60초 글)을 히어로에서
+ * 눈앞에 재생하는 것이 목적 (레퍼런스: attio 라이브 데모 + flex 타이핑 인풋).
  *
  * - 모든 글자는 실제 HTML 텍스트 (이미지 텍스트 금지)
- * - 애니메이션은 globals.css 의 dp-float-* 클래스 사용 (prefers-reduced-motion 존중)
+ * - prefers-reduced-motion 이면 애니메이션 없이 완성 상태로 정적 렌더
  * - 과장·보장 문구 금지 (순위 보장·완치 등 사용 안 함)
  */
+
+import { useEffect, useRef, useState } from 'react';
+
+interface Demo {
+  kw: string;
+  title: string;
+  s1: string;
+  s2: string;
+}
+
+const DEMOS: Demo[] = [
+  {
+    kw: '임플란트 사후관리',
+    title: '임플란트 사후관리, 오래 쓰려면 이것부터 챙기세요',
+    s1: '임플란트 후 첫 1주일, 관리 포인트',
+    s2: '정기 검진이 필요한 이유',
+  },
+  {
+    kw: '도수치료 통증 관리',
+    title: '도수치료 후 통증 관리, 순서가 중요합니다',
+    s1: '치료 직후 24시간, 이렇게 보내세요',
+    s2: '다시 내원이 필요한 신호',
+  },
+  {
+    kw: '라식 수술 전 검사',
+    title: '라식 전 검사, 꼼꼼할수록 좋은 이유',
+    s1: '수술 전 검사에서 확인하는 것들',
+    s2: '검사 결과에 따라 달라지는 선택',
+  },
+];
+
+// 사이클 단계: 키워드 타이핑 → 생성중 → 제목 등장 → 본문 채움 → 검수 배지 → 유지
+type Phase = 'typing' | 'generating' | 'title' | 'body' | 'badge' | 'hold';
 
 const SKELETON_LINES = ['w-full', 'w-[92%]', 'w-[96%]', 'w-[70%]'];
 
 export default function HeroMockup() {
+  const [reduced, setReduced] = useState(false);
+  const [di, setDi] = useState(0);
+  const [typed, setTyped] = useState('');
+  const [phase, setPhase] = useState<Phase>('typing');
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    if (reduced) return;
+    const demo = DEMOS[di];
+    const later = (fn: () => void, ms: number) => {
+      timers.current.push(setTimeout(fn, ms));
+    };
+
+    if (phase === 'typing') {
+      if (typed.length < demo.kw.length) {
+        later(() => setTyped(demo.kw.slice(0, typed.length + 1)), 90);
+      } else {
+        later(() => setPhase('generating'), 450);
+      }
+    } else if (phase === 'generating') {
+      later(() => setPhase('title'), 900);
+    } else if (phase === 'title') {
+      later(() => setPhase('body'), 550);
+    } else if (phase === 'body') {
+      later(() => setPhase('badge'), 900);
+    } else if (phase === 'badge') {
+      later(() => setPhase('hold'), 2600);
+    } else {
+      later(() => {
+        setTyped('');
+        setDi((di + 1) % DEMOS.length);
+        setPhase('typing');
+      }, 400);
+    }
+    return () => {
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
+    };
+  }, [phase, typed, di, reduced]);
+
+  const demo = DEMOS[di];
+  // reduced-motion: 전부 완성된 정적 상태
+  const kwText = reduced ? demo.kw : typed;
+  const showTitle = reduced || phase === 'title' || phase === 'body' || phase === 'badge' || phase === 'hold';
+  const showBody = reduced || phase === 'body' || phase === 'badge' || phase === 'hold';
+  const showBadge = reduced || phase === 'badge' || phase === 'hold';
+  const generating = phase === 'generating';
+
   return (
     <div className="relative mx-auto w-full max-w-[480px]" aria-hidden="true">
       {/* 브라우저 창 프레임 */}
@@ -32,51 +125,71 @@ export default function HeroMockup() {
         </div>
 
         {/* 본문 — 키워드 입력 → 생성된 글 카드 */}
-        <div className="p-4 sm:p-5 space-y-4 bg-[#fafbfc]">
-          {/* 키워드 입력창 */}
+        <div className="p-4 sm:p-5 space-y-4 bg-[#fafbfc] min-h-[300px]">
+          {/* 키워드 입력창 (라이브 타이핑) */}
           <div>
             <p className="text-[11px] font-bold text-[#8a93a0] mb-1.5">키워드 입력</p>
             <div className="flex items-center gap-2">
-              <div className="flex-1 flex items-center px-3.5 py-2.5 bg-white border border-[#dbe2ea] rounded-lg text-sm font-semibold text-[#202020]">
-                임플란트 사후관리
+              <div className="flex-1 flex items-center px-3.5 py-2.5 bg-white border border-[#dbe2ea] rounded-lg text-sm font-semibold text-[#202020] min-h-[42px]">
+                {kwText}
                 <span className="ml-0.5 inline-block w-[2px] h-4 bg-[#ff4628] dp-blink" />
               </div>
-              <span className="flex-none px-4 py-2.5 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white text-sm font-bold rounded-lg">
-                생성
+              <span
+                className={`flex-none px-4 py-2.5 text-white text-sm font-bold rounded-lg transition-all bg-gradient-to-br from-[#ff4628] to-[#e63a1c] ${
+                  generating ? 'scale-95 brightness-90' : ''
+                }`}
+              >
+                {generating ? '생성 중…' : '생성'}
               </span>
             </div>
           </div>
 
           {/* 생성된 글 카드 */}
-          <div className="bg-white border border-[#dbe2ea] rounded-xl p-4 shadow-[0_8px_24px_-16px_rgba(32,32,32,0.20)]">
-            <p className="text-[15px] font-extrabold text-[#202020] leading-snug">
-              임플란트 사후관리, 오래 쓰려면 이것부터 챙기세요
+          <div className="relative bg-white border border-[#dbe2ea] rounded-xl p-4 shadow-[0_8px_24px_-16px_rgba(32,32,32,0.20)]">
+            <p
+              className={`text-[15px] font-extrabold text-[#202020] leading-snug transition-all duration-500 ${
+                showTitle ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1.5'
+              }`}
+            >
+              {demo.title}
             </p>
 
             <div className="mt-3 space-y-3">
-              <div>
-                <p className="text-[12px] font-bold text-[#3f5468] flex items-center gap-1.5">
-                  <span className="w-1 h-3 rounded-full bg-[#ff4628]" />
-                  임플란트 후 첫 1주일, 관리 포인트
-                </p>
-                <div className="mt-1.5 space-y-1.5">
-                  {SKELETON_LINES.slice(0, 2).map((w, i) => (
-                    <div key={i} className={`h-2 rounded-full bg-[#eef2f6] ${w}`} />
-                  ))}
+              {[demo.s1, demo.s2].map((sec, si) => (
+                <div
+                  key={sec}
+                  className={`transition-all duration-500 ${
+                    showBody ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1.5'
+                  }`}
+                  style={{ transitionDelay: showBody ? `${si * 220}ms` : '0ms' }}
+                >
+                  <p className="text-[12px] font-bold text-[#3f5468] flex items-center gap-1.5">
+                    <span className={`w-1 h-3 rounded-full ${si === 0 ? 'bg-[#ff4628]' : 'bg-[#b8c8d7]'}`} />
+                    {sec}
+                  </p>
+                  <div className="mt-1.5 space-y-1.5">
+                    {SKELETON_LINES.slice(si * 2, si * 2 + 2).map((w, i) => (
+                      <div
+                        key={i}
+                        className={`h-2 rounded-full bg-[#eef2f6] origin-left transition-transform duration-700 ${w} ${
+                          showBody ? 'scale-x-100' : 'scale-x-0'
+                        }`}
+                        style={{ transitionDelay: showBody ? `${si * 220 + i * 140}ms` : '0ms' }}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <p className="text-[12px] font-bold text-[#3f5468] flex items-center gap-1.5">
-                  <span className="w-1 h-3 rounded-full bg-[#b8c8d7]" />
-                  정기 검진이 필요한 이유
-                </p>
-                <div className="mt-1.5 space-y-1.5">
-                  {SKELETON_LINES.slice(2).map((w, i) => (
-                    <div key={i} className={`h-2 rounded-full bg-[#eef2f6] ${w}`} />
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
+
+            {/* 검수 통과 스탬프 — 생성 마지막에 탁 찍힘 */}
+            <span
+              className={`absolute -top-2.5 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#eafaf0] border border-[#c9ead2] text-[11px] font-extrabold text-[#1c7c3d] shadow-sm transition-all duration-300 ${
+                showBadge ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+              }`}
+            >
+              의료광고법 검수 통과 ✓
+            </span>
           </div>
         </div>
       </div>

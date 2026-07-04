@@ -34,10 +34,19 @@ const ADVANTAGES = [
 
 export default function BlindTestSection() {
   return (
-    <section className="py-16 sm:py-[84px] bg-[#202020]">
-      <div className="max-w-6xl mx-auto px-5 sm:px-6">
+    <section className="relative overflow-hidden py-20 sm:py-[110px] bg-[#161616]">
+      {/* 은은한 코랄 앰비언트 글로우 (Linear 문법 — 다크 위 광원 한 점) */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(640px 320px at 50% 0%, rgba(255,70,40,0.14), transparent 70%)',
+        }}
+      />
+      <div className="relative max-w-6xl mx-auto px-5 sm:px-6">
         <p className="text-center text-[13px] font-extrabold text-[#ff6a52] tracking-[2px]">블라인드 비교</p>
-        <h2 className="text-center text-[28px] sm:text-4xl font-black text-white mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+        <h2 className="text-center text-[30px] sm:text-[44px] font-black text-white mt-2.5 leading-tight" style={{ letterSpacing: '-1px' }}>
           같은 주제로 써서, 가리고 비교했습니다
         </h2>
         <p className="text-center text-[#b9bdc2] mt-3 text-base">
@@ -57,7 +66,7 @@ export default function BlindTestSection() {
             >
               <p className={`text-sm font-extrabold ${highlight ? 'text-[#ff6a52]' : 'text-[#8a93a0]'}`}>{name}</p>
               <p className="mt-2 flex items-baseline gap-1.5">
-                <span className={`text-4xl sm:text-5xl font-black ${highlight ? 'text-white' : 'text-[#b9bdc2]'}`}>
+                <span className={`text-5xl sm:text-[64px] leading-none font-black ${highlight ? 'text-white' : 'text-[#b9bdc2]'}`} style={{ letterSpacing: '-2px' }}>
                   {score.toFixed(1)}
                 </span>
                 <span className="text-sm font-bold text-[#8a93a0]">/ {max}</span>
@@ -76,7 +85,7 @@ export default function BlindTestSection() {
         {/* 우위 포인트 3 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 mt-8 sm:mt-10">
           {ADVANTAGES.map(({ icon, title, desc }) => (
-            <div key={title} className="bg-[#2a2a2a] border border-[#3a3a3a] rounded-2xl p-6">
+            <div key={title} className="dp-lift bg-white/[0.045] border border-white/[0.09] rounded-2xl p-6">
               <div className="w-11 h-11 rounded-xl bg-[#38302d] text-xl flex items-center justify-center mb-4">{icon}</div>
               <h3 className="font-extrabold text-white text-lg">{title}</h3>
               <p className="text-sm text-[#b9bdc2] leading-relaxed mt-2">{desc}</p>

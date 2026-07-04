@@ -118,6 +118,32 @@ body {
   }
 }
 
+/* 스크롤 리빌 — 섹션 진입 시 떠오름 (2026-07-04 랜딩 고급화, Reveal.tsx) */
+.dp-reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.dp-reveal.dp-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 카드 호버 리프트 — 고급화 공통 마이크로 인터랙션 */
+.dp-lift {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+}
+.dp-lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 24px 48px -20px rgba(32, 32, 32, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dp-reveal { opacity: 1; transform: none; transition: none; }
+  .dp-lift, .dp-lift:hover { transform: none; transition: none; }
+}
+
 /* AuthModal 입력 가독성 — 페이지 root text-white 상속 차단 */
 .auth-modal-light {
   color: #111827;

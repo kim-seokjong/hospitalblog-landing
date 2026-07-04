@@ -12,6 +12,7 @@ import ClinicflixSection from '@/components/landing/ClinicflixSection';
 import HomeFaqSection from '@/components/landing/HomeFaqSection';
 import Logo from '@/components/landing/Logo';
 import HeroMockup from '@/components/landing/HeroMockup';
+import RevealInit from '@/components/landing/Reveal';
 import FloatingCta from '@/components/landing/FloatingCta';
 import BlindTestSection from '@/components/landing/BlindTestSection';
 import WhyDoctorPostSection from '@/components/landing/WhyDoctorPostSection';
@@ -118,6 +119,9 @@ export default function LandingPage() {
       {/* 홈 FAQ FAQPage JSON-LD (GEO/AEO) — 화면 FAQ(HomeFaqSection)와 동일 데이터 사용 */}
       <JsonLd data={buildFaqPageJsonLd(HOME_FAQS)} />
 
+      {/* 스크롤 리빌 자동 장착 (섹션 진입 모션 — 고급화) */}
+      <RevealInit />
+
       <Suspense fallback={null}>
         <ClinicParamReader onClinic={setClinicName} />
       </Suspense>
@@ -193,11 +197,24 @@ export default function LandingPage() {
       <section
         className="relative overflow-hidden"
         style={{
+          // 코랄 그레인 그라데이션 히어로 (flex.team 레퍼런스, 라이트 톤 유지 — 의료 신뢰 우선)
           background:
-            'radial-gradient(820px 360px at 50% -30px, #eef2f6, transparent 70%), linear-gradient(180deg,#fbfcfe,#ffffff)',
+            'radial-gradient(900px 480px at 18% -10%, rgba(255,233,226,0.95), transparent 62%), ' +
+            'radial-gradient(760px 420px at 88% 4%, rgba(255,214,200,0.6), transparent 60%), ' +
+            'radial-gradient(680px 380px at 55% 110%, rgba(238,242,246,0.9), transparent 65%), ' +
+            'linear-gradient(180deg,#fffdfc,#ffffff)',
         }}
       >
-        <div className="relative max-w-6xl mx-auto px-5 sm:px-6 pt-16 sm:pt-24 pb-16 sm:pb-20">
+        {/* 필름 그레인 질감 레이어 (장식, 텍스트 아님) */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-40 mix-blend-multiply"
+          style={{
+            backgroundImage:
+              "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.95 0 0 0 0 0.94 0 0 0 0 0.93 0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E\")",
+          }}
+        />
+        <div className="relative max-w-6xl mx-auto px-5 sm:px-6 pt-16 sm:pt-28 pb-16 sm:pb-24">
           <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-center gap-12 lg:gap-10">
             {/* 왼쪽: 기존 카피 + CTA (모바일 중앙, 데스크톱 좌측 정렬) */}
             <div className="text-center lg:text-left">
@@ -206,7 +223,7 @@ export default function LandingPage() {
                 Claude AI · 네이버·구글 SEO · AI검색(GEO) 최적화
               </span>
 
-              <h1 className="text-[34px] sm:text-5xl md:text-[56px] font-black text-[#202020] leading-[1.12] mt-6 sm:mt-7" style={{ letterSpacing: '-1px' }}>
+              <h1 className="text-[38px] sm:text-[56px] md:text-[66px] font-black text-[#202020] leading-[1.08] mt-6 sm:mt-8" style={{ letterSpacing: '-1.5px' }}>
                 병원 블로그,<br />
                 <span className="text-[#ff4628]">AI가 대신</span> 써드려요.
               </h1>
@@ -245,7 +262,7 @@ export default function LandingPage() {
               { num: '네이버·구글·AI', label: '3대 검색 최적화' },
               { num: '의료광고법', label: '자동 검수' },
             ].map(({ num, label }) => (
-              <div key={num} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+              <div key={num} className="dp-lift bg-white/85 backdrop-blur-sm border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
                 <b className="block text-2xl sm:text-[30px] font-black text-[#ff4628]">{num}</b>
                 <span className="block text-sm font-semibold text-[#8a93a0] mt-1.5">{label}</span>
               </div>
@@ -255,10 +272,10 @@ export default function LandingPage() {
       </section>
 
       {/* 섹션 1: 문제 제기 */}
-      <section className="py-16 sm:py-[84px] bg-[#eef2f6]">
+      <section className="py-20 sm:py-[110px] bg-[#eef2f6]">
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
           <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">병원 블로그의 현실</p>
-          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             이런 고민, 한 번쯤 있으셨죠?
           </h2>
           <p className="text-center text-[#4a4f55] mt-3 text-base">대부분의 원장님이 블로그 앞에서 똑같이 멈춰 섭니다.</p>
@@ -271,7 +288,7 @@ export default function LandingPage() {
               { icon: '🧩', title: '뭘 써야 할지 막막해요', desc: '키워드·주제 선정부터 막혀서 시작조차 어렵습니다.' },
               { icon: '📉', title: '효과를 알 수가 없어요', desc: '글은 쌓이는데 실제로 환자 유입에 도움이 되는지 확인이 안 됩니다.' },
             ].map(({ icon, title, desc }) => (
-              <div key={title} className="bg-white border border-[#dbe2ea] border-l-[3px] border-l-[#ff4628] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] transition-transform hover:-translate-y-0.5">
+              <div key={title} className="bg-white border border-[#dbe2ea] border-l-[3px] border-l-[#ff4628] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] dp-lift">
                 <div className="w-11 h-11 rounded-xl bg-[#ffece7] text-[#ff4628] flex items-center justify-center text-xl mb-4">{icon}</div>
                 <h3 className="font-extrabold text-[#202020] text-lg">{title}</h3>
                 <p className="text-sm text-[#4a4f55] leading-relaxed mt-2">{desc}</p>
@@ -282,10 +299,10 @@ export default function LandingPage() {
       </section>
 
       {/* 섹션 2: 비교표 */}
-      <section className="py-16 sm:py-[84px] bg-white">
+      <section className="py-20 sm:py-[110px] bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
           <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">무엇이 다른가</p>
-          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             직접 쓸까, 맡길까, 아니면 닥터포스트
           </h2>
           <p className="text-center text-[#4a4f55] mt-3 text-base">세 가지 방법을 한눈에 비교해보세요.</p>
@@ -329,10 +346,10 @@ export default function LandingPage() {
       <BlindTestSection />
 
       {/* 섹션 3: 해결 매핑 */}
-      <section className="py-16 sm:py-[84px] bg-[#eef2f6]">
+      <section className="py-20 sm:py-[110px] bg-[#eef2f6]">
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
           <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">SOLUTION</p>
-          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             닥터포스트는 이렇게 해결해요
           </h2>
           <p className="text-center text-[#4a4f55] mt-3 text-base">고민 하나하나에 정확히 답합니다.</p>
@@ -356,10 +373,10 @@ export default function LandingPage() {
       </section>
 
       {/* 사용법 */}
-      <section id="how" className="py-16 sm:py-[84px] bg-white">
+      <section id="how" className="py-20 sm:py-[110px] bg-white">
         <div className="max-w-4xl mx-auto px-5 sm:px-6">
           <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">How it works</p>
-          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             3단계로 끝납니다
           </h2>
           <p className="text-center text-[#4a4f55] mt-3 mb-10 sm:mb-12 text-base">복잡한 설정 없이 바로 사용하세요.</p>
@@ -369,7 +386,7 @@ export default function LandingPage() {
               { step: '2', title: 'AI 자동 작성', desc: 'Claude AI가 네이버 SEO에 맞춰 제목·본문·태그까지 생성해요.', iconClass: 'bg-[#eef2f6] text-[#3f5468]' },
               { step: '3', title: '복사 후 발행', desc: '완성된 글을 복사해 네이버 블로그에 붙여넣으면 끝이에요.', iconClass: 'bg-[#ececec] text-[#202020]' },
             ].map(({ step, title, desc, iconClass }) => (
-              <div key={step} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] transition-transform hover:-translate-y-0.5">
+              <div key={step} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] dp-lift">
                 <div className={`w-11 h-11 rounded-xl ${iconClass} flex items-center justify-center text-xl font-extrabold mb-4`}>
                   {step}
                 </div>
@@ -418,30 +435,36 @@ export default function LandingPage() {
       </section>
 
       {/* 기능 섹션 */}
-      <section id="features" className="py-16 sm:py-[84px] bg-[#eef2f6]">
+      <section id="features" className="py-20 sm:py-[110px] bg-[#eef2f6]">
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
           <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">Features</p>
-          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             블로그 운영에 필요한 모든 것
           </h2>
           <p className="text-center text-[#4a4f55] mt-3 mb-10 sm:mb-12 text-base">
             병원 마케팅의 모든 과정을 자동화해요.
           </p>
+          {/* 벤토 그리드 — 핵심 기능 2개(작성·검수)를 와이드 카드로 강조 (Attio 문법) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "네이버 C-Rank·D.I.A+ 최적 블로그 글을 작성해요.", iconClass: "bg-[#ffece7] text-[#ff4628]" },
-              { icon: "🖼️", title: "이미지 자동 생성", desc: "병원 특화 실사 이미지를 자동 생성해요.", iconClass: "bg-[#eef2f6] text-[#3f5468]" },
-              { icon: "🔍", title: "SEO·GEO 최적화", desc: "네이버·구글 SEO와 AI 검색(GEO) 기준으로 점수를 분석·최적화해요.", iconClass: "bg-[#ececec] text-[#202020]" },
-              { icon: "🛡️", title: "의료광고법 검수", desc: "과장·단정 광고 문구를 자동 필터링해요.", iconClass: "bg-[#eef2f6] text-[#3f5468]" },
-              { icon: "📈", title: "네이버 트렌드", desc: "실시간 검색 트렌드를 분석해요.", iconClass: "bg-[#ffece7] text-[#ff4628]" },
-              { icon: "📑", title: "독창성 검사", desc: "중복 콘텐츠를 자동으로 검사해요.", iconClass: "bg-[#ececec] text-[#202020]" },
-            ].map(({ icon, title, desc, iconClass }) => (
-              <div key={title} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] transition-transform hover:-translate-y-0.5">
+              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "네이버 C-Rank·D.I.A+ 로직에 맞춘 제목·본문·태그를 60초 안에 완성합니다. 병원 진료과목과 강점을 학습해 우리 병원 톤으로 씁니다.", iconClass: "bg-[#ffece7] text-[#ff4628]", span: true },
+              { icon: "🖼️", title: "이미지 자동 생성", desc: "병원 특화 실사 이미지를 자동 생성해요.", iconClass: "bg-[#eef2f6] text-[#3f5468]", span: false },
+              { icon: "🔍", title: "SEO·GEO 최적화", desc: "네이버·구글 SEO와 AI 검색(GEO) 기준으로 점수를 분석·최적화해요.", iconClass: "bg-[#ececec] text-[#202020]", span: false },
+              { icon: "🛡️", title: "의료광고법 검수", desc: "과장·단정·유인 표현을 발행 전에 자동 감지합니다. 걸리고 나서가 아니라, 올리기 전에 잡는 게 닥터포스트의 기준입니다.", iconClass: "bg-[#eef2f6] text-[#3f5468]", span: true },
+              { icon: "📈", title: "네이버 트렌드", desc: "실시간 검색 트렌드를 분석해요.", iconClass: "bg-[#ffece7] text-[#ff4628]", span: false },
+              { icon: "📑", title: "독창성 검사", desc: "중복 콘텐츠를 자동으로 검사해요.", iconClass: "bg-[#ececec] text-[#202020]", span: false },
+            ].map(({ icon, title, desc, iconClass, span }) => (
+              <div
+                key={title}
+                className={`bg-white border border-[#dbe2ea] rounded-2xl p-6 sm:p-7 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] dp-lift ${
+                  span ? 'md:col-span-2' : ''
+                }`}
+              >
                 <div className={`w-11 h-11 rounded-xl ${iconClass} flex items-center justify-center text-xl mb-4`}>
                   {icon}
                 </div>
-                <h3 className="font-extrabold text-[#202020] text-lg mb-2">{title}</h3>
-                <p className="text-sm text-[#4a4f55] leading-relaxed">{desc}</p>
+                <h3 className={`font-extrabold text-[#202020] mb-2 ${span ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{title}</h3>
+                <p className={`text-[#4a4f55] leading-relaxed ${span ? 'text-[15px] max-w-xl' : 'text-sm'}`}>{desc}</p>
               </div>
             ))}
           </div>
@@ -455,10 +478,10 @@ export default function LandingPage() {
       <WhyDoctorPostSection />
 
       {/* 요금 섹션 */}
-      <section id="pricing" className="py-16 sm:py-[84px] bg-white">
+      <section id="pricing" className="py-20 sm:py-[110px] bg-white">
         <div className="max-w-4xl mx-auto px-5 sm:px-6">
           <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">Pricing</p>
-          <h2 className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             합리적인 요금제
           </h2>
           <p className="text-center text-[#4a4f55] mt-3 mb-6 text-base">
@@ -541,9 +564,9 @@ export default function LandingPage() {
       <HomeFaqSection />
 
       {/* CTA — 블랙 띠 */}
-      <section className="py-16 sm:py-[84px] bg-[#202020]">
+      <section className="py-20 sm:py-[110px] bg-[#202020]">
         <div className="max-w-2xl mx-auto px-5 sm:px-6 text-center">
-          <h2 className="text-[28px] sm:text-4xl font-black text-white mb-4" style={{ letterSpacing: '-0.5px' }}>
+          <h2 className="text-[30px] sm:text-[44px] font-black text-white mb-4" style={{ letterSpacing: '-0.5px' }}>
             지금 바로 시작해보세요
           </h2>
           <p className="text-[#b9bdc2] mb-8 text-base">
