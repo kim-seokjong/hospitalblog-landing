@@ -6,6 +6,7 @@ export type MyPageTabId =
   | 'usage'
   | 'posts'
   | 'rankings'
+  | 'geo'
   | 'audit'
   | 'conversions'
   | 'brandkit'
@@ -18,6 +19,7 @@ export const MYPAGE_TABS: { id: MyPageTabId; label: string }[] = [
   { id: 'usage', label: '사용량' },
   { id: 'posts', label: '콘텐츠 보관함' },
   { id: 'rankings', label: '성과 리포트' },
+  { id: 'geo', label: 'AI 검색' },
   { id: 'audit', label: '블로그 진단' },
   { id: 'conversions', label: '변환 내역' },
   { id: 'brandkit', label: '콘텐츠 설정' },
