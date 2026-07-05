@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server'
+import {
+  isCharacterPresetId,
+  parseCharacterSelection,
+} from '@/content/lib/clinicflix-characters'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +32,8 @@ interface BrandKitResponse {
   doctor_photo_url: string | null
   doctor_video_url: string | null
   doctor_consent: boolean
+  /** 전속 AI 캐릭터 프리셋 id (null = 미선택 → 자동 배정). 마이그레이션 036. */
+  character_preset_id: string | null
 }
 
 /**
@@ -44,13 +50,23 @@ export async function GET() {
       return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 })
     }
 
-    const { data, error } = await supabase
+    const LEGACY_COLS =
+      'clinic_logo_url, clinic_brand_color, clinic_hashtags, clinic_voice_gender, clinic_threads_tone, clinic_cardnews_style, clinic_shorts_concept, clinic_doctor_photo_url, clinic_doctor_video_url, clinic_doctor_consent'
+    let { data, error } = await supabase
       .from('profiles')
-      .select(
-        'clinic_logo_url, clinic_brand_color, clinic_hashtags, clinic_voice_gender, clinic_threads_tone, clinic_cardnews_style, clinic_shorts_concept, clinic_doctor_photo_url, clinic_doctor_video_url, clinic_doctor_consent',
-      )
+      .select(`${LEGACY_COLS}, clinicflix_character`)
       .eq('id', user.id)
       .single()
+
+    // 마이그레이션 036(clinicflix_character) 미적용 DB 방어 — 컬럼 없음(42703)이면
+    // 기존 컬럼만으로 재조회해 탭 전체가 죽지 않게 한다 (캐릭터만 미선택으로 표시).
+    if (error && error.code === '42703') {
+      ;({ data, error } = await supabase
+        .from('profiles')
+        .select(LEGACY_COLS)
+        .eq('id', user.id)
+        .single())
+    }
 
     if (error && error.code !== 'PGRST116') {
       return NextResponse.json({ error: '브랜드킷 조회 실패' }, { status: 500 })
@@ -71,6 +87,7 @@ export async function GET() {
       doctor_photo_url: (row.clinic_doctor_photo_url as string | null) ?? null,
       doctor_video_url: (row.clinic_doctor_video_url as string | null) ?? null,
       doctor_consent: (row.clinic_doctor_consent as boolean | null) ?? false,
+      character_preset_id: parseCharacterSelection(row.clinicflix_character),
     }
     return NextResponse.json(body)
   } catch (e) {
@@ -134,6 +151,18 @@ function validateBody(raw: unknown): ValidationResult {
       return { ok: false, error: '쇼츠 콘셉트 값이 올바르지 않습니다.' }
     }
     updates.clinic_shorts_concept = v
+  }
+
+  // character_preset_id (전속 AI 캐릭터 — 프리셋 id 화이트리스트 | null=해제)
+  if ('character_preset_id' in b) {
+    const v = b.character_preset_id
+    if (v === null) {
+      updates.clinicflix_character = null
+    } else if (isCharacterPresetId(v)) {
+      updates.clinicflix_character = { preset_id: v, selected_at: new Date().toISOString() }
+    } else {
+      return { ok: false, error: '전속 캐릭터 값이 올바르지 않습니다.' }
+    }
   }
 
   // doctor_consent (boolean)

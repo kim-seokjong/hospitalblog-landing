@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { clinicflixApprove, ClinicflixUnavailableError, type ClinicflixPlanEdits } from '@/content/lib/clinicflix'
-import { getConversionByJobId, commitUsage } from '@/content/lib/clinicflix-usage'
+import {
+  clinicflixApprove,
+  clinicflixGetJob,
+  ClinicflixUnavailableError,
+  type ClinicflixPlanEdits,
+} from '@/content/lib/clinicflix'
+import {
+  getConversionByJobId,
+  commitUsage,
+  updateConversionTopic,
+} from '@/content/lib/clinicflix-usage'
+import { extractPlanTopic } from '@/content/lib/clinicflix-characters'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,6 +94,19 @@ export async function POST(
       }
       const msg = e instanceof Error ? e.message : '생성 승인에 실패했습니다'
       return NextResponse.json({ error: msg }, { status: 502 })
+    }
+
+    // ── 에피소드 주제 확정 기록 (best-effort) ──
+    // 기획(plan)의 topic 을 저장해 다음 변환의 series_context(전속 캐릭터 시리즈 연속성 —
+    // 반복 방지 + 가벼운 콜백) 원천으로 쓴다. 실패해도 승인 흐름에는 영향 없음.
+    try {
+      const job = await clinicflixGetJob(jobId)
+      const topic = extractPlanTopic(job.plan)
+      if (topic) {
+        await updateConversionTopic(mapping.conversion_id, topic)
+      }
+    } catch {
+      /* topic 은 부가 정보 — 조회 실패 무시 */
     }
 
     return NextResponse.json({ ok: true })

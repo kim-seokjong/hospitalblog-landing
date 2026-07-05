@@ -67,6 +67,11 @@ export interface ClinicflixConvertRequest {
   callback_url?: string
   // 쇼츠 제작법: 'v1'(컷 기반) | 'v2'(사건→궁금증 시퀀스+네이티브 대사, 2026-07-04 기본)
   recipe?: 'v1' | 'v2'
+  // 병원 전속 AI 캐릭터 (선택): 프리셋 id — 미전송 시 서비스 기존 동작 완전 불변(하위 호환).
+  // 프리셋 목록 단일 소스 = clinicflix_pipeline/clinicflix/characters.py
+  character?: { preset_id: string }
+  // 시리즈 연속성: 같은 병원의 최근 에피소드 주제(최대 3). 캐릭터 선택 시에만 전송.
+  series_context?: string[]
 }
 
 export interface ClinicflixConvertResponse {

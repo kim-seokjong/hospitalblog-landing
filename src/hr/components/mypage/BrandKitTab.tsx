@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Section, Field, Select } from '@/hr/components/form-controls';
 import { uploadClinicAsset } from '@/content/lib/clinic-assets';
+// 전속 캐릭터 프리셋 메타 — 원본(clinicflix_pipeline/clinicflix/characters.py)과 동기화 필수
+import { CLINICFLIX_CHARACTER_PRESETS } from '@/content/lib/clinicflix-characters';
 
 interface BrandKit {
   logo_url: string | null;
@@ -15,6 +17,8 @@ interface BrandKit {
   doctor_photo_url: string | null;
   doctor_video_url: string | null;
   doctor_consent: boolean;
+  /** 전속 AI 캐릭터 프리셋 id (null = 미선택 → 자동 배정) */
+  character_preset_id: string | null;
 }
 
 const DEFAULT_BRANDKIT: BrandKit = {
@@ -28,6 +32,7 @@ const DEFAULT_BRANDKIT: BrandKit = {
   doctor_photo_url: null,
   doctor_video_url: null,
   doctor_consent: false,
+  character_preset_id: null,
 };
 
 const VOICE_OPTIONS = [
@@ -252,6 +257,7 @@ export default function BrandKitTab() {
           doctor_photo_url: brand.doctor_photo_url,
           doctor_video_url: brand.doctor_video_url,
           doctor_consent: brand.doctor_consent,
+          character_preset_id: brand.character_preset_id,
         }),
       });
       if (!res.ok) {
@@ -461,7 +467,79 @@ export default function BrandKitTab() {
           </div>
         </Section>
 
-        {/* 4. AI 가상 진행자 */}
+        {/* 4. 전속 AI 캐릭터 (시리즈 각인) */}
+        <Section title="전속 AI 캐릭터">
+          <p className="text-xs text-[#5b6573] mb-3 leading-relaxed">
+            병원마다 고정 캐릭터가 시리즈물처럼 등장해 <strong>&quot;그 병원 그 캐릭터&quot;</strong>로
+            기억되게 합니다. 캐릭터를 선택하면 이후 영상의 진행자 말투·시그니처 멘트가 캐릭터로
+            고정되고, 영상 음성도 캐릭터 성별로 통일됩니다. 아래에서 확정한 &lsquo;AI 가상
+            진행자&rsquo;가 이미 있으면 얼굴은 그 진행자로 유지되고 말투·멘트만 캐릭터가 적용됩니다.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {CLINICFLIX_CHARACTER_PRESETS.map((c) => {
+              const selected = brand.character_preset_id === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() =>
+                    setBrand((p) => ({
+                      ...p,
+                      // 같은 카드를 다시 누르면 선택 해제 (자동 배정으로 복귀)
+                      character_preset_id: selected ? null : c.id,
+                    }))
+                  }
+                  className={`text-left rounded-xl border px-4 py-3 transition-colors ${
+                    selected
+                      ? 'border-[#ff4628] bg-[#fff2ef] ring-1 ring-[#ff4628]'
+                      : 'border-[#b4bfce] bg-white hover:border-[#ff4628]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-[#202020]">{c.name}</span>
+                    <span
+                      className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full border ${
+                        selected
+                          ? 'border-[#ff4628] text-[#ff4628] font-semibold'
+                          : 'border-[#b4bfce] text-[#5b6573]'
+                      }`}
+                    >
+                      {selected ? '선택됨 ✓' : c.voiceGender === 'male' ? '남성 목소리' : '여성 목소리'}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-[#5b6573] leading-relaxed">{c.intro}</p>
+                  <p className="mt-1.5 text-xs text-[#5b6573]">
+                    <span className="font-medium text-[#202020]">말투</span> · {c.tone}
+                  </p>
+                  <p className="mt-1 text-xs text-[#202020]">
+                    시그니처 <span className="font-medium">&ldquo;{c.catchphrase}&rdquo;</span>
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          {brand.character_preset_id === null ? (
+            <p className="mt-3 text-xs text-[#5b6573]">
+              미선택 상태입니다 — 기존처럼 영상 음성 성별에 맞춰 진행자가 자동 배정됩니다.
+            </p>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <p className="text-xs text-[#5b6573]">
+                선택한 캐릭터는 아래 &lsquo;저장하기&rsquo;를 눌러야 적용됩니다.
+              </p>
+              <button
+                type="button"
+                onClick={() => setBrand((p) => ({ ...p, character_preset_id: null }))}
+                className="text-xs text-[#5b6573] hover:text-red-600 transition-colors"
+              >
+                선택 해제 (자동 배정으로)
+              </button>
+            </div>
+          )}
+        </Section>
+
+        {/* 5. AI 가상 진행자 */}
         <Section title="AI 가상 진행자">
           <p className="text-xs text-[#5b6573] mb-3 leading-relaxed">
             영상에 나와서 설명하는 진행자입니다. <strong>한 번 만들면 모든 영상에 같은 얼굴</strong>로
