@@ -19,6 +19,8 @@ interface BrandKit {
   doctor_consent: boolean;
   /** 전속 AI 캐릭터 프리셋 id (null = 미선택 → 자동 배정) */
   character_preset_id: string | null;
+  /** 캐릭터 전용 얼굴 URL (1회 생성·영구 고정). null = 미고정 */
+  character_face_url: string | null;
 }
 
 const DEFAULT_BRANDKIT: BrandKit = {
@@ -33,7 +35,14 @@ const DEFAULT_BRANDKIT: BrandKit = {
   doctor_video_url: null,
   doctor_consent: false,
   character_preset_id: null,
+  character_face_url: null,
 };
+
+/** 저장 완료된 캐릭터 상태 (썸네일·얼굴 생성 버튼은 "저장된" 선택에만 적용) */
+interface SavedCharacter {
+  presetId: string | null;
+  faceUrl: string | null;
+}
 
 const VOICE_OPTIONS = [
   { value: 'female', label: '여성' },
@@ -113,6 +122,13 @@ export default function BrandKitTab() {
   const [genBusy, setGenBusy] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
+  // 전속 캐릭터 전용 얼굴 (저장된 선택 기준 — 카드 썸네일·생성/재시도 버튼)
+  const [savedCharacter, setSavedCharacter] = useState<SavedCharacter>({
+    presetId: null,
+    faceUrl: null,
+  });
+  const [faceBusy, setFaceBusy] = useState(false);
+
   const fetchBrandKit = useCallback(async () => {
     setLoading(true);
     try {
@@ -123,6 +139,10 @@ export default function BrandKitTab() {
         Object.entries(json ?? {}).filter(([, v]) => v !== null && v !== undefined),
       ) as Partial<BrandKit>;
       setBrand({ ...DEFAULT_BRANDKIT, ...incoming });
+      setSavedCharacter({
+        presetId: json?.character_preset_id ?? null,
+        faceUrl: json?.character_face_url ?? null,
+      });
     } catch {
       setBrand(DEFAULT_BRANDKIT);
     } finally {
@@ -239,6 +259,40 @@ export default function BrandKitTab() {
     setTimeout(() => setSaveMsg(null), 4000);
   };
 
+  /**
+   * 전속 캐릭터 전용 얼굴 1회 생성 (병원당 1회 — 이후 모든 영상에 같은 얼굴로 고정).
+   * 실패해도 캐릭터 선택 자체는 유지된다 (graceful) — 재시도 버튼으로 다시 시도.
+   */
+  const generateCharacterFace = async (presetId: string) => {
+    setFaceBusy(true);
+    try {
+      const res = await fetch('/api/clinicflix/character-face', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset_id: presetId }),
+      });
+      const j = (await res.json()) as { face_url?: string; error?: string };
+      if (!res.ok || typeof j.face_url !== 'string' || !j.face_url) {
+        throw new Error(j.error ?? '얼굴 생성 실패');
+      }
+      setSavedCharacter({ presetId, faceUrl: j.face_url });
+      setSaveMsg({
+        type: 'success',
+        text: '캐릭터 전용 얼굴이 확정되었습니다. 이후 모든 영상에 같은 얼굴로 나옵니다.',
+      });
+      setTimeout(() => setSaveMsg(null), 5000);
+    } catch {
+      // 캐릭터 저장은 성공한 상태 — 얼굴만 미고정. 아래 안내 배너의 재시도 버튼으로 다시 시도.
+      setSaveMsg({
+        type: 'error',
+        text: '캐릭터는 저장됐지만 전용 얼굴 생성에 실패했습니다. 잠시 후 캐릭터 카드 아래 버튼으로 다시 시도해 주세요.',
+      });
+      setTimeout(() => setSaveMsg(null), 6000);
+    } finally {
+      setFaceBusy(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setSaveMsg(null);
@@ -260,12 +314,19 @@ export default function BrandKitTab() {
           character_preset_id: brand.character_preset_id,
         }),
       });
+      const json = (await res.json()) as Partial<BrandKit> & { error?: string };
       if (!res.ok) {
-        const json = (await res.json()) as { error?: string };
         throw new Error(json.error ?? '저장 실패');
       }
+      const savedPresetId = json.character_preset_id ?? null;
+      const savedFaceUrl = json.character_face_url ?? null;
+      setSavedCharacter({ presetId: savedPresetId, faceUrl: savedFaceUrl });
       setSaveMsg({ type: 'success', text: '콘텐츠 설정이 저장되었습니다.' });
       setTimeout(() => setSaveMsg(null), 3000);
+      // 캐릭터를 저장했는데 전용 얼굴이 아직 없으면 이어서 1회 생성 (실패해도 저장은 유지)
+      if (savedPresetId && !savedFaceUrl) {
+        await generateCharacterFace(savedPresetId);
+      }
     } catch (e) {
       showError(e instanceof Error ? e.message : '저장 실패');
     } finally {
@@ -472,8 +533,10 @@ export default function BrandKitTab() {
           <p className="text-xs text-[#5b6573] mb-3 leading-relaxed">
             병원마다 고정 캐릭터가 시리즈물처럼 등장해 <strong>&quot;그 병원 그 캐릭터&quot;</strong>로
             기억되게 합니다. 캐릭터를 선택하면 이후 영상의 진행자 말투·시그니처 멘트가 캐릭터로
-            고정되고, 영상 음성도 캐릭터 성별로 통일됩니다. 아래에서 확정한 &lsquo;AI 가상
-            진행자&rsquo;가 이미 있으면 얼굴은 그 진행자로 유지되고 말투·멘트만 캐릭터가 적용됩니다.
+            고정되고, 영상 음성도 캐릭터 성별로 통일됩니다. 저장 시{' '}
+            <strong>캐릭터 전용 얼굴을 1회 생성해 영구 고정</strong>하므로 모든 영상에 같은 얼굴이
+            나옵니다. 아래에서 확정한 &lsquo;AI 가상 진행자&rsquo;가 이미 있으면 얼굴은 그 진행자로
+            유지되고 말투·멘트만 캐릭터가 적용됩니다.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {CLINICFLIX_CHARACTER_PRESETS.map((c) => {
@@ -508,6 +571,20 @@ export default function BrandKitTab() {
                       {selected ? '선택됨 ✓' : c.voiceGender === 'male' ? '남성 목소리' : '여성 목소리'}
                     </span>
                   </div>
+                  {/* 전용 얼굴 썸네일 — 저장된 캐릭터에 고정된 얼굴이 있을 때만 */}
+                  {savedCharacter.presetId === c.id && savedCharacter.faceUrl && (
+                    <div className="mt-2 flex items-center gap-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={savedCharacter.faceUrl}
+                        alt={`${c.name} 전용 얼굴`}
+                        className="h-12 w-12 rounded-full object-cover border border-[#b4bfce] bg-white"
+                      />
+                      <span className="text-[10px] font-medium text-green-700">
+                        전용 얼굴 고정됨 ✓ 모든 영상에 같은 얼굴
+                      </span>
+                    </div>
+                  )}
                   <p className="mt-1.5 text-xs text-[#5b6573] leading-relaxed">{c.intro}</p>
                   <p className="mt-1.5 text-xs text-[#5b6573]">
                     <span className="font-medium text-[#202020]">말투</span> · {c.tone}
@@ -534,6 +611,26 @@ export default function BrandKitTab() {
                 className="text-xs text-[#5b6573] hover:text-red-600 transition-colors"
               >
                 선택 해제 (자동 배정으로)
+              </button>
+            </div>
+          )}
+
+          {/* 전용 얼굴 미고정 안내 + 생성/재시도 — 저장된 캐릭터가 있는데 얼굴이 없을 때만 */}
+          {savedCharacter.presetId !== null && savedCharacter.faceUrl === null && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2">
+              <p className="flex-1 text-xs text-amber-800 leading-relaxed">
+                캐릭터 전용 얼굴이 아직 고정되지 않았어요 — 지금은 영상마다 얼굴이 조금씩 달라질 수
+                있습니다. 한 번 생성하면 영구 고정됩니다.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (savedCharacter.presetId) void generateCharacterFace(savedCharacter.presetId);
+                }}
+                disabled={faceBusy}
+                className="shrink-0 self-start sm:self-center px-3 py-2 bg-[#ff4628] text-white rounded-lg text-xs font-medium hover:bg-[#e63a1c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {faceBusy ? '생성 중... (수십 초)' : '전용 얼굴 생성'}
               </button>
             </div>
           )}
@@ -662,10 +759,10 @@ export default function BrandKitTab() {
         <button
           type="button"
           onClick={() => void handleSave()}
-          disabled={saving || uploading !== null}
+          disabled={saving || faceBusy || uploading !== null}
           className="w-full sm:w-auto px-8 py-3 bg-[#ff4628] text-white rounded-xl font-semibold text-sm hover:bg-[#e63a1c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {saving ? '저장 중...' : '저장하기'}
+          {saving ? '저장 중...' : faceBusy ? '캐릭터 얼굴 생성 중...' : '저장하기'}
         </button>
       </div>
     </div>

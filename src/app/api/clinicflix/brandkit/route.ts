@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/dev/lib/supabase/server'
 import {
   isCharacterPresetId,
   parseCharacterSelection,
+  parseCharacterFaceUrl,
 } from '@/content/lib/clinicflix-characters'
 
 export const dynamic = 'force-dynamic'
@@ -34,6 +35,8 @@ interface BrandKitResponse {
   doctor_consent: boolean
   /** 전속 AI 캐릭터 프리셋 id (null = 미선택 → 자동 배정). 마이그레이션 036. */
   character_preset_id: string | null
+  /** 캐릭터 전용 얼굴 URL (1회 생성·영구 고정, /api/clinicflix/character-face). null = 미고정 */
+  character_face_url: string | null
 }
 
 /**
@@ -88,6 +91,7 @@ export async function GET() {
       doctor_video_url: (row.clinic_doctor_video_url as string | null) ?? null,
       doctor_consent: (row.clinic_doctor_consent as boolean | null) ?? false,
       character_preset_id: parseCharacterSelection(row.clinicflix_character),
+      character_face_url: parseCharacterFaceUrl(row.clinicflix_character),
     }
     return NextResponse.json(body)
   } catch (e) {
@@ -223,7 +227,48 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
 
-    const updates = { ...result.updates, updated_at: new Date().toISOString() }
+    let updates: Record<string, unknown> = {
+      ...result.updates,
+      updated_at: new Date().toISOString(),
+    }
+
+    // 같은 프리셋 재저장이면 기존 전용 얼굴(face_url, 1회 생성·영구 고정)을 보존한다.
+    // 다른 프리셋으로 바꾸면 초기화 — 새 캐릭터의 얼굴은 다시 1회 생성한다.
+    const nextCharacter = updates['clinicflix_character'] as
+      | { preset_id: string; selected_at: string }
+      | null
+      | undefined
+    if (nextCharacter && typeof nextCharacter === 'object') {
+      try {
+        const { data: cur } = await supabase
+          .from('profiles')
+          .select('clinicflix_character')
+          .eq('id', user.id)
+          .maybeSingle()
+        const curRaw = (cur as Record<string, unknown> | null)?.clinicflix_character
+        const curPresetId = parseCharacterSelection(curRaw)
+        const curFaceUrl = parseCharacterFaceUrl(curRaw)
+        if (curPresetId === nextCharacter.preset_id && curFaceUrl) {
+          const curGeneratedAt =
+            curRaw !== null && typeof curRaw === 'object'
+              ? (curRaw as Record<string, unknown>).face_generated_at
+              : undefined
+          updates = {
+            ...updates,
+            clinicflix_character: {
+              ...nextCharacter,
+              face_url: curFaceUrl,
+              ...(typeof curGeneratedAt === 'string'
+                ? { face_generated_at: curGeneratedAt }
+                : {}),
+            },
+          }
+        }
+      } catch {
+        // 조회 실패(마이그 036 미적용 등) — 보존 없이 진행 (저장 자체를 막지 않음)
+      }
+    }
+
     const { error } = await supabase.from('profiles').update(updates).eq('id', user.id)
     if (error) {
       return NextResponse.json({ error: '브랜드킷 저장 실패' }, { status: 500 })

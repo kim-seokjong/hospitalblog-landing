@@ -25,10 +25,12 @@ import {
   isPlayableUrl,
   type EditableDraft,
 } from '@/content/components/multichannel-views';
+import {
+  MULTICHANNEL_SRC_KEY as SRC_KEY,
+  decodeMultichannelSrc,
+} from '@/content/lib/multichannel-src';
 
 type Stage = 'loading' | 'idle' | 'select' | 'planning' | 'review1' | 'approving' | 'rendering' | 'done' | 'failed';
-
-const SRC_KEY = 'dp_multichannel_src';
 
 // 생성 가능한 채널. id 는 ClinicFlix 서비스 식별자(shorts = 영상).
 const CHANNEL_OPTIONS: { id: string; label: string }[] = [
@@ -60,16 +62,20 @@ export default function MultichannelPage() {
   const [entryError, setEntryError] = useState<string | null>(null);
   // 키워드 진입일 때만 서비스로 함께 전달하는 키워드 (블로그/붙여넣기 진입은 undefined)
   const [keyword, setKeyword] = useState<string | null>(null);
+  // 블로그 글 진입일 때 원본 saved_posts.id — 변환 이력에 원본 연결 (마이그 038)
+  const [sourcePostId, setSourcePostId] = useState<string | null>(null);
 
   // 마운트 시 블로그 본문 로드 → 채널 선택 단계 노출 (자동 시작하지 않음)
   useEffect(() => {
-    const src = (sessionStorage.getItem(SRC_KEY) ?? '').trim();
+    // v2 JSON(postId 동반) / 구 평문 포맷 둘 다 지원 (하위 호환)
+    const { text: src, postId } = decodeMultichannelSrc(sessionStorage.getItem(SRC_KEY));
     if (!src) {
       setStage('idle');
       setBlogText('');
       return;
     }
     setBlogText(src);
+    setSourcePostId(postId);
     setStage('select');
     return () => {
       abortRef.current?.abort();
@@ -100,6 +106,7 @@ export default function MultichannelPage() {
       // 키워드 단독 진입: 키워드 텍스트를 소스(blog_text)로도 사용하고, keyword 로도 함께 전달한다.
       setBlogText(kw);
       setKeyword(kw);
+      setSourcePostId(null); // 키워드 진입 — 원본 글 연결 없음
       setStage('select');
       return;
     }
@@ -110,6 +117,7 @@ export default function MultichannelPage() {
     }
     setBlogText(text);
     setKeyword(null);
+    setSourcePostId(null); // 붙여넣기 진입 — 원본 글 연결 없음
     setStage('select');
   }
 
@@ -120,7 +128,12 @@ export default function MultichannelPage() {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const { job_id } = await startConvert(src, channels, keyword ?? undefined);
+      const { job_id } = await startConvert(
+        src,
+        channels,
+        keyword ?? undefined,
+        sourcePostId ?? undefined,
+      );
       const planned = await pollUntil(
         job_id,
         ['planned'],

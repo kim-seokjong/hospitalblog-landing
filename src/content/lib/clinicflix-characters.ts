@@ -95,6 +95,26 @@ export function parseCharacterSelection(raw: unknown): string | null {
   return isCharacterPresetId(presetId) ? presetId : null
 }
 
+const FACE_URL_MAX_LEN = 500
+
+/**
+ * profiles.clinicflix_character(jsonb) → 전용 얼굴 face_url (1회 생성·영구 고정본).
+ * https URL 만 허용, 형태 불일치·비정상 값은 null (미고정과 동일 — 렌더는 기존 폴백).
+ */
+export function parseCharacterFaceUrl(raw: unknown): string | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const faceUrl = (raw as Record<string, unknown>).face_url
+  if (typeof faceUrl !== 'string') return null
+  const trimmed = faceUrl.trim()
+  if (!trimmed || trimmed.length > FACE_URL_MAX_LEN) return null
+  try {
+    const u = new URL(trimmed)
+    return u.protocol === 'https:' ? trimmed : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * ClinicFlix 기획(plan, 신뢰 불가 외부 데이터)에서 에피소드 topic 추출.
  * v2(shorts_v2) 우선, 없으면 v1(shorts). 없거나 형태 불일치면 null.

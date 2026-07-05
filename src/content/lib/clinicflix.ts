@@ -68,8 +68,9 @@ export interface ClinicflixConvertRequest {
   // 쇼츠 제작법: 'v1'(컷 기반) | 'v2'(사건→궁금증 시퀀스+네이티브 대사, 2026-07-04 기본)
   recipe?: 'v1' | 'v2'
   // 병원 전속 AI 캐릭터 (선택): 프리셋 id — 미전송 시 서비스 기존 동작 완전 불변(하위 호환).
+  // face_url = /character-face 로 1회 생성·고정한 전용 얼굴(있으면 진행자 ref2v 레퍼런스로 재사용).
   // 프리셋 목록 단일 소스 = clinicflix_pipeline/clinicflix/characters.py
-  character?: { preset_id: string }
+  character?: { preset_id: string; face_url?: string }
   // 시리즈 연속성: 같은 병원의 최근 에피소드 주제(최대 3). 캐릭터 선택 시에만 전송.
   series_context?: string[]
 }
@@ -145,13 +146,16 @@ function baseUrl(): string {
 
 // 콜드스타트/네트워크 지연 여유 (변환은 큐만 걸고 즉시 반환하지만, 깨어나는 데 시간이 걸릴 수 있음)
 const DEFAULT_TIMEOUT_MS = 30_000
+// 이미지 동기 생성 엔드포인트(/character-face 등)는 생성 완료까지 응답을 기다린다 — 여유 상향
+const IMAGE_SYNC_TIMEOUT_MS = 55_000
 
 async function callClinicflix<T>(
   path: string,
   init: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   let res: Response
   try {
     res = await fetch(`${baseUrl()}${path}`, {
@@ -203,10 +207,37 @@ export async function clinicflixConvert(
 export async function clinicflixGeneratePresenter(
   body: ClinicflixPresenterRequest,
 ): Promise<ClinicflixPresenterResponse> {
-  return callClinicflix<ClinicflixPresenterResponse>('/presenter', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return callClinicflix<ClinicflixPresenterResponse>(
+    '/presenter',
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+    IMAGE_SYNC_TIMEOUT_MS,
+  )
+}
+
+export interface ClinicflixCharacterFaceResponse {
+  preset_id: string
+  face_url: string
+  cost_krw?: number
+}
+
+/**
+ * 전속 캐릭터 전용 얼굴 1장 생성 (서비스 /character-face). 병원당 1회 — 이후 모든
+ * 영상의 진행자 레퍼런스로 고정된다. 영구저장(profiles jsonb)은 호출부(API 라우트) 책임.
+ */
+export async function clinicflixCharacterFace(
+  presetId: string,
+): Promise<ClinicflixCharacterFaceResponse> {
+  return callClinicflix<ClinicflixCharacterFaceResponse>(
+    '/character-face',
+    {
+      method: 'POST',
+      body: JSON.stringify({ preset_id: presetId }),
+    },
+    IMAGE_SYNC_TIMEOUT_MS,
+  )
 }
 
 export async function clinicflixGetJob(jobId: string): Promise<ClinicflixJob> {

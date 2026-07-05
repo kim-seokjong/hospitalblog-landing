@@ -4,9 +4,11 @@
 //  - 블로그 → 영상: 성과 좋은(상위 노출) 글 / 최근 발행 글을 영상화 추천
 //  - 영상 → 블로그: 영상으로 다룬 주제의 후속 블로그 각도 추천
 //
-// 주제 연결의 한계: clinicflix_conversions 에는 원문 글 연결 컬럼이 없다.
-// 저장된 결과물 텍스트(result_assets.threads/feed)와 글 키워드·제목의
-// 토큰 겹침으로 판정하며, 확신이 높을 때만 "이미 영상화됨"으로 본다(보수적 판정).
+// 주제 연결(마이그레이션 038 이후): clinicflix_conversions.source_post_id /
+// source_keyword 가 있으면 그것을 1순위로 판정한다(정확한 연결).
+// source 가 둘 다 없는 과거 변환만 기존 방식 — 저장된 결과물 텍스트
+// (result_assets.threads/feed)와 글 키워드·제목의 토큰 겹침 — 으로 폴백하며,
+// 확신이 높을 때만 "이미 영상화됨"으로 본다(보수적 판정).
 //
 // 이 파일은 DB/네트워크 의존이 없어야 한다 (단위 테스트 대상).
 
@@ -27,6 +29,10 @@ export interface CrossConversionInput {
   createdAt: string;
   /** result_assets 에서 추출한 텍스트 조각들 (없으면 빈 배열 → 주제 판정 불가) */
   texts: string[];
+  /** 원본 글 saved_posts.id (마이그 038, 블로그 진입 변환) — 중복 판정 1순위 */
+  sourcePostId?: string | null;
+  /** 키워드 진입 변환의 입력 키워드 (마이그 038) — 중복 판정·주제 특정 1순위 */
+  sourceKeyword?: string | null;
 }
 
 /** 블로그 → 영상 추천 1건 */
@@ -113,7 +119,50 @@ export function extractConversionTexts(resultAssets: unknown): string[] {
   return texts.map((t) => t.trim()).filter((t) => t.length > 0);
 }
 
-// ── 중복(이미 영상화) 판정 — 보수적 ─────────────────────────────────
+// ── 중복(이미 영상화) 판정 1순위 — source 연결 (마이그 038) ──────────
+
+/** 이 변환에 원본 연결 정보(source_post_id / source_keyword)가 있는가 */
+export function hasConversionSource(
+  conversion: Pick<CrossConversionInput, 'sourcePostId' | 'sourceKeyword'>,
+): boolean {
+  return (
+    Boolean(conversion.sourcePostId) ||
+    Boolean((conversion.sourceKeyword ?? '').trim())
+  );
+}
+
+function tokenSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const t of a) {
+    if (!b.has(t)) return false;
+  }
+  return true;
+}
+
+/**
+ * source 기반 중복 판정 (1순위 — 토큰 매칭보다 우선):
+ *  (a) source_post_id 가 글 id 와 일치 — 확정적 연결, 또는
+ *  (b) source_keyword 가 글 키워드와 사실상 동일
+ *      (정규화 문자열 일치 또는 토큰 Set 동일 — 어순·조사 차이 흡수)
+ * source 정보가 없으면 판정 불가(false) — 호출부가 토큰 매칭으로 폴백한다.
+ */
+export function isPostCoveredBySource(
+  post: Pick<CrossPostInput, 'id' | 'keyword'>,
+  conversion: Pick<CrossConversionInput, 'sourcePostId' | 'sourceKeyword'>,
+): boolean {
+  if (conversion.sourcePostId && conversion.sourcePostId === post.id) return true;
+
+  const sourceKeyword = (conversion.sourceKeyword ?? '').trim();
+  const postKeyword = (post.keyword ?? '').trim();
+  if (!sourceKeyword || !postKeyword) return false;
+  if (sourceKeyword.toLowerCase() === postKeyword.toLowerCase()) return true;
+
+  const sourceTokens = tokenize(sourceKeyword);
+  const postTokens = tokenize(postKeyword);
+  return sourceTokens.size > 0 && tokenSetsEqual(sourceTokens, postTokens);
+}
+
+// ── 중복(이미 영상화) 판정 폴백 — 토큰 매칭 (source 없는 과거 변환용) ──
 
 const TITLE_MIN_OVERLAP = 2;
 const TITLE_MIN_RATIO = 0.5;
@@ -176,7 +225,8 @@ function toVideoReason(post: CrossPostInput): string {
 /**
  * 영상화 추천 상위 3개.
  *  - 후보: (a) 검색 15위 이내 또는 (b) 최근 30일 내 발행
- *  - 이미 영상화된 주제(변환 텍스트와 토큰 겹침)는 제외
+ *  - 이미 영상화된 주제 제외 — source 연결(마이그 038)이 1순위,
+ *    source 없는 과거 변환만 결과물 텍스트 토큰 매칭으로 폴백 판정
  *  - 정렬: 순위 보유 글 우선(순위 오름차순) → 나머지는 발행일 내림차순
  */
 export function recommendBlogToVideo(
@@ -184,14 +234,18 @@ export function recommendBlogToVideo(
   conversions: readonly CrossConversionInput[],
   now: Date = new Date(),
 ): ToVideoRecommendation[] {
-  const conversionTokenSets = conversions
+  // 1순위: source 연결 보유 변환 / 폴백: source 없는 변환의 텍스트 토큰
+  const sourcedConversions = conversions.filter(hasConversionSource);
+  const legacyTokenSets = conversions
+    .filter((c) => !hasConversionSource(c))
     .map((c) => tokenizeAll(c.texts))
     .filter((s) => s.size > 0);
 
   const candidates = posts.filter((p) => {
     if (!p.title.trim()) return false;
     if (!isTopRanked(p.latestRank) && !isRecent(p.publishedAt, now, RECENT_DAYS)) return false;
-    return !conversionTokenSets.some((tokens) => isPostCoveredByConversion(p, tokens));
+    if (sourcedConversions.some((c) => isPostCoveredBySource(p, c))) return false;
+    return !legacyTokenSets.some((tokens) => isPostCoveredByConversion(p, tokens));
   });
 
   const sorted = [...candidates].sort((a, b) => {
@@ -233,10 +287,38 @@ function isAngleCoveredByPosts(
   });
 }
 
+/** 변환 1건의 주제 특정 — source 1순위, 없으면 토큰 매칭 폴백. 특정 불가면 null. */
+function resolveConversionTopic(
+  conversion: CrossConversionInput,
+  posts: readonly CrossPostInput[],
+): string | null {
+  // 1순위: 원본 글 직접 연결 (마이그 038)
+  if (conversion.sourcePostId) {
+    const matched = posts.find((p) => p.id === conversion.sourcePostId);
+    if (matched) {
+      const topic = (matched.keyword ?? '').trim() || matched.title.trim();
+      if (topic) return topic;
+    }
+    // 연결 글이 조회 범위(3개월) 밖이면 아래 source_keyword 로 폴백
+  }
+  // 1순위: 키워드 진입 변환 — 입력 키워드가 곧 주제 (글 매칭 불필요)
+  const sourceKeyword = (conversion.sourceKeyword ?? '').trim();
+  if (sourceKeyword) return sourceKeyword;
+  // source 자체가 있었는데 특정 실패 → 토큰 매칭으로 넘기지 않는다 (오연결 방지, 보수적)
+  if (hasConversionSource(conversion)) return null;
+
+  // 폴백: source 없는 과거 변환 — 결과물 텍스트 토큰으로 원문 글 역추적
+  const conversionTokens = tokenizeAll(conversion.texts);
+  if (conversionTokens.size === 0) return null;
+  const matched = posts.find((p) => isPostCoveredByConversion(p, conversionTokens));
+  if (!matched) return null; // 원문을 못 찾으면 주제를 특정할 수 없어 건너뜀 (보수적)
+  return (matched.keyword ?? '').trim() || matched.title.trim() || null;
+}
+
 /**
  * 후속 블로그 추천 상위 2개.
- *  - 최근 변환(텍스트 보유) 중 기존 발행 글과 매칭되는 주제를 찾고
- *    (변환 테이블에 원문 연결 컬럼이 없어 토큰 매칭으로 역추적),
+ *  - 최근 변환의 주제를 특정하고 — source 연결(원본 글 id/키워드, 마이그 038)이 1순위,
+ *    source 없는 과거 변환만 결과물 텍스트 토큰 매칭으로 역추적 —
  *  - 주제별로 아직 다루지 않은 후속 각도(자주 묻는 질문 등)를 제안한다.
  *  - 같은 주제는 1회만, 이미 후속 글이 있는 각도는 건너뛴다.
  */
@@ -254,8 +336,9 @@ export function recommendVideoToBlog(
     return merged;
   });
 
+  // source 연결 변환은 결과물 텍스트가 아직 없어도(미저장) 주제 특정이 가능하다
   const recent = [...conversions]
-    .filter((c) => c.texts.length > 0)
+    .filter((c) => c.texts.length > 0 || hasConversionSource(c))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const seenTopics = new Set<string>();
@@ -264,11 +347,7 @@ export function recommendVideoToBlog(
   for (const conversion of recent) {
     if (results.length >= MAX_TO_BLOG) break;
 
-    const conversionTokens = tokenizeAll(conversion.texts);
-    const matched = posts.find((p) => isPostCoveredByConversion(p, conversionTokens));
-    if (!matched) continue; // 원문을 못 찾으면 주제를 특정할 수 없어 건너뜀 (보수적)
-
-    const topic = (matched.keyword ?? '').trim() || matched.title.trim();
+    const topic = resolveConversionTopic(conversion, posts);
     if (!topic) continue;
     const topicKey = [...tokenize(topic)].sort().join('|') || topic.toLowerCase();
     if (seenTopics.has(topicKey)) continue;

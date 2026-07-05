@@ -149,19 +149,37 @@ export async function recordConversion(params: {
   consumeChannel: boolean
   /** 에피소드 주제 1차 기록 (키워드 등). approve 시 기획 topic 으로 갱신된다. 선택. */
   topic?: string | null
+  /** 원본 블로그 글 saved_posts.id (마이그 038) — 블로그 진입 변환만. 선택. */
+  sourcePostId?: string | null
+  /** 키워드 진입 변환의 입력 키워드 (마이그 038). 선택. */
+  sourceKeyword?: string | null
 }): Promise<void> {
-  const { error } = await admin()
+  const base = {
+    conversion_id: params.conversionId,
+    user_id: params.userId,
+    job_id: params.jobId,
+    plan: params.plan,
+    usage_month: params.usageMonth,
+    status: params.status,
+    consume_video: params.consumeVideo,
+    consume_channel: params.consumeChannel,
+  }
+  // source 컬럼(마이그 038)은 값이 있을 때만 포함 — 미적용 DB(42703)나 원본 글 삭제
+  // 직후의 FK 위반(23503)이면 해당 컬럼을 제외하고 재시도한다 (부가 정보가 변환을 막지 않음).
+  const sourceCols: Record<string, string> = {}
+  if (params.sourcePostId) sourceCols.source_post_id = params.sourcePostId
+  if (params.sourceKeyword) sourceCols.source_keyword = params.sourceKeyword
+
+  let { error } = await admin()
     .from('clinicflix_conversions')
-    .insert({
-      conversion_id: params.conversionId,
-      user_id: params.userId,
-      job_id: params.jobId,
-      plan: params.plan,
-      usage_month: params.usageMonth,
-      status: params.status,
-      consume_video: params.consumeVideo,
-      consume_channel: params.consumeChannel,
-    })
+    .insert(Object.keys(sourceCols).length > 0 ? { ...base, ...sourceCols } : base)
+  if (
+    error &&
+    Object.keys(sourceCols).length > 0 &&
+    (error.code === '42703' || error.code === '23503')
+  ) {
+    ;({ error } = await admin().from('clinicflix_conversions').insert(base))
+  }
   if (error) throw new Error(`변환 기록 저장 실패: ${error.message}`)
   // topic 은 부가 정보 — 마이그레이션 036 미적용 DB 에서도 본 insert 가 깨지지 않도록
   // 별도 best-effort 갱신으로 분리한다 (실패해도 변환 흐름 불변).

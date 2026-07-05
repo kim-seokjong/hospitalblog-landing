@@ -16,6 +16,10 @@ import type {
   ToVideoRecommendation,
   ToBlogRecommendation,
 } from '@/content/lib/cross-content';
+import {
+  MULTICHANNEL_SRC_KEY,
+  encodeMultichannelSrc,
+} from '@/content/lib/multichannel-src';
 
 interface ApiResponse {
   toVideo?: ToVideoRecommendation[];
@@ -28,8 +32,6 @@ interface Props {
   /** [이 주제로 글쓰기] — 키워드 입력란 프리필 (경쟁분석·갭 제안과 동일 패턴) */
   onSelectKeyword: (keyword: string) => void;
 }
-
-const MULTICHANNEL_SRC_KEY = 'dp_multichannel_src';
 
 export default function CrossContentRecommendations({ onSelectKeyword }: Props) {
   const router = useRouter();
@@ -73,7 +75,11 @@ export default function CrossContentRecommendations({ onSelectKeyword }: Props) 
       const title = data.post?.title ?? '';
       const content = data.post?.content ?? '';
       if (!content.trim()) throw new Error('글 본문이 비어 있습니다.');
-      sessionStorage.setItem(MULTICHANNEL_SRC_KEY, `${title}\n\n${content}`.trim());
+      // postId 동반 v2 포맷 — 변환 이력에 원본 글이 연결돼 같은 글 재추천을 막는다 (마이그 038)
+      sessionStorage.setItem(
+        MULTICHANNEL_SRC_KEY,
+        encodeMultichannelSrc({ text: `${title}\n\n${content}`.trim(), postId }),
+      );
       router.push('/app/multichannel');
     } catch (err) {
       setActionError(err instanceof Error ? err.message : '이동에 실패했습니다.');

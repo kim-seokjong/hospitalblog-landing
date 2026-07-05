@@ -20,6 +20,7 @@ import AuthModal from '@/hr/components/AuthModal';
 import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, WritingStyle, OptimizationMode, TargetSite, Readability } from '@/types';
 import { PLANS, isPaidPlanId, isActivePlan } from '@/payment/lib/plans';
 import { safeFetchJson } from '@/content/lib/safe-fetch';
+import { MULTICHANNEL_SRC_KEY, encodeMultichannelSrc } from '@/content/lib/multichannel-src';
 import { checkCompliance } from '@/content/lib/medical-compliance';
 import { buildComplianceReport } from '@/content/lib/compliance-report';
 
@@ -1482,7 +1483,7 @@ export default function AppPage() {
                           type="button"
                           onClick={() => {
                             // 소스를 비워 idle 단계(키워드/붙여넣기 폼)로 진입한다. dp_multichannel_src 를 설정하지 않는다.
-                            sessionStorage.removeItem('dp_multichannel_src');
+                            sessionStorage.removeItem(MULTICHANNEL_SRC_KEY);
                             router.push('/app/multichannel');
                           }}
                           className="w-full py-3.5 sm:py-4 rounded-xl bg-white hover:bg-[#fff1ee] text-[#ff4628] text-sm sm:text-base font-bold border border-[#ff4628]/40 transition-colors flex items-center justify-center gap-2"
@@ -1587,7 +1588,15 @@ export default function AppPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          sessionStorage.setItem('dp_multichannel_src', `${content.title}\n\n${content.body}`);
+                          // 복사 저장된 글이면 postId 를 함께 실어 변환 이력에 원본을 연결한다 (마이그 038).
+                          // 저장 전이면 구 평문 포맷 그대로 (하위 호환 — 연결 없이 변환).
+                          sessionStorage.setItem(
+                            MULTICHANNEL_SRC_KEY,
+                            encodeMultichannelSrc({
+                              text: `${content.title}\n\n${content.body}`,
+                              postId: savedPostIdRef.current,
+                            }),
+                          );
                           router.push('/app/multichannel');
                         }}
                         className="w-full py-3.5 sm:py-4 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm sm:text-base font-bold transition-colors flex items-center justify-center gap-2"

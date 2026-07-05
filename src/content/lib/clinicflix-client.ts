@@ -67,13 +67,16 @@ export class UpgradeRequiredError extends Error {
 /**
  * 변환 시작. 블로그 전용 플랜이면 UpgradeRequiredError 를 던진다(403).
  * keyword: 키워드 진입(#2)일 때 함께 전달. blog_text 와 별개로 서비스 키워드 생성에 사용된다.
+ * sourcePostId: 블로그 글 진입(#1)일 때 원본 saved_posts.id — 변환 이력에 원본 연결(마이그 038).
  */
 export async function startConvert(
   blogText: string,
   channels?: string[],
   keyword?: string,
+  sourcePostId?: string | null,
 ): Promise<ConvertResult> {
   const trimmedKeyword = keyword?.trim()
+  const trimmedSourcePostId = sourcePostId?.trim()
   const res = await fetch('/api/clinicflix/convert', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -81,6 +84,7 @@ export async function startConvert(
       blog_text: blogText,
       ...(channels ? { channels } : {}),
       ...(trimmedKeyword ? { keyword: trimmedKeyword } : {}),
+      ...(trimmedSourcePostId ? { source_post_id: trimmedSourcePostId } : {}),
     }),
   })
   if (res.status === 403) {
