@@ -9,6 +9,7 @@ import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import KeywordInput from '@/content/components/KeywordInput';
 import ContentGapSuggestions from '@/content/components/ContentGapSuggestions';
+import CrossContentRecommendations from '@/content/components/CrossContentRecommendations';
 import TitleSelector from '@/content/components/TitleSelector';
 import ContentPreview from '@/content/components/ContentPreview';
 import ImageGallery from '@/content/components/ImageGallery';
@@ -1410,6 +1411,17 @@ export default function AppPage() {
                           specialty={userPlan.hospital_type}
                           region={profileRegion}
                           onSelect={(kw) => {
+                            setPrefillKeyword(kw);
+                            setKeyword(kw);
+                            setKeywordInputKey((k) => k + 1);
+                          }}
+                        />
+                      )}
+
+                      {/* 크로스 콘텐츠 추천 — 잘 되는 글은 영상으로, 영상 주제는 후속 글로 (추천 없으면 자동 숨김) */}
+                      {user && (
+                        <CrossContentRecommendations
+                          onSelectKeyword={(kw) => {
                             setPrefillKeyword(kw);
                             setKeyword(kw);
                             setKeywordInputKey((k) => k + 1);
