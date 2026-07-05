@@ -18,6 +18,7 @@ import {
 } from '@/content/lib/clinicflix-usage'
 import {
   parseCharacterSelection,
+  parseCharacterFaceUrl,
   buildSeriesContext,
 } from '@/content/lib/clinicflix-characters'
 import { isAdmin } from '@/hr/lib/admin'
@@ -35,6 +36,7 @@ function getSupabase() {
 
 const BRAND_COLOR_DEFAULT = '#ff4628'
 const MAX_BLOG_TEXT = 20_000
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // 서비스가 받는 채널 식별자. shorts = 영상, 나머지 4개 = 멀티채널 세트.
 const ALL_CHANNELS = ['shorts', 'cardnews', 'threads', 'feed', 'story'] as const
@@ -70,6 +72,23 @@ export async function POST(req: NextRequest) {
     // 키워드 진입(#2): 선택값. 있으면 서비스 키워드 생성에 사용한다(mode=keyword).
     // blog_text 는 그대로 필수 유지(키워드 단독 진입은 프런트가 keyword 텍스트를 blog_text 로도 보낸다).
     const keyword = typeof body?.keyword === 'string' ? body.keyword.trim() : ''
+    // 블로그 글 진입(#1): 원본 saved_posts.id (선택값, 마이그 038 — 크로스 추천 중복 판정용).
+    // 본인 소유 글(RLS)인지 확인해 통과한 것만 기록한다 — 부가 정보라 실패해도 변환은 진행.
+    const rawSourcePostId =
+      typeof body?.source_post_id === 'string' ? body.source_post_id.trim() : ''
+    let sourcePostId: string | null = null
+    if (rawSourcePostId && UUID_RE.test(rawSourcePostId)) {
+      try {
+        const { data: postRow } = await supabase
+          .from('saved_posts')
+          .select('id')
+          .eq('id', rawSourcePostId)
+          .maybeSingle()
+        if (postRow?.id) sourcePostId = rawSourcePostId
+      } catch {
+        sourcePostId = null // 조회 실패 → 미기록 (변환 흐름 불변)
+      }
+    }
     // 선택된 채널. 누락/빈 배열이면 전체 5개로 취급한다.
     const rawChannels: string[] = Array.isArray(body?.channels)
       ? body.channels.filter((c: unknown): c is string => typeof c === 'string')
@@ -158,7 +177,12 @@ export async function POST(req: NextRequest) {
 
     // ── 전속 AI 캐릭터 (선택) — 미선택이면 두 필드 모두 미전송 → 서비스 기존 동작 불변 ──
     // 시리즈 연속성: 최근 변환 3건의 주제를 함께 보내 반복 방지 + 가벼운 콜백을 유도한다.
+    // 전용 얼굴(face_url, /character-face 로 1회 생성·고정)이 있으면 함께 전달 —
+    // 파이프라인이 진행자 레퍼런스(ref2v)로 재사용해 영상 간 얼굴 변동을 없앤다.
     const characterPresetId = parseCharacterSelection(clinic.clinicflix_character)
+    const characterFaceUrl = characterPresetId
+      ? parseCharacterFaceUrl(clinic.clinicflix_character)
+      : null
     let seriesContext: string[] = []
     if (characterPresetId) {
       seriesContext = buildSeriesContext(await getRecentConversionTopics(user.id, 3))
@@ -206,7 +230,14 @@ export async function POST(req: NextRequest) {
         // 문제 시 env CLINICFLIX_RECIPE=v1 으로 즉시 롤백 가능(서비스 v1 경로 보존됨).
         recipe: process.env.CLINICFLIX_RECIPE === 'v1' ? 'v1' : 'v2',
         // 전속 캐릭터 미선택 시 두 필드 모두 미전송 (파이프라인 하위 호환과 맞물림)
-        ...(characterPresetId ? { character: { preset_id: characterPresetId } } : {}),
+        ...(characterPresetId
+          ? {
+              character: {
+                preset_id: characterPresetId,
+                ...(characterFaceUrl ? { face_url: characterFaceUrl } : {}),
+              },
+            }
+          : {}),
         ...(characterPresetId && seriesContext.length > 0
           ? { series_context: seriesContext }
           : {}),
@@ -233,6 +264,9 @@ export async function POST(req: NextRequest) {
         consumeChannel: needChannel,
         // 에피소드 주제 1차 기록 (키워드) — approve 시 기획 topic 으로 갱신된다 (best-effort)
         topic: keyword || null,
+        // 원본 연결 (마이그 038) — 크로스 추천 중복 판정·주제 특정 1순위
+        sourcePostId,
+        sourceKeyword: keyword || null,
       })
     } catch (e) {
       const detail = e instanceof Error ? e.message : '변환 기록 저장 실패'

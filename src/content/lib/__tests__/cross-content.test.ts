@@ -5,6 +5,8 @@ import {
   tokenizeAll,
   extractConversionTexts,
   isPostCoveredByConversion,
+  hasConversionSource,
+  isPostCoveredBySource,
   recommendBlogToVideo,
   recommendVideoToBlog,
   TOP_RANK_THRESHOLD,
@@ -219,4 +221,97 @@ test('후속 글 추천: 같은 주제 변환 여러 건이어도 1회만 + 상�
   const result = recommendVideoToBlog(conversions, posts);
   assert.equal(result.length, MAX_TO_BLOG);
   assert.deepEqual(result.map((r) => r.topic), ['임플란트', '라식']);
+});
+
+// ── source 연결 1순위 판정 (마이그 038) ──
+
+test('hasConversionSource: sourcePostId 또는 sourceKeyword 있으면 true', () => {
+  assert.equal(hasConversionSource({ sourcePostId: 'p1', sourceKeyword: null }), true);
+  assert.equal(hasConversionSource({ sourcePostId: null, sourceKeyword: '임플란트' }), true);
+  assert.equal(hasConversionSource({ sourcePostId: null, sourceKeyword: '  ' }), false);
+  assert.equal(hasConversionSource({}), false);
+});
+
+test('isPostCoveredBySource: sourcePostId 일치 → 중복 (확정 연결)', () => {
+  assert.equal(
+    isPostCoveredBySource({ id: 'p1', keyword: null }, { sourcePostId: 'p1' }),
+    true,
+  );
+  assert.equal(
+    isPostCoveredBySource({ id: 'p2', keyword: null }, { sourcePostId: 'p1' }),
+    false,
+  );
+});
+
+test('isPostCoveredBySource: sourceKeyword 는 사실상 동일할 때만 (문자열/토큰 Set 일치)', () => {
+  const post = { id: 'p1', keyword: '임플란트 비용' };
+  assert.equal(isPostCoveredBySource(post, { sourceKeyword: '임플란트 비용' }), true);
+  assert.equal(isPostCoveredBySource(post, { sourceKeyword: '비용 임플란트' }), true); // 어순 무시
+  assert.equal(isPostCoveredBySource(post, { sourceKeyword: '임플란트' }), false); // 부분 일치는 미중복
+  assert.equal(isPostCoveredBySource(post, { sourceKeyword: '임플란트 비용 기간' }), false);
+  assert.equal(isPostCoveredBySource({ id: 'p1', keyword: null }, { sourceKeyword: '임플란트' }), false);
+});
+
+test('영상화 추천: source_post_id 연결 변환은 결과물 텍스트 없이도 그 글을 제외한다', () => {
+  const posts = [
+    post({ id: 'p1', title: '임플란트 수술 과정', keyword: '임플란트' }),
+    post({ id: 'p2', title: '라식 수술 검사', keyword: '라식' }),
+  ];
+  // 과거 토큰 매칭이라면 texts 가 비어 판정 불가 → 재추천됐을 케이스
+  const conversions = [conv({ conversionId: 'c1', texts: [], sourcePostId: 'p1' })];
+  const result = recommendBlogToVideo(posts, conversions, NOW);
+  assert.deepEqual(result.map((r) => r.postId), ['p2']);
+});
+
+test('영상화 추천: source_keyword 동일 키워드 글 제외 + source 보유 변환은 토큰 폴백을 타지 않는다', () => {
+  const posts = [
+    post({ id: 'p1', title: '임플란트 비용 정리', keyword: '임플란트 비용' }),
+    post({ id: 'p2', title: '임플란트 수술 과정', keyword: '임플란트 수술' }),
+  ];
+  // source 보유 → 1순위 판정만. texts 에 '임플란트 수술'이 있어도 p2 를 토큰 매칭으로 제외하지 않는다.
+  const conversions = [
+    conv({
+      conversionId: 'c1',
+      texts: ['임플란트 수술 이야기'],
+      sourceKeyword: '임플란트 비용',
+    }),
+  ];
+  const result = recommendBlogToVideo(posts, conversions, NOW);
+  assert.deepEqual(result.map((r) => r.postId), ['p2']);
+});
+
+test('영상화 추천: source 없는 과거 변환은 기존 토큰 매칭으로 폴백 판정', () => {
+  const posts = [post({ id: 'p1', title: '임플란트 수술 과정', keyword: '임플란트' })];
+  const legacy = [conv({ conversionId: 'c1', texts: ['임플란트 수술 과정을 영상으로'] })];
+  assert.deepEqual(recommendBlogToVideo(posts, legacy, NOW), []);
+});
+
+test('후속 글 추천: sourcePostId 로 주제 특정 (결과물 텍스트 불필요)', () => {
+  const posts = [post({ id: 'p1', title: '임플란트 수술 과정', keyword: '임플란트' })];
+  const conversions = [conv({ conversionId: 'c1', texts: [], sourcePostId: 'p1' })];
+  const result = recommendVideoToBlog(conversions, posts);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].topic, '임플란트');
+  assert.equal(result[0].suggestedKeyword, '임플란트 자주 묻는 질문');
+});
+
+test('후속 글 추천: 키워드 진입 변환은 sourceKeyword 가 곧 주제 (글 매칭 불필요)', () => {
+  const posts = [post({ id: 'p1', title: '전혀 다른 주제 글', keyword: '라식' })];
+  const conversions = [conv({ conversionId: 'c1', texts: [], sourceKeyword: '허리디스크 증상' })];
+  const result = recommendVideoToBlog(conversions, posts);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].topic, '허리디스크 증상');
+});
+
+test('후속 글 추천: sourcePostId 가 조회 범위 밖이면 sourceKeyword 폴백, 그것도 없으면 생략', () => {
+  const posts = [post({ id: 'p9', title: '무관한 글', keyword: '무관' })];
+  const withKeyword = [
+    conv({ conversionId: 'c1', texts: [], sourcePostId: 'gone', sourceKeyword: '임플란트' }),
+  ];
+  assert.equal(recommendVideoToBlog(withKeyword, posts)[0]?.topic, '임플란트');
+  // source 는 있었지만 특정 실패 → 토큰 매칭으로 넘기지 않고 생략 (오연결 방지)
+  const unresolvable = [
+    conv({ conversionId: 'c2', texts: ['무관한 글 이야기'], sourcePostId: 'gone' }),
+  ];
+  assert.deepEqual(recommendVideoToBlog(unresolvable, posts), []);
 });

@@ -50,6 +50,9 @@ interface ConversionRow {
   conversion_id: string;
   created_at: string;
   result_assets: unknown;
+  /** 마이그 038 — 미적용 DB 재조회 시 undefined */
+  source_post_id?: string | null;
+  source_keyword?: string | null;
 }
 
 export async function GET() {
@@ -106,15 +109,30 @@ export async function GET() {
     }
 
     // 3) 최근 영상(멀티채널) 변환 이력 (RLS select_own 정책으로 본인 것만)
-    const { data: convData } = await supabase
+    //    source_post_id / source_keyword (마이그 038) 를 함께 읽어 중복 판정 1순위로 쓴다.
+    //    마이그 미적용 DB(42703)면 기존 컬럼만으로 재조회 — 추천 자체는 계속 동작.
+    let convRows: ConversionRow[];
+    const firstTry = await supabase
       .from('clinicflix_conversions')
-      .select('conversion_id, created_at, result_assets')
+      .select('conversion_id, created_at, result_assets, source_post_id, source_keyword')
       .order('created_at', { ascending: false })
       .limit(MAX_CONVERSIONS);
-    const conversions: CrossConversionInput[] = ((convData ?? []) as ConversionRow[]).map((c) => ({
+    if (firstTry.error && firstTry.error.code === '42703') {
+      const fallback = await supabase
+        .from('clinicflix_conversions')
+        .select('conversion_id, created_at, result_assets')
+        .order('created_at', { ascending: false })
+        .limit(MAX_CONVERSIONS);
+      convRows = (fallback.data ?? []) as ConversionRow[];
+    } else {
+      convRows = (firstTry.data ?? []) as ConversionRow[];
+    }
+    const conversions: CrossConversionInput[] = convRows.map((c) => ({
       conversionId: c.conversion_id,
       createdAt: c.created_at,
       texts: extractConversionTexts(c.result_assets),
+      sourcePostId: c.source_post_id ?? null,
+      sourceKeyword: c.source_keyword ?? null,
     }));
 
     // 4) 규칙 기반 추천 계산 (순수 함수)
