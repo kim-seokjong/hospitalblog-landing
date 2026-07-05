@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { validateComplianceReport } from '@/content/lib/compliance-report';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -52,6 +53,16 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     const body = await req.json();
     const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score', 'target_site', 'published_url'];
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+    // compliance_report(검사 증빙 스냅샷) — 재복사(PATCH)로 최신 검사 결과가 오면 갱신.
+    // 서버 검증 실패(형태 불일치)나 미전송 시 건드리지 않는다(글 수정 자체는 막지 않는 방침,
+    // 마이그 034 미적용 환경은 아래 42703 폴백이 보호).
+    const incomingReport = 'compliance_report' in body
+      ? validateComplianceReport(body.compliance_report)
+      : null;
+    if (incomingReport) {
+      updates.compliance_report = incomingReport;
+    }
 
     // original_content(VOICE-DNA 원본 스냅샷)는 불변 — 최초 1회만 채운다.
     // 재복사(PATCH)로 들어와도 이미 값이 있으면 절대 덮지 않는다. 미전송 시 건드리지 않음(하위 호환).
@@ -122,13 +133,26 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       }
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('saved_posts')
       .update(updates)
       .eq('id', id)
       .eq('user_id', user.id)
       .select()
       .single();
+
+    // 마이그 034(compliance_report) 미적용 환경 폴백 — 컬럼 없음(42703)이면
+    // 리포트만 제외하고 재시도한다(글 수정 자체를 막지 않는다).
+    if (error && incomingReport && error.code === '42703') {
+      const { compliance_report: _omitted, ...withoutReport } = updates;
+      ({ data, error } = await supabase
+        .from('saved_posts')
+        .update(withoutReport)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single());
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

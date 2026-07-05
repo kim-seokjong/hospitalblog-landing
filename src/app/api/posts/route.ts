@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { validateComplianceReport } from '@/content/lib/compliance-report';
 
 export async function GET(req: NextRequest) {
   try {
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy, target_site, status, published_url, original_content } = body;
+    const { title, content, keyword, tags, specialty, seo_score, image_urls, sns_copy, sms_copy, target_site, status, published_url, original_content, compliance_report } = body;
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
       return NextResponse.json({ error: '제목은 필수입니다.' }, { status: 400 });
@@ -80,26 +81,45 @@ export async function POST(req: NextRequest) {
         ? original_content.trim()
         : null;
 
-    const { data, error } = await supabase
+    // compliance_report: 의료광고법 검사 증빙 스냅샷(서버 검증·정규화 후 저장).
+    // 검증 실패(형태 불일치)나 미전송 시 컬럼 자체를 insert에서 제외해 하위 호환
+    // (마이그 034 미적용 환경 보호 + 글 저장 자체는 리포트 문제로 막지 않는 방침).
+    const validComplianceReport = validateComplianceReport(compliance_report);
+
+    const insertRow = {
+      user_id: user.id,
+      title: title.trim(),
+      content: content.trim(),
+      keyword: keyword ?? null,
+      tags: Array.isArray(tags) ? tags : null,
+      specialty: specialty ?? null,
+      seo_score: typeof seo_score === 'number' ? seo_score : null,
+      image_urls: Array.isArray(image_urls) ? image_urls : null,
+      sns_copy: sns_copy ?? null,
+      sms_copy: sms_copy ?? null,
+      status: validStatus,
+      ...(validTargetSite ? { target_site: validTargetSite } : {}),
+      ...(validPublishedUrl ? { published_url: validPublishedUrl } : {}),
+      ...(validOriginalContent ? { original_content: validOriginalContent } : {}),
+      ...(validComplianceReport ? { compliance_report: validComplianceReport } : {}),
+    };
+
+    let { data, error } = await supabase
       .from('saved_posts')
-      .insert({
-        user_id: user.id,
-        title: title.trim(),
-        content: content.trim(),
-        keyword: keyword ?? null,
-        tags: Array.isArray(tags) ? tags : null,
-        specialty: specialty ?? null,
-        seo_score: typeof seo_score === 'number' ? seo_score : null,
-        image_urls: Array.isArray(image_urls) ? image_urls : null,
-        sns_copy: sns_copy ?? null,
-        sms_copy: sms_copy ?? null,
-        status: validStatus,
-        ...(validTargetSite ? { target_site: validTargetSite } : {}),
-        ...(validPublishedUrl ? { published_url: validPublishedUrl } : {}),
-        ...(validOriginalContent ? { original_content: validOriginalContent } : {}),
-      })
+      .insert(insertRow)
       .select()
       .single();
+
+    // 마이그 034(compliance_report) 미적용 환경 폴백 — 컬럼 없음(42703)이면
+    // 리포트만 제외하고 재시도한다(글 저장 자체를 막지 않는다).
+    if (error && validComplianceReport && error.code === '42703') {
+      const { compliance_report: _omitted, ...withoutReport } = insertRow as Record<string, unknown>;
+      ({ data, error } = await supabase
+        .from('saved_posts')
+        .insert(withoutReport)
+        .select()
+        .single());
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

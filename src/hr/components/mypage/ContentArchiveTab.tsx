@@ -100,6 +100,14 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
 
         {/* 푸터 */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2 px-4 sm:px-6 py-4 border-t border-[#b4bfce]">
+          <a
+            href={`/app/report/${post.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2.5 text-center text-sm font-semibold text-[#4a4f55] border border-[#b4bfce] hover:bg-[#eef2f6] rounded-lg transition-colors"
+          >
+            검사 리포트
+          </a>
           <button
             type="button"
             onClick={() => void handleCopy()}
@@ -332,6 +340,16 @@ export default function ContentArchiveTab() {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#5b6573]">
                     {post.keyword && <span className="text-[#ff4628]">#{post.keyword}</span>}
                     <span>{formatDate(post.published_at ?? post.created_at)}</span>
+                    <a
+                      href={`/app/report/${post.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[#5b6573] hover:text-[#ff4628] underline underline-offset-2 transition-colors"
+                      aria-label={`${post.title} 검사 리포트 새 탭에서 열기`}
+                    >
+                      검사 리포트
+                    </a>
                   </div>
                 </div>
               );

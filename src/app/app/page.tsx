@@ -20,6 +20,7 @@ import type { BlogTitle, BlogContent, GeneratedImage, TagResult, CardNewsData, W
 import { PLANS, isPaidPlanId, isActivePlan } from '@/payment/lib/plans';
 import { safeFetchJson } from '@/content/lib/safe-fetch';
 import { checkCompliance } from '@/content/lib/medical-compliance';
+import { buildComplianceReport } from '@/content/lib/compliance-report';
 
 type ViewStep = 'input' | 'content';
 
@@ -1027,6 +1028,12 @@ export default function AppPage() {
     };
     // VOICE-DNA: AI 원본 스냅샷 (편집 학습용). null이면 컬럼 제외(하위 호환은 API가 처리).
     const originalContent = originalBodyRef.current;
+    // 컴플라이언스 증빙 스냅샷 — A층(편집 반영 재검사분) + B층(생성 시 LLM 심의) 결과를
+    // 저장 시점에 정리해 함께 보관한다(리포트 페이지 /app/report/[postId]에서 재사용).
+    const complianceReport = buildComplianceReport({
+      compliance: content.compliance,
+      aiReview: content.aiReview ?? null,
+    });
     copySaveQueueRef.current = copySaveQueueRef.current.then(async () => {
       try {
         const existingId = savedPostIdRef.current;
@@ -1040,6 +1047,7 @@ export default function AppPage() {
               keyword: payload.keyword,
               target_site: payload.targetSite,
               status: 'published',
+              compliance_report: complianceReport,
               ...(originalContent ? { original_content: originalContent } : {}),
             }),
           });
@@ -1055,6 +1063,7 @@ export default function AppPage() {
             keyword: payload.keyword,
             target_site: payload.targetSite,
             status: 'published',
+            compliance_report: complianceReport,
             ...(originalContent ? { original_content: originalContent } : {}),
           }),
         });
