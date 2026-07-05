@@ -62,6 +62,26 @@ function NotificationIcon({ type }: { type: string }) {
       </svg>
     );
   }
+  if (type === 'monthly_report') {
+    // 월간 성과 리포트 — 차트 아이콘
+    return (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-[#ff4628] flex-shrink-0 mt-0.5"
+      >
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    );
+  }
   // 기본 벨 아이콘
   return (
     <svg
@@ -148,6 +168,14 @@ export default function NotificationBell() {
       });
     } catch {
       // 낙관적 업데이트가 이미 적용된 상태로 유지
+    }
+  };
+
+  const handleItemClick = (n: Notification) => {
+    void handleMarkRead(n.id);
+    // 월간 성과 리포트 알림은 마이페이지 성과 리포트 탭으로 이동
+    if (n.type === 'monthly_report') {
+      window.location.href = '/mypage?tab=rankings';
     }
   };
 
@@ -251,7 +279,7 @@ export default function NotificationBell() {
             {!loading && visibleNotifications.map((n) => (
               <button
                 key={n.id}
-                onClick={() => handleMarkRead(n.id)}
+                onClick={() => handleItemClick(n)}
                 className={`w-full text-left px-4 py-3 border-b border-[#b4bfce] last:border-b-0 hover:bg-[#eef2f6] active:bg-[#eef2f6] transition-colors ${
                   n.is_read ? 'opacity-60' : ''
                 }`}
