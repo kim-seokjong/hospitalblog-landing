@@ -147,6 +147,8 @@ export async function recordConversion(params: {
   status: string
   consumeVideo: boolean
   consumeChannel: boolean
+  /** 에피소드 주제 1차 기록 (키워드 등). approve 시 기획 topic 으로 갱신된다. 선택. */
+  topic?: string | null
 }): Promise<void> {
   const { error } = await admin()
     .from('clinicflix_conversions')
@@ -161,6 +163,50 @@ export async function recordConversion(params: {
       consume_channel: params.consumeChannel,
     })
   if (error) throw new Error(`변환 기록 저장 실패: ${error.message}`)
+  // topic 은 부가 정보 — 마이그레이션 036 미적용 DB 에서도 본 insert 가 깨지지 않도록
+  // 별도 best-effort 갱신으로 분리한다 (실패해도 변환 흐름 불변).
+  if (params.topic) {
+    await updateConversionTopic(params.conversionId, params.topic)
+  }
+}
+
+/**
+ * 최근 변환의 topic 목록 (최신순, null 제외) — 전속 캐릭터 series_context 용.
+ * 실패 시 빈 배열 (시리즈 컨텍스트는 부가 기능 — 변환을 막지 않는다).
+ */
+export async function getRecentConversionTopics(
+  userId: string,
+  limit = 3,
+): Promise<string[]> {
+  try {
+    const { data } = await admin()
+      .from('clinicflix_conversions')
+      .select('topic')
+      .eq('user_id', userId)
+      .not('topic', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    return (data ?? [])
+      .map((r) => (typeof r.topic === 'string' ? r.topic.trim() : ''))
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+/** 기획(plan)에서 확정된 topic 으로 갱신 (best-effort — 실패해도 흐름을 막지 않는다). */
+export async function updateConversionTopic(
+  conversionId: string,
+  topic: string,
+): Promise<void> {
+  try {
+    await admin()
+      .from('clinicflix_conversions')
+      .update({ topic, updated_at: new Date().toISOString() })
+      .eq('conversion_id', conversionId)
+  } catch {
+    /* 마이그레이션 036 미적용 등 — 무시 (topic 은 부가 정보) */
+  }
 }
 
 /** job_id 로 변환 소유자 검증용 조회. */

@@ -14,7 +14,12 @@ import {
   getMonthlyUsage,
   checkQuota,
   recordConversion,
+  getRecentConversionTopics,
 } from '@/content/lib/clinicflix-usage'
+import {
+  parseCharacterSelection,
+  buildSeriesContext,
+} from '@/content/lib/clinicflix-characters'
 import { isAdmin } from '@/hr/lib/admin'
 
 export const dynamic = 'force-dynamic'
@@ -124,6 +129,7 @@ export async function POST(req: NextRequest) {
       clinic_doctor_video_url?: string | null
       clinic_doctor_consent?: boolean | null
       clinic_virtual_presenter_urls?: unknown
+      clinicflix_character?: unknown
     }
     const hospitalName = clinic.hospital_name?.trim() || '우리 병원'
     // AI 가상 진행자: 저장된 동일 인물 이미지(들) → 영상 진행자 컷에 재사용(일관성).
@@ -149,6 +155,14 @@ export async function POST(req: NextRequest) {
     }
 
     const concept = clinic.clinic_shorts_concept || '정보형'
+
+    // ── 전속 AI 캐릭터 (선택) — 미선택이면 두 필드 모두 미전송 → 서비스 기존 동작 불변 ──
+    // 시리즈 연속성: 최근 변환 3건의 주제를 함께 보내 반복 방지 + 가벼운 콜백을 유도한다.
+    const characterPresetId = parseCharacterSelection(clinic.clinicflix_character)
+    let seriesContext: string[] = []
+    if (characterPresetId) {
+      seriesContext = buildSeriesContext(await getRecentConversionTopics(user.id, 3))
+    }
 
     const conversionId = randomUUID()
 
@@ -191,6 +205,11 @@ export async function POST(req: NextRequest) {
         // 쇼츠 제작법 v2(사건→궁금증 시퀀스+네이티브 대사, 2026-07-04)가 기본.
         // 문제 시 env CLINICFLIX_RECIPE=v1 으로 즉시 롤백 가능(서비스 v1 경로 보존됨).
         recipe: process.env.CLINICFLIX_RECIPE === 'v1' ? 'v1' : 'v2',
+        // 전속 캐릭터 미선택 시 두 필드 모두 미전송 (파이프라인 하위 호환과 맞물림)
+        ...(characterPresetId ? { character: { preset_id: characterPresetId } } : {}),
+        ...(characterPresetId && seriesContext.length > 0
+          ? { series_context: seriesContext }
+          : {}),
       })
     } catch (e) {
       if (e instanceof ClinicflixUnavailableError) {
@@ -212,6 +231,8 @@ export async function POST(req: NextRequest) {
         status: convertRes.status,
         consumeVideo: needVideo,
         consumeChannel: needChannel,
+        // 에피소드 주제 1차 기록 (키워드) — approve 시 기획 topic 으로 갱신된다 (best-effort)
+        topic: keyword || null,
       })
     } catch (e) {
       const detail = e instanceof Error ? e.message : '변환 기록 저장 실패'
