@@ -12,6 +12,7 @@ import SubscriptionTab from '@/hr/components/mypage/SubscriptionTab';
 import UsageTab from '@/hr/components/mypage/UsageTab';
 import ContentArchiveTab from '@/hr/components/mypage/ContentArchiveTab';
 import RankingsTab from '@/hr/components/mypage/RankingsTab';
+import BlogAuditTab from '@/hr/components/mypage/BlogAuditTab';
 import ConversionHistoryTab from '@/hr/components/mypage/ConversionHistoryTab';
 import BrandKitTab from '@/hr/components/mypage/BrandKitTab';
 import VoiceDnaTab from '@/hr/components/mypage/VoiceDnaTab';
@@ -121,6 +122,7 @@ function MyPageContent() {
         {activeTab === 'usage' && <UsageTab />}
         {activeTab === 'posts' && <ContentArchiveTab />}
         {activeTab === 'rankings' && <RankingsTab />}
+        {activeTab === 'audit' && <BlogAuditTab />}
         {activeTab === 'conversions' && <ConversionHistoryTab />}
         {activeTab === 'brandkit' && <BrandKitTab />}
         {activeTab === 'voice' && <VoiceDnaTab />}

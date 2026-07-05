@@ -12,12 +12,14 @@
 const REQUEST_TIMEOUT_MS = 12_000;
 /** 전체 수집 작업 상한(ms) — 라우트 maxDuration 보호. */
 const TOTAL_BUDGET_MS = 50_000;
-/** 수집 글 1편당 본문 길이 상한(문체 분석 토큰 보호). */
+/** 수집 글 1편당 본문 길이 상한 기본값(문체 분석 토큰 보호). */
 const POST_BODY_MAX_CHARS = 2000;
+/** 본문 길이 상한 절대 최대치(소급 진단 등 옵션 지정 시에도 이 이상 불가). */
+const POST_BODY_MAX_CHARS_CAP = 6000;
 /** 본문으로 인정하는 최소 길이(공백 제거 후). 이보다 짧으면 제외. */
 const MIN_BODY_CHARS = 60;
-/** 수집 글 수 절대 상한(과도한 요청 방지). */
-const MAX_POSTS_HARD_CAP = 10;
+/** 수집 글 수 절대 상한(과도한 요청 방지) — 소급 진단(20편)까지 허용. */
+const MAX_POSTS_HARD_CAP = 20;
 /** fetch 시 보낼 User-Agent. */
 const USER_AGENT =
   'Mozilla/5.0 (compatible; DoctorPostVoiceDNA/1.0; +https://hospitalblog.kr)';
@@ -119,21 +121,24 @@ async function safeFetchText(url: string, deadline: number): Promise<string | nu
 }
 
 interface RssItem {
+  title: string;
   link: string;
   description: string;
 }
 
-/** RSS XML 문자열에서 item(link, description)들을 파싱한다. */
+/** RSS XML 문자열에서 item(title, link, description)들을 파싱한다. */
 function parseRssItems(xml: string): RssItem[] {
   const items: RssItem[] = [];
   const itemBlocks = xml.match(/<item\b[\s\S]*?<\/item>/gi);
   if (!itemBlocks) return items;
   for (const block of itemBlocks) {
+    const titleMatch = block.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
     const linkMatch = block.match(/<link\b[^>]*>([\s\S]*?)<\/link>/i);
     const descMatch = block.match(/<description\b[^>]*>([\s\S]*?)<\/description>/i);
+    const title = titleMatch ? decodeEntities(unwrapCdata(titleMatch[1]).trim()) : '';
     const link = linkMatch ? unwrapCdata(linkMatch[1]).trim() : '';
     const description = descMatch ? unwrapCdata(descMatch[1]).trim() : '';
-    items.push({ link, description });
+    items.push({ title, link, description });
   }
   return items;
 }
@@ -147,22 +152,41 @@ function extractLogNo(link: string): string | null {
   return null;
 }
 
+/** 수집된 글 1편 — 제목·링크 포함(소급 진단 카드 표시용). */
+export interface NaverBlogPostItem {
+  title: string;
+  link: string;
+  body: string;
+}
+
+/** 상세 수집 옵션 — 미지정 시 VOICE-DNA 기본값(8편·2000자)과 동일하게 동작. */
+export interface NaverBlogFetchOptions {
+  /** 수집 글 수 상한(기본 8, 하드캡 20). */
+  limit?: number;
+  /** 글 1편당 본문 길이 상한(기본 2000자, 최대 6000자). */
+  bodyMaxChars?: number;
+}
+
 /**
- * 네이버 블로그 최근 글 본문 텍스트를 수집한다.
+ * 네이버 블로그 최근 글을 제목·링크·본문과 함께 수집한다.
  *
  * 1) RSS(`https://rss.blog.naver.com/{blogId}.xml`) fetch → item 파싱
  * 2) description(본문 일부)이 충분하면 그대로 사용
  * 3) 부족하면 모바일 PostView를 fetch해 본문 텍스트 추출
- * 각 본문은 2000자 상한, 최소 길이 미달은 제외. 최대 limit편(하드캡 10).
+ * 각 본문은 bodyMaxChars 상한, 최소 길이 미달은 제외. 최대 limit편(하드캡 20).
  *
  * 실패·타임아웃·빈 결과 시 빈 배열(never throws).
- *
- * @param blogId 네이버 블로그 ID
- * @param limit 수집 상한(기본 8)
  */
-export async function fetchNaverBlogPosts(blogId: string, limit = 8): Promise<string[]> {
+export async function fetchNaverBlogPostItems(
+  blogId: string,
+  options: NaverBlogFetchOptions = {},
+): Promise<NaverBlogPostItem[]> {
   if (typeof blogId !== 'string' || !/^[a-z0-9_-]{3,20}$/.test(blogId)) return [];
-  const cap = Math.max(1, Math.min(limit, MAX_POSTS_HARD_CAP));
+  const cap = Math.max(1, Math.min(options.limit ?? 8, MAX_POSTS_HARD_CAP));
+  const bodyMaxChars = Math.max(
+    MIN_BODY_CHARS,
+    Math.min(options.bodyMaxChars ?? POST_BODY_MAX_CHARS, POST_BODY_MAX_CHARS_CAP),
+  );
   const deadline = Date.now() + TOTAL_BUDGET_MS;
 
   const rssXml = await safeFetchText(`https://rss.blog.naver.com/${blogId}.xml`, deadline);
@@ -171,7 +195,7 @@ export async function fetchNaverBlogPosts(blogId: string, limit = 8): Promise<st
   const items = parseRssItems(rssXml).slice(0, cap);
   if (items.length === 0) return [];
 
-  const results: string[] = [];
+  const results: NaverBlogPostItem[] = [];
   for (const item of items) {
     if (Date.now() >= deadline) break;
     if (results.length >= cap) break;
@@ -197,11 +221,26 @@ export async function fetchNaverBlogPosts(blogId: string, limit = 8): Promise<st
       }
     }
 
-    const cleaned = text.slice(0, POST_BODY_MAX_CHARS).trim();
+    const cleaned = text.slice(0, bodyMaxChars).trim();
     if (cleaned.replace(/\s/g, '').length >= MIN_BODY_CHARS) {
-      results.push(cleaned);
+      results.push({ title: item.title, link: item.link, body: cleaned });
     }
   }
 
   return results;
+}
+
+/**
+ * 네이버 블로그 최근 글 본문 텍스트만 수집한다 — VOICE-DNA 문체 학습용.
+ * (fetchNaverBlogPostItems 의 얇은 래퍼. 기본값 8편·2000자로 기존 동작 불변.)
+ *
+ * @param blogId 네이버 블로그 ID
+ * @param limit 수집 상한(기본 8)
+ */
+export async function fetchNaverBlogPosts(blogId: string, limit = 8): Promise<string[]> {
+  const items = await fetchNaverBlogPostItems(blogId, {
+    limit,
+    bodyMaxChars: POST_BODY_MAX_CHARS,
+  });
+  return items.map((item) => item.body);
 }
