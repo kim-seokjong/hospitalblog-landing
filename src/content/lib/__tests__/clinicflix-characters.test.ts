@@ -5,6 +5,7 @@ import {
   isCharacterPresetId,
   getCharacterPreset,
   parseCharacterSelection,
+  parseCharacterFaceUrl,
   buildSeriesContext,
   extractPlanTopic,
 } from '../clinicflix-characters.ts';
@@ -98,4 +99,33 @@ test('extractPlanTopic: 없거나 형태 불일치 → null', () => {
 test('extractPlanTopic: 과도하게 긴 topic 은 200자로 절단', () => {
   const long = '가'.repeat(500);
   assert.equal(extractPlanTopic({ shorts_v2: { topic: long } })?.length, 200);
+});
+
+// ── parseCharacterFaceUrl (전속 캐릭터 전용 얼굴 — 1회 생성·영구 고정) ──
+
+test('parseCharacterFaceUrl: 정상 https URL → 그대로 반환', () => {
+  const raw = {
+    preset_id: 'calm_male_doctor',
+    face_url: 'https://cdn.example.com/face.png',
+  };
+  assert.equal(parseCharacterFaceUrl(raw), 'https://cdn.example.com/face.png');
+});
+
+test('parseCharacterFaceUrl: face_url 없음/비객체 → null (미고정과 동일)', () => {
+  assert.equal(parseCharacterFaceUrl({ preset_id: 'calm_male_doctor' }), null);
+  assert.equal(parseCharacterFaceUrl(null), null);
+  assert.equal(parseCharacterFaceUrl('문자열'), null);
+});
+
+test('parseCharacterFaceUrl: https 아닌 값·비정상 URL 거부', () => {
+  assert.equal(parseCharacterFaceUrl({ face_url: 'http://insecure.com/f.png' }), null);
+  assert.equal(parseCharacterFaceUrl({ face_url: 'javascript:alert(1)' }), null);
+  assert.equal(parseCharacterFaceUrl({ face_url: '   ' }), null);
+  assert.equal(parseCharacterFaceUrl({ face_url: 123 }), null);
+  assert.equal(parseCharacterFaceUrl({ face_url: 'not-a-url' }), null);
+});
+
+test('parseCharacterFaceUrl: 과도하게 긴 URL 거부 (외부 입력 방어)', () => {
+  const long = 'https://x.com/' + 'a'.repeat(600);
+  assert.equal(parseCharacterFaceUrl({ face_url: long }), null);
 });
