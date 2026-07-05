@@ -1,9 +1,10 @@
-// 5종 이메일 템플릿 (HTML 문자열)
+// 6종 이메일 템플릿 (HTML 문자열)
 // - billing-notify: 결제 7일 전 사전고지 (방통위 의무)
 // - payment-success: 자동결제 성공
 // - payment-failed: 1차 실패 (Dunning 1단계)
 // - payment-retry-failed: 재시도도 실패 (Dunning 2단계, 해지 예고)
 // - subscription-cancelled: 자동 해지 통지
+// - monthly-report: 월간 성과 리포트 도착 안내 (구독 해지 방어)
 
 import {
   renderLayout,
@@ -145,4 +146,44 @@ export function subscriptionCancelledEmail(params: SubscriptionCancelledParams):
     <p style="margin:0;font-size:13px;color:#6b7280;">이용해 주셔서 감사합니다. 더 좋은 서비스로 다시 만나뵙겠습니다.</p>
   `
   return { subject, html: renderLayout({ preheader: '구독이 해지되었습니다.', bodyHtml: body }) }
+}
+
+interface MonthlyReportParams {
+  /** '2026년 6월' 형태 표기 */
+  periodText: string
+  /** 'YYYY-MM' — 리포트 페이지 링크에 사용 */
+  period: string
+  hospitalName: string | null
+  generated: number
+  published: number
+  complianceChecked: number
+  top10Count: number
+}
+
+export function monthlyReportEmail(params: MonthlyReportParams): { subject: string; html: string } {
+  const subject = `[닥터포스트] ${params.periodText} 성과 리포트가 도착했어요`
+  const greeting = params.hospitalName
+    ? `${escapeHtml(params.hospitalName)} 원장님, 지난달에도 닥터포스트가 함께했습니다.`
+    : '지난달에도 닥터포스트가 함께했습니다.'
+  const top10Line = params.top10Count > 0
+    ? `<p style="margin:0;">검색 상위 10위 진입: <strong>${params.top10Count}건</strong></p>`
+    : ''
+  const reportUrl = `https://www.hospitalblog.kr/app/monthly-report/${params.period}`
+  const body = `
+    <h1 style="font-size:20px;font-weight:700;margin:0 0 16px 0;">${escapeHtml(params.periodText)} 성과 리포트</h1>
+    <p style="margin:0 0 16px 0;">${greeting}</p>
+    ${infoBox(`
+      <p style="margin:0 0 8px 0;">AI 글 생성: <strong>${params.generated}회</strong></p>
+      <p style="margin:0 0 8px 0;">발행한 글: <strong>${params.published}건</strong></p>
+      <p style="margin:0 ${top10Line ? '0 8px 0' : ''};">의료광고법 자동 검사: <strong>${params.complianceChecked}건</strong></p>
+      ${top10Line}
+    `)}
+    <p style="margin:0 0 16px 0;">순위 변동과 다음 달 추천 액션은 리포트 전문에서 확인하실 수 있습니다. PDF 저장도 가능합니다.</p>
+    <div style="text-align:center;margin:24px 0;">${button(reportUrl, '월간 리포트 보기')}</div>
+    <p style="margin:0;font-size:13px;color:#6b7280;">검색 순위는 네이버 블로그 검색 관련도 기준 추정치이며, 실제 성과를 보장하지 않습니다.</p>
+  `
+  return {
+    subject,
+    html: renderLayout({ preheader: `${params.periodText} 닥터포스트 성과 요약이 도착했습니다.`, bodyHtml: body }),
+  }
 }

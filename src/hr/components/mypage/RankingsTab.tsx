@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { ctrForRank } from '@/content/lib/roi-estimate';
+import MonthlyReportsSection from '@/hr/components/mypage/MonthlyReportsSection';
 import type { PostRankingItem, RankPoint } from '@/app/api/mypage/rankings/route';
 
 type FetchState = 'loading' | 'ready' | 'error';
@@ -200,6 +201,9 @@ export default function RankingsTab() {
 
   return (
     <div className="space-y-4">
+      {/* 월간 리포트 — 매월 1일 자동 생성, 인쇄 페이지로 연결 */}
+      <MonthlyReportsSection />
+
       {/* 요약 헤더 */}
       <div className="bg-white border border-[#b4bfce] rounded-2xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
         <h3 className="text-sm font-semibold text-[#202020] mb-1">발행글 검색 성과 (추정)</h3>
