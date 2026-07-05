@@ -6,7 +6,9 @@ import { Suspense, useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
-import MyPageTabs, { isMyPageTabId, type MyPageTabId } from '@/hr/components/mypage/MyPageTabs';
+import MyPageTabs, { type MyPageTabId } from '@/hr/components/mypage/MyPageTabs';
+import { groupOfTab, resolveMyPageTab } from '@/hr/components/mypage/mypage-tab-groups';
+import PerformanceSummaryStrip from '@/hr/components/mypage/PerformanceSummaryStrip';
 import ProfileTab from '@/hr/components/mypage/ProfileTab';
 import SubscriptionTab from '@/hr/components/mypage/SubscriptionTab';
 import UsageTab from '@/hr/components/mypage/UsageTab';
@@ -28,7 +30,9 @@ function MyPageContent() {
   const [authChecked, setAuthChecked] = useState(false);
 
   const tabParam = searchParams.get('tab');
-  const activeTab: MyPageTabId = isMyPageTabId(tabParam) ? tabParam : 'profile';
+  // 딥링크 `?tab=` 우선 — 유효하면 그 탭, 없거나 잘못됐으면 'profile'. 그룹은 탭에서 유도.
+  const activeTab: MyPageTabId = resolveMyPageTab(tabParam);
+  const activeGroup = groupOfTab(activeTab);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: d }) => {
@@ -114,8 +118,16 @@ function MyPageContent() {
           </p>
         </div>
 
-        {/* 탭 */}
-        <MyPageTabs active={activeTab} onChange={handleTabChange} />
+        {/* 탭 — 2층(그룹 → 서브탭). 성과·안전 그룹은 서브탭 위에 요약 스트립 표시 */}
+        <MyPageTabs
+          active={activeTab}
+          onChange={handleTabChange}
+          summarySlot={
+            activeGroup === 'performance' ? (
+              <PerformanceSummaryStrip onNavigate={handleTabChange} />
+            ) : undefined
+          }
+        />
 
         {/* 탭 콘텐츠 */}
         {activeTab === 'profile' && <ProfileTab />}
