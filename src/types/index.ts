@@ -1,8 +1,16 @@
 import type { SerpBenchmark } from '@/content/lib/serp-benchmark';
 import type { AiComplianceReview } from '@/content/lib/medical-compliance-ai';
+import type { ComplianceReportSnapshot } from '@/content/lib/compliance-report';
 
 export type { SerpBenchmark } from '@/content/lib/serp-benchmark';
 export type { AiComplianceReview, AiComplianceFinding, AiViolationSeverity } from '@/content/lib/medical-compliance-ai';
+export type {
+  ComplianceReportSnapshot,
+  ComplianceGrade,
+  AuditPostResult,
+  AuditViolation,
+  BlogAuditResults,
+} from '@/content/lib/compliance-report';
 
 export interface SeoDetails {
   keywordPlacement: number;  // 키워드 앞배치 점수
@@ -201,6 +209,8 @@ export interface SavedPost {
   target_site?: TargetSite | null
   /** 발행된 글 URL — 마이그레이션 027 적용 전/URL 미수집 행은 null (순위 매칭은 블로그ID로 폴백) */
   published_url?: string | null
+  /** 의료광고법 검사 증빙 스냅샷 — 마이그레이션 034 적용 전/구버전 글은 null (리포트 페이지에서 즉석 재검사) */
+  compliance_report?: ComplianceReportSnapshot | null
   created_at: string
   updated_at: string
 }

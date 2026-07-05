@@ -4,6 +4,7 @@ import { isAdmin } from '@/hr/lib/admin';
 import KpiDashboard from '@/components/admin/KpiDashboard';
 import MemberTable from '@/components/admin/MemberTable';
 import NoticeComposer from '@/components/admin/NoticeComposer';
+import BlogAuditPanel from '@/components/admin/BlogAuditPanel';
 import type {
   DashboardData,
   MemberRow,
@@ -285,6 +286,8 @@ export default async function AdminPage() {
         </div>
 
         <KpiDashboard data={data} />
+
+        <BlogAuditPanel />
 
         <NoticeComposer members={data.members} />
 
