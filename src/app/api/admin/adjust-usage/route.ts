@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '업데이트에 실패했습니다.' }, { status: 500 });
     }
 
-    console.log(`[admin/adjust-usage] ${user?.email} adjusted ${userId}: ${current} → ${newCount} (delta ${delta > 0 ? '+' : ''}${delta})`);
+    // 감사 로그(관리자 행위 추적) — 제거 금지, info 레벨 유지.
+    console.info(`[admin/adjust-usage] ${user?.email} adjusted ${userId}: ${current} → ${newCount} (delta ${delta > 0 ? '+' : ''}${delta})`);
 
     return NextResponse.json({ previousCount: current, newCount, delta });
   } catch (e) {

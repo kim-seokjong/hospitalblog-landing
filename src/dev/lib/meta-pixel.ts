@@ -19,7 +19,7 @@ interface EventParams {
   value?: number;
   currency?: string;
   status?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**

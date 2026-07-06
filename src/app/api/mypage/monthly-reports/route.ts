@@ -48,6 +48,11 @@ export async function GET(req: NextRequest) {
         .eq('period', period)
         .maybeSingle();
       if (error) {
+        // 마이그 035(monthly_reports) 미적용 DB 폴백 — 테이블 없음(42P01)이면
+        // 500 대신 "리포트 없음"으로 응답해 마이페이지 UX를 막지 않는다.
+        if (error.code === '42P01') {
+          return NextResponse.json({ error: '해당 월의 리포트가 없습니다.' }, { status: 404 });
+        }
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
       if (!data) {
@@ -66,6 +71,10 @@ export async function GET(req: NextRequest) {
       .order('period', { ascending: false })
       .limit(MAX_MONTHS);
     if (error) {
+      // 마이그 035 미적용 DB 폴백 — 테이블 없음(42P01)이면 빈 목록 반환.
+      if (error.code === '42P01') {
+        return NextResponse.json({ items: [] });
+      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
