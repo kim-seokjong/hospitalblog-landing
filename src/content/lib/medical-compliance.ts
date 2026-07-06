@@ -71,10 +71,19 @@ const WARNING_PATTERNS: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /\d+%\s*(성공|효과|개선|치료)/, message: '구체적인 수치 표현은 근거 자료가 필요합니다.' },
   { pattern: /(즉시|바로|당일)\s*(효과|회복|치료)/, message: '즉각적 효과 표현은 과장 광고로 해석될 수 있습니다.' },
   { pattern: /전후\s*사진|전후\s*비교|비포애프터|before.?after|전\s*vs\s*후/i, message: '시술 전후 비교·비포애프터 표현은 의료광고 심의 대상입니다(전후 사진 광고 원칙 금지).' },
-  { pattern: /후기|리얼\s*후기|생생\s*후기|체험\s*후기/, message: '환자 후기·체험담 형식은 의료법 제56조 심의 대상입니다.' },
+  // 2026-W28: 경험담 위장 표현(내돈내산·직접 받아보니)을 기존 후기 패턴에 합류(검출·표시만).
+  { pattern: /후기|리얼\s*후기|생생\s*후기|체험\s*후기|내돈내산|직접\s*받아\s*보니/, message: '환자 후기·체험담 형식(경험담 위장 표현 포함)은 의료법 제56조 심의 대상입니다.' },
   { pattern: /유명인|연예인|스타\b|셀럽|인플루언서/, message: '유명인·인플루언서 언급 광고는 별도 심의가 필요합니다.' },
   // 유인·이벤트·가격 — recall 우선 광역 탐색(검출만, 치환 없음)
-  { pattern: /할인|이벤트|특가|파격가|반값|선착순|사은품|추첨|경품|특별\s*할인|무제한|평생|무료|1\s*\+\s*1|지금\s*예약/, message: '가격 할인·이벤트·유인성 표현은 의료광고 심의 대상입니다(환자 유인·알선 소지).' },
+  // 2026-W28: 한정 수량·동반 방문·지인 소개 합류. "선착순"·"한정 특가"(특가)는 기존 알터네이션이 이미 커버.
+  // 오탐 배제: "무료 상담"은 기존 관행이라 `무료(?!\s*상담)`으로 제외(무료 검사·무료 시술은 계속 검출).
+  { pattern: /할인|이벤트|특가|파격가|반값|선착순|사은품|추첨|경품|특별\s*할인|무제한|평생|무료(?!\s*상담)|1\s*\+\s*1|지금\s*예약|한정\s*수량|동반\s*방문|지인\s*소개/, message: '가격 할인·이벤트·유인성 표현은 의료광고 심의 대상입니다(환자 유인·알선 소지).' },
+  // 2026-W28: 비급여 비용 면제 — 환자 유인행위(의료법 제27조 제3항) 소지. 검출·표시만.
+  // 오탐 배제: "책임 면제 조항" 같은 법률 문구는 매칭하지 않도록 비용 명사 근접일 때만 잡는다.
+  { pattern: /(비급여|본인\s*부담금?|검사비|시술비|수술비|진료비|치료비)[^.!?\n]{0,10}면제|면제\s*(이벤트|혜택|프로모션)/, message: '비급여 비용 면제 표현은 환자 유인행위(의료법 제27조 제3항) 소지가 있습니다.' },
+  // 2026-W28: 전문가 프레임 — 전문가 보증으로 오인시킬 소지(검출·표시만).
+  // "전문가의 의견을 인용" 같은 정상 서술은 매칭하지 않는다(추천 어구 결합 시에만).
+  { pattern: /전문가\s*추천|의사가\s*추천하는/, message: '전문가 추천·의사 추천 프레임은 전문가 보증 오인 소지가 있어 의료광고 심의 대상입니다.' },
   // 보장성 — 결과·환불 보장
   { pattern: /재수술\s*무료|책임\s*보장|평생\s*보장|100\s*%\s*환불|전액\s*환불|환불\s*보장/, message: '결과·환불 보장 표현은 치료 결과 보장 금지(의료법 제56조)에 저촉될 소지가 큽니다.' },
   // 비급여 가격 단정 + 시술 근접 노출
@@ -99,6 +108,22 @@ const WARNING_PATTERNS: Array<{ pattern: RegExp; message: string }> = [
  */
 export const PRESCRIPTION_DRUG_NAMES: readonly string[] = [
   '위고비', '삭센다', '마운자로', '오젬픽', '큐시미아', '펜터민', '디에타민',
+  // 2026-W28 주간 리서치 반영 (사람 승인 완료) — GLP-1 계열 신약·경구제·병용 신약
+  // '먹는 위고비' 류 모방 표현은 '위고비' 부분매칭으로 이미 검출되므로 별도 등록하지 않는다(테스트로 보증).
+  '젭바운드', '파운다요', '오포글리프론', '카그리세마', '캐그리세마', '리벨서스',
+];
+
+/**
+ * 전문의약품 상품명 — 영문 표기 (2026-W28 신설).
+ *
+ * 한글 목록(PRESCRIPTION_DRUG_NAMES)의 영문 대응 표기. 영문에는 한글 좌측 경계가
+ * 무의미하므로 buildProductRegexEn(영문 단어 경계·대소문자 무시)로 별도 매칭한다.
+ * 한글 목록과 동일하게 **자동치환 없이 검출·경고만** 한다.
+ */
+export const PRESCRIPTION_DRUG_NAMES_EN: readonly string[] = [
+  'Wegovy', 'Mounjaro', 'Ozempic', 'Zepbound', 'Saxenda',
+  // 기존·신규 한글 등록분의 영문 대응
+  'Qsymia', 'Phentermine', 'Rybelsus', 'CagriSema', 'Orforglipron',
 ];
 
 /**
@@ -111,6 +136,11 @@ export const PRESCRIPTION_DRUG_NAMES: readonly string[] = [
 export const MEDICAL_DEVICE_NAMES: readonly string[] = [
   '써마지', '울쎄라', '인모드', '포텐자', '피코슈어', '피코웨이', '피코',
   '프락셀', '슈링크', '튠페이스', '리프테라',
+  // 2026-W28 주간 리서치 반영 (사람 승인 완료) — 고주파·초음파 신장비 + 스킨부스터류.
+  // `텐써마`·`써마지`는 부분문자열 관계가 아니며(각각 독립 매칭), 한글 좌측 경계로
+  // "텐써마지" 같은 연쇄 표기에서도 긴 이름이 중복 없이 매칭된다(테스트로 보증).
+  '덴서티', '볼뉴머', '올리지오', '소프웨이브', '텐써마',
+  '리쥬란', '쥬베룩', '스컬트라',
 ];
 
 /**
@@ -148,6 +178,18 @@ function buildProductRegex(name: string): RegExp {
   return new RegExp(`(?<![가-힣])${escaped}`, 'g');
 }
 
+/**
+ * 영문 상품명 매칭용 정규식(전역·대소문자 무시) — 2026-W28 신설.
+ *
+ * 영문에는 한글 좌측 경계 `(?<![가-힣])`가 무의미하므로, 양쪽에 알파벳·숫자 부재
+ * 경계를 적용해 다른 영단어 안의 부분문자열 오매칭(예: "awegovy"·"wegovys")을 차단한다.
+ * 기존 buildProductRegex(한글 경로)의 시그니처·동작은 변경하지 않는다.
+ */
+function buildProductRegexEn(name: string): RegExp {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, 'gi');
+}
+
 /** 문자열 index 를 포함하는 문장의 [시작, 끝) 경계를 구한다(문장부호·줄바꿈 기준). */
 function sentenceBounds(content: string, index: number): [number, number] {
   const isSep = (ch: string): boolean => ch === '.' || ch === '!' || ch === '?' || ch === '\n';
@@ -180,16 +222,30 @@ export function detectProductNames(content: string): ProductNameFindings {
   const warnings: string[] = [];
   if (!content) return { violations, warnings };
 
-  const categories: Array<{ names: readonly string[]; label: string; rule: string }> = [
+  // toRegex: 한글 상품명은 한글 좌측 경계, 영문 상품명은 영문 단어 경계(대소문자 무시)로 매칭.
+  const categories: Array<{
+    names: readonly string[];
+    label: string;
+    rule: string;
+    toRegex: (name: string) => RegExp;
+  }> = [
     {
       names: PRESCRIPTION_DRUG_NAMES,
       label: '전문의약품 상품명',
       rule: '전문의약품 상품명 광고 노출 소지 (의료법 제56조·약사법) — 교육 목적 서술은 예외이나 유인·심의 소지 주의',
+      toRegex: buildProductRegex,
     },
     {
       names: MEDICAL_DEVICE_NAMES,
       label: '의료기기·전문시술 상품명',
       rule: '의료기기·전문시술 상품명 광고 노출 소지 (의료법 제56조) — 교육 목적 서술은 예외이나 심의 소지 주의',
+      toRegex: buildProductRegex,
+    },
+    {
+      names: PRESCRIPTION_DRUG_NAMES_EN,
+      label: '전문의약품 상품명(영문)',
+      rule: '전문의약품 상품명(영문) 광고 노출 소지 (의료법 제56조·약사법) — 교육 목적 서술은 예외이나 유인·심의 소지 주의',
+      toRegex: buildProductRegexEn,
     },
   ];
 
@@ -197,11 +253,11 @@ export function detectProductNames(content: string): ProductNameFindings {
   const overlaps = (from: number, to: number): boolean =>
     covered.some(([s, e]) => from < e && s < to);
 
-  for (const { names, label, rule } of categories) {
+  for (const { names, label, rule, toRegex } of categories) {
     // 긴 이름 먼저 처리 → `피코슈어` 범위를 선점해 `피코`의 중복 매칭을 막는다.
     const sortedNames = [...names].sort((a, b) => b.length - a.length);
     for (const name of sortedNames) {
-      const re = buildProductRegex(name);
+      const re = toRegex(name);
       let match: RegExpExecArray | null;
       while ((match = re.exec(content)) !== null) {
         const index = match.index;
