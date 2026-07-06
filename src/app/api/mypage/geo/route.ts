@@ -72,10 +72,12 @@ export async function GET() {
       .gte('checked_at', since.toISOString())
       .order('checked_at', { ascending: false })
       .limit(MAX_ROWS);
-    if (rowsErr) {
+    // 마이그 037(geo_citations) 미적용 DB 폴백 — 테이블 없음(42P01)이면
+    // 인용 기록만 비운 채 준비도 점수는 계속 제공한다(탭 자체를 막지 않는다).
+    if (rowsErr && rowsErr.code !== '42P01') {
       return NextResponse.json({ error: rowsErr.message }, { status: 500 });
     }
-    const rows = (rowsData ?? []) as CitationDbRow[];
+    const rows = (rowsErr ? [] : (rowsData ?? [])) as CitationDbRow[];
 
     // 2) 최신 회차 결과 — 가장 최근 checked_at 과 같은 날짜(UTC)의 기록
     let latest: GeoCheckItem[] = [];

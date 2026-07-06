@@ -86,7 +86,8 @@ export async function POST(req: NextRequest) {
         ? await createNoticeForAll({ title, message })
         : await createNoticeForUser({ userId: target, title, message });
 
-    console.log(
+    // 감사 로그(관리자 행위 추적) — 제거 금지, info 레벨 유지.
+    console.info(
       `[admin/notices] ${user?.email} sent notice (target=${target}, delivered=${result.delivered})`
     );
 
