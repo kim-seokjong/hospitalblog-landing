@@ -16,6 +16,7 @@ import RevealInit from '@/components/landing/Reveal';
 import FloatingCta from '@/components/landing/FloatingCta';
 import BlindTestSection from '@/components/landing/BlindTestSection';
 import WhyDoctorPostSection from '@/components/landing/WhyDoctorPostSection';
+import EbookLeadSection from '@/components/landing/EbookLeadSection';
 import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildFaqPageJsonLd } from '@/dev/lib/seo/schemas';
 import { HOME_FAQS } from '@/dev/lib/seo/homeFaq';
@@ -480,6 +481,9 @@ export default function LandingPage() {
 
       {/* 왜 닥터포스트인가 — 이유 응집 섹션 */}
       <WhyDoctorPostSection />
+
+      {/* 의료광고법 요약판 무료 다운로드 — 리드마그넷 */}
+      <EbookLeadSection />
 
       {/* 요금 섹션 */}
       <section id="pricing" className="py-20 sm:py-[110px] bg-white">
