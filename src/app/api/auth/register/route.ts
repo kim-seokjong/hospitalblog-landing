@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { suggestClinicProfile } from '@/content/lib/clinic-profile';
+import { applyReturningUserFreeBenefitPolicy } from '@/payment/lib/free-benefit';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,6 +114,19 @@ export async function POST(req: NextRequest) {
 
     // 프로필 저장 성공 — 이 시점 이후 예외가 나도 가입은 유효하므로 롤백 금지.
     profileCommitted = true;
+
+    // 재가입 무료혜택 악용 방지: 이미 무료혜택을 받은 전화/이메일이면 크레딧(2→0) 회수,
+    // 신규 신원이면 원장에 기록한다. best-effort — 실패해도 가입은 유효하게 유지한다
+    // (원장 테이블 미적용 환경에서는 기존 동작인 "크레딧 2 부여"로 graceful 하게 유지).
+    try {
+      await applyReturningUserFreeBenefitPolicy(supabaseAdmin, userId, targetUser.email, phone);
+    } catch (benefitErr) {
+      console.error(
+        'register 무료혜택 정책 적용 실패 — 가입은 계속 진행:',
+        userId,
+        benefitErr instanceof Error ? benefitErr.message : String(benefitErr),
+      );
+    }
 
     if (!targetUser.email_confirmed_at) {
       await supabaseAdmin.auth.admin.updateUserById(userId, { email_confirm: true });
