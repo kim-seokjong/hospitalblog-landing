@@ -170,7 +170,7 @@ export default function RefundPage() {
               <p><span className="text-[#202020]">대표자:</span> 김석종</p>
               <p><span className="text-[#202020]">사업자등록번호:</span> 570-60-00560</p>
               <p><span className="text-[#202020]">주소:</span> 대구광역시 수성구 청호로422 2층</p>
-              <p><span className="text-[#202020]">전화:</span> 010-2558-1115</p>
+              <p><span className="text-[#202020]">전화:</span> 070-8095-3320</p>
               <p><span className="text-[#202020]">이메일:</span>{' '}
                 <a href="mailto:terro6936@naver.com" className="text-[#ff4628] hover:text-[#e63a1c] underline">
                   terro6936@naver.com

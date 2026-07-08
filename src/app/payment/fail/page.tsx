@@ -23,7 +23,7 @@ function FailContent() {
           {message ?? '결제 처리 중 오류가 발생했습니다.'}
         </p>
         <p className="text-[#5b6573] text-sm mb-8">
-          문제가 지속되면 고객센터(010-2558-1115)로 문의해주세요.
+          문제가 지속되면 고객센터(070-8095-3320)로 문의해주세요.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
