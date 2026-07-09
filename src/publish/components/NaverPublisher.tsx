@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { BlogContent, TagResult, GeneratedImage } from '@/types';
 import { splitBodyByMarkers, toNaverFormat } from '@/content/lib/naver-format';
 import { downloadImageReliable } from '@/content/lib/download-image';
-import { composeImageWithAILabel } from '@/content/lib/ai-image-label';
+import { composeImageWithProvenance } from '@/content/lib/ai-image-provenance';
 
 interface NaverPublisherProps {
   title: string;
@@ -97,10 +97,10 @@ export default function NaverPublisher({ title, content, tags, images, imageStyl
   const handleDownloadOne = async (img: GeneratedImage, index: number) => {
     const safe = img.prompt.slice(0, 20).replace(/[^\w가-힣]/g, '_');
     try {
-      // AI 생성 이미지(photo/cardnews)는 라벨 박아서 다운로드,
+      // AI 생성 이미지(photo/cardnews)는 시각 라벨 없이 출처 메타데이터를 삽입해 다운로드,
       // 사용자 업로드(upload)는 원본 그대로
       const url = isAIGenerated
-        ? await composeImageWithAILabel(img.url)
+        ? await composeImageWithProvenance(img.url)
         : img.url;
       await downloadImageReliable(url, `이미지${index + 1}_${safe}`);
       setDownloaded((prev) => new Set([...prev, img.id]));
