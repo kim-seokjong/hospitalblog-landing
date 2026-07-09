@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { embedProvenanceInPngDataUrl } from '@/content/lib/ai-image-provenance';
 
 interface TextElement {
   id: string;
@@ -19,6 +20,8 @@ interface ImageEditorProps {
   imageUrl: string;
   keyword: string;
   title: string;
+  /** AI 생성 이미지(photo/cardnews)면 다운로드 PNG에 출처 메타데이터를 삽입한다. */
+  isAIGenerated?: boolean;
   onClose: () => void;
   onSave: (dataUrl: string) => void;
 }
@@ -102,7 +105,7 @@ function applyTemplate(
   }
 }
 
-export default function ImageEditor({ imageUrl, keyword, title, onClose, onSave }: ImageEditorProps) {
+export default function ImageEditor({ imageUrl, keyword, title, isAIGenerated = false, onClose, onSave }: ImageEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
@@ -229,8 +232,10 @@ export default function ImageEditor({ imageUrl, keyword, title, onClose, onSave 
 
     const dataUrl = canvas.toDataURL('image/png');
     onSave(dataUrl);
+    // AI 생성 이미지면 다운로드 파일에 출처 메타데이터를 삽입(시각 라벨 없음).
+    const downloadUrl = isAIGenerated ? embedProvenanceInPngDataUrl(dataUrl) : dataUrl;
     const link = document.createElement('a');
-    link.href = dataUrl;
+    link.href = downloadUrl;
     link.download = `edited-${keyword}.png`;
     link.click();
   };

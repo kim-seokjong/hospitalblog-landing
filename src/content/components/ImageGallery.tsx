@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { GeneratedImage } from '@/types';
 import ImageEditor from '@/content/components/ImageEditor';
 import { downloadImageReliable } from '@/content/lib/download-image';
-import { drawAILabel, loadImageForCanvas, composeImageWithAILabel } from '@/content/lib/ai-image-label';
+import { loadImageForCanvas, composeImageWithProvenance, embedProvenanceInPngDataUrl } from '@/content/lib/ai-image-provenance';
 import { safeFetchJson } from '@/content/lib/safe-fetch';
 
 interface ImageGalleryProps {
@@ -28,8 +28,7 @@ async function renderCardNews(image: GeneratedImage, canvas: HTMLCanvasElement):
   const scale = Math.max(SIZE / img.width, SIZE / img.height);
   const dw = img.width * scale, dh = img.height * scale;
   ctx.drawImage(img, (SIZE - dw) / 2, (SIZE - dh) / 2, dw, dh);
-
-  drawAILabel(ctx, SIZE, 1);
+  // 시각 라벨은 그리지 않는다 — AI 출처는 다운로드 시 PNG 메타데이터로만 표시.
 }
 
 export default function ImageGallery({ images, keyword, title, style = 'cardnews', onRegenerate, isLoading, onImagesUpdate }: ImageGalleryProps) {
@@ -96,12 +95,14 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
         const url = composited[image.id] || image.url;
         await downloadImageReliable(url, `edited-${keyword}-${image.id}`);
       } else if (style === 'photo') {
-        // AI 이미지 라벨을 캔버스로 박아서 다운로드
-        const dataUrl = await composeImageWithAILabel(image.url);
+        // 시각 라벨 없이, AI 출처 메타데이터를 삽입해 다운로드
+        const dataUrl = await composeImageWithProvenance(image.url);
         await downloadImageReliable(dataUrl, `photo-${keyword}-${image.id}`);
       } else {
-        const dataUrl = composited[image.id];
-        if (!dataUrl) return;
+        const composedUrl = composited[image.id];
+        if (!composedUrl) return;
+        // 카드뉴스 캔버스 PNG에 AI 출처 메타데이터 삽입 후 다운로드
+        const dataUrl = embedProvenanceInPngDataUrl(composedUrl);
         await downloadImageReliable(dataUrl, `cardnews-${keyword}-${image.id}`);
       }
     } catch {
@@ -208,15 +209,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                       alt={`이미지 ${image.id}`}
                       className="w-full h-full object-cover"
                     />
-                    {style === 'photo' && (
-                      <div
-                        className="absolute top-2 right-2 text-white text-[10px] sm:text-[11px] font-extrabold pointer-events-none tracking-wide"
-                        style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.9)' }}
-                      >
-                        AI 이미지
-                      </div>
-                    )}
-                    {/* cardnews는 캔버스에 라벨이 이미 박혀있어 CSS 오버레이 불필요 */}
+                    {/* AI 시각 라벨 제거(2026-07-09): 출처는 다운로드 PNG 메타데이터로만 표시 */}
                     {style === 'upload' && (
                       <div className="absolute bottom-2 left-0 right-0 flex justify-center">
                         <button
@@ -315,6 +308,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
           imageUrl={composited[editing.id] || editing.url}
           keyword={keyword}
           title={title}
+          isAIGenerated={style === 'photo' || style === 'cardnews'}
           onClose={() => setEditing(null)}
           onSave={(dataUrl) => {
             setComposited(prev => ({ ...prev, [editing.id]: dataUrl }));
@@ -350,14 +344,7 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
                 alt="이미지 확대"
                 className={`w-full object-cover ${style === 'photo' ? 'aspect-video' : 'aspect-square'} max-h-[70vh]`}
               />
-              {style === 'photo' && (
-                <div
-                  className="absolute top-3 left-4 text-white text-sm font-extrabold pointer-events-none tracking-wide"
-                  style={{ textShadow: '0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.9)' }}
-                >
-                  AI 이미지
-                </div>
-              )}
+              {/* AI 시각 라벨 제거(2026-07-09): 출처는 다운로드 PNG 메타데이터로만 표시 */}
             </div>
             <div className="p-4 flex items-center justify-between gap-2">
               <p className="text-xs text-[#5b6573] truncate">#{keyword}</p>
