@@ -34,10 +34,15 @@ interface SampleText {
 
 const sample: SampleText = sampleText as SampleText;
 
+// 2026-07-10 재제작: 업그레이드 카드뉴스(슬라이드별 다른 실사 장면·검색형 표지·저장유도 엔딩)
+// 웹 최적화 JPEG(4:5, 장당 ~60KB) — 6장 전체 캐러셀.
 const CARDNEWS_IMAGES = [
-  `${SAMPLE_BASE}/cardnews-1.png`,
-  `${SAMPLE_BASE}/cardnews-2.png`,
-  `${SAMPLE_BASE}/cardnews-3.png`,
+  `${SAMPLE_BASE}/cardnews-1.jpg`,
+  `${SAMPLE_BASE}/cardnews-2.jpg`,
+  `${SAMPLE_BASE}/cardnews-3.jpg`,
+  `${SAMPLE_BASE}/cardnews-4.jpg`,
+  `${SAMPLE_BASE}/cardnews-5.jpg`,
+  `${SAMPLE_BASE}/cardnews-6.jpg`,
 ];
 
 const OUTPUT_KINDS = [
@@ -250,7 +255,7 @@ function CardnewsCarousel() {
         <span className="text-lg">🗂️</span>
         <span className="font-extrabold text-[#202020]">카드뉴스</span>
         <span className="ml-auto text-[11px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
-          9:16 · 슬라이드 {total}장
+          4:5 · 슬라이드 {total}장
         </span>
       </figcaption>
 
@@ -270,12 +275,13 @@ function CardnewsCarousel() {
           >
             {/* next/image 미사용 리포지토리이므로 native img + lazy load 사용 (PNG ~1.7MB) */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
+            {/* 카드 원본은 1080×1350(4:5) — 9:16 프레임에 crop하면 글자가 잘림(2026-07-10 수정) */}
             <img
               src={src}
               alt={`카드뉴스 슬라이드 ${i + 1}`}
               loading="lazy"
               decoding="async"
-              className="w-full aspect-[9/16] object-cover"
+              className="w-full aspect-[4/5] object-cover"
             />
           </div>
         ))}
