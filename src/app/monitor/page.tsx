@@ -6,6 +6,8 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
 import RoiSimulator from '@/content/components/RoiSimulator';
+import CompetitorScoreboard from '@/content/components/scoreboard/CompetitorScoreboard';
+import type { PublishFrequencyResult } from '@/content/lib/scoreboard/publish-frequency';
 
 interface NaverPost {
   title: string;
@@ -39,6 +41,7 @@ interface PlanResult {
   gaps: GapCandidate[];
   volumes: Record<string, KeywordVolume>;
   volumeAvailable: boolean;
+  publishFrequency?: PublishFrequencyResult;
   naverError?: string;
 }
 
@@ -95,6 +98,13 @@ export default function MonitorPage() {
   const [result, setResult] = useState<PlanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [profilePrefilled, setProfilePrefilled] = useState(false);
+  const [hospitalName, setHospitalName] = useState('');
+  // 종합 비교 섹션의 독립 조회 트리거 + 분석 시점의 파라미터 고정
+  const [scoreboardRun, setScoreboardRun] = useState<{ runId: number; specialty: string; region: string }>({
+    runId: 0,
+    specialty: '',
+    region: '',
+  });
 
   // 프로필 region/hospital_type 자동 채움 (있으면). 없으면 수동 입력 유지.
   useEffect(() => {
@@ -104,12 +114,17 @@ export default function MonitorPage() {
       if (!user) return;
       supabase
         .from('profiles')
-        .select('hospital_type, hospital_address')
+        .select('hospital_type, hospital_address, hospital_name')
         .eq('id', user.id)
         .single()
         .then(({ data: profile }) => {
           if (cancelled || !profile) return;
-          const p = profile as { hospital_type?: string | null; hospital_address?: string | null };
+          const p = profile as {
+            hospital_type?: string | null;
+            hospital_address?: string | null;
+            hospital_name?: string | null;
+          };
+          if (p.hospital_name) setHospitalName(p.hospital_name);
           if (p.hospital_type && SPECIALTIES.includes(p.hospital_type)) {
             setSpecialty((prev) => prev || p.hospital_type!);
           }
@@ -156,6 +171,12 @@ export default function MonitorPage() {
         throw new Error(data.error ?? '분석 중 오류가 발생했습니다.');
       }
       setResult(data);
+      // 종합 비교 섹션 독립 조회 트리거 (분석 시점 파라미터 고정)
+      setScoreboardRun((prev) => ({
+        runId: prev.runId + 1,
+        specialty,
+        region: region.trim(),
+      }));
     } catch (err) {
       setError(err instanceof Error ? err.message : '분석 중 오류가 발생했습니다.');
     } finally {
@@ -476,6 +497,17 @@ export default function MonitorPage() {
                   <p className="text-xs text-[#73808f] mt-1">검색어를 변경해보세요.</p>
                 </div>
               )
+            )}
+
+            {/* ── 경쟁 병원 종합 비교 (섹션별 독립 로딩·독립 실패) ── */}
+            {scoreboardRun.runId > 0 && (
+              <CompetitorScoreboard
+                specialty={scoreboardRun.specialty}
+                region={scoreboardRun.region}
+                hospitalName={hospitalName}
+                publishFrequency={result.publishFrequency ?? null}
+                runId={scoreboardRun.runId}
+              />
             )}
           </div>
         ) : (
