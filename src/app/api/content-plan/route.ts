@@ -12,6 +12,7 @@ import {
   fetchKeywordVolumes,
   type GapCandidate,
 } from '@/content/lib/keyword-volume';
+import { computePublishFrequency } from '@/content/lib/scoreboard/publish-frequency';
 
 /**
  * POST /api/content-plan
@@ -102,12 +103,16 @@ export async function POST(req: NextRequest) {
       volumeResult.volumes
     );
 
+    // 7) 발행 빈도 프록시 — 같은 검색 결과의 postdate 만 사용 (추가 API 없음)
+    const publishFrequency = computePublishFrequency(posts);
+
     return NextResponse.json({
       posts,
       insights,
       gaps,
       volumes: volumeResult.volumes,
       volumeAvailable: volumeResult.available,
+      publishFrequency,
       ...(naverError ? { naverError } : {}),
     });
   } catch (err) {
