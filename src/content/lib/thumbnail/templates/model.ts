@@ -13,6 +13,8 @@ export interface TemplateViewModel {
   readonly tags: readonly string[];
   /** 병원명(없으면 빈 문자열) */
   readonly clinicName: string;
+  /** 제목 안에서 강조할 어절(없으면 빈 문자열) */
+  readonly accentWord: string;
   /** 강조색 */
   readonly accent: string;
   /** satori fontFamily */

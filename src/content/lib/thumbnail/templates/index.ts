@@ -8,6 +8,9 @@ import type { TemplateViewModel } from './model';
 import { renderBottomGradient } from './bottom-gradient';
 import { renderFullScrim } from './full-scrim';
 import { renderFooterBar } from './footer-bar';
+import { renderMagazineSplit } from './magazine-split';
+import { renderCircleFrame } from './circle-frame';
+import { renderTypoMaximal } from './typo-maximal';
 
 export type { TemplateViewModel } from './model';
 
@@ -17,6 +20,9 @@ const REGISTRY: Record<ThumbnailTemplate, TemplateRenderer> = {
   'bottom-gradient': renderBottomGradient,
   'full-scrim': renderFullScrim,
   'footer-bar': renderFooterBar,
+  'magazine-split': renderMagazineSplit,
+  'circle-frame': renderCircleFrame,
+  'typo-maximal': renderTypoMaximal,
 };
 
 /** 템플릿 id 에 해당하는 렌더 함수를 반환한다. */

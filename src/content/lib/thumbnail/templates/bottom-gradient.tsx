@@ -6,9 +6,10 @@
 import type { ReactElement } from 'react';
 import type { TemplateViewModel } from './model';
 import { fitTitleFontSize } from '../layout';
+import { renderAccentedTitle } from './accent-title';
 
 export function renderBottomGradient(vm: TemplateViewModel): ReactElement {
-  const { imageUrl, title, klabel, tags, clinicName, accent, fontFamily, size } = vm;
+  const { imageUrl, title, klabel, tags, clinicName, accent, accentWord, fontFamily, size } = vm;
   const titleSize = fitTitleFontSize(title, 92, 46);
 
   return (
@@ -75,7 +76,7 @@ export function renderBottomGradient(vm: TemplateViewModel): ReactElement {
           textShadow: '0 3px 24px rgba(0,0,0,0.6)',
         }}
       >
-        {title}
+        {renderAccentedTitle({ title, accentWord, accentStyle: { color: accent }, titleSize })}
       </div>
 
       {tags.length > 0 ? (

@@ -5,13 +5,22 @@
  * 여러 템플릿 중 골라 만드는 범용 엔진. 전 회원·전 진료과 공용.
  */
 
-/** 지원 템플릿 3종 */
-export type ThumbnailTemplate = 'bottom-gradient' | 'full-scrim' | 'footer-bar';
+/** 지원 템플릿 6종 (2026-07-10 "전체 적용" — 신규 3종 확장) */
+export type ThumbnailTemplate =
+  | 'bottom-gradient'
+  | 'full-scrim'
+  | 'footer-bar'
+  | 'magazine-split'
+  | 'circle-frame'
+  | 'typo-maximal';
 
 export const THUMBNAIL_TEMPLATES: readonly ThumbnailTemplate[] = Object.freeze([
   'bottom-gradient',
   'full-scrim',
   'footer-bar',
+  'magazine-split',
+  'circle-frame',
+  'typo-maximal',
 ]);
 
 /** 배경 사진의 출처 — AI 생성이면 출처 메타데이터를 삽입, 실제 업로드 사진이면 원본 그대로. */
@@ -34,6 +43,11 @@ export interface ThumbnailParams {
    * VISUAL-DNA 프로필이 나중에 병원색을 주입할 수 있게 파라미터로 열어 둔다.
    */
   readonly accentColor?: string;
+  /**
+   * 제목 안에서 강조색으로 하이라이트할 어절 1개 (카피 톤 시스템 연동).
+   * 제목에 포함된 어절이어야 하며, 미지정 시 기존과 동일하게 전체 단색 렌더.
+   */
+  readonly accentWord?: string;
   /** 사용할 템플릿. */
   readonly template: ThumbnailTemplate;
   /** 배경 출처 — 'ai'면 PNG에 출처 메타데이터 삽입, 'upload'면 원본 그대로. */

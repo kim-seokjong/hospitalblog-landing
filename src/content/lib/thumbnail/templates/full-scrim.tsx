@@ -5,9 +5,10 @@
 import type { ReactElement } from 'react';
 import type { TemplateViewModel } from './model';
 import { fitTitleFontSize } from '../layout';
+import { renderAccentedTitle } from './accent-title';
 
 export function renderFullScrim(vm: TemplateViewModel): ReactElement {
-  const { imageUrl, title, klabel, clinicName, accent, fontFamily, size } = vm;
+  const { imageUrl, title, klabel, clinicName, accent, accentWord, fontFamily, size } = vm;
   const titleSize = fitTitleFontSize(title, 100, 50);
 
   return (
@@ -72,7 +73,7 @@ export function renderFullScrim(vm: TemplateViewModel): ReactElement {
           textShadow: '0 3px 28px rgba(0,0,0,0.7)',
         }}
       >
-        {title}
+        {renderAccentedTitle({ title, accentWord, accentStyle: { color: accent }, titleSize })}
       </div>
 
       {clinicName ? (

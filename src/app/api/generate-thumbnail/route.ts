@@ -60,7 +60,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '허용되지 않은 배경 이미지 도메인입니다.' }, { status: 400 });
     }
 
-    const { bytes, contentType } = await renderThumbnail(parsed.params);
+    // 번들 폰트(public/fonts)를 자체 오리진에서 로드 — CDN 은 최후 폴백.
+    const { bytes, contentType } = await renderThumbnail(parsed.params, {
+      fontBaseUrl: req.nextUrl.origin,
+    });
 
     // 새 ArrayBuffer 로 복사 — Uint8Array<ArrayBufferLike> 를 Response 가 받도록 폭을 좁힌다.
     const body = new ArrayBuffer(bytes.byteLength);
