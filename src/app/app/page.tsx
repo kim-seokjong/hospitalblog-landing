@@ -1564,6 +1564,7 @@ export default function AppPage() {
                         onRegenerate={() => handleGenerateImages(lastImageCount)}
                         isLoading={loadingImages}
                         onImagesUpdate={setImages}
+                        clinicName={hospitalName}
                       />
                     )}
 

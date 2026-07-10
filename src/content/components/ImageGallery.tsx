@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { GeneratedImage } from '@/types';
 import ImageEditor from '@/content/components/ImageEditor';
+import ThumbnailStudio from '@/content/components/ThumbnailStudio';
 import { downloadImageReliable } from '@/content/lib/download-image';
 import { loadImageForCanvas, composeImageWithProvenance, embedProvenanceInPngDataUrl } from '@/content/lib/ai-image-provenance';
 import { safeFetchJson } from '@/content/lib/safe-fetch';
@@ -15,6 +16,8 @@ interface ImageGalleryProps {
   onRegenerate?: () => void;
   isLoading?: boolean;
   onImagesUpdate?: (images: GeneratedImage[]) => void;
+  /** 썸네일 카드 병원명 기본값 (선택) */
+  clinicName?: string;
 }
 
 async function renderCardNews(image: GeneratedImage, canvas: HTMLCanvasElement): Promise<void> {
@@ -31,8 +34,9 @@ async function renderCardNews(image: GeneratedImage, canvas: HTMLCanvasElement):
   // 시각 라벨은 그리지 않는다 — AI 출처는 다운로드 시 PNG 메타데이터로만 표시.
 }
 
-export default function ImageGallery({ images, keyword, title, style = 'cardnews', onRegenerate, isLoading, onImagesUpdate }: ImageGalleryProps) {
+export default function ImageGallery({ images, keyword, title, style = 'cardnews', onRegenerate, isLoading, onImagesUpdate, clinicName }: ImageGalleryProps) {
   const isRawStyle = style === 'photo' || style === 'upload';
+  const [showStudio, setShowStudio] = useState(false);
   const [selected, setSelected] = useState<GeneratedImage | null>(null);
   const [editing, setEditing] = useState<GeneratedImage | null>(null);
   const [composited, setComposited] = useState<Record<string, string>>({});
@@ -164,6 +168,14 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
           </h2>
           <p className="text-xs text-[#5b6573]">{images.length}장 · 개별 재생성 가능</p>
         </div>
+        <button
+          onClick={() => setShowStudio(true)}
+          className="flex items-center gap-1 px-3 py-2 text-xs font-bold bg-[#ffece7] hover:bg-[#ffded5] active:bg-[#ffd0c3] text-[#ff4628] rounded-lg transition-colors border border-[#ff4628]/20 min-h-[36px]"
+          title="선택한 사진 + 제목으로 썸네일 카드 만들기"
+        >
+          <span>🎨</span>
+          <span className="hidden sm:inline">썸네일 만들기</span>
+        </button>
         {onRegenerate && (
           <button
             onClick={onRegenerate}
@@ -302,6 +314,17 @@ export default function ImageGallery({ images, keyword, title, style = 'cardnews
       <p className="text-[10px] text-[#73808f] mt-4 text-center">
         이미지를 클릭하여 확대 · 다운로드
       </p>
+
+      {showStudio && (
+        <ThumbnailStudio
+          images={images}
+          imagesSource={style === 'upload' ? 'upload' : 'ai'}
+          defaultTitle={title}
+          defaultKlabel={keyword}
+          defaultClinicName={clinicName}
+          onClose={() => setShowStudio(false)}
+        />
+      )}
 
       {editing && (
         <ImageEditor
