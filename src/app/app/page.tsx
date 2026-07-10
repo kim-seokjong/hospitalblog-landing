@@ -1192,6 +1192,16 @@ export default function AppPage() {
               user ? (
                 <>
                   <span className="text-xs text-[#5b6573] hidden lg:block max-w-[120px] truncate">{user.email}</span>
+                  {/* 경쟁 분석 리포트 진입점 — /monitor는 기능 완성 후에도 네비 링크가 없어
+                      회원이 URL 직접 입력으로만 접근 가능했음(2026-07-10 발견·수정) */}
+                  <Link
+                    href="/monitor"
+                    title="경쟁 분석 · 콘텐츠 기획"
+                    className="px-2.5 sm:px-3 py-1.5 text-xs border border-[#b4bfce] rounded-lg text-[#5b6573] hover:bg-[#eef2f6] hover:text-[#202020] active:bg-[#eef2f6] transition-colors min-h-[36px] flex items-center gap-1"
+                  >
+                    <span>📊</span>
+                    <span className="hidden sm:inline">경쟁 분석</span>
+                  </Link>
                   <Link
                     href="/mypage"
                     title="마이페이지"
