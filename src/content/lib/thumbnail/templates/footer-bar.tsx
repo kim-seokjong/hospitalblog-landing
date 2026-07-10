@@ -5,9 +5,10 @@
 import type { ReactElement } from 'react';
 import type { TemplateViewModel } from './model';
 import { fitTitleFontSize } from '../layout';
+import { renderAccentedTitle } from './accent-title';
 
 export function renderFooterBar(vm: TemplateViewModel): ReactElement {
-  const { imageUrl, title, klabel, clinicName, accent, fontFamily, size } = vm;
+  const { imageUrl, title, klabel, clinicName, accent, accentWord, fontFamily, size } = vm;
   const photoHeight = Math.round(size * 0.62);
   const footHeight = size - photoHeight;
   const titleSize = fitTitleFontSize(title, 76, 40);
@@ -50,7 +51,7 @@ export function renderFooterBar(vm: TemplateViewModel): ReactElement {
           {klabel || '가이드'}
         </div>
         <div style={{ display: 'flex', fontSize: titleSize, fontWeight: 800, color: '#ffffff', lineHeight: 1.25 }}>
-          {title}
+          {renderAccentedTitle({ title, accentWord, accentStyle: { color: accent }, titleSize })}
         </div>
       </div>
 

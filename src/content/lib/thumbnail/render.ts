@@ -76,6 +76,7 @@ export function parseThumbnailParams(raw: unknown): ParseResult {
       imageUrl,
       title: b.title,
       klabel: typeof b.klabel === 'string' ? b.klabel : undefined,
+      accentWord: typeof b.accentWord === 'string' ? b.accentWord : undefined,
       tags,
       clinicName: typeof b.clinicName === 'string' ? b.clinicName : undefined,
       accentColor,
@@ -90,6 +91,7 @@ function buildViewModel(params: ThumbnailParams): TemplateViewModel {
     imageUrl: params.imageUrl,
     title: clampText(params.title, 80),
     klabel: clampText(params.klabel, 24),
+    accentWord: clampText(params.accentWord, 12),
     tags: normalizeTags(params.tags),
     clinicName: clampText(params.clinicName, 24),
     accent: params.accentColor && isValidCssColor(params.accentColor) ? params.accentColor : DEFAULT_ACCENT_COLOR,
@@ -103,13 +105,24 @@ export interface RenderedThumbnail {
   readonly contentType: 'image/png';
 }
 
+export interface RenderOptions {
+  /**
+   * 번들 폰트를 가져올 자체 오리진 (예: req.nextUrl.origin).
+   * 지정 시 저장소 번들(public/fonts) 우선, 실패하면 CDN 폴백.
+   */
+  readonly fontBaseUrl?: string;
+}
+
 /**
  * 검증된 파라미터로 카드 PNG 바이트를 생성한다.
  * AI 배경이면 출처 메타데이터를 삽입한 바이트를 반환한다.
  */
-export async function renderThumbnail(params: ThumbnailParams): Promise<RenderedThumbnail> {
+export async function renderThumbnail(
+  params: ThumbnailParams,
+  options?: RenderOptions,
+): Promise<RenderedThumbnail> {
   const vm = buildViewModel(params);
-  const fonts = await loadThumbnailFonts();
+  const fonts = await loadThumbnailFonts(options?.fontBaseUrl);
   const element = getTemplateRenderer(params.template)(vm);
 
   const response = new ImageResponse(element, {

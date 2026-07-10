@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GeneratedImage } from '@/types';
 import type { ThumbnailTemplate } from '@/content/lib/thumbnail/types';
+import type { CopySuggestion } from '@/content/lib/thumbnail/copy-suggest';
+import ThumbnailCopySuggest from '@/content/components/ThumbnailCopySuggest';
 
 type ImageSource = 'ai' | 'upload';
 
@@ -43,6 +45,9 @@ const TEMPLATES: { id: ThumbnailTemplate; name: string; desc: string }[] = [
   { id: 'bottom-gradient', name: '① 바텀 그라데이션', desc: '가장 흔한 형 · 안전빵' },
   { id: 'full-scrim', name: '② 풀 스크림 센터', desc: '사진 전체 어둡게 · 집중형' },
   { id: 'footer-bar', name: '③ 하단 컬러바', desc: '사진 깨끗 · 가독성↑' },
+  { id: 'magazine-split', name: '④ 매거진 스플릿', desc: '좌 사진/우 텍스트 · 잡지 화보' },
+  { id: 'circle-frame', name: '⑤ 원형 윈도우', desc: '파스텔 매트 · 밝은 과 감성' },
+  { id: 'typo-maximal', name: '⑥ 맥시멀 타이포', desc: '거대 타이포+하이라이트 · 시선 강탈' },
 ];
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -71,6 +76,7 @@ export default function ThumbnailStudio({
 
   const [bg, setBg] = useState<BgChoice | null>(firstBg);
   const [title, setTitle] = useState(defaultTitle);
+  const [accentWord, setAccentWord] = useState('');
   const [klabel, setKlabel] = useState(defaultKlabel ?? '');
   const [clinicName, setClinicName] = useState(defaultClinicName ?? '');
   const [tagsText, setTagsText] = useState('');
@@ -142,6 +148,7 @@ export default function ThumbnailStudio({
               imageUrl: bg.url,
               title,
               klabel: klabel.trim() || undefined,
+              accentWord: accentWord.trim() || undefined,
               clinicName: clinicName.trim() || undefined,
               tags: parseTags(tagsText),
               accentColor: accent,
@@ -166,7 +173,14 @@ export default function ThumbnailStudio({
       }),
     );
     setGenerating(false);
-  }, [bg, title, klabel, clinicName, tagsText, accent]);
+  }, [bg, title, klabel, accentWord, clinicName, tagsText, accent]);
+
+  /** 카피 제안 적용 — 제목(2줄)·라벨·강조 어절 일괄 반영. */
+  const applySuggestion = useCallback((s: CopySuggestion) => {
+    setTitle(s.line2 ? `${s.line1}\n${s.line2}` : s.line1);
+    if (s.klabel) setKlabel(s.klabel);
+    setAccentWord(s.accentWord);
+  }, []);
 
   const download = (id: string) => {
     const pv = previews[id];
@@ -201,7 +215,7 @@ export default function ThumbnailStudio({
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-bold text-[#202020]">썸네일 만들기</h2>
-            <p className="text-xs text-[#5b6573]">배경 사진 + 제목 오버레이 · 템플릿 3종</p>
+            <p className="text-xs text-[#5b6573]">배경 사진 + 제목 오버레이 · 템플릿 6종 · 카피 자동 제안</p>
           </div>
           <button
             onClick={onClose}
@@ -282,15 +296,30 @@ export default function ThumbnailStudio({
             )}
           </div>
 
+          {/* 카피 자동 제안 — 열릴 때 글 제목으로 5안 로드 */}
+          <ThumbnailCopySuggest title={defaultTitle} keyword={defaultKlabel} onApply={applySuggestion} />
+
           {/* 입력 필드 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-[#4a4f55] mb-1">제목 *</label>
-              <input
+              <label className="block text-xs font-bold text-[#4a4f55] mb-1">
+                제목 * <span className="font-normal text-[#73808f]">(줄바꿈 = 카드 줄바꿈)</span>
+              </label>
+              <textarea
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-white border border-[#b4bfce] text-[#202020] text-sm [color-scheme:light] focus:outline-none focus:border-[#ff4628]"
+                rows={2}
+                className="w-full px-3 py-2.5 rounded-lg bg-white border border-[#b4bfce] text-[#202020] text-sm [color-scheme:light] focus:outline-none focus:border-[#ff4628] resize-none"
                 placeholder="카드에 크게 들어갈 제목"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-[#4a4f55] mb-1">강조 어절 (선택)</label>
+              <input
+                value={accentWord}
+                onChange={(e) => setAccentWord(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg bg-white border border-[#b4bfce] text-[#202020] text-sm [color-scheme:light] focus:outline-none focus:border-[#ff4628]"
+                placeholder="제목 속 어절 1개 · 예: 5가지"
               />
             </div>
             <div>
@@ -340,7 +369,7 @@ export default function ThumbnailStudio({
             disabled={generating || !bg || !title.trim()}
             className="w-full py-3 rounded-xl bg-[#ff4628] hover:bg-[#e63a1c] text-white text-sm font-bold transition-colors disabled:opacity-40"
           >
-            {generating ? '생성 중...' : '미리보기 3종 생성'}
+            {generating ? '생성 중...' : '미리보기 6종 생성'}
           </button>
 
           {/* 미리보기 */}
