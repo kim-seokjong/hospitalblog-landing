@@ -37,6 +37,8 @@ export interface GeoHospitalProfile {
   region: string | null;
   /** 주소 (profiles.hospital_address) — 없으면 생략 */
   address?: string | null;
+  /** 병원 로고 URL (브랜드킷 — 자체 스토리지 검증 통과분만 전달) — 없으면 생략 */
+  logoUrl?: string | null;
 }
 
 export interface FaqItem {
@@ -188,6 +190,7 @@ export function buildMedicalClinicSchema(profile: GeoHospitalProfile): JsonLdObj
   const specialty = normalized(profile.specialty);
   const region = normalized(profile.region);
   const address = normalized(profile.address);
+  const logoUrl = normalized(profile.logoUrl);
 
   const postalAddress: JsonLdObject | null = region || address
     ? {
@@ -204,6 +207,7 @@ export function buildMedicalClinicSchema(profile: GeoHospitalProfile): JsonLdObj
     name: hospitalName,
     ...(specialty ? { medicalSpecialty: specialty } : {}),
     ...(postalAddress ? { address: postalAddress } : {}),
+    ...(logoUrl ? { logo: logoUrl } : {}),
   };
 }
 

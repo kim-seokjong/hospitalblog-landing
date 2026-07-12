@@ -1,8 +1,10 @@
+import type { CSSProperties } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { validateSlug, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
-import { getClinicBySlug, getPublishedPost } from '@/content/lib/clinic-site/data';
+import { getClinicBySlug, getPublishedPost, getPublishedPosts } from '@/content/lib/clinic-site/data';
+import { getClinicTheme } from '@/content/lib/clinic-site/theme-data';
 import {
   buildGeoSchemas,
   buildMetaDescription,
@@ -21,9 +23,14 @@ import ClinicSiteFooter, { formatClinicDate } from '../../site-chrome';
  * - 발행 확정(published_to_site=true) 글만 — 아니면 404 (검수 게이트는 발행 API가 담당)
  * - 본문 렌더·JSON-LD 는 geo-export/geo-schema 재사용 (직렬화 이스케이프 그대로)
  * - canonical = 서브도메인 절대 URL. ISR 1시간.
+ * - 브랜드킷 자동 테마: 로고(헤더)·브랜드 컬러(h2 보더·홈 링크 hover) 절제 적용.
+ *   미등록이면 기본 디자인 그대로 (theme-data.ts graceful).
  */
 
 export const revalidate = 3600;
+
+/** 본문 하단 "이 병원의 다른 글" 표시 수. */
+const OTHER_POSTS_LIMIT = 3;
 
 interface PageProps {
   params: Promise<{ slug: string; postId: string }>;
@@ -64,8 +71,14 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
   const clinic = await getClinicBySlug(validated.slug);
   if (!clinic) notFound();
 
-  const post = await getPublishedPost(clinic.userId, postId);
+  const [post, allPosts, theme] = await Promise.all([
+    getPublishedPost(clinic.userId, postId),
+    getPublishedPosts(clinic.userId),
+    getClinicTheme(clinic.userId),
+  ]);
   if (!post) notFound();
+
+  const otherPosts = allPosts.filter((p) => p.id !== post.id).slice(0, OTHER_POSTS_LIMIT);
 
   const schemas = buildGeoSchemas(
     { title: post.title, content: post.content, publishedAt: post.publishedAt },
@@ -74,6 +87,7 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
       specialty: clinic.hospitalType,
       region: clinic.region,
       address: clinic.address,
+      logoUrl: theme.logoUrl,
     },
   );
 
@@ -82,8 +96,19 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
   // renderBodyHtml 은 모든 텍스트를 escapeHtml 처리한 시맨틱 HTML 문자열을 만든다
   const bodyHtml = renderBodyHtml(stripStructureBlocks(post.content));
 
+  // 브랜드 컬러 — 검증 통과(hasBrandColor)시에만. CSS 변수는 hex 검증 완료값만 주입.
+  const accentStyle: CSSProperties | undefined = theme.hasBrandColor
+    ? ({ '--clinic-accent': theme.accentColor } as CSSProperties)
+    : undefined;
+  const navHoverClass = theme.hasBrandColor
+    ? 'hover:text-[color:var(--clinic-accent)]'
+    : 'hover:text-[#202020]';
+  const bodyAccentClass = theme.hasBrandColor
+    ? ' [&_h2]:pl-3 [&_h2]:border-l-4 [&_h2]:border-[color:var(--clinic-accent)] [&_a]:text-[color:var(--clinic-accent)]'
+    : '';
+
   return (
-    <div className="min-h-screen bg-white text-[#202020]">
+    <div className="min-h-screen bg-white text-[#202020]" style={accentStyle}>
       <script
         type="application/ld+json"
         // serializeJsonLd 가 "</" 를 "<\/" 로 이스케이프 (geo-schema — XSS 가드)
@@ -91,10 +116,18 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
       />
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-        <nav className="mb-8">
+        <nav className="mb-8 flex items-center gap-2">
+          {theme.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={theme.logoUrl}
+              alt={`${clinic.hospitalName} 로고`}
+              className="h-6 w-auto max-w-[96px] object-contain shrink-0"
+            />
+          )}
           <Link
             href="/"
-            className="text-sm text-[#5b6573] hover:text-[#202020] hover:underline underline-offset-4"
+            className={`text-sm text-[#5b6573] ${navHoverClass} hover:underline underline-offset-4`}
           >
             ← {clinic.hospitalName} 블로그
           </Link>
@@ -123,10 +156,10 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
 
           {/* 본문 — geo-export renderBodyHtml (전 텍스트 이스케이프 완료) */}
           <div
-            className="clinic-post-body space-y-4 text-[15px] sm:text-base
+            className={`clinic-post-body space-y-4 text-[15px] sm:text-base
               [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-9 [&_h2]:mb-2
               [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-7 [&_h3]:mb-1.5
-              [&_p]:leading-[1.8]"
+              [&_p]:leading-[1.8]${bodyAccentClass}`}
             dangerouslySetInnerHTML={{ __html: bodyHtml }}
           />
 
@@ -149,6 +182,30 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
             </section>
           )}
         </article>
+
+        {/* 이 병원의 다른 글 — 최근 3편 (현재 글 제외, 없으면 생략) */}
+        {otherPosts.length > 0 && (
+          <section aria-label="이 병원의 다른 글" className="mt-12 pt-8 border-t border-[#e5e9ef]">
+            <h2 className="text-base font-semibold mb-4 text-[#202020]">이 병원의 다른 글</h2>
+            <ul className="space-y-3">
+              {otherPosts.map((other) => (
+                <li key={other.id} className="flex flex-wrap items-baseline gap-x-2">
+                  <Link
+                    href={`/posts/${other.id}`}
+                    className={`text-[15px] font-medium break-keep hover:underline underline-offset-4 ${theme.hasBrandColor ? 'hover:text-[color:var(--clinic-accent)]' : ''}`}
+                  >
+                    {other.title}
+                  </Link>
+                  {other.publishedAt && (
+                    <span className="text-xs text-[#73808f]">
+                      {formatClinicDate(other.publishedAt)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <ClinicSiteFooter hospitalName={clinic.hospitalName} />
       </div>
