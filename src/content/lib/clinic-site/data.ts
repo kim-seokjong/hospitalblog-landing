@@ -21,6 +21,10 @@ export interface ClinicSiteProfile {
   hospitalType: string | null;
   region: string | null;
   address: string | null;
+  /** 저자 이름 (profiles.full_name) — 바이라인/E-E-A-T 파생용 */
+  authorFullName: string | null;
+  /** 저자 직책 (profiles.position — 원장/부원장/… ) — 임상 역할일 때만 개인 저자 */
+  authorPosition: string | null;
 }
 
 export interface ClinicSitePost {
@@ -28,6 +32,10 @@ export interface ClinicSitePost {
   title: string;
   content: string;
   publishedAt: string | null;
+  /** 주제 기반 관련 글 랭킹용 (saved_posts.tags) — 없으면 빈 배열 */
+  tags: string[];
+  /** 주제 기반 관련 글 랭킹용 (saved_posts.keyword) — 없으면 null */
+  keyword: string | null;
 }
 
 interface ProfileRow {
@@ -37,6 +45,8 @@ interface ProfileRow {
   hospital_type: string | null;
   region: string | null;
   hospital_address: string | null;
+  full_name: string | null;
+  position: string | null;
 }
 
 interface PostRow {
@@ -46,6 +56,8 @@ interface PostRow {
   site_published_at: string | null;
   published_at: string | null;
   created_at: string | null;
+  tags: string[] | null;
+  keyword: string | null;
 }
 
 /** 목록 페이지 글 수 상한. */
@@ -63,7 +75,7 @@ export async function getClinicBySlug(slug: string): Promise<ClinicSiteProfile |
     const admin = createAdminClient();
     const { data, error } = await admin
       .from('profiles')
-      .select('id, site_slug, hospital_name, hospital_type, region, hospital_address')
+      .select('id, site_slug, hospital_name, hospital_type, region, hospital_address, full_name, position')
       .eq('site_slug', slug)
       .single<ProfileRow>();
 
@@ -75,6 +87,8 @@ export async function getClinicBySlug(slug: string): Promise<ClinicSiteProfile |
       hospitalType: data.hospital_type,
       region: data.region,
       address: data.hospital_address,
+      authorFullName: data.full_name,
+      authorPosition: data.position,
     };
   } catch (err) {
     console.error('[clinic-site] 프로필 조회 오류:', err instanceof Error ? err.message : err);
@@ -88,6 +102,8 @@ function toPost(row: PostRow): ClinicSitePost {
     title: row.title,
     content: row.content,
     publishedAt: row.site_published_at ?? row.published_at ?? row.created_at,
+    tags: Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === 'string') : [],
+    keyword: typeof row.keyword === 'string' ? row.keyword : null,
   };
 }
 
@@ -97,7 +113,7 @@ export async function getPublishedPosts(userId: string): Promise<ClinicSitePost[
     const admin = createAdminClient();
     const { data, error } = await admin
       .from('saved_posts')
-      .select('id, title, content, site_published_at, published_at, created_at')
+      .select('id, title, content, site_published_at, published_at, created_at, tags, keyword')
       .eq('user_id', userId)
       .eq('published_to_site', true)
       .order('site_published_at', { ascending: false, nullsFirst: false })
@@ -121,7 +137,7 @@ export async function getPublishedPost(
     const admin = createAdminClient();
     const { data, error } = await admin
       .from('saved_posts')
-      .select('id, title, content, site_published_at, published_at, created_at')
+      .select('id, title, content, site_published_at, published_at, created_at, tags, keyword')
       .eq('id', postId)
       .eq('user_id', userId)
       .eq('published_to_site', true)

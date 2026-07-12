@@ -14,6 +14,8 @@ import {
   stripStructureBlocks,
 } from '@/content/lib/geo-schema';
 import { renderBodyHtml } from '@/content/lib/geo-export';
+import { formatBylineText, resolveAuthorAttribution } from '@/content/lib/clinic-site/byline';
+import { rankRelatedPosts, RELATED_POSTS_LIMIT } from '@/content/lib/clinic-site/related-posts';
 import ClinicSiteFooter, { formatClinicDate } from '../../site-chrome';
 
 /**
@@ -28,9 +30,6 @@ import ClinicSiteFooter, { formatClinicDate } from '../../site-chrome';
  */
 
 export const revalidate = 3600;
-
-/** 본문 하단 "이 병원의 다른 글" 표시 수. */
-const OTHER_POSTS_LIMIT = 3;
 
 interface PageProps {
   params: Promise<{ slug: string; postId: string }>;
@@ -78,7 +77,12 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
   ]);
   if (!post) notFound();
 
-  const otherPosts = allPosts.filter((p) => p.id !== post.id).slice(0, OTHER_POSTS_LIMIT);
+  // 주제 기반 관련 글 — 태그/키워드 겹침 순, 부족하면 최신순 보충 (현재 글 제외)
+  const relatedPosts = rankRelatedPosts(
+    { id: post.id, title: post.title, tags: post.tags, keyword: post.keyword },
+    allPosts,
+    RELATED_POSTS_LIMIT,
+  );
 
   const schemas = buildGeoSchemas(
     { title: post.title, content: post.content, publishedAt: post.publishedAt },
@@ -88,7 +92,19 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
       region: clinic.region,
       address: clinic.address,
       logoUrl: theme.logoUrl,
+      authorFullName: clinic.authorFullName,
+      authorPosition: clinic.authorPosition,
     },
+  );
+
+  // 저자 바이라인 — 임상 역할(원장·부원장)+이름이면 인물, 아니면 병원(조직). 없으면 생략.
+  const bylineText = formatBylineText(
+    resolveAuthorAttribution({
+      fullName: clinic.authorFullName,
+      position: clinic.authorPosition,
+      hospitalName: clinic.hospitalName,
+      specialty: clinic.hospitalType,
+    }),
   );
 
   const summaryLines = extractSummaryLines(post.content);
@@ -181,14 +197,21 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
               </dl>
             </section>
           )}
+
+          {/* 저자 바이라인 — 프로필 사실정보 기반 (임상 역할=인물 / 그 외=병원, 없으면 생략) */}
+          {bylineText && (
+            <p className="mt-10 pt-4 border-t border-[#eef1f5] text-xs text-[#73808f]">
+              {bylineText}
+            </p>
+          )}
         </article>
 
-        {/* 이 병원의 다른 글 — 최근 3편 (현재 글 제외, 없으면 생략) */}
-        {otherPosts.length > 0 && (
-          <section aria-label="이 병원의 다른 글" className="mt-12 pt-8 border-t border-[#e5e9ef]">
-            <h2 className="text-base font-semibold mb-4 text-[#202020]">이 병원의 다른 글</h2>
+        {/* 관련 글 — 같은 진료과·주제 연관도 순 (현재 글 제외, 없으면 생략) */}
+        {relatedPosts.length > 0 && (
+          <section aria-label="관련 글" className="mt-12 pt-8 border-t border-[#e5e9ef]">
+            <h2 className="text-base font-semibold mb-4 text-[#202020]">관련 글</h2>
             <ul className="space-y-3">
-              {otherPosts.map((other) => (
+              {relatedPosts.map((other) => (
                 <li key={other.id} className="flex flex-wrap items-baseline gap-x-2">
                   <Link
                     href={`/posts/${other.id}`}

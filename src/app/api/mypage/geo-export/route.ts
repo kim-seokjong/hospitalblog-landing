@@ -10,6 +10,7 @@ import {
   stripStructureBlocks,
 } from '@/content/lib/geo-schema';
 import { buildExportFilename, buildGeoExportHtml } from '@/content/lib/geo-export';
+import { formatBylineText, resolveAuthorAttribution } from '@/content/lib/clinic-site/byline';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,8 @@ interface ProfileRow {
   hospital_type?: string | null;
   region?: string | null;
   hospital_address?: string | null;
+  full_name?: string | null;
+  position?: string | null;
 }
 
 function jsonError(status: number, error: string): NextResponse {
@@ -120,7 +123,7 @@ export async function GET(req: NextRequest) {
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('hospital_name, hospital_type, region, hospital_address')
+        .select('hospital_name, hospital_type, region, hospital_address, full_name, position')
         .eq('id', user.id)
         .single<ProfileRow>();
       profileRow = data ?? {};
@@ -138,7 +141,19 @@ export async function GET(req: NextRequest) {
       specialty: profileRow.hospital_type ?? null,
       region: profileRow.region ?? null,
       address: profileRow.hospital_address ?? null,
+      authorFullName: profileRow.full_name ?? null,
+      authorPosition: profileRow.position ?? null,
     };
+
+    // 저자 바이라인 — 임상 역할(원장·부원장)+이름이면 인물, 아니면 병원(조직). 없으면 생략.
+    const bylineText = formatBylineText(
+      resolveAuthorAttribution({
+        fullName: profile.authorFullName,
+        position: profile.authorPosition,
+        hospitalName: profile.hospitalName,
+        specialty: profile.specialty,
+      }),
+    );
 
     const schemas = buildGeoSchemas(schemaPost, profile);
     const html = buildGeoExportHtml({
@@ -148,6 +163,7 @@ export async function GET(req: NextRequest) {
       jsonLd: serializeJsonLd(schemas),
       summaryLines: extractSummaryLines(content),
       faqItems: extractFaqItems(content),
+      bylineText,
     });
 
     const filename = buildExportFilename(post.title);

@@ -36,6 +36,11 @@ export interface GeoExportInput {
   summaryLines: ReadonlyArray<string>;
   /** [자주 묻는 질문] Q/A (없으면 빈 배열 → 섹션 생략) */
   faqItems: ReadonlyArray<GeoExportFaqItem>;
+  /**
+   * 저자 바이라인 텍스트("작성: …") — byline.ts formatBylineText 결과.
+   * 없거나(null) 빈 문자열이면 바이라인 footer 를 생략한다.
+   */
+  bylineText?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +175,15 @@ const BASE_STYLE = `    article { max-width: 720px; margin: 0 auto; padding: 24p
     article h2 { font-size: 1.25em; margin-top: 2em; }
     article h3 { font-size: 1.05em; margin-top: 1.5em; }
     article section[aria-label="핵심 요약"] { background: #f6f7f9; border-radius: 12px; padding: 16px 20px; }
-    article section[aria-label="핵심 요약"] h2 { margin-top: 0; }`;
+    article section[aria-label="핵심 요약"] h2 { margin-top: 0; }
+    article p.byline { margin-top: 2.5em; padding-top: 1em; border-top: 1px solid #e5e9ef; color: #73808f; font-size: 0.85em; }`;
+
+/** 저자 바이라인 footer — 텍스트가 있을 때만 절제된 <p> 로 렌더. */
+function renderBylineSection(bylineText: string | null | undefined): string {
+  const text = (bylineText ?? '').trim();
+  if (!text) return '';
+  return `  <p class="byline">${escapeHtml(text)}</p>`;
+}
 
 /**
  * 병원 홈페이지 게시용 완결 HTML 문서 문자열을 생성한다.
@@ -186,6 +199,8 @@ export function buildGeoExportHtml(input: GeoExportInput): string {
   const faqSection = renderFaqSection(input.faqItems);
   const bodyHtml = renderBodyHtml(input.bodyText);
 
+  const bylineSection = renderBylineSection(input.bylineText);
+
   const bodySections = [
     `  <h1>${title}</h1>`,
     summarySection,
@@ -194,6 +209,7 @@ export function buildGeoExportHtml(input: GeoExportInput): string {
       .map((line) => `  ${line}`)
       .join('\n'),
     faqSection,
+    bylineSection,
   ].filter((s) => s.trim().length > 0);
 
   return `<!doctype html>

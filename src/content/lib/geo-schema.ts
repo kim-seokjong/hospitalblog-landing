@@ -15,7 +15,16 @@
  *
  * 외부 의존 없는 순수 모듈(@/ alias import 금지) — node:test 러너로 직접 검증 가능.
  * (geo-tracking.ts 패턴)
+ *
+ * 저자 귀속(author)·Physician 파생은 byline.ts(동일 계층 순수 모듈)에 위임한다 —
+ * "자격을 지어내지 않는다"는 컴플라이언스 규칙을 한곳에서 관리하기 위함.
  */
+
+import {
+  buildAuthorNode,
+  buildPhysicianSchema,
+  resolveAuthorAttribution,
+} from './clinic-site/byline.ts';
 
 // ---------------------------------------------------------------------------
 // 입력 타입
@@ -39,6 +48,13 @@ export interface GeoHospitalProfile {
   address?: string | null;
   /** 병원 로고 URL (브랜드킷 — 자체 스토리지 검증 통과분만 전달) — 없으면 생략 */
   logoUrl?: string | null;
+  /**
+   * 저자 이름 (profiles.full_name) — 임상 역할(원장·부원장)일 때만 개인 저자로 쓰인다.
+   * 없거나 비임상 직책이면 저자는 병원(Organization)으로 파생된다.
+   */
+  authorFullName?: string | null;
+  /** 저자 직책 (profiles.position — 원장/부원장/간호사/원무/마케터/기타) */
+  authorPosition?: string | null;
 }
 
 export interface FaqItem {
@@ -136,12 +152,26 @@ function safeIsoDate(value: string | null | undefined): string | null {
   return new Date(parsed).toISOString();
 }
 
-/** Article 스키마 — headline·description 은 제목·본문에서 파생. */
+/** 프로필의 저자 필드로 귀속(person/organization/null)을 결정한다. */
+function attributionOf(profile: GeoHospitalProfile) {
+  return resolveAuthorAttribution({
+    fullName: profile.authorFullName ?? null,
+    position: profile.authorPosition ?? null,
+    hospitalName: profile.hospitalName,
+    specialty: profile.specialty,
+  });
+}
+
+/**
+ * Article 스키마 — headline·description 은 제목·본문에서 파생.
+ * author 는 byline 규칙대로 Person(임상 역할) 또는 Organization(병원)으로 —
+ * 저자 필드가 없으면 기존과 동일하게 병원명 Organization 으로 수렴한다.
+ */
 export function buildArticleSchema(
   post: GeoSchemaPost,
   profile: GeoHospitalProfile,
 ): JsonLdObject {
-  const hospitalName = normalized(profile.hospitalName);
+  const authorNode = buildAuthorNode(attributionOf(profile));
   const datePublished = safeIsoDate(post.publishedAt);
 
   return {
@@ -150,9 +180,7 @@ export function buildArticleSchema(
     headline: normalized(post.title),
     description: buildMetaDescription(post.content),
     inLanguage: 'ko',
-    ...(hospitalName
-      ? { author: { '@type': 'Organization', name: hospitalName } }
-      : {}),
+    ...(authorNode ? { author: authorNode } : {}),
     ...(datePublished ? { datePublished } : {}),
   };
 }
@@ -214,7 +242,7 @@ export function buildMedicalClinicSchema(profile: GeoHospitalProfile): JsonLdObj
 /**
  * 글 1편의 JSON-LD 묶음을 파생한다.
  * Article 은 항상, FAQPage 는 본문에 FAQ 가 실재할 때만, MedicalClinic 은
- * 병원명이 있을 때만 포함된다.
+ * 병원명이 있을 때만, Physician 은 저자가 임상 역할(원장·부원장)일 때만 포함된다.
  */
 export function buildGeoSchemas(
   post: GeoSchemaPost,
@@ -227,6 +255,9 @@ export function buildGeoSchemas(
 
   const clinicSchema = buildMedicalClinicSchema(profile);
   if (clinicSchema) schemas.push(clinicSchema);
+
+  const physicianSchema = buildPhysicianSchema(attributionOf(profile));
+  if (physicianSchema) schemas.push(physicianSchema);
 
   return schemas;
 }
