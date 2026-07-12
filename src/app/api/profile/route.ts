@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server'
 import { validateSlug } from '@/content/lib/clinic-site/slug'
+import { isValidCadence } from '@/content/lib/clinic-site/auto-publish'
 
 interface ProfileUpdateBody {
   full_name?: string
@@ -22,9 +23,11 @@ interface ProfileUpdateBody {
   threads_handle?: string
   youtube_channel_id?: string
   site_slug?: string
+  site_publish_cadence?: string
 }
 
 // 마이그레이션이 아직 적용 안 된 환경에서도 안 깨지게 컬럼 셋을 단계적으로 축소한다.
+//  - +SCHED: base + naver(028) + 자사 채널(042) + site_slug(043) + site_publish_cadence(044)
 //  - +SITE : base + naver(028) + 자사 채널(042) + site_slug(043)
 //  - FULL : base + naver_blog_url(028) + 자사 채널(042)
 //  - +NAVER: base + naver_blog_url (042 미적용)
@@ -34,9 +37,11 @@ const PROFILE_COLS_BASE =
 const PROFILE_COLS_WITH_NAVER = `${PROFILE_COLS_BASE}, naver_blog_url`
 const PROFILE_COLS_FULL = `${PROFILE_COLS_WITH_NAVER}, instagram_handle, threads_handle, youtube_channel_id`
 const PROFILE_COLS_WITH_SITE = `${PROFILE_COLS_FULL}, site_slug`
+const PROFILE_COLS_WITH_SCHEDULE = `${PROFILE_COLS_WITH_SITE}, site_publish_cadence`
 
 // 넓은 것 → 좁은 것 순. 42703(컬럼 없음)이면 다음 후보로 재시도한다.
 const SELECT_CANDIDATES: readonly string[] = [
+  PROFILE_COLS_WITH_SCHEDULE,
   PROFILE_COLS_WITH_SITE,
   PROFILE_COLS_FULL,
   PROFILE_COLS_WITH_NAVER,
@@ -111,7 +116,7 @@ export async function PUT(req: NextRequest) {
       'specialty', 'specialty_detail', 'hospital_desc', 'hospital_keywords',
       'region', 'sms_enabled', 'sms_phone', 'notify_expiry', 'notify_usage',
       'naver_blog_url', 'instagram_handle', 'threads_handle', 'youtube_channel_id',
-      'site_slug',
+      'site_slug', 'site_publish_cadence',
     ]
 
     const nullableSet = new Set<string>(NULLABLE_TEXT_COLS as readonly string[])
@@ -138,29 +143,32 @@ export async function PUT(req: NextRequest) {
       updates.site_slug = validated.slug
     }
 
-    // 넓은 update → 컬럼 없음(42703)이면 043 site_slug 제거 → 042 채널 컬럼 제거
-    // → 여전히 없으면 028 naver 컬럼도 제거.
+    // site_publish_cadence — 허용값(off/weekly/biweekly)만. NOT NULL 컬럼이라 빈 값/미허용값은 거부.
+    if ('site_publish_cadence' in updates) {
+      if (!isValidCadence(updates.site_publish_cadence)) {
+        return NextResponse.json({ error: '자동발행 주기 값이 올바르지 않습니다.' }, { status: 400 })
+      }
+    }
+
+    // 넓은 update → 컬럼 없음(42703)이면 최신 마이그 컬럼부터 제거하며 재시도한다.
+    // 순서: 044(site_publish_cadence) → 043(site_slug) → 042(채널 3종) → 028(naver)
     const runUpdate = (payload: Record<string, unknown>) =>
       supabase.from('profiles').update(payload).eq('id', user.id)
 
-    let { error } = await runUpdate(updates)
+    const PEEL_GROUPS_NEWEST_FIRST: readonly (readonly string[])[] = [
+      ['site_publish_cadence'],
+      ['site_slug'],
+      CHANNEL_COLS,
+      ['naver_blog_url'],
+    ]
 
-    if (isMissingColumnError(error)) {
-      const { site_slug, ...withoutSite } = updates
-      void site_slug
-      ;({ error } = await runUpdate(withoutSite))
-
-      if (isMissingColumnError(error)) {
-        const withoutChannels = { ...withoutSite }
-        for (const col of CHANNEL_COLS) delete withoutChannels[col]
-        ;({ error } = await runUpdate(withoutChannels))
-
-        if (isMissingColumnError(error)) {
-          const { naver_blog_url, ...base } = withoutChannels
-          void naver_blog_url
-          ;({ error } = await runUpdate(base))
-        }
-      }
+    let payload = updates
+    let { error } = await runUpdate(payload)
+    for (const group of PEEL_GROUPS_NEWEST_FIRST) {
+      if (!isMissingColumnError(error)) break
+      payload = { ...payload }
+      for (const col of group) delete payload[col]
+      ;({ error } = await runUpdate(payload))
     }
 
     if (error) {

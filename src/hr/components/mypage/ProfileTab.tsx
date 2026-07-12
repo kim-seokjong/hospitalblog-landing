@@ -33,6 +33,7 @@ interface ProfileData {
   threads_handle: string;
   youtube_channel_id: string;
   site_slug: string;
+  site_publish_cadence: string;
   sms_enabled: boolean;
   sms_phone: string;
   notify_expiry: boolean;
@@ -55,6 +56,7 @@ const DEFAULT_PROFILE: ProfileData = {
   threads_handle: '',
   youtube_channel_id: '',
   site_slug: '',
+  site_publish_cadence: 'off',
   sms_enabled: false,
   sms_phone: '',
   notify_expiry: true,
@@ -590,6 +592,28 @@ export default function ProfileTab() {
             }
             return <p className="mt-1.5 text-xs text-red-600">{validated.reason}</p>;
           })()}
+
+          {/* 정기 자동발행 스케줄 — 주소가 유효하게 설정됐을 때만 노출 */}
+          {validateSlug(profile.site_slug.trim()).ok && (
+            <div className="mt-4 pt-4 border-t border-[#e5e9ef]">
+              <Field label="정기 자동발행">
+                <Select
+                  value={profile.site_publish_cadence}
+                  onChange={v => setProfile(p => ({ ...p, site_publish_cadence: v }))}
+                  options={[
+                    { value: 'off', label: '사용 안 함' },
+                    { value: 'weekly', label: '주 1회' },
+                    { value: 'biweekly', label: '격주 1회' },
+                  ]}
+                />
+              </Field>
+              <p className="mt-1.5 text-xs text-[#5b6573] leading-relaxed">
+                검수를 통과한 글 중 아직 발행 안 된 글을 설정 주기로 하나씩 자동 발행합니다.
+                새 글을 만들지 않으며, 검수 통과 글만 대상입니다. 발행할 글이 없으면 아무 일도
+                일어나지 않습니다.
+              </p>
+            </div>
+          )}
         </Section>
 
         {/* 4. 자주 쓰는 키워드 */}
