@@ -5,6 +5,7 @@ import { Section, Field, Input, Select, ToggleRow } from '@/hr/components/form-c
 import { extractNaverBlogId } from '@/content/lib/rank-tracking';
 import { sanitizeHandle } from '@/content/lib/scoreboard/social';
 import { isValidChannelId } from '@/content/lib/scoreboard/youtube';
+import { validateSlug, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
 
 interface NaverLocalResult {
   name: string;
@@ -31,6 +32,7 @@ interface ProfileData {
   instagram_handle: string;
   threads_handle: string;
   youtube_channel_id: string;
+  site_slug: string;
   sms_enabled: boolean;
   sms_phone: string;
   notify_expiry: boolean;
@@ -52,6 +54,7 @@ const DEFAULT_PROFILE: ProfileData = {
   instagram_handle: '',
   threads_handle: '',
   youtube_channel_id: '',
+  site_slug: '',
   sms_enabled: false,
   sms_phone: '',
   notify_expiry: true,
@@ -548,6 +551,44 @@ export default function ProfileTab() {
             ) : (
               <p className="mt-1 text-xs text-red-600">채널 ID 형식이 아닙니다. UC로 시작하는 24자여야 합니다. (채널 URL의 /channel/UC… 부분)</p>
             );
+          })()}
+        </Section>
+
+        {/* 3.7 내 블로그 주소 (서브도메인 공개 블로그) */}
+        <Section title="내 블로그 주소">
+          <p className="text-xs text-[#5b6573] mb-3 leading-relaxed">
+            주소를 설정하면 내 병원 전용 공개 블로그가 열립니다. 콘텐츠 보관함에서 검수를
+            통과한 글만 발행할 수 있고, 발행된 글은 ChatGPT·Gemini 같은 AI 검색이
+            크롤링·인용할 수 있습니다.
+          </p>
+          <Field label="블로그 주소 (선택)">
+            <Input
+              value={profile.site_slug}
+              onChange={v => setProfile(p => ({ ...p, site_slug: v }))}
+              placeholder="myclinic (소문자 영문·숫자·하이픈 3~30자)"
+            />
+          </Field>
+          {(() => {
+            const v = profile.site_slug.trim();
+            if (!v) {
+              return (
+                <p className="mt-1.5 text-xs text-[#5b6573]">
+                  예: myclinic 을 입력하면 https://myclinic.hospitalblog.kr 이 됩니다.
+                </p>
+              );
+            }
+            const validated = validateSlug(v);
+            if (validated.ok) {
+              return (
+                <p className="mt-1.5 text-xs text-green-700">
+                  내 블로그 주소: <strong>{clinicSiteUrl(validated.slug)}</strong>
+                  <span className="block mt-0.5 text-[#5b6573]">
+                    저장하면 위 주소로 공개 블로그가 열립니다.
+                  </span>
+                </p>
+              );
+            }
+            return <p className="mt-1.5 text-xs text-red-600">{validated.reason}</p>;
           })()}
         </Section>
 

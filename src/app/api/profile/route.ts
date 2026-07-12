@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server'
+import { validateSlug } from '@/content/lib/clinic-site/slug'
 
 interface ProfileUpdateBody {
   full_name?: string
@@ -20,9 +21,11 @@ interface ProfileUpdateBody {
   instagram_handle?: string
   threads_handle?: string
   youtube_channel_id?: string
+  site_slug?: string
 }
 
 // 마이그레이션이 아직 적용 안 된 환경에서도 안 깨지게 컬럼 셋을 단계적으로 축소한다.
+//  - +SITE : base + naver(028) + 자사 채널(042) + site_slug(043)
 //  - FULL : base + naver_blog_url(028) + 자사 채널(042)
 //  - +NAVER: base + naver_blog_url (042 미적용)
 //  - BASE : 코어 컬럼만 (028·042 모두 미적용)
@@ -30,9 +33,11 @@ const PROFILE_COLS_BASE =
   'full_name, phone, hospital_name, hospital_address, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage'
 const PROFILE_COLS_WITH_NAVER = `${PROFILE_COLS_BASE}, naver_blog_url`
 const PROFILE_COLS_FULL = `${PROFILE_COLS_WITH_NAVER}, instagram_handle, threads_handle, youtube_channel_id`
+const PROFILE_COLS_WITH_SITE = `${PROFILE_COLS_FULL}, site_slug`
 
 // 넓은 것 → 좁은 것 순. 42703(컬럼 없음)이면 다음 후보로 재시도한다.
 const SELECT_CANDIDATES: readonly string[] = [
+  PROFILE_COLS_WITH_SITE,
   PROFILE_COLS_FULL,
   PROFILE_COLS_WITH_NAVER,
   PROFILE_COLS_BASE,
@@ -44,6 +49,7 @@ const NULLABLE_TEXT_COLS: readonly (keyof ProfileUpdateBody)[] = [
   'instagram_handle',
   'threads_handle',
   'youtube_channel_id',
+  'site_slug',
 ]
 
 // 042(자사 채널) 컬럼 — 미적용 환경에서 제거 후 재시도할 대상.
@@ -105,6 +111,7 @@ export async function PUT(req: NextRequest) {
       'specialty', 'specialty_detail', 'hospital_desc', 'hospital_keywords',
       'region', 'sms_enabled', 'sms_phone', 'notify_expiry', 'notify_usage',
       'naver_blog_url', 'instagram_handle', 'threads_handle', 'youtube_channel_id',
+      'site_slug',
     ]
 
     const nullableSet = new Set<string>(NULLABLE_TEXT_COLS as readonly string[])
@@ -122,25 +129,45 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    // 넓은 update → 컬럼 없음(42703)이면 042 채널 컬럼 제거 → 여전히 없으면 028 naver 컬럼도 제거.
+    // site_slug — 형식·예약어 검증 후 정규화(소문자) 저장. 빈 값은 null(주소 해제).
+    if (typeof updates.site_slug === 'string') {
+      const validated = validateSlug(updates.site_slug)
+      if (!validated.ok) {
+        return NextResponse.json({ error: validated.reason }, { status: 400 })
+      }
+      updates.site_slug = validated.slug
+    }
+
+    // 넓은 update → 컬럼 없음(42703)이면 043 site_slug 제거 → 042 채널 컬럼 제거
+    // → 여전히 없으면 028 naver 컬럼도 제거.
     const runUpdate = (payload: Record<string, unknown>) =>
       supabase.from('profiles').update(payload).eq('id', user.id)
 
     let { error } = await runUpdate(updates)
 
     if (isMissingColumnError(error)) {
-      const withoutChannels = { ...updates }
-      for (const col of CHANNEL_COLS) delete withoutChannels[col]
-      ;({ error } = await runUpdate(withoutChannels))
+      const { site_slug, ...withoutSite } = updates
+      void site_slug
+      ;({ error } = await runUpdate(withoutSite))
 
       if (isMissingColumnError(error)) {
-        const { naver_blog_url, ...base } = withoutChannels
-        void naver_blog_url
-        ;({ error } = await runUpdate(base))
+        const withoutChannels = { ...withoutSite }
+        for (const col of CHANNEL_COLS) delete withoutChannels[col]
+        ;({ error } = await runUpdate(withoutChannels))
+
+        if (isMissingColumnError(error)) {
+          const { naver_blog_url, ...base } = withoutChannels
+          void naver_blog_url
+          ;({ error } = await runUpdate(base))
+        }
       }
     }
 
     if (error) {
+      // 23505 = unique 위반 — profiles 의 사용자 편집 unique 컬럼은 site_slug 뿐
+      if (error.code === '23505') {
+        return NextResponse.json({ error: '이미 사용 중인 주소입니다. 다른 주소를 입력해주세요.' }, { status: 409 })
+      }
       return NextResponse.json({ error: '프로필 저장 실패' }, { status: 500 })
     }
 

@@ -1,7 +1,23 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { resolveClinicSiteRewrite } from '@/content/lib/clinic-site/slug';
 
 export async function middleware(request: NextRequest) {
+  // 병원 서브도메인 블로그 — {slug}.hospitalblog.kr / {slug}.localhost 요청을
+  // /clinic-site/{slug}{경로} 로 rewrite 한다 (공개 페이지, 인증 불필요).
+  // 메인 도메인·www·예약어·vercel.app 미리보기·_next/api/정적 파일은 null 이
+  // 반환되어 아래 기존 동작(세션 갱신)을 그대로 탄다 — DNS 미설정 상태에서도
+  // 어떤 부작용도 없다. 판정 로직은 순수 함수(slug.ts)로 분리해 테스트한다.
+  const clinicSitePath = resolveClinicSiteRewrite(
+    request.headers.get('host'),
+    request.nextUrl.pathname,
+  );
+  if (clinicSitePath) {
+    const url = request.nextUrl.clone();
+    url.pathname = clinicSitePath;
+    return NextResponse.rewrite(url);
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 

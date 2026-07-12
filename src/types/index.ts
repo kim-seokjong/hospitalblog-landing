@@ -211,6 +211,10 @@ export interface SavedPost {
   published_url?: string | null
   /** 의료광고법 검사 증빙 스냅샷 — 마이그레이션 034 적용 전/구버전 글은 null (리포트 페이지에서 즉석 재검사) */
   compliance_report?: ComplianceReportSnapshot | null
+  /** 병원 서브도메인 블로그 공개 여부 — 마이그레이션 043 적용 전 행은 undefined/null (미발행 간주) */
+  published_to_site?: boolean | null
+  /** 서브도메인 블로그 발행 시각 — 발행 취소 시 null */
+  site_published_at?: string | null
   created_at: string
   updated_at: string
 }

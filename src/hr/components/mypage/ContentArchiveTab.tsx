@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import PostEditor from '@/content/components/PostEditor';
+import { publishBlockReason } from '@/content/lib/clinic-site/publish-gate';
+import { clinicSiteUrl } from '@/content/lib/clinic-site/slug';
 import type { SavedPost } from '@/types';
 
 type FetchState = 'loading' | 'ready' | 'error';
@@ -57,6 +59,39 @@ function geoExportEligibility(post: SavedPost): { ok: boolean; reason: string } 
   return { ok: true, reason: '' };
 }
 
+/** 내 블로그 발행 안내 문구 — 버튼 툴팁 공용 */
+const SITE_PUBLISH_TOOLTIP =
+  '검수 통과 글을 내 병원 공개 블로그({주소}.hospitalblog.kr)에 발행합니다. AI 검색(ChatGPT·Gemini) 인용 대상이 됩니다.';
+
+/**
+ * 내 블로그 발행 가능 여부 — 서버 게이트(/api/mypage/site-publish)와 동일 기준.
+ * 검수 게이트(publishBlockReason) + 프로필 블로그 주소(site_slug) 설정 여부.
+ */
+function sitePublishEligibility(
+  post: SavedPost,
+  siteSlug: string | null,
+): { ok: boolean; reason: string } {
+  const gateReason = publishBlockReason(post.compliance_report ?? null);
+  if (gateReason) return { ok: false, reason: gateReason };
+  if (!siteSlug) {
+    return { ok: false, reason: '마이페이지 내 정보에서 블로그 주소를 먼저 설정해주세요.' };
+  }
+  return { ok: true, reason: '' };
+}
+
+/** 내 블로그 발행 토글 API 호출 — 실패 시 서버의 한국어 사유를 담아 throw. */
+async function toggleSitePublish(postId: string, publish: boolean): Promise<void> {
+  const res = await fetch('/api/mypage/site-publish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ postId, publish }),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(json.error ?? '발행 처리에 실패했습니다.');
+  }
+}
+
 /** GEO 발행본 다운로드 — 실패 시 서버의 한국어 사유를 담아 throw. */
 async function downloadGeoExportFile(post: SavedPost): Promise<void> {
   const res = await fetch(`/api/mypage/geo-export?postId=${encodeURIComponent(post.id)}`);
@@ -77,16 +112,21 @@ async function downloadGeoExportFile(post: SavedPost): Promise<void> {
 
 interface DetailModalProps {
   post: SavedPost;
+  siteSlug: string | null;
+  publishing: boolean;
+  onTogglePublish: (post: SavedPost) => void;
   onClose: () => void;
   onEdit: (post: SavedPost) => void;
 }
 
-function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
+function DetailModal({ post, siteSlug, publishing, onTogglePublish, onClose, onEdit }: DetailModalProps) {
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const status = statusBadge(post.status);
   const site = siteBadge(post.target_site);
   const geoExport = geoExportEligibility(post);
+  const sitePublish = sitePublishEligibility(post, siteSlug);
+  const isPublishedToSite = post.published_to_site === true;
 
   const handleGeoDownload = async () => {
     if (!geoExport.ok || downloading) return;
@@ -162,7 +202,34 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
               홈페이지용 HTML: {geoExport.reason}
             </p>
           )}
+          {!sitePublish.ok && !isPublishedToSite && (
+            <p className="text-xs text-[#73808f]" role="note">
+              내 블로그 발행: {sitePublish.reason}
+            </p>
+          )}
+          {isPublishedToSite && siteSlug && (
+            <p className="text-xs text-green-700" role="note">
+              내 블로그에 발행됨 —{' '}
+              <a
+                href={clinicSiteUrl(siteSlug, `/posts/${post.id}`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-green-800"
+              >
+                {clinicSiteUrl(siteSlug, `/posts/${post.id}`)}
+              </a>
+            </p>
+          )}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => onTogglePublish(post)}
+            disabled={publishing || (!isPublishedToSite && !sitePublish.ok)}
+            title={isPublishedToSite ? '내 블로그에서 이 글을 내립니다.' : (sitePublish.ok ? SITE_PUBLISH_TOOLTIP : sitePublish.reason)}
+            className="px-4 py-2.5 text-sm font-semibold text-[#4a4f55] border border-[#b4bfce] hover:bg-[#eef2f6] rounded-lg transition-colors disabled:text-[#b4bfce] disabled:hover:bg-transparent disabled:cursor-not-allowed"
+          >
+            {publishing ? '처리 중...' : (isPublishedToSite ? '내 블로그 발행 취소' : '내 블로그에 발행')}
+          </button>
           <button
             type="button"
             onClick={() => void handleGeoDownload()}
@@ -220,6 +287,27 @@ export default function ContentArchiveTab() {
   const [editingPost, setEditingPost] = useState<SavedPost | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [geoDownloadingId, setGeoDownloadingId] = useState<string | null>(null);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [siteSlug, setSiteSlug] = useState<string | null>(null);
+
+  // 내 블로그 주소(site_slug) — 발행 버튼 활성/공개 URL 표시용 (실패해도 목록은 정상)
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/profile');
+        if (!res.ok) return;
+        const json = await res.json() as { profile?: { site_slug?: string | null } };
+        const slug = json.profile?.site_slug;
+        if (!cancelled && typeof slug === 'string' && slug.trim() !== '') {
+          setSiteSlug(slug.trim());
+        }
+      } catch {
+        // 조회 실패 시 미설정으로 간주 — 서버 게이트가 최종 방어
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const loadPosts = useCallback(async () => {
     setFetchState('loading');
@@ -296,6 +384,24 @@ export default function ContentArchiveTab() {
     }
   }, []);
 
+  const handleTogglePublish = useCallback(async (post: SavedPost) => {
+    const publish = post.published_to_site !== true;
+    setPublishingId(post.id);
+    try {
+      await toggleSitePublish(post.id, publish);
+      const patch: Partial<SavedPost> = {
+        published_to_site: publish,
+        site_published_at: publish ? new Date().toISOString() : null,
+      };
+      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, ...patch } : p)));
+      setDetailPost((prev) => (prev && prev.id === post.id ? { ...prev, ...patch } : prev));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '발행 처리에 실패했습니다.');
+    } finally {
+      setPublishingId(null);
+    }
+  }, []);
+
   return (
     <div>
       {/* 에디터 모달 (수정) */}
@@ -311,6 +417,9 @@ export default function ContentArchiveTab() {
       {detailPost && !editingPost && (
         <DetailModal
           post={detailPost}
+          siteSlug={siteSlug}
+          publishing={publishingId === detailPost.id}
+          onTogglePublish={(p) => void handleTogglePublish(p)}
           onClose={() => setDetailPost(null)}
           onEdit={(p) => setEditingPost(p)}
         />
@@ -458,6 +567,61 @@ export default function ContentArchiveTab() {
                           aria-label={`${post.title} 홈페이지용 HTML 다운로드`}
                         >
                           {geoDownloadingId === post.id ? '다운로드 중...' : '홈페이지 HTML'}
+                        </button>
+                      );
+                    })()}
+                    {(() => {
+                      const isPublished = post.published_to_site === true;
+                      if (isPublished) {
+                        return (
+                          <>
+                            {siteSlug && (
+                              <a
+                                href={clinicSiteUrl(siteSlug, `/posts/${post.id}`)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-green-700 hover:text-green-800 underline underline-offset-2 transition-colors"
+                                aria-label={`${post.title} 내 블로그에서 열기`}
+                              >
+                                내 블로그 발행됨 ↗
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); void handleTogglePublish(post); }}
+                              disabled={publishingId === post.id}
+                              title="내 블로그에서 이 글을 내립니다."
+                              className="text-[#5b6573] hover:text-[#ff4628] disabled:text-[#b4bfce] underline underline-offset-2 transition-colors"
+                              aria-label={`${post.title} 내 블로그 발행 취소`}
+                            >
+                              {publishingId === post.id ? '처리 중...' : '발행 취소'}
+                            </button>
+                          </>
+                        );
+                      }
+                      const sitePublish = sitePublishEligibility(post, siteSlug);
+                      if (!sitePublish.ok) {
+                        return (
+                          <span
+                            title={sitePublish.reason}
+                            className="text-[#b4bfce] cursor-not-allowed underline underline-offset-2"
+                            aria-disabled="true"
+                          >
+                            내 블로그 발행
+                          </span>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); void handleTogglePublish(post); }}
+                          disabled={publishingId === post.id}
+                          title={SITE_PUBLISH_TOOLTIP}
+                          className="text-[#5b6573] hover:text-[#ff4628] disabled:text-[#b4bfce] underline underline-offset-2 transition-colors"
+                          aria-label={`${post.title} 내 블로그에 발행`}
+                        >
+                          {publishingId === post.id ? '처리 중...' : '내 블로그 발행'}
                         </button>
                       );
                     })()}
