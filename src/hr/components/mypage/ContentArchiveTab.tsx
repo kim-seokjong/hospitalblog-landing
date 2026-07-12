@@ -32,6 +32,49 @@ function siteBadge(targetSite: SavedPost['target_site']): { text: string; classN
   return { text: '네이버', className: 'bg-green-50 text-green-700 border border-green-200' };
 }
 
+/** GEO 발행본 안내 문구 — 버튼 툴팁 공용 */
+const GEO_EXPORT_TOOLTIP =
+  '네이버 블로그=환자 유입, 홈페이지 발행=AI 검색 인용. 같은 글로 둘 다 준비하세요.';
+
+/**
+ * 홈페이지용 HTML(GEO 발행본) 다운로드 가능 여부 — 서버 게이트와 동일 기준.
+ * 검수(의료광고법) 통과 글만 허용: 검사 스냅샷 존재 + HIGH/CRITICAL·검수필요 아님.
+ */
+function geoExportEligibility(post: SavedPost): { ok: boolean; reason: string } {
+  const report = post.compliance_report;
+  if (!report) {
+    return {
+      ok: false,
+      reason: '의료광고법 검사 기록이 없습니다. 검사 리포트에서 검사를 먼저 완료해주세요.',
+    };
+  }
+  if (report.needsManualReview || report.grade === 'HIGH' || report.grade === 'CRITICAL') {
+    return {
+      ok: false,
+      reason: '의료광고법 검수가 필요한 글입니다. 표현 수정 후 재검사를 통과하면 다운로드할 수 있습니다.',
+    };
+  }
+  return { ok: true, reason: '' };
+}
+
+/** GEO 발행본 다운로드 — 실패 시 서버의 한국어 사유를 담아 throw. */
+async function downloadGeoExportFile(post: SavedPost): Promise<void> {
+  const res = await fetch(`/api/mypage/geo-export?postId=${encodeURIComponent(post.id)}`);
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(json.error ?? '홈페이지용 HTML 다운로드에 실패했습니다.');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${post.title.replace(/[\\/:*?"<>|]/g, '').trim() || 'geo-post'}.html`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 interface DetailModalProps {
   post: SavedPost;
   onClose: () => void;
@@ -40,8 +83,22 @@ interface DetailModalProps {
 
 function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
   const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const status = statusBadge(post.status);
   const site = siteBadge(post.target_site);
+  const geoExport = geoExportEligibility(post);
+
+  const handleGeoDownload = async () => {
+    if (!geoExport.ok || downloading) return;
+    setDownloading(true);
+    try {
+      await downloadGeoExportFile(post);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '홈페이지용 HTML 다운로드에 실패했습니다.');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const handleCopy = async () => {
     try {
@@ -99,7 +156,22 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
         </div>
 
         {/* 푸터 */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2 px-4 sm:px-6 py-4 border-t border-[#b4bfce]">
+        <div className="flex flex-col px-4 sm:px-6 py-4 border-t border-[#b4bfce] gap-2">
+          {!geoExport.ok && (
+            <p className="text-xs text-[#73808f]" role="note">
+              홈페이지용 HTML: {geoExport.reason}
+            </p>
+          )}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => void handleGeoDownload()}
+            disabled={!geoExport.ok || downloading}
+            title={geoExport.ok ? GEO_EXPORT_TOOLTIP : geoExport.reason}
+            className="px-4 py-2.5 text-sm font-semibold text-[#4a4f55] border border-[#b4bfce] hover:bg-[#eef2f6] rounded-lg transition-colors disabled:text-[#b4bfce] disabled:hover:bg-transparent disabled:cursor-not-allowed"
+          >
+            {downloading ? '다운로드 중...' : '홈페이지용 HTML'}
+          </button>
           <a
             href={`/app/report/${post.id}`}
             target="_blank"
@@ -126,6 +198,7 @@ function DetailModal({ post, onClose, onEdit }: DetailModalProps) {
           >
             수정하기
           </button>
+          </div>
         </div>
       </div>
     </div>
@@ -146,6 +219,7 @@ export default function ContentArchiveTab() {
   const [detailPost, setDetailPost] = useState<SavedPost | null>(null);
   const [editingPost, setEditingPost] = useState<SavedPost | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [geoDownloadingId, setGeoDownloadingId] = useState<string | null>(null);
 
   const loadPosts = useCallback(async () => {
     setFetchState('loading');
@@ -208,6 +282,17 @@ export default function ContentArchiveTab() {
       alert(err instanceof Error ? err.message : '삭제에 실패했습니다.');
     } finally {
       setDeletingId(null);
+    }
+  }, []);
+
+  const handleGeoDownload = useCallback(async (post: SavedPost) => {
+    setGeoDownloadingId(post.id);
+    try {
+      await downloadGeoExportFile(post);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '홈페이지용 HTML 다운로드에 실패했습니다.');
+    } finally {
+      setGeoDownloadingId(null);
     }
   }, []);
 
@@ -350,6 +435,32 @@ export default function ContentArchiveTab() {
                     >
                       검사 리포트
                     </a>
+                    {(() => {
+                      const geoExport = geoExportEligibility(post);
+                      if (!geoExport.ok) {
+                        return (
+                          <span
+                            title={geoExport.reason}
+                            className="text-[#b4bfce] cursor-not-allowed underline underline-offset-2"
+                            aria-disabled="true"
+                          >
+                            홈페이지 HTML
+                          </span>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); void handleGeoDownload(post); }}
+                          disabled={geoDownloadingId === post.id}
+                          title={GEO_EXPORT_TOOLTIP}
+                          className="text-[#5b6573] hover:text-[#ff4628] disabled:text-[#b4bfce] underline underline-offset-2 transition-colors"
+                          aria-label={`${post.title} 홈페이지용 HTML 다운로드`}
+                        >
+                          {geoDownloadingId === post.id ? '다운로드 중...' : '홈페이지 HTML'}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               );
