@@ -12,6 +12,7 @@ export type MyPageTabId =
   | 'rankings'
   | 'geo'
   | 'audit'
+  | 'channels'
   | 'conversions'
   | 'brandkit'
   | 'voice'
@@ -58,6 +59,7 @@ export const MYPAGE_GROUPS: readonly MyPageGroupDef[] = [
       { id: 'rankings', label: '성과 리포트' },
       { id: 'geo', label: 'AI 검색' },
       { id: 'audit', label: '블로그 진단' },
+      { id: 'channels', label: '내 채널' },
     ],
   },
   {

@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Section, Field, Input, Select, ToggleRow } from '@/hr/components/form-controls';
 import { extractNaverBlogId } from '@/content/lib/rank-tracking';
+import { sanitizeHandle } from '@/content/lib/scoreboard/social';
+import { isValidChannelId } from '@/content/lib/scoreboard/youtube';
 
 interface NaverLocalResult {
   name: string;
@@ -26,6 +28,9 @@ interface ProfileData {
   hospital_keywords: string[];
   region: string;
   naver_blog_url: string;
+  instagram_handle: string;
+  threads_handle: string;
+  youtube_channel_id: string;
   sms_enabled: boolean;
   sms_phone: string;
   notify_expiry: boolean;
@@ -44,6 +49,9 @@ const DEFAULT_PROFILE: ProfileData = {
   hospital_keywords: [],
   region: '',
   naver_blog_url: '',
+  instagram_handle: '',
+  threads_handle: '',
+  youtube_channel_id: '',
   sms_enabled: false,
   sms_phone: '',
   notify_expiry: true,
@@ -479,6 +487,66 @@ export default function ProfileTab() {
               <p className="mt-1.5 text-xs text-red-600">
                 네이버 블로그 주소 형식이 아닙니다. 예: blog.naver.com/myclinic
               </p>
+            );
+          })()}
+        </Section>
+
+        {/* 3.6 자사 채널 (내 채널 통합 뷰) */}
+        <Section title="자사 채널">
+          <p className="text-xs text-[#5b6573] mb-3 leading-relaxed">
+            핸들을 등록하면 마이페이지 &lsquo;내 채널&rsquo;에서 공개 팔로워·게시물·구독자·발행량을 한눈에 확인할 수 있습니다. 모두 선택 입력이며, 공개 계정만 조회됩니다.
+          </p>
+
+          <Field label="인스타그램 핸들 (선택)">
+            <Input
+              value={profile.instagram_handle}
+              onChange={v => setProfile(p => ({ ...p, instagram_handle: v }))}
+              placeholder="@myclinic (@ 제외 가능)"
+            />
+          </Field>
+          {(() => {
+            const v = profile.instagram_handle.trim();
+            if (!v) return null;
+            const h = sanitizeHandle(v);
+            return h ? (
+              <p className="mt-1 mb-2 text-xs text-green-700">조회 대상: <strong>@{h}</strong></p>
+            ) : (
+              <p className="mt-1 mb-2 text-xs text-red-600">핸들 형식이 아닙니다. 영문·숫자·밑줄·마침표 30자 이하로 입력하세요.</p>
+            );
+          })()}
+
+          <Field label="쓰레드 핸들 (선택)">
+            <Input
+              value={profile.threads_handle}
+              onChange={v => setProfile(p => ({ ...p, threads_handle: v }))}
+              placeholder="@myclinic (@ 제외 가능)"
+            />
+          </Field>
+          {(() => {
+            const v = profile.threads_handle.trim();
+            if (!v) return null;
+            const h = sanitizeHandle(v);
+            return h ? (
+              <p className="mt-1 mb-2 text-xs text-green-700">조회 대상: <strong>@{h}</strong></p>
+            ) : (
+              <p className="mt-1 mb-2 text-xs text-red-600">핸들 형식이 아닙니다. 영문·숫자·밑줄·마침표 30자 이하로 입력하세요.</p>
+            );
+          })()}
+
+          <Field label="유튜브 채널 ID (선택)">
+            <Input
+              value={profile.youtube_channel_id}
+              onChange={v => setProfile(p => ({ ...p, youtube_channel_id: v }))}
+              placeholder="UC로 시작하는 채널 ID"
+            />
+          </Field>
+          {(() => {
+            const v = profile.youtube_channel_id.trim();
+            if (!v) return null;
+            return isValidChannelId(v) ? (
+              <p className="mt-1 text-xs text-green-700">조회 대상 채널: <strong>{v}</strong></p>
+            ) : (
+              <p className="mt-1 text-xs text-red-600">채널 ID 형식이 아닙니다. UC로 시작하는 24자여야 합니다. (채널 URL의 /channel/UC… 부분)</p>
             );
           })()}
         </Section>

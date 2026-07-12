@@ -23,6 +23,7 @@ const ALL_TAB_IDS: MyPageTabId[] = [
   'rankings',
   'geo',
   'audit',
+  'channels',
   'conversions',
   'brandkit',
   'voice',
@@ -36,15 +37,15 @@ test('그룹은 정확히 4개이고 순서는 계정→콘텐츠→성과·안�
   );
 });
 
-test('서브탭 11종이 그룹에 정확히 1번씩 배정된다 (중복/누락 없음)', () => {
+test('서브탭 12종이 그룹에 정확히 1번씩 배정된다 (중복/누락 없음)', () => {
   const flattened = MYPAGE_GROUPS.flatMap((g) => g.tabs.map((t) => t.id));
-  assert.equal(flattened.length, 11);
-  assert.equal(new Set(flattened).size, 11);
+  assert.equal(flattened.length, 12);
+  assert.equal(new Set(flattened).size, 12);
   assert.deepEqual([...flattened].sort(), [...ALL_TAB_IDS].sort());
 });
 
-test('MYPAGE_TABS 는 그룹 정의에서 유도된 11개 탭이다', () => {
-  assert.equal(MYPAGE_TABS.length, 11);
+test('MYPAGE_TABS 는 그룹 정의에서 유도된 12개 탭이다', () => {
+  assert.equal(MYPAGE_TABS.length, 12);
   assert.deepEqual(
     [...MYPAGE_TABS.map((t) => t.id)].sort(),
     [...ALL_TAB_IDS].sort(),
@@ -71,6 +72,7 @@ test('tab → group 매핑이 명세와 일치한다', () => {
     rankings: 'performance',
     geo: 'performance',
     audit: 'performance',
+    channels: 'performance',
     brandkit: 'clinicflix',
     photos: 'clinicflix',
     conversions: 'clinicflix',

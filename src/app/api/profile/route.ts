@@ -17,16 +17,44 @@ interface ProfileUpdateBody {
   notify_expiry?: boolean
   notify_usage?: boolean
   naver_blog_url?: string
+  instagram_handle?: string
+  threads_handle?: string
+  youtube_channel_id?: string
 }
 
-// 마이그레이션 028(naver_blog_url) 미적용 환경에서도 안 깨지게 base/full 분리.
+// 마이그레이션이 아직 적용 안 된 환경에서도 안 깨지게 컬럼 셋을 단계적으로 축소한다.
+//  - FULL : base + naver_blog_url(028) + 자사 채널(042)
+//  - +NAVER: base + naver_blog_url (042 미적용)
+//  - BASE : 코어 컬럼만 (028·042 모두 미적용)
 const PROFILE_COLS_BASE =
   'full_name, phone, hospital_name, hospital_address, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage'
-const PROFILE_COLS_FULL = `${PROFILE_COLS_BASE}, naver_blog_url`
+const PROFILE_COLS_WITH_NAVER = `${PROFILE_COLS_BASE}, naver_blog_url`
+const PROFILE_COLS_FULL = `${PROFILE_COLS_WITH_NAVER}, instagram_handle, threads_handle, youtube_channel_id`
 
-function isMissingBlogUrlColumn(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false
-  return error.code === '42703' || (error.message?.includes('naver_blog_url') ?? false)
+// 넓은 것 → 좁은 것 순. 42703(컬럼 없음)이면 다음 후보로 재시도한다.
+const SELECT_CANDIDATES: readonly string[] = [
+  PROFILE_COLS_FULL,
+  PROFILE_COLS_WITH_NAVER,
+  PROFILE_COLS_BASE,
+]
+
+// 저장 시 빈 문자열 → null 로 정규화하는 선택 입력 컬럼.
+const NULLABLE_TEXT_COLS: readonly (keyof ProfileUpdateBody)[] = [
+  'naver_blog_url',
+  'instagram_handle',
+  'threads_handle',
+  'youtube_channel_id',
+]
+
+// 042(자사 채널) 컬럼 — 미적용 환경에서 제거 후 재시도할 대상.
+const CHANNEL_COLS: readonly string[] = [
+  'instagram_handle',
+  'threads_handle',
+  'youtube_channel_id',
+]
+
+function isMissingColumnError(error: { code?: string } | null): boolean {
+  return error?.code === '42703'
 }
 
 export async function GET() {
@@ -38,26 +66,23 @@ export async function GET() {
       return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 })
     }
 
-    let { data, error } = await supabase
-      .from('profiles')
-      .select(PROFILE_COLS_FULL)
-      .eq('id', user.id)
-      .single()
-
-    // naver_blog_url 컬럼이 아직 없으면(마이그 028 미적용) 컬럼 제외 후 재조회
-    if (isMissingBlogUrlColumn(error)) {
-      ;({ data, error } = await supabase
+    // 존재하는 컬럼 셋을 단계적으로 시도 (마이그 028/042 미적용 환경 방어).
+    for (const cols of SELECT_CANDIDATES) {
+      const { data, error } = await supabase
         .from('profiles')
-        .select(PROFILE_COLS_BASE)
+        .select(cols)
         .eq('id', user.id)
-        .single())
+        .single()
+
+      if (isMissingColumnError(error)) continue
+      if (error && error.code !== 'PGRST116') {
+        return NextResponse.json({ error: '프로필 조회 실패' }, { status: 500 })
+      }
+      return NextResponse.json({ profile: data ?? {} })
     }
 
-    if (error && error.code !== 'PGRST116') {
-      return NextResponse.json({ error: '프로필 조회 실패' }, { status: 500 })
-    }
-
-    return NextResponse.json({ profile: data ?? {} })
+    // 모든 후보가 컬럼 없음 — 코어 컬럼도 없다면 빈 프로필 반환.
+    return NextResponse.json({ profile: {} })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '서버 오류'
     return NextResponse.json({ error: msg }, { status: 500 })
@@ -79,35 +104,40 @@ export async function PUT(req: NextRequest) {
       'full_name', 'phone', 'hospital_name', 'hospital_address', 'position',
       'specialty', 'specialty_detail', 'hospital_desc', 'hospital_keywords',
       'region', 'sms_enabled', 'sms_phone', 'notify_expiry', 'notify_usage',
-      'naver_blog_url',
+      'naver_blog_url', 'instagram_handle', 'threads_handle', 'youtube_channel_id',
     ]
+
+    const nullableSet = new Set<string>(NULLABLE_TEXT_COLS as readonly string[])
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
     for (const key of allowed) {
-      if (key in body) {
+      if (!(key in body)) continue
+      if (nullableSet.has(key)) {
         // 빈 문자열은 null 로 저장 (미설정 의미 명확화)
-        if (key === 'naver_blog_url') {
-          const v = typeof body.naver_blog_url === 'string' ? body.naver_blog_url.trim() : ''
-          updates[key] = v === '' ? null : v
-        } else {
-          updates[key] = body[key]
-        }
+        const raw = body[key]
+        const v = typeof raw === 'string' ? raw.trim() : ''
+        updates[key] = v === '' ? null : v
+      } else {
+        updates[key] = body[key]
       }
     }
 
-    let { error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', user.id)
+    // 넓은 update → 컬럼 없음(42703)이면 042 채널 컬럼 제거 → 여전히 없으면 028 naver 컬럼도 제거.
+    const runUpdate = (payload: Record<string, unknown>) =>
+      supabase.from('profiles').update(payload).eq('id', user.id)
 
-    // naver_blog_url 컬럼이 아직 없으면(마이그 028 미적용) 해당 키 제외 후 재저장
-    if (isMissingBlogUrlColumn(error)) {
-      const { naver_blog_url, ...rest } = updates
-      void naver_blog_url
-      ;({ error } = await supabase
-        .from('profiles')
-        .update(rest)
-        .eq('id', user.id))
+    let { error } = await runUpdate(updates)
+
+    if (isMissingColumnError(error)) {
+      const withoutChannels = { ...updates }
+      for (const col of CHANNEL_COLS) delete withoutChannels[col]
+      ;({ error } = await runUpdate(withoutChannels))
+
+      if (isMissingColumnError(error)) {
+        const { naver_blog_url, ...base } = withoutChannels
+        void naver_blog_url
+        ;({ error } = await runUpdate(base))
+      }
     }
 
     if (error) {
