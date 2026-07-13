@@ -249,8 +249,11 @@ export default function LandingPage() {
                   기능 살펴보기
                 </a>
               </div>
-              <p className="mt-3 text-[13px] text-[#8a93a0] text-center lg:text-left">
-                가입하면 블로그 글 <b className="text-[#ff4628]">2회 무료 생성</b> · 카드 등록 없음
+              {/* 가입 혜택 배지 — 상시 혜택(프로모 아님), "2회 무료 생성 + 카드 등록 없음" 강조 */}
+              <p className="mt-4 flex justify-center lg:justify-start">
+                <span className="inline-block bg-[#ff4628]/10 border border-[#ff4628]/25 text-[#e63a1c] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
+                  🎁 가입하면 블로그 글 <b className="font-extrabold">2회 무료 생성</b> · 카드 등록 없음
+                </span>
               </p>
             </div>
 
@@ -586,6 +589,12 @@ export default function LandingPage() {
           >
             시작하기 →
           </button>
+          {/* 가입 혜택 배지 — 히어로와 동일 문구(상시 혜택, 프로모 아님), 다크 배경용 톤 */}
+          <p className="mt-5 flex justify-center">
+            <span className="inline-block bg-[#ff4628]/15 border border-[#ff4628]/40 text-[#ffb4a8] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
+              🎁 가입하면 블로그 글 <b className="text-white font-extrabold">2회 무료 생성</b> · 카드 등록 없음
+            </span>
+          </p>
         </div>
       </section>
 
