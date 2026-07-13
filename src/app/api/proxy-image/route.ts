@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 
 const ALLOWED_HOSTS = [
   'fal.run',
@@ -9,6 +10,13 @@ const ALLOWED_HOSTS = [
 ];
 
 export async function GET(req: NextRequest) {
+  // 호출처는 전부 로그인 후 앱 내부(NaverPublisher/ImageGallery/ImageEditor) — 무인증 오픈 프록시 방지
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  }
+
   const url = req.nextUrl.searchParams.get('url');
   if (!url) {
     return NextResponse.json({ error: 'url 파라미터가 필요합니다.' }, { status: 400 });

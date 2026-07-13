@@ -7,6 +7,7 @@ import {
   type ResultAssets,
 } from '@/content/lib/clinicflix-usage'
 import { clinicflixGetJob } from '@/content/lib/clinicflix'
+import { isAllowedClinicflixAssetUrl } from '@/content/lib/clinicflix-asset-hosts'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -26,21 +27,6 @@ export async function GET() {
 
 const BUCKET = 'clinic-assets'
 
-// SSRF 방지: 신뢰 호스트(생성 결과 CDN / Supabase Storage)만 서버 fetch 허용.
-const ALLOWED_FETCH_SUFFIXES = ['.fal.media', 'fal.media', '.up.railway.app', '.supabase.co']
-
-function isAllowedAssetUrl(raw: string): boolean {
-  try {
-    const u = new URL(raw)
-    return (
-      u.protocol === 'https:' &&
-      ALLOWED_FETCH_SUFFIXES.some((s) => u.hostname === s || u.hostname.endsWith(s))
-    )
-  } catch {
-    return false
-  }
-}
-
 function extFromUrl(url: string, contentType: string | null): string {
   const clean = url.split('?')[0]
   const m = clean.match(/\.([a-zA-Z0-9]{2,5})$/)
@@ -57,7 +43,8 @@ async function copyToStorage(
   conversionId: string,
   name: string,
 ): Promise<string> {
-  if (!isAllowedAssetUrl(url)) throw new Error('허용되지 않은 자산 호스트')
+  // SSRF 방지: 신뢰 호스트(생성 결과 CDN / Supabase Storage / ClinicFlix 서비스 호스트)만 서버 fetch 허용.
+  if (!isAllowedClinicflixAssetUrl(url)) throw new Error('허용되지 않은 자산 호스트')
   const res = await fetch(url)
   if (!res.ok) throw new Error(`다운로드 실패 ${res.status}`)
   const contentType = res.headers.get('content-type')
