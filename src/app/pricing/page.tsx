@@ -10,7 +10,7 @@ import { PRICING_FAQS } from '@/payment/lib/pricingFaq'
 export const metadata: Metadata = {
   title: '요금제',
   description:
-    '닥터포스트 요금제 안내. 병원 블로그 자동 작성 베이직·스탠다드·프로 월 구독, 첫 달 혜택 제공.',
+    '닥터포스트 요금제 안내. 병원 블로그 자동 작성 스탠다드·프로 및 올인원(블로그+영상+멀티채널) 월 구독.',
 }
 
 export default function PricingPage() {
