@@ -293,3 +293,118 @@ test('checkCompliance(W28): 정상 문구 보존 — 경보·치환 오발 없�
   assert.equal(r.warnings.length, 0);
   assert.equal(r.isCompliant, true);
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 2026-W29 주간 리서치 반영 — 실손·실비(WARNING)·GLP-1 신약 2종·후기 유인 표현(LOW)
+// ═══════════════════════════════════════════════════════════════
+
+// ── 1군: 신규 전문의약품(한글) 단독 등장 → MEDIUM 검출 ──
+const W29_NEW_DRUGS = ['레타트루타이드', '레타트루티드', '에페글레나타이드'];
+for (const name of W29_NEW_DRUGS) {
+  test(`detectProductNames(W29): "${name}" 단독 → MEDIUM 검출`, () => {
+    const { violations } = detectProductNames(`${name}에 대해 알아보겠습니다.`);
+    const hit = violations.find((v) => v.word === name);
+    assert.ok(hit, `${name} 이 검출되어야 함`);
+    assert.equal(hit?.severity, 'MEDIUM');
+  });
+}
+
+test('detectProductNames(W29): "레타트루타이드 처방" → 유인 근접으로 HIGH 격상', () => {
+  const { violations } = detectProductNames('레타트루타이드 처방 상담을 받아보세요.');
+  const hit = violations.find((v) => v.word === '레타트루타이드');
+  assert.ok(hit);
+  assert.equal(hit?.severity, 'HIGH');
+});
+
+// ── 1군: 영문 신규 상품명 단독 → MEDIUM 검출 ──
+const W29_EN_DRUGS = ['Retatrutide', 'Efpeglenatide'];
+for (const name of W29_EN_DRUGS) {
+  test(`detectProductNames(W29): 영문 "${name}" 단독 → MEDIUM 검출`, () => {
+    const { violations } = detectProductNames(`${name} 성분과 작용 원리를 설명합니다.`);
+    const hit = violations.find((v) => v.word === name);
+    assert.ok(hit, `${name} 이 검출되어야 함`);
+    assert.equal(hit?.severity, 'MEDIUM');
+  });
+}
+
+// ── 1군: 표기 2종은 서로 오탐 없이 독립 매칭(부분문자열 충돌 없음) ──
+test('detectProductNames(W29): "레타트루티드"는 티드 표기 1건만 검출(타이드 오탐 없음)', () => {
+  const { violations } = detectProductNames('레타트루티드 임상 결과를 소개합니다.');
+  assert.ok(violations.some((v) => v.word === '레타트루티드'));
+  assert.ok(!violations.some((v) => v.word === '레타트루타이드'));
+});
+
+// ── 1군: 신규 상품명도 자동치환 금지(검출만) 원칙 유지 ──
+test('checkCompliance(W29): 신규 상품명은 filteredContent 에서 치환되지 않음', () => {
+  const r = checkCompliance('레타트루타이드와 에페글레나타이드, Retatrutide 에 대해 알아봅니다.');
+  assert.ok(r.filteredContent.includes('레타트루타이드'));
+  assert.ok(r.filteredContent.includes('에페글레나타이드'));
+  assert.ok(r.filteredContent.includes('Retatrutide'));
+  assert.ok(r.violations.length >= 3);
+});
+
+// ── 실손·실비: WARNING(검출·표시만) — 4개 승인 표현 + 붙여쓰기 변형 ──
+test('checkCompliance(W29): 실손·실비 표현 4종 → 실손 경고 검출', () => {
+  for (const text of [
+    '실손 적용 가능한 시술입니다.',
+    '실비 처리 도와드립니다.',
+    '실비 청구 방법을 안내합니다.',
+    '실손 청구 가능 여부를 확인해 드립니다.',
+  ]) {
+    const r = checkCompliance(text);
+    assert.ok(r.warnings.some((w) => w.includes('실손')), `"${text}" 에서 실손 경고가 나와야 함`);
+  }
+});
+
+test('checkCompliance(W29): 붙여쓰기 변형(실손적용·실비청구)도 검출', () => {
+  for (const text of ['실손적용 되는 항목입니다.', '실비청구 서류를 챙겨드립니다.']) {
+    const r = checkCompliance(text);
+    assert.ok(r.warnings.some((w) => w.includes('실손')), `"${text}" 에서 실손 경고가 나와야 함`);
+  }
+});
+
+test('checkCompliance(W29): 실손·실비 표현은 warnings 로만 표면화(치환·violations 없음)', () => {
+  const r = checkCompliance('실손 적용 안내입니다.');
+  assert.equal(r.violations.length, 0);
+  assert.equal(r.filteredContent, '실손 적용 안내입니다.', '원문 무변형');
+  assert.ok(r.warnings.some((w) => w.includes('실손')));
+});
+
+// ── 실손·실비 오탐 배제: "실손보험 가입 여부" 류 정보성 문맥 미매칭 ──
+test('checkCompliance(W29): "실손보험 가입 여부 확인" 은 실손 경고 오발 없음', () => {
+  const r = checkCompliance('실손보험 가입 여부를 미리 확인하시기 바랍니다.');
+  assert.ok(!r.warnings.some((w) => w.includes('실손')));
+  assert.equal(r.violations.length, 0);
+});
+
+// ── 후기 유인 표현(LOW): 체험단 모집·후기 이벤트·후기 작성 시 → 검출·표시만 ──
+test('checkCompliance(W29): "체험단 모집"·"후기 이벤트"·"후기 작성 시" → 후기 유인 경고 검출', () => {
+  for (const text of ['체험단 모집 안내입니다.', '후기 이벤트에 참여하세요.', '후기 작성 시 안내해 드립니다.']) {
+    const r = checkCompliance(text);
+    assert.ok(
+      r.warnings.some((w) => w.includes('대가성 후기')),
+      `"${text}" 에서 대가성 후기 유인 경고가 나와야 함`
+    );
+  }
+});
+
+test('checkCompliance(W29): 후기 유인 표현은 violations 가 아닌 warnings 로만(원문 무변형)', () => {
+  const r = checkCompliance('체험단 모집 안내.');
+  assert.equal(r.violations.length, 0);
+  assert.equal(r.filteredContent, '체험단 모집 안내.', '원문 무변형');
+});
+
+// ── autoFix 는 W29 신규 항목을 자동치환하지 않음 ──
+test('autoFix(W29): 신규 상품명·실손·후기 유인 표현은 자동치환하지 않음', () => {
+  const src = '레타트루타이드 안내와 실손 적용, 체험단 모집 안내';
+  const { fixed } = autoFix(src);
+  assert.equal(fixed, src);
+});
+
+// ── 보존 회귀: 정상 문구가 W29 패턴에 오발되지 않음 ──
+test('checkCompliance(W29): 정상 문구 보존 — "정기적인" 등 오발 없음', () => {
+  const r = checkCompliance('정기적인 검진과 전문의 상담 후 치료 방향을 결정합니다.');
+  assert.equal(r.violations.length, 0);
+  assert.equal(r.warnings.length, 0);
+  assert.equal(r.isCompliant, true);
+});
