@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import type { BlogContent } from '@/types';
+import type { BlogContent, GeneratedImage } from '@/types';
 import { toNaverFormat } from '@/content/lib/naver-format';
+import { renderBlogBody } from '@/content/components/BlogBodyRenderer';
+import BodyEditorModal from '@/content/components/BodyEditorModal';
 
 interface ContentPreviewProps {
   content: BlogContent;
@@ -14,17 +16,18 @@ interface ContentPreviewProps {
   onGenerateSlides?: () => void;
   isLoadingSlides?: boolean;
   onContentChange?: (newBody: string) => void;
+  /** 생성된 이미지 — 편집 모달 미리보기에서 본문 내 인라인 썸네일로 매핑. */
+  images?: GeneratedImage[];
   /** 클립보드 복사 성공 시 호출 (보관함 자동 저장 등 부가 동작은 부모가 처리) */
   onCopied?: () => void;
 }
 
-export default function ContentPreview({ content, onGenerateImages, onImagesUploaded, isLoadingImages, imageStyle, onImageStyleChange, onGenerateSlides, isLoadingSlides, onContentChange, onCopied }: ContentPreviewProps) {
+export default function ContentPreview({ content, onGenerateImages, onImagesUploaded, isLoadingImages, imageStyle, onImageStyleChange, onGenerateSlides, isLoadingSlides, onContentChange, images, onCopied }: ContentPreviewProps) {
   const [imageCount, setImageCount] = useState(6);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
   const [showImageHints, setShowImageHints] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editBody, setEditBody] = useState('');
 
   const handleCopy = async () => {
     const cleanBody = toNaverFormat(content.body);
@@ -55,163 +58,6 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
         ? <mark key={idx} className="bg-red-100 text-red-700 font-bold rounded px-0.5 not-italic">{part}</mark>
         : part
     );
-  };
-
-  const renderSummaryBox = (lines: string[], keyPrefix: string): React.ReactNode => {
-    const items = lines.map((l) => l.trim()).filter(Boolean);
-    return (
-      <div
-        key={keyPrefix}
-        className="my-4 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-emerald-50 p-3 sm:p-4"
-      >
-        <div className="flex items-center gap-1.5 mb-2">
-          <span className="text-base">💡</span>
-          <span className="text-xs sm:text-sm font-bold text-blue-700">핵심 요약</span>
-        </div>
-        <ul className="space-y-1.5">
-          {items.map((s, idx) => (
-            <li key={idx} className="text-xs sm:text-sm text-gray-800 leading-relaxed flex items-start gap-1.5">
-              <span className="text-blue-500 mt-0.5 flex-shrink-0">•</span>
-              <span>{highlightViolations(s)}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  };
-
-  const renderFaqBox = (lines: string[], keyPrefix: string): React.ReactNode => {
-    const pairs: { q: string; a: string }[] = [];
-    let cur: { q: string; a: string } | null = null;
-    for (const raw of lines) {
-      const t = raw.trim();
-      if (!t) continue;
-      if (/^Q\d+\./.test(t)) {
-        if (cur) pairs.push(cur);
-        cur = { q: t, a: '' };
-      } else if (/^A\d+\./.test(t)) {
-        if (cur) cur.a = t;
-      } else if (cur && cur.a) {
-        cur.a += ' ' + t;
-      }
-    }
-    if (cur) pairs.push(cur);
-
-    return (
-      <div
-        key={keyPrefix}
-        className="my-4 rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 p-3 sm:p-4"
-      >
-        <div className="flex items-center gap-1.5 mb-3">
-          <span className="text-base">❓</span>
-          <span className="text-xs sm:text-sm font-bold text-indigo-700">자주 묻는 질문</span>
-        </div>
-        <div className="space-y-3">
-          {pairs.map((qa, idx) => (
-            <div key={idx} className="space-y-1">
-              <p className="text-xs sm:text-sm font-bold text-indigo-800">{highlightViolations(qa.q)}</p>
-              <p className="text-xs sm:text-sm text-gray-800 leading-relaxed pl-3">{highlightViolations(qa.a)}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderBody = (text: string): React.ReactNode[] => {
-    const lines = text.split('\n');
-    const elements: React.ReactNode[] = [];
-    let i = 0;
-    let key = 0;
-
-    while (i < lines.length) {
-      const line = lines[i];
-      const trimmed = line.trim();
-
-      // TL;DR 블록
-      if (trimmed === '[핵심 요약]') {
-        const buf: string[] = [];
-        i++;
-        while (i < lines.length && lines[i].trim() !== '[/핵심 요약]') {
-          buf.push(lines[i]);
-          i++;
-        }
-        i++; // skip closing tag
-        elements.push(renderSummaryBox(buf, `summary-${key++}`));
-        continue;
-      }
-
-      // FAQ 블록
-      if (trimmed === '[자주 묻는 질문]') {
-        const buf: string[] = [];
-        i++;
-        while (i < lines.length && lines[i].trim() !== '[/자주 묻는 질문]') {
-          buf.push(lines[i]);
-          i++;
-        }
-        i++; // skip closing tag
-        elements.push(renderFaqBox(buf, `faq-${key++}`));
-        continue;
-      }
-
-      // 세부 소제목 (H3)
-      if (line.startsWith('▶')) {
-        elements.push(
-          <h3 key={`h3-${key++}`} className="text-sm font-semibold text-[#ff4628] mt-3 mb-1 pl-2 border-l-2 border-[#ff4628]/40">
-            {highlightViolations(line.replace(/^▶\s*/, ''))}
-          </h3>
-        );
-        i++;
-        continue;
-      }
-
-      // 이미지 자리표시자
-      if (/^\[이미지\s*\d+:/.test(line)) {
-        elements.push(
-          <div key={`img-${key++}`} className="my-2 bg-blue-50 border border-dashed border-blue-300 rounded-lg px-3 py-2 flex items-center gap-2">
-            <span className="text-blue-600 text-sm">🖼</span>
-            <span className="text-xs text-blue-700">{line.replace(/[\[\]]/g, '')}</span>
-          </div>
-        );
-        i++;
-        continue;
-      }
-
-      // 주요 소제목 (H2): 앞이 빈 줄이고 길이 10~45자, 대괄호로 시작 안 함
-      if (
-        trimmed.length >= 10 &&
-        trimmed.length <= 45 &&
-        !trimmed.startsWith('[')
-      ) {
-        const prevEmpty = i === 0 || lines[i - 1]?.trim() === '';
-        if (prevEmpty) {
-          elements.push(
-            <h2 key={`h2-${key++}`} className="text-sm font-bold text-gray-900 mt-5 mb-2">
-              {highlightViolations(line)}
-            </h2>
-          );
-          i++;
-          continue;
-        }
-      }
-
-      // 빈 줄
-      if (trimmed === '') {
-        elements.push(<br key={`br-${key++}`} />);
-        i++;
-        continue;
-      }
-
-      // 일반 단락
-      elements.push(
-        <p key={`p-${key++}`} className="text-gray-800 leading-relaxed text-xs mb-1">
-          {highlightViolations(line)}
-        </p>
-      );
-      i++;
-    }
-
-    return elements;
   };
 
   return (
@@ -317,48 +163,35 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
         )}
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] text-[#73808f]">본문 내용</span>
-          {!isEditing && onContentChange && (
+          {onContentChange && (
             <button
-              onClick={() => { setEditBody(content.body); setIsEditing(true); }}
+              onClick={() => setIsEditing(true)}
               className="text-[10px] font-bold text-[#ff4628] hover:text-[#e63a1c] px-2 py-1 rounded-lg border border-[#b4bfce] hover:border-[#ff4628]/50 transition-colors"
             >
               ✏️ 직접 편집
             </button>
           )}
         </div>
-        {isEditing ? (
-          <div className="space-y-2">
-            <textarea
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-              rows={12}
-              className="w-full px-3 py-3 rounded-xl bg-white border border-[#ff4628]/50 text-[#202020] text-xs leading-relaxed focus:outline-none focus:ring-1 focus:ring-[#ff4628]/30 resize-none"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => { onContentChange?.(editBody); setIsEditing(false); }}
-                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors"
-              >
-                저장
-              </button>
-              <button
-                onClick={() => setIsEditing(false)}
-                className="flex-1 py-2 bg-[#eef2f6] hover:bg-[#b4bfce] text-[#4a4f55] text-xs font-bold rounded-xl transition-colors"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200 max-h-72 sm:max-h-80 overflow-y-auto text-gray-800 [&_p]:!text-gray-800 [&_li]:!text-gray-800 [&_h1]:!text-gray-900 [&_h2]:!text-gray-900 [&_strong]:!text-gray-900"
-            style={{ colorScheme: 'light', color: '#1f2937' }}
-          >
-            <h1 className="text-sm font-bold !text-gray-900 mb-3 pb-3 border-b border-gray-200">{content.title}</h1>
-            <div className="!text-gray-800">{renderBody(content.body)}</div>
-          </div>
-        )}
+        <div
+          className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200 max-h-72 sm:max-h-80 overflow-y-auto text-gray-800 [&_p]:!text-gray-800 [&_li]:!text-gray-800 [&_h1]:!text-gray-900 [&_h2]:!text-gray-900 [&_strong]:!text-gray-900"
+          style={{ colorScheme: 'light', color: '#1f2937' }}
+        >
+          <h1 className="text-sm font-bold !text-gray-900 mb-3 pb-3 border-b border-gray-200">{content.title}</h1>
+          <div className="!text-gray-800">{renderBlogBody(content.body, { highlight: highlightViolations })}</div>
+        </div>
       </div>
+
+      {/* 본문 직접 편집 팝업 모달 */}
+      {onContentChange && (
+        <BodyEditorModal
+          open={isEditing}
+          initialBody={content.body}
+          images={images}
+          title={content.title}
+          onSave={(newBody) => { onContentChange(newBody); setIsEditing(false); }}
+          onClose={() => setIsEditing(false)}
+        />
+      )}
 
       {/* 이미지 가이드라인 */}
       {content.imageGuidelines.placementHints.length > 0 && (

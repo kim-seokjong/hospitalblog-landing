@@ -1528,6 +1528,7 @@ export default function AppPage() {
                       onGenerateSlides={handleGenerateSlides}
                       isLoadingSlides={loadingSlides}
                       onContentChange={handleContentChange}
+                      images={images}
                       onCopied={handleContentCopied}
                     />
 
