@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, Suspense, type SyntheticEvent } from 
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthModal from '@/hr/components/AuthModal';
 import Logo from '@/components/landing/Logo';
+import { trackEvent } from '@/dev/lib/meta-pixel';
 
 interface FreeSampleSection {
   heading: string;
@@ -80,6 +81,11 @@ function SamplePageInner() {
           setError(data.error || '샘플을 불러오지 못했습니다.');
         } else {
           setSample(data.sample);
+          // 무료 맞춤 샘플이 실제로 노출된 시점 = 관심 리드 발생.
+          trackEvent('Lead', {
+            content_name: 'free_sample',
+            content_category: 'sample_view',
+          });
         }
       } catch {
         if (!cancelled) setError('네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');

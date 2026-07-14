@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { PlanId } from '@/payment/lib/plans'
+import { PLANS, type PlanId } from '@/payment/lib/plans'
 import { trackEvent } from '@/dev/lib/meta-pixel'
 
 interface Props {
@@ -86,6 +86,16 @@ export default function BillingButton({
         const { error: msg } = await confirmRes.json()
         throw new Error(msg ?? '결제 처리 실패')
       }
+
+      // PortOne 빌링키 발급 + 서버 결제 확정이 모두 성공한 지점 = 결제 성공 콜백.
+      // 리다이렉트 직전에 발송해 성공 페이지 새로고침으로 인한 중복 집계를 피한다.
+      trackEvent('Purchase', {
+        content_name: PLANS[plan].name,
+        content_category: 'subscription_recurring',
+        content_ids: [plan],
+        value: PLANS[plan].price,
+        currency: 'KRW',
+      })
 
       router.push(`/payment/success?paymentId=${paymentId}`)
     } catch (e) {
