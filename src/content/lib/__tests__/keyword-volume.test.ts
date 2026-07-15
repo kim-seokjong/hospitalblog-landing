@@ -9,6 +9,8 @@ import {
   readSearchAdCredentials,
   computeContentGaps,
   fetchKeywordVolumes,
+  fetchRelatedKeywords,
+  cleanHintKeywords,
 } from '../keyword-volume.ts';
 
 // ── parseQcCount: '< 10' → 5, 콤마/문자열/음수/비정상 처리 ──
@@ -208,4 +210,45 @@ test('fetchKeywordVolumes: fetch throw 도 그레이스풀', async () => {
   const fetchImpl = (async () => { throw new Error('network'); }) as unknown as typeof fetch;
   const res = await fetchKeywordVolumes(['보톡스'], { env, fetchImpl });
   assert.equal(res.available, false);
+});
+
+// ── cleanHintKeywords ──
+test('cleanHintKeywords: trim·빈 값 제거·dedupe·최대 5개', () => {
+  assert.deepEqual(
+    cleanHintKeywords([' 보톡스 ', '보톡스', '', '리프팅']),
+    ['보톡스', '리프팅']
+  );
+  assert.equal(cleanHintKeywords(['a', 'b', 'c', 'd', 'e', 'f']).length, 5);
+});
+
+// ── fetchRelatedKeywords: 연관 키워드 전체 (필터 없음) ──
+test('fetchRelatedKeywords: 요청 키워드 외 연관 키워드도 전부 반환', async () => {
+  const env = {
+    NAVER_AD_API_KEY: 'a',
+    NAVER_AD_SECRET_KEY: 'b',
+    NAVER_AD_CUSTOMER_ID: 'c',
+  } as NodeJS.ProcessEnv;
+  const fetchImpl = (async () =>
+    new Response(
+      JSON.stringify({
+        keywordList: [
+          { relKeyword: '보톡스', monthlyPcQcCnt: 100, monthlyMobileQcCnt: 900, compIdx: '높음' },
+          { relKeyword: '보톡스가격', monthlyPcQcCnt: 50, monthlyMobileQcCnt: 450, compIdx: '중간' },
+          { relKeyword: '턱보톡스', monthlyPcQcCnt: '< 10', monthlyMobileQcCnt: 90, compIdx: '낮음' },
+        ],
+      }),
+      { status: 200 }
+    )) as unknown as typeof fetch;
+  const res = await fetchRelatedKeywords(['보톡스'], { env, fetchImpl });
+  assert.equal(res.available, true);
+  assert.equal(Object.keys(res.volumes).length, 3); // 필터 없음
+  assert.deepEqual(res.volumes['보톡스가격'], { pc: 50, mobile: 450, total: 500, compIdx: '중간' });
+});
+
+test('fetchRelatedKeywords: 키 없으면 available:false, 빈 힌트는 available:true', async () => {
+  const noKey = await fetchRelatedKeywords(['보톡스'], { env: {} as NodeJS.ProcessEnv });
+  assert.equal(noKey.available, false);
+  const empty = await fetchRelatedKeywords([], { env: {} as NodeJS.ProcessEnv });
+  assert.equal(empty.available, true);
+  assert.deepEqual(empty.volumes, {});
 });

@@ -3,6 +3,7 @@
 import { useState, useRef, type ReactNode } from 'react';
 import type { WritingStyle, OptimizationMode, TargetSite, Readability } from '@/types';
 import SpecialtyKeywordSuggester from '@/content/components/SpecialtyKeywordSuggester';
+import GoldenKeywordFinder from '@/content/components/GoldenKeywordFinder';
 
 interface KeywordInputProps {
   onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle, region: string, optimizationMode: OptimizationMode, targetSite: TargetSite, readability: Readability, useVoiceDna: boolean, viralHook: boolean, storytelling: boolean, reverseAnalysis: boolean) => void;
@@ -135,6 +136,19 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
 
   const effectiveHospitalType = lockedHospitalType || hospitalType;
 
+  // 추천 칩 공용 핸들러 — 선택 시 입력창에 추가, 해제 시 제거 (불변 갱신)
+  const applyKeywordSelection = (kw: string, isSelected: boolean) => {
+    if (isSelected) {
+      setKeyword((prev) => (prev ? `${prev}, ${kw}` : kw));
+    } else {
+      setKeyword((prev) => {
+        const parts = prev.split(',').map((k) => k.trim()).filter((k) => k !== kw);
+        return parts.join(', ');
+      });
+    }
+    setTimeout(() => keywordInputRef.current?.focus(), 0);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyword.trim()) return;
@@ -211,17 +225,14 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
         <SpecialtyKeywordSuggester
           specialty={effectiveHospitalType}
           region={region}
-          onSelect={(kw, isSelected) => {
-            if (isSelected) {
-              setKeyword((prev) => prev ? `${prev}, ${kw}` : kw);
-            } else {
-              setKeyword((prev) => {
-                const parts = prev.split(',').map(k => k.trim()).filter(k => k !== kw);
-                return parts.join(', ');
-              });
-            }
-            setTimeout(() => keywordInputRef.current?.focus(), 0);
-          }}
+          onSelect={applyKeywordSelection}
+        />
+
+        <GoldenKeywordFinder
+          seedKeyword={keyword}
+          region={region}
+          specialty={effectiveHospitalType}
+          onSelect={applyKeywordSelection}
         />
 
         <div>
