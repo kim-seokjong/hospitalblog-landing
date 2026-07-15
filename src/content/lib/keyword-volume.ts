@@ -214,8 +214,48 @@ export function computeContentGaps(
     .map(({ g }) => g);
 }
 
+/** 힌트 키워드 정제: 문자열만 → trim → 빈 값 제거 → dedupe → 최대 5개 */
+export function cleanHintKeywords(keywords: readonly string[]): string[] {
+  return Array.from(
+    new Set(
+      keywords
+        .filter((k): k is string => typeof k === 'string')
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0)
+    )
+  ).slice(0, 5); // keywordstool hintKeywords 권장 최대 5개
+}
+
+type KeywordstoolResponse = { ok: true; keywordList: unknown } | { ok: false };
+
+/** keywordstool GET 호출. 실패(non-ok/throw)는 { ok:false } (그레이스풀). */
+async function requestKeywordList(
+  cleaned: readonly string[],
+  creds: SearchAdCredentials,
+  fetchImpl: typeof fetch
+): Promise<KeywordstoolResponse> {
+  try {
+    const timestamp = String(Date.now());
+    const headers = buildSearchAdHeaders(creds, 'GET', KEYWORDSTOOL_URI, timestamp);
+    // hintKeywords 는 공백 없이 콤마 구분
+    const hint = cleaned.map((k) => k.replace(/\s+/g, '')).join(',');
+    const url = `${SEARCHAD_BASE_URL}${KEYWORDSTOOL_URI}?hintKeywords=${encodeURIComponent(hint)}&showDetail=1`;
+
+    const res = await fetchImpl(url, { headers, method: 'GET' });
+    if (!res.ok) {
+      return { ok: false };
+    }
+
+    const data = (await res.json()) as { keywordList?: unknown };
+    return { ok: true, keywordList: data.keywordList };
+  } catch {
+    // 호출 실패는 그레이스풀 degrade
+    return { ok: false };
+  }
+}
+
 /**
- * 검색광고 API 를 호출해 키워드 검색량을 조회한다.
+ * 검색광고 API 를 호출해 "요청한 키워드 자체"의 검색량을 조회한다.
  * 자격증명이 없으면 available:false 를 반환(그레이스풀). 호출/파싱 실패도 동일.
  * 외부 fetch 를 주입 가능하게 해 테스트에서 모킹할 수 있다.
  */
@@ -229,15 +269,7 @@ export async function fetchKeywordVolumes(
   const env = options.env ?? process.env;
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const cleaned = Array.from(
-    new Set(
-      keywords
-        .filter((k): k is string => typeof k === 'string')
-        .map((k) => k.trim())
-        .filter((k) => k.length > 0)
-    )
-  ).slice(0, 5); // keywordstool hintKeywords 권장 최대 5개
-
+  const cleaned = cleanHintKeywords(keywords);
   if (cleaned.length === 0) {
     return { available: true, volumes: {} };
   }
@@ -248,23 +280,43 @@ export async function fetchKeywordVolumes(
     return { available: false, volumes: {} };
   }
 
-  try {
-    const timestamp = String(Date.now());
-    const headers = buildSearchAdHeaders(creds, 'GET', KEYWORDSTOOL_URI, timestamp);
-    // hintKeywords 는 공백 없이 콤마 구분
-    const hint = cleaned.map((k) => k.replace(/\s+/g, '')).join(',');
-    const url = `${SEARCHAD_BASE_URL}${KEYWORDSTOOL_URI}?hintKeywords=${encodeURIComponent(hint)}&showDetail=1`;
-
-    const res = await fetchImpl(url, { headers, method: 'GET' });
-    if (!res.ok) {
-      return { available: false, volumes: {} };
-    }
-
-    const data = (await res.json()) as { keywordList?: unknown };
-    const volumes = parseKeywordVolumes(data.keywordList, cleaned);
-    return { available: true, volumes };
-  } catch {
-    // 호출 실패는 그레이스풀 degrade
+  const resp = await requestKeywordList(cleaned, creds, fetchImpl);
+  if (!resp.ok) {
     return { available: false, volumes: {} };
   }
+  return { available: true, volumes: parseKeywordVolumes(resp.keywordList, cleaned) };
+}
+
+/**
+ * keywordstool 로 힌트 키워드의 "연관 키워드 전체"를 조회한다.
+ * fetchKeywordVolumes 와 달리 요청 키워드로 필터링하지 않고,
+ * 네이버가 돌려주는 연관 키워드 목록 전부(월 검색량·compIdx 포함)를 반환한다.
+ * 황금 키워드 추천·경쟁분석 키워드 카드가 공유하는 기반 함수.
+ */
+export async function fetchRelatedKeywords(
+  hintKeywords: readonly string[],
+  options: {
+    env?: NodeJS.ProcessEnv;
+    fetchImpl?: typeof fetch;
+  } = {}
+): Promise<KeywordVolumeResult> {
+  const env = options.env ?? process.env;
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const cleaned = cleanHintKeywords(hintKeywords);
+  if (cleaned.length === 0) {
+    return { available: true, volumes: {} };
+  }
+
+  const creds = readSearchAdCredentials(env);
+  if (!creds) {
+    return { available: false, volumes: {} };
+  }
+
+  const resp = await requestKeywordList(cleaned, creds, fetchImpl);
+  if (!resp.ok) {
+    return { available: false, volumes: {} };
+  }
+  // 필터 없음 — 연관 키워드 전체
+  return { available: true, volumes: parseKeywordVolumes(resp.keywordList) };
 }
