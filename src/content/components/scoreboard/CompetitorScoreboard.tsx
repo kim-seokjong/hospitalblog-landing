@@ -5,6 +5,7 @@ import PublishFrequencyCard from '@/content/components/scoreboard/PublishFrequen
 import VideoCompareCard from '@/content/components/scoreboard/VideoCompareCard';
 import PlaceCompareCard from '@/content/components/scoreboard/PlaceCompareCard';
 import SocialCompareCard from '@/content/components/scoreboard/SocialCompareCard';
+import KeywordVolumeCard from '@/content/components/scoreboard/KeywordVolumeCard';
 
 /**
  * 경쟁 병원 종합 비교 영역 (/monitor 하단).
@@ -51,6 +52,7 @@ export default function CompetitorScoreboard({
           hospitalName={hospitalName}
           runId={runId}
         />
+        <KeywordVolumeCard specialty={specialty} region={region} runId={runId} />
         <SocialCompareCard />
       </div>
     </section>
