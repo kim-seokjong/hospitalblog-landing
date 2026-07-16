@@ -232,6 +232,12 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
                       경쟁 {item.competition}
                     </span>
                   )}
+                  {/* 이 항목만 문서수 조회 실패 — 전체 실패(docAvailable=false)면 하단 안내문이 있으니 중복 표시 안 함 */}
+                  {docAvailable && item.competition === null && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-[#eef2f6] text-[#73808f] border-[#d6dee8]">
+                      경쟁 확인불가
+                    </span>
+                  )}
                 </button>
               </li>
             ))}

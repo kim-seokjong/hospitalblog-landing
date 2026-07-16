@@ -244,6 +244,71 @@ test('fetchBlogDocCounts: 키워드별 total 매핑 (청크 순회)', async () =
   assert.deepEqual(out, { 황금: 10, 일반: 99 });
 });
 
+// ── fetchBlogDocCounts: 실패 키워드 1회 재시도 ──
+test('fetchBlogDocCounts: 1차 실패 키워드만 재시도 호출 (성공 키워드는 1회)', async () => {
+  const calls: string[] = [];
+  const fetchImpl = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes(encodeURIComponent('실패'))) {
+      return new Response('err', { status: 429 });
+    }
+    return new Response(JSON.stringify({ total: 50 }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const out = await fetchBlogDocCounts(['성공', '실패'], {
+    env: OPEN_ENV,
+    fetchImpl,
+    retryDelayMs: 0,
+  });
+  assert.equal(out.성공, 50);
+  assert.equal(out.실패, null);
+  // 성공 1회 + 실패 2회(1차+재시도) = 총 3회
+  assert.equal(calls.filter((u) => u.includes(encodeURIComponent('성공'))).length, 1);
+  assert.equal(calls.filter((u) => u.includes(encodeURIComponent('실패'))).length, 2);
+});
+
+test('fetchBlogDocCounts: 재시도 성공 시 값이 채워진다', async () => {
+  let attempts = 0;
+  const fetchImpl = (async () => {
+    attempts += 1;
+    if (attempts === 1) return new Response('err', { status: 500 });
+    return new Response(JSON.stringify({ total: 123 }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const out = await fetchBlogDocCounts(['불안정'], { env: OPEN_ENV, fetchImpl, retryDelayMs: 0 });
+  assert.deepEqual(out, { 불안정: 123 });
+  assert.equal(attempts, 2);
+});
+
+test('fetchBlogDocCounts: 재시도도 실패하면 null 유지 (총 2회까지만)', async () => {
+  let attempts = 0;
+  const fetchImpl = (async () => {
+    attempts += 1;
+    return new Response('err', { status: 429 });
+  }) as unknown as typeof fetch;
+
+  const out = await fetchBlogDocCounts(['계속실패'], { env: OPEN_ENV, fetchImpl, retryDelayMs: 0 });
+  assert.deepEqual(out, { 계속실패: null });
+  assert.equal(attempts, 2);
+});
+
+test('fetchBlogDocCounts: 키 없으면 재시도 없이 전부 null (호출 0회)', async () => {
+  let called = false;
+  const fetchImpl = (async () => {
+    called = true;
+    return new Response('{}');
+  }) as unknown as typeof fetch;
+
+  const out = await fetchBlogDocCounts(['보톡스'], {
+    env: {} as NodeJS.ProcessEnv,
+    fetchImpl,
+    retryDelayMs: 0,
+  });
+  assert.deepEqual(out, { 보톡스: null });
+  assert.equal(called, false);
+});
+
 // ── fetchGoldenKeywords: 전체 파이프라인 ──
 const FULL_ENV = {
   NAVER_AD_API_KEY: 'a',

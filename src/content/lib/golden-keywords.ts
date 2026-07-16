@@ -215,13 +215,19 @@ export async function fetchBlogDocCount(
   }
 }
 
-/**
- * 여러 키워드의 문서수를 청크 단위(기본 5개씩 순차)로 조회한다.
- * 오픈API 초당 호출 제한을 배려하면서 병렬성을 유지.
- */
-export async function fetchBlogDocCounts(
+/** 실패 키워드 재시도 전 대기(ms) — 오픈API 초당 호출 제한 배려 */
+export const DOC_COUNT_RETRY_DELAY_MS = 400;
+
+interface DocCountFetchOptions {
+  env?: NodeJS.ProcessEnv;
+  fetchImpl?: typeof fetch;
+  chunkSize?: number;
+}
+
+/** 청크 단위(기본 5개씩 순차) 문서수 조회 — 청크 내부만 병렬 */
+async function fetchDocCountsChunked(
   keywords: readonly string[],
-  options: { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch; chunkSize?: number } = {}
+  options: DocCountFetchOptions
 ): Promise<Record<string, number | null>> {
   const chunkSize = options.chunkSize ?? 5;
   const out: Record<string, number | null> = {};
@@ -237,6 +243,38 @@ export async function fetchBlogDocCounts(
   }
 
   return out;
+}
+
+/**
+ * 여러 키워드의 문서수를 청크 단위(기본 5개씩 순차)로 조회한다.
+ * 오픈API 초당 호출 제한을 배려하면서 병렬성을 유지.
+ *
+ * 일시 실패(429 등)로 null 이 된 키워드만 모아 짧은 대기 후 1회 재시도한다
+ * — 목록 하단 키워드에 경쟁도 배지가 통째로 빠지는 현상 완화.
+ * 재시도까지 실패하면 null 유지 (그레이스풀).
+ */
+export async function fetchBlogDocCounts(
+  keywords: readonly string[],
+  options: DocCountFetchOptions & {
+    /** 재시도 전 대기(ms) — 테스트 주입용. 기본 DOC_COUNT_RETRY_DELAY_MS */
+    retryDelayMs?: number;
+  } = {}
+): Promise<Record<string, number | null>> {
+  const first = await fetchDocCountsChunked(keywords, options);
+
+  // 자격증명 자체가 없으면 재시도해도 전부 null — 대기 없이 그대로 반환
+  if (!readOpenApiCredentials(options.env ?? process.env)) return first;
+
+  const failed = keywords.filter((kw) => first[kw] === null);
+  if (failed.length === 0) return first;
+
+  const retryDelayMs = options.retryDelayMs ?? DOC_COUNT_RETRY_DELAY_MS;
+  if (retryDelayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+  }
+
+  const retried = await fetchDocCountsChunked(failed, options);
+  return { ...first, ...retried };
 }
 
 /**
