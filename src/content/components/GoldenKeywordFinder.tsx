@@ -8,7 +8,8 @@ import { useState } from 'react';
  * + 데이터랩 기반 "지금 뜨는 계절 키워드" 섹션 (진료과 기준, 실패 시 조용히 숨김).
  *
  * 배지: 월 검색량 · 블로그 문서수 · 경쟁도(문서수÷검색량) · 계절🔥
- * 클릭 시 키워드 입력창에 추가/제거 (SpecialtyKeywordSuggester 와 동일 UX).
+ * 클릭 시 핵심 키워드를 클릭한 키워드 1개로 교체(단일 선택) — 씨앗 키워드와
+ * 동시 선택되는 혼란 방지. (SpecialtyKeywordSuggester 의 추가/제거 UX 와 다름)
  */
 
 interface GoldenItem {
@@ -38,7 +39,8 @@ interface Props {
   seedKeyword: string;
   region: string;
   specialty: string;
-  onSelect: (keyword: string, isSelected: boolean) => void;
+  /** 클릭한 키워드로 핵심 키워드를 교체 (append 아님 — 항상 단일 선택) */
+  onReplace: (keyword: string) => void;
 }
 
 const COMPETITION_BADGE: Record<'낮음' | '중간' | '높음', string> = {
@@ -53,7 +55,7 @@ function extractSeed(raw: string): string {
   return parts.length > 0 ? parts[parts.length - 1] : '';
 }
 
-export default function GoldenKeywordFinder({ seedKeyword, region, specialty, onSelect }: Props) {
+export default function GoldenKeywordFinder({ seedKeyword, region, specialty, onReplace }: Props) {
   const [items, setItems] = useState<GoldenItem[]>([]);
   const [seasonalItems, setSeasonalItems] = useState<SeasonalItem[]>([]);
   const [docAvailable, setDocAvailable] = useState(true);
@@ -61,7 +63,8 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
   const [searched, setSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** 단일 선택 — 클릭한 키워드 1개만 하이라이트 (핵심 키워드 교체와 동기) */
+  const [selected, setSelected] = useState<string | null>(null);
 
   const seed = extractSeed(seedKeyword);
 
@@ -76,7 +79,7 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
     setItems([]);
     setSeasonalItems([]);
     setUnavailable(false);
-    setSelected(new Set());
+    setSelected(null);
 
     try {
       const res = await fetch('/api/keywords/golden', {
@@ -110,18 +113,10 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
     }
   };
 
+  // 클릭 = 핵심 키워드를 그 키워드 1개로 교체. 다른 항목 클릭 시 다시 교체.
   const handleChipClick = (keyword: string) => {
-    const willBeSelected = !selected.has(keyword);
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(keyword)) {
-        next.delete(keyword);
-      } else {
-        next.add(keyword);
-      }
-      return next;
-    });
-    onSelect(keyword, willBeSelected);
+    setSelected(keyword);
+    onReplace(keyword);
   };
 
   return (
@@ -183,13 +178,13 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
                 type="button"
                 onClick={() => handleChipClick(s.keyword)}
                 className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-all active:scale-95 ${
-                  selected.has(s.keyword)
+                  selected === s.keyword
                     ? 'bg-[#ff4628] border-[#ff4628] text-white'
                     : 'bg-white border-[#ff4628]/40 text-[#202020] hover:bg-[#ffece7]'
                 }`}
               >
                 {s.keyword}
-                <span className={`text-[9px] font-bold ${selected.has(s.keyword) ? 'text-white/80' : 'text-[#ff4628]'}`}>
+                <span className={`text-[9px] font-bold ${selected === s.keyword ? 'text-white/80' : 'text-[#ff4628]'}`}>
                   ×{s.boost}
                 </span>
               </button>
@@ -201,7 +196,7 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
       {items.length > 0 && (
         <div>
           <p className="text-[10px] text-[#5b6573] mb-2">
-            경쟁이 낮은 순서예요. 키워드를 누르면 입력창에 추가됩니다 ({items.length}개)
+            경쟁이 낮은 순서예요. 키워드를 누르면 핵심 키워드로 설정됩니다 ({items.length}개)
           </p>
           <ul className="space-y-1.5">
             {items.map((item) => (
@@ -211,7 +206,7 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
                   onClick={() => handleChipClick(item.keyword)}
                   title={item.volume.compIdx !== '-' ? `광고 경쟁정도: ${item.volume.compIdx}` : undefined}
                   className={`w-full flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 rounded-xl border text-left transition-all active:scale-[0.99] min-h-[44px] ${
-                    selected.has(item.keyword)
+                    selected === item.keyword
                       ? 'border-[#ff4628] bg-[#ffece7]'
                       : 'border-[#e3e9f0] bg-white hover:border-[#ff4628]/50'
                   }`}

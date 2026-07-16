@@ -149,6 +149,13 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
     setTimeout(() => keywordInputRef.current?.focus(), 0);
   };
 
+  // 황금 키워드 전용 핸들러 — 핵심 키워드를 클릭한 키워드 1개로 교체(덮어쓰기).
+  // 씨앗 키워드와 동시 선택되는 혼란 방지. 직접 입력(콤마 다중)은 그대로 유지.
+  const replaceKeyword = (kw: string) => {
+    setKeyword(kw);
+    setTimeout(() => keywordInputRef.current?.focus(), 0);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyword.trim()) return;
@@ -232,7 +239,7 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
           seedKeyword={keyword}
           region={region}
           specialty={effectiveHospitalType}
-          onSelect={applyKeywordSelection}
+          onReplace={replaceKeyword}
         />
 
         <div>
