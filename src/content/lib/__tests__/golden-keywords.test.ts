@@ -71,6 +71,76 @@ test('selectGoldenCandidates: 니치 주제 폴백 — 필터 결과 부족하�
   assert.equal(out[0].keyword, '니치A');
 });
 
+// ── selectGoldenCandidates: 타 진료과 블랙리스트 필터 ──
+test('selectGoldenCandidates: 피부과 — 타 진료과 키워드(치과·어린이치과) 제외', () => {
+  const volumes = {
+    사각턱보톡스: vol(8000),
+    치과: vol(50000),
+    어린이치과: vol(9000),
+    임플란트가격: vol(7000),
+    보톡스가격: vol(3000),
+  };
+  const out = selectGoldenCandidates(volumes, { specialty: '피부과' });
+  assert.deepEqual(out.map((c) => c.keyword), ['사각턱보톡스', '보톡스가격']);
+});
+
+test('selectGoldenCandidates: 본인 진료과(치과)면 치과 키워드 유지', () => {
+  const volumes = {
+    치과: vol(50000),
+    어린이치과: vol(9000),
+    임플란트가격: vol(7000),
+    피부과보톡스: vol(3000),
+  };
+  const out = selectGoldenCandidates(volumes, { specialty: '치과' });
+  assert.deepEqual(out.map((c) => c.keyword), ['치과', '어린이치과', '임플란트가격']);
+});
+
+test('selectGoldenCandidates: 공유 시술어(보톡스·필러)는 피부과에서 통과', () => {
+  const volumes = {
+    보톡스: vol(90000),
+    사각턱보톡스: vol(8000),
+    필러가격: vol(5000),
+  };
+  const out = selectGoldenCandidates(volumes, { specialty: '피부과' });
+  assert.deepEqual(out.map((c) => c.keyword), ['보톡스', '사각턱보톡스', '필러가격']);
+});
+
+test('selectGoldenCandidates: specialty 미설정·미지원이면 무필터 기존 동작', () => {
+  const volumes = {
+    치과: vol(50000),
+    보톡스: vol(9000),
+  };
+  const noSpecialty = selectGoldenCandidates(volumes);
+  assert.deepEqual(noSpecialty.map((c) => c.keyword), ['치과', '보톡스']);
+  const unknown = selectGoldenCandidates(volumes, { specialty: '기타' });
+  assert.deepEqual(unknown.map((c) => c.keyword), ['치과', '보톡스']);
+});
+
+test('selectGoldenCandidates: 필터로 빠진 자리는 다음 순위로 재충원 — limit 유지', () => {
+  const volumes = {
+    치과A: vol(90000),
+    치과B: vol(80000),
+    피부키워드1: vol(5000),
+    피부키워드2: vol(4000),
+    피부키워드3: vol(3000),
+  };
+  // limit 3: 필터 없으면 치과A·치과B가 자리를 차지하지만,
+  // 피부과 필터 적용 시 다음 순위 피부 키워드 3개로 채워진다.
+  const out = selectGoldenCandidates(volumes, { specialty: '피부과', limit: 3, minCandidates: 1 });
+  assert.deepEqual(out.map((c) => c.keyword), ['피부키워드1', '피부키워드2', '피부키워드3']);
+});
+
+test('selectGoldenCandidates: specialty 필터 + 입력 불변', () => {
+  const volumes = {
+    치과: vol(50000),
+    보톡스: vol(9000),
+  };
+  const keysBefore = Object.keys(volumes);
+  selectGoldenCandidates(volumes, { specialty: '피부과' });
+  assert.deepEqual(Object.keys(volumes), keysBefore);
+  assert.equal(volumes.치과.total, 50000);
+});
+
 // ── computeCompetitionRatio / classifyCompetition ──
 test('computeCompetitionRatio: 문서수÷검색량, 불가 시 null', () => {
   assert.equal(computeCompetitionRatio(1000, 100), 10);
@@ -216,6 +286,32 @@ test('fetchGoldenKeywords: 경쟁 낮은 키워드가 1위', async () => {
   assert.ok(red);
   assert.equal(red.competition, '높음');
   assert.equal(red.ratio, 90);
+});
+
+test('fetchGoldenKeywords: specialty 전달 시 타 진료과 연관어 제외 (파이프라인)', async () => {
+  const fetchImpl = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('searchad')) {
+      return new Response(
+        JSON.stringify({
+          keywordList: [
+            { relKeyword: '어린이치과', monthlyPcQcCnt: 30000, monthlyMobileQcCnt: 30000, compIdx: '높음' },
+            { relKeyword: '사각턱보톡스', monthlyPcQcCnt: 4000, monthlyMobileQcCnt: 4000, compIdx: '중간' },
+          ],
+        }),
+        { status: 200 }
+      );
+    }
+    return new Response(JSON.stringify({ total: 100 }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const res = await fetchGoldenKeywords('보톡스', {
+    env: FULL_ENV,
+    fetchImpl,
+    specialty: '피부과',
+  });
+  assert.equal(res.available, true);
+  assert.deepEqual(res.items.map((i) => i.keyword), ['사각턱보톡스']);
 });
 
 test('fetchGoldenKeywords: 검색광고 키 없으면 available:false', async () => {

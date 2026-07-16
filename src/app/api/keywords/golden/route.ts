@@ -19,7 +19,7 @@ export const maxDuration = 30;
  *
  * 황금 키워드 추천 — "검색량은 충분한데 블로그 문서수(경쟁)는 적은" 키워드.
  * - keywordstool 연관 키워드(1콜) + 상위 20개만 블로그 문서수 조회 (호출 낭비 방지)
- * - specialty 가 있으면 데이터랩 계절성 부스트 반영 (지금 달·다음 달 상승 국면)
+ * - specialty 가 있으면 ①타 진료과 연관어 제외(블랙리스트 필터) ②데이터랩 계절성 부스트 반영
  * - 캐시: 황금 6시간 / 계절성은 월 단위로 사실상 고정 → 7일 (인메모리 — 새 테이블 없음)
  * - 그레이스풀: 검색광고 env 없으면 available:false, 데이터랩 실패는 계절 섹션만 숨김
  */
@@ -64,13 +64,17 @@ async function getSeasonalCached(specialty: string): Promise<SeasonalKeywordResu
   return result;
 }
 
-/** 황금 키워드 조회 + 6시간 캐시 */
-async function getGoldenCached(keyword: string, region: string): Promise<GoldenKeywordResult> {
-  const cacheKey = `golden:${normalizeKeyword(keyword)}:${normalizeKeyword(region)}`;
+/** 황금 키워드 조회 + 6시간 캐시 (specialty 별 캐시 분리 — 진료과 간 오염 방지) */
+async function getGoldenCached(
+  keyword: string,
+  region: string,
+  specialty: string
+): Promise<GoldenKeywordResult> {
+  const cacheKey = `golden:${normalizeKeyword(keyword)}:${normalizeKeyword(region)}:${normalizeKeyword(specialty)}`;
   const cached = cacheGet<GoldenKeywordResult>(cacheKey);
   if (cached) return cached;
 
-  const result = await fetchGoldenKeywords(keyword, { region });
+  const result = await fetchGoldenKeywords(keyword, { region, specialty });
   if (result.available) {
     cacheSet(cacheKey, result);
   }
@@ -98,7 +102,7 @@ export async function POST(req: NextRequest) {
     }
 
     const [golden, seasonal] = await Promise.all([
-      getGoldenCached(keyword, region),
+      getGoldenCached(keyword, region, specialty),
       getSeasonalCached(specialty),
     ]);
 

@@ -1,4 +1,5 @@
 import { fetchRelatedKeywords, type KeywordVolume } from './keyword-volume.ts';
+import { createSpecialtyFilter } from './specialty-filter.ts';
 
 /**
  * 황금 키워드 추천 순수 로직.
@@ -81,17 +82,29 @@ export function buildGoldenHints(seed: string, region?: string): string[] {
  * 연관 키워드 중 문서수를 조회할 후보를 고른다.
  * 검색량(total) 내림차순 → minVolume 이상 우선. 필터 결과가 너무 적으면
  * (니치 주제) 미달 키워드로 minCandidates 까지 채운다. 입력은 변형하지 않는다.
+ *
+ * specialty 가 있으면 타 진료과 키워드(예: 피부과 사용자의 "치과", "임플란트")를
+ * 먼저 제외한다 — keywordstool 연관어는 광고그룹 동시등록 통계라 무관 키워드가 섞인다.
+ * 필터는 정렬 전에 적용하므로 제외된 자리는 다음 순위 키워드로 자동 재충원되어
+ * limit 개수가 유지된다. specialty 미설정·사전에 없는 진료과는 필터 없이 기존 동작.
  */
 export function selectGoldenCandidates(
   volumes: Record<string, KeywordVolume>,
-  options: { limit?: number; minVolume?: number; minCandidates?: number } = {}
+  options: {
+    limit?: number;
+    minVolume?: number;
+    minCandidates?: number;
+    specialty?: string;
+  } = {}
 ): GoldenCandidate[] {
   const limit = options.limit ?? GOLDEN_CANDIDATE_LIMIT;
   const minVolume = options.minVolume ?? GOLDEN_MIN_VOLUME;
   const minCandidates = options.minCandidates ?? GOLDEN_MIN_CANDIDATES;
+  const specialtyFilter = createSpecialtyFilter(options.specialty);
 
   const sorted = Object.entries(volumes)
     .map(([keyword, volume]) => ({ keyword, volume }))
+    .filter((c) => specialtyFilter === null || specialtyFilter(c.keyword))
     .sort((a, b) => b.volume.total - a.volume.total);
 
   const enough = sorted.filter((c) => c.volume.total >= minVolume).slice(0, limit);
@@ -228,7 +241,13 @@ export async function fetchBlogDocCounts(
  */
 export async function fetchGoldenKeywords(
   seed: string,
-  options: { region?: string; env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch } = {}
+  options: {
+    region?: string;
+    /** 사용자 진료과 — 타 진료과 연관어 제외 필터에 사용 (없으면 무필터) */
+    specialty?: string;
+    env?: NodeJS.ProcessEnv;
+    fetchImpl?: typeof fetch;
+  } = {}
 ): Promise<GoldenKeywordResult> {
   const cleanSeed = seed.trim();
   if (!cleanSeed) {
@@ -244,7 +263,9 @@ export async function fetchGoldenKeywords(
     return { available: false, docAvailable: false, items: [] };
   }
 
-  const candidates = selectGoldenCandidates(related.volumes);
+  const candidates = selectGoldenCandidates(related.volumes, {
+    specialty: options.specialty,
+  });
   if (candidates.length === 0) {
     return { available: true, docAvailable: true, items: [] };
   }
