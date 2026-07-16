@@ -1,5 +1,10 @@
 import { fetchRelatedKeywords, type KeywordVolume } from './keyword-volume.ts';
 import { createSpecialtyFilter } from './specialty-filter.ts';
+import {
+  filterCandidatesByRelevance,
+  RELEVANCE_POOL_LIMIT,
+  type RelevanceGateCreate,
+} from './relevance-gate.ts';
 
 /**
  * 황금 키워드 추천 순수 로직.
@@ -12,6 +17,7 @@ import { createSpecialtyFilter } from './specialty-filter.ts';
  * 그레이스풀 철학은 keyword-volume.ts 와 동일:
  * - 검색광고 env 없음/실패 → available:false (기능만 숨김)
  * - 오픈API env 없음/실패 → docAvailable:false (문서수·경쟁도 배지만 숨김)
+ * - LLM 관련성 게이트(relevance-gate.ts) 실패/키 없음 → 게이트만 건너뜀
  */
 
 export interface OpenApiCredentials {
@@ -236,8 +242,12 @@ export async function fetchBlogDocCounts(
 /**
  * 황금 키워드 추천 전체 파이프라인.
  * 1) keywordstool 연관 키워드 + 검색량·compIdx (1콜)
- * 2) 상위 후보 최대 GOLDEN_CANDIDATE_LIMIT 개만 블로그 문서수 조회
- * 3) 경쟁도(문서수÷검색량) 오름차순 정렬
+ * 2) 블랙리스트 필터 통과 후보 여유분(RELEVANCE_POOL_LIMIT=40) 확보
+ * 3) LLM 관련성 게이트(haiku 배치 1콜) — 진료과명 없는 무관 키워드까지 제거.
+ *    키 없음/실패/타임아웃/파싱 실패 시 게이트 건너뜀 (relevance-gate.ts)
+ * 4) 통과 후보 상위 GOLDEN_CANDIDATE_LIMIT(20)개만 블로그 문서수 조회
+ *    — 비용 있는 오픈API 호출 전에 걸러 낭비를 막는다
+ * 5) 경쟁도(문서수÷검색량) 오름차순 정렬
  */
 export async function fetchGoldenKeywords(
   seed: string,
@@ -247,6 +257,8 @@ export async function fetchGoldenKeywords(
     specialty?: string;
     env?: NodeJS.ProcessEnv;
     fetchImpl?: typeof fetch;
+    /** 테스트 주입용 — 관련성 게이트 LLM 호출 함수 (미주입 시 anthropic.ts) */
+    relevanceCreateMessage?: RelevanceGateCreate;
   } = {}
 ): Promise<GoldenKeywordResult> {
   const cleanSeed = seed.trim();
@@ -263,14 +275,35 @@ export async function fetchGoldenKeywords(
     return { available: false, docAvailable: false, items: [] };
   }
 
-  const candidates = selectGoldenCandidates(related.volumes, {
+  // 블랙리스트 통과 후보를 여유분(40개)으로 확보 — LLM 게이트에서 걸러져도
+  // 다음 순위 키워드가 자연 재충원되어 최종 20개를 최대한 채운다.
+  const pool = selectGoldenCandidates(related.volumes, {
     specialty: options.specialty,
+    limit: RELEVANCE_POOL_LIMIT,
   });
-  if (candidates.length === 0) {
+  if (pool.length === 0) {
     return { available: true, docAvailable: true, items: [] };
   }
 
   const env = options.env ?? process.env;
+
+  // LLM 관련성 게이트 — 문서수 조회(비용 있는 단계) 전에 무관 키워드 제거.
+  // 실패·키 없음이면 applied:false + 입력 그대로 (기존 블랙리스트 결과 유지).
+  const gate = await filterCandidatesByRelevance(
+    {
+      seed: cleanSeed,
+      specialty: options.specialty,
+      candidates: pool.map((c) => c.keyword),
+    },
+    { env: options.env, createMessage: options.relevanceCreateMessage }
+  );
+  const allowed = new Set(gate.keywords);
+  const candidates = pool
+    .filter((c) => allowed.has(c.keyword))
+    .slice(0, GOLDEN_CANDIDATE_LIMIT);
+  if (candidates.length === 0) {
+    return { available: true, docAvailable: true, items: [] };
+  }
   let docCounts: Record<string, number | null> = {};
   let docAvailable = false;
   if (readOpenApiCredentials(env)) {

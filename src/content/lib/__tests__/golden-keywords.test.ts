@@ -337,6 +337,79 @@ test('fetchGoldenKeywords: 오픈API 키 없으면 docAvailable:false + 검색�
   assert.equal(res.items[0].docCount, null);
 });
 
+// ── fetchGoldenKeywords: LLM 관련성 게이트 (파이프라인 통합) ──
+const GATE_FULL_ENV = { ...FULL_ENV, ANTHROPIC_API_KEY: 'sk-test' } as NodeJS.ProcessEnv;
+
+test('fetchGoldenKeywords: 게이트가 무관 키워드 제외 + 문서수 조회 자체를 건너뜀', async () => {
+  const docUrls: string[] = [];
+  const fetchImpl = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('searchad')) {
+      return new Response(
+        JSON.stringify({
+          keywordList: [
+            { relKeyword: '황금', monthlyPcQcCnt: 500, monthlyMobileQcCnt: 500, compIdx: '낮음' },
+            { relKeyword: '무관상품', monthlyPcQcCnt: 5000, monthlyMobileQcCnt: 5000, compIdx: '높음' },
+          ],
+        }),
+        { status: 200 }
+      );
+    }
+    docUrls.push(url);
+    return new Response(JSON.stringify({ total: 100 }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const res = await fetchGoldenKeywords('주제', {
+    env: GATE_FULL_ENV,
+    fetchImpl,
+    relevanceCreateMessage: async () => ({ content: [{ type: 'text', text: '["황금"]' }] }),
+  });
+  assert.deepEqual(res.items.map((i) => i.keyword), ['황금']);
+  // 게이트에서 제외된 키워드는 블로그 문서수 조회(비용 단계)에 안 들어간다
+  assert.equal(docUrls.length, 1);
+  assert.ok(docUrls[0].includes(encodeURIComponent('황금')));
+});
+
+test('fetchGoldenKeywords: 게이트 LLM 실패 시 블랙리스트 결과 그대로 (그레이스풀)', async () => {
+  const fetchImpl = makeDualFetch({ 황금: 3000, 레드오션: 900000, 너무작음: 400 });
+  const res = await fetchGoldenKeywords('주제', {
+    env: GATE_FULL_ENV,
+    fetchImpl,
+    relevanceCreateMessage: async () => {
+      throw new Error('api down');
+    },
+  });
+  assert.equal(res.available, true);
+  assert.equal(res.items[0].keyword, '황금');
+  assert.ok(res.items.some((i) => i.keyword === '레드오션'));
+});
+
+test('fetchGoldenKeywords: 게이트 응답 파싱 이상(JSON 아님)도 폴백', async () => {
+  const fetchImpl = makeDualFetch({ 황금: 3000, 레드오션: 900000, 너무작음: 400 });
+  const res = await fetchGoldenKeywords('주제', {
+    env: GATE_FULL_ENV,
+    fetchImpl,
+    relevanceCreateMessage: async () => ({ content: [{ type: 'text', text: '판정 불가' }] }),
+  });
+  assert.equal(res.items[0].keyword, '황금');
+  assert.ok(res.items.some((i) => i.keyword === '레드오션'));
+});
+
+test('fetchGoldenKeywords: ANTHROPIC_API_KEY 없으면 게이트 호출 없이 기존 동작', async () => {
+  let gateCalled = false;
+  const fetchImpl = makeDualFetch({ 황금: 3000, 레드오션: 900000, 너무작음: 400 });
+  const res = await fetchGoldenKeywords('주제', {
+    env: FULL_ENV, // ANTHROPIC_API_KEY 없음
+    fetchImpl,
+    relevanceCreateMessage: async () => {
+      gateCalled = true;
+      return { content: [{ type: 'text', text: '[]' }] };
+    },
+  });
+  assert.equal(gateCalled, false);
+  assert.equal(res.items[0].keyword, '황금');
+});
+
 test('fetchGoldenKeywords: 빈 주제는 빈 결과 (호출 없음)', async () => {
   let called = false;
   const res = await fetchGoldenKeywords('  ', {
