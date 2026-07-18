@@ -226,13 +226,13 @@ export default function LandingPage() {
               </span>
 
               <h1 className="text-[38px] sm:text-[56px] md:text-[66px] font-black text-[#202020] leading-[1.08] mt-6 sm:mt-8" style={{ letterSpacing: '-1.5px' }}>
-                병원 블로그,<br />
-                <span className="text-[#ff4628]">AI가 대신</span> 써드려요.
+                잘 쓰는 건 기본,<br />
+                <span className="text-[#ff4628]">안 걸리는 게</span> 실력입니다.
               </h1>
 
               <p className="text-base sm:text-lg md:text-[19px] text-[#4a4f55] max-w-2xl mx-auto lg:mx-0 mt-5 leading-relaxed">
-                복잡한 설정 없이, 60초 안에<br />
-                네이버 상위 노출용 블로그를 자동으로 작성해드려요.
+                모든 글은 발행 전 의료광고법 3중 검수를 통과합니다.<br className="hidden sm:block" />
+                금지 표현 필터 · AI 검사 · 주간 점검 — 잘 쓰는 AI는 많지만, 안전까지 책임지는 건 닥터포스트입니다.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mt-8">
