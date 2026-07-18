@@ -268,7 +268,7 @@ export default function LandingPage() {
             {[
               { num: '60초', label: '블로그 1편 작성' },
               { num: '네이버·구글·AI', label: '3대 검색 최적화' },
-              { num: '의료광고법', label: '자동 검수' },
+              { num: '의료광고법', label: '발행 전 3중 검수' },
             ].map(({ num, label }) => (
               <div key={num} className="dp-lift bg-white/85 backdrop-blur-sm border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
                 <b className="block text-2xl sm:text-[30px] font-black text-[#ff4628]">{num}</b>
@@ -328,7 +328,7 @@ export default function LandingPage() {
                 {[
                   { label: '비용', a: '무료지만 시간 소모', b: '월 수십~수백만 원', dp: '월 구독, 합리적' },
                   { label: '1편 작성', a: '1~2시간', b: '외주 대기·소통', dp: '60초 초안' },
-                  { label: '의료광고법', a: '직접 확인, 불안', b: '대행사 역량에 의존', dp: 'AI 자동 검수' },
+                  { label: '의료광고법', a: '직접 확인, 불안', b: '대행사 역량에 의존', dp: '발행 전 3중 검수' },
                   { label: '검색 최적화', a: '네이버 위주', b: '네이버 중심', dp: '네이버·구글 SEO' },
                   { label: 'AI 검색(GEO)', a: '대응 어려움', b: '거의 안 함', dp: 'GEO 자동 최적화' },
                   { label: '통제권', a: '있음', b: '낮음', dp: '직접 생성·수정' },
@@ -364,7 +364,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-10 sm:mt-12">
             {[
               { problem: '시간이 없다', solution: '키워드 한 줄이면 60초 자동 초안' },
-              { problem: '법이 불안하다', solution: '과장·단정 표현 AI 자동 점검' },
+              { problem: '법이 불안하다', solution: '발행 전 3중 검수 — 금지 표현 필터·AI 검사·주간 점검' },
               { problem: '대행이 비싸다', solution: '월 구독으로 직접 운영, 통제권은 원장님께' },
               { problem: '노출이 안 된다', solution: '네이버·구글 SEO + AI검색(GEO)까지 구조 자동 반영' },
               { problem: '주제가 막막하다', solution: '시술명만 넣으면 제목·구성까지 제안' },
@@ -392,7 +392,7 @@ export default function LandingPage() {
             {[
               { step: '1', title: '키워드 입력', desc: '병원 시술명이나 질환명을 입력하세요. 예) 레이저 토닝', iconClass: 'bg-[#ffece7] text-[#ff4628]' },
               { step: '2', title: 'AI 자동 작성', desc: 'Claude AI가 네이버 SEO에 맞춰 제목·본문·태그까지 생성해요.', iconClass: 'bg-[#eef2f6] text-[#3f5468]' },
-              { step: '3', title: '복사 후 발행', desc: '완성된 글을 복사해 네이버 블로그에 붙여넣으면 끝이에요.', iconClass: 'bg-[#ececec] text-[#202020]' },
+              { step: '3', title: '검수 통과 후 발행', desc: '의료광고법 검수를 통과한 글을 복사해 네이버 블로그에 붙여넣으면 끝이에요.', iconClass: 'bg-[#ececec] text-[#202020]' },
             ].map(({ step, title, desc, iconClass }) => (
               <div key={step} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] dp-lift">
                 <div className={`w-11 h-11 rounded-xl ${iconClass} flex items-center justify-center text-xl font-extrabold mb-4`}>
@@ -455,10 +455,10 @@ export default function LandingPage() {
           {/* 벤토 그리드 — 핵심 기능 2개(작성·검수)를 와이드 카드로 강조 (Attio 문법) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "네이버 C-Rank·D.I.A+ 로직에 맞춘 제목·본문·태그를 60초 안에 완성합니다. 병원 진료과목과 강점을 학습해 우리 병원 톤으로 씁니다.", iconClass: "bg-[#ffece7] text-[#ff4628]", span: true },
+              { icon: "🛡️", title: "의료광고법 3중 검수", desc: "금지 표현 필터 · AI 검사 · 주간 점검 — 3중 검수를 통과한 글만 발행 단계로 갑니다. 걸리고 나서가 아니라, 올리기 전에 잡는 게 닥터포스트의 기준입니다.", iconClass: "bg-[#eef2f6] text-[#3f5468]", span: true },
               { icon: "🖼️", title: "이미지 자동 생성", desc: "병원 특화 실사 이미지를 자동 생성해요.", iconClass: "bg-[#eef2f6] text-[#3f5468]", span: false },
+              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "네이버 C-Rank·D.I.A+ 로직에 맞춘 제목·본문·태그를 60초 안에 완성합니다. 병원 진료과목과 강점을 학습해 우리 병원 톤으로 씁니다.", iconClass: "bg-[#ffece7] text-[#ff4628]", span: true },
               { icon: "🔍", title: "SEO·GEO 최적화", desc: "네이버·구글 SEO와 AI 검색(GEO) 기준으로 점수를 분석·최적화해요.", iconClass: "bg-[#ececec] text-[#202020]", span: false },
-              { icon: "🛡️", title: "의료광고법 검수", desc: "과장·단정·유인 표현을 발행 전에 자동 감지합니다. 걸리고 나서가 아니라, 올리기 전에 잡는 게 닥터포스트의 기준입니다.", iconClass: "bg-[#eef2f6] text-[#3f5468]", span: true },
               { icon: "📈", title: "네이버 트렌드", desc: "실시간 검색 트렌드를 분석해요.", iconClass: "bg-[#ffece7] text-[#ff4628]", span: false },
               { icon: "📑", title: "독창성 검사", desc: "중복 콘텐츠를 자동으로 검사해요.", iconClass: "bg-[#ececec] text-[#202020]", span: false },
             ].map(({ icon, title, desc, iconClass, span }) => (
@@ -581,7 +581,7 @@ export default function LandingPage() {
             지금 바로 시작해보세요
           </h2>
           <p className="text-[#b9bdc2] mb-8 text-base">
-            병원 마케팅의 가장 큰 고민, AI가 해결해드려요.
+            잘 쓰는 건 기본 — 발행 전 3중 검수로 안전까지 챙기세요.
           </p>
           <button
             onClick={handlePricingClick}

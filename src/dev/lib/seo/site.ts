@@ -6,14 +6,15 @@ export const SITE_URL =
 
 export const SITE_NAME = '닥터포스트'
 
-export const SITE_TITLE = '닥터포스트 — 의료광고법 준수 병원 블로그 자동 작성'
+export const SITE_TITLE = '닥터포스트 — 발행 전 의료광고법 3중 검수, 병원 블로그 자동 작성'
 
 export const SITE_DESCRIPTION =
-  '병원 블로그 자동 작성 SaaS 닥터포스트. 의료광고법 준수 검토, 네이버 SEO 분석, AI 이미지 생성으로 병원 마케팅 콘텐츠 제작을 돕습니다.'
+  '병원 블로그 자동 작성 SaaS 닥터포스트. 모든 글은 발행 전 의료광고법 3중 검수(금지 표현 필터·AI 검사·주간 점검)를 통과합니다. 네이버·구글 SEO와 AI 검색(GEO) 최적화까지.'
 
 export const SITE_KEYWORDS = [
   '병원 블로그',
   '의료광고법',
+  '의료광고법 검수',
   '병원 마케팅',
   '블로그 자동 작성',
   'AI 블로그',
