@@ -1,4 +1,5 @@
 import { fetchRelatedKeywords, type KeywordVolume } from './keyword-volume.ts';
+import { fetchJsonWithTimeout, EXTERNAL_FETCH_TIMEOUT_MS } from './fetch-timeout.ts';
 import { createSpecialtyFilter } from './specialty-filter.ts';
 import {
   filterCandidatesByRelevance,
@@ -190,7 +191,14 @@ const BLOG_SEARCH_URL = 'https://openapi.naver.com/v1/search/blog.json';
  */
 export async function fetchBlogDocCount(
   keyword: string,
-  options: { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch } = {}
+  options: {
+    env?: NodeJS.ProcessEnv;
+    fetchImpl?: typeof fetch;
+    /** 요청 1건 타임아웃(ms). 기본 EXTERNAL_FETCH_TIMEOUT_MS */
+    timeoutMs?: number;
+    /** 전체 마감시각(epoch ms) — 지나면 호출 없이 즉시 null (라우트 한도 보호) */
+    deadline?: number;
+  } = {}
 ): Promise<number | null> {
   const env = options.env ?? process.env;
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -200,19 +208,25 @@ export async function fetchBlogDocCount(
   const cleaned = keyword.trim();
   if (!cleaned) return null;
 
-  try {
-    const params = new URLSearchParams({ query: cleaned, display: '1' });
-    const res = await fetchImpl(`${BLOG_SEARCH_URL}?${params}`, {
+  const budget = options.timeoutMs ?? EXTERNAL_FETCH_TIMEOUT_MS;
+  const remaining =
+    options.deadline !== undefined ? options.deadline - Date.now() : budget;
+  if (remaining <= 0) return null;
+
+  const params = new URLSearchParams({ query: cleaned, display: '1' });
+  const res = await fetchJsonWithTimeout(
+    fetchImpl,
+    `${BLOG_SEARCH_URL}?${params}`,
+    {
       headers: {
         'X-Naver-Client-Id': creds.clientId,
         'X-Naver-Client-Secret': creds.clientSecret,
       },
-    });
-    if (!res.ok) return null;
-    return parseBlogTotal(await res.json());
-  } catch {
-    return null;
-  }
+    },
+    Math.min(budget, remaining)
+  );
+  if (!res.ok) return null;
+  return parseBlogTotal(res.data);
 }
 
 /** 실패 키워드 재시도 전 대기(ms) — 오픈API 초당 호출 제한 배려 */
@@ -222,7 +236,14 @@ interface DocCountFetchOptions {
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   chunkSize?: number;
+  /** 요청 1건 타임아웃(ms) — 테스트 주입용. 기본 EXTERNAL_FETCH_TIMEOUT_MS */
+  timeoutMs?: number;
+  /** 전체 마감시각(epoch ms) — 지나면 남은 조회·재시도를 건너뛴다 */
+  deadline?: number;
 }
+
+/** 문서수 조회 전체(청크+재시도 포함) 시간 예산 — 라우트 30초 한도 보호 */
+export const DOC_COUNT_TOTAL_BUDGET_MS = 15_000;
 
 /** 청크 단위(기본 5개씩 순차) 문서수 조회 — 청크 내부만 병렬 */
 async function fetchDocCountsChunked(
@@ -268,9 +289,19 @@ export async function fetchBlogDocCounts(
   const failed = keywords.filter((kw) => first[kw] === null);
   if (failed.length === 0) return first;
 
+  // 시간 예산 소진 시 재시도 생략 (그레이스풀 — 실패분은 null 유지)
+  if (options.deadline !== undefined && Date.now() >= options.deadline) {
+    return first;
+  }
+
   const retryDelayMs = options.retryDelayMs ?? DOC_COUNT_RETRY_DELAY_MS;
   if (retryDelayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+  }
+
+  // 대기 중 예산이 소진됐을 수 있으므로 재확인
+  if (options.deadline !== undefined && Date.now() >= options.deadline) {
+    return first;
   }
 
   const retried = await fetchDocCountsChunked(failed, options);
@@ -347,7 +378,11 @@ export async function fetchGoldenKeywords(
   if (readOpenApiCredentials(env)) {
     docCounts = await fetchBlogDocCounts(
       candidates.map((c) => c.keyword),
-      { env: options.env, fetchImpl: options.fetchImpl }
+      {
+        env: options.env,
+        fetchImpl: options.fetchImpl,
+        deadline: Date.now() + DOC_COUNT_TOTAL_BUDGET_MS,
+      }
     );
     docAvailable = Object.values(docCounts).some((v) => v !== null);
   }

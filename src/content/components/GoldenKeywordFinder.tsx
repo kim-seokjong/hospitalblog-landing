@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 /**
  * 황금 키워드 찾기 — 입력한 주제 키워드의 연관 키워드 중
@@ -65,8 +65,14 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
   const [error, setError] = useState<string | null>(null);
   /** 단일 선택 — 클릭한 키워드 1개만 하이라이트 (핵심 키워드 교체와 동기) */
   const [selected, setSelected] = useState<string | null>(null);
+  /** 실행 번호 — 늦게 도착한 이전 요청 응답이 최신 결과를 덮지 않도록 가드 */
+  const runRef = useRef(0);
 
   const seed = extractSeed(seedKeyword);
+  /** 최신 입력 조합(seed·지역·진료과) — 조회 중 입력이 바뀌면 도착한 응답을 폐기 */
+  const paramsKey = `${seed}|${region}|${specialty}`;
+  const paramsRef = useRef(paramsKey);
+  paramsRef.current = paramsKey;
 
   const handleFind = async () => {
     if (!seed) {
@@ -74,6 +80,7 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
       return;
     }
 
+    const runId = ++runRef.current;
     setIsLoading(true);
     setError(null);
     setItems([]);
@@ -93,6 +100,7 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
       });
 
       const data = (await res.json()) as GoldenResponse;
+      if (runId !== runRef.current || paramsRef.current !== paramsKey) return;
       if (!res.ok) {
         throw new Error(data.error ?? '황금 키워드 조회에 실패했습니다.');
       }
@@ -107,9 +115,10 @@ export default function GoldenKeywordFinder({ seedKeyword, region, specialty, on
       setDocAvailable(data.docAvailable !== false);
       setSeasonalItems(data.seasonal?.available === false ? [] : (data.seasonal?.items ?? []));
     } catch (err) {
+      if (runId !== runRef.current || paramsRef.current !== paramsKey) return;
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
     } finally {
-      setIsLoading(false);
+      if (runId === runRef.current) setIsLoading(false);
     }
   };
 

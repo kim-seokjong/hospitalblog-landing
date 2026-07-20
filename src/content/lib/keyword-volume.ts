@@ -1,5 +1,7 @@
 import { createHmac } from 'crypto';
 
+import { fetchJsonWithTimeout } from './fetch-timeout.ts';
+
 /**
  * 네이버 검색광고 API(keywordstool) 연동 순수 로직.
  *
@@ -241,13 +243,16 @@ async function requestKeywordList(
     const hint = cleaned.map((k) => k.replace(/\s+/g, '')).join(',');
     const url = `${SEARCHAD_BASE_URL}${KEYWORDSTOOL_URI}?hintKeywords=${encodeURIComponent(hint)}&showDetail=1`;
 
-    const res = await fetchImpl(url, { headers, method: 'GET' });
+    const res = await fetchJsonWithTimeout(fetchImpl, url, { headers, method: 'GET' });
     if (!res.ok) {
       return { ok: false };
     }
 
-    const data = (await res.json()) as { keywordList?: unknown };
-    return { ok: true, keywordList: data.keywordList };
+    // JSON null 등 비정상 body 는 기존과 동일하게 실패 취급 (available:false 유지)
+    if (!res.data || typeof res.data !== 'object') {
+      return { ok: false };
+    }
+    return { ok: true, keywordList: (res.data as { keywordList?: unknown }).keywordList };
   } catch {
     // 호출 실패는 그레이스풀 degrade
     return { ok: false };

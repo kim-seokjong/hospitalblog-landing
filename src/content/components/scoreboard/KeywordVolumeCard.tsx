@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * ⑤ 키워드 검색량 · 경쟁정도 (네이버 검색광고 공개 지표).
@@ -38,9 +38,12 @@ export default function KeywordVolumeCard({ specialty, region, runId }: Props) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<KeywordBoardResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** 실행 번호 — 재분석·재시도 연속 실행 시 이전 응답이 최신 결과를 덮지 않도록 가드 */
+  const reqRef = useRef(0);
 
   const load = useCallback(async () => {
     if (!specialty || !region) return;
+    const reqId = ++reqRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -50,14 +53,16 @@ export default function KeywordVolumeCard({ specialty, region, runId }: Props) {
         body: JSON.stringify({ specialty, region }),
       });
       const data = (await res.json()) as KeywordBoardResult & { error?: string };
+      if (reqId !== reqRef.current) return;
       if (!res.ok) {
         throw new Error(data.error ?? '키워드 데이터 조회에 실패했습니다.');
       }
       setResult(data);
     } catch (err) {
+      if (reqId !== reqRef.current) return;
       setError(err instanceof Error ? err.message : '키워드 데이터 조회에 실패했습니다.');
     } finally {
-      setLoading(false);
+      if (reqId === reqRef.current) setLoading(false);
     }
   }, [specialty, region]);
 

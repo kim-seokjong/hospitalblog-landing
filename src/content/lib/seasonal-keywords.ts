@@ -1,4 +1,5 @@
 import { normalizeKeyword } from './keyword-volume.ts';
+import { fetchJsonWithTimeout } from './fetch-timeout.ts';
 import type { GoldenKeywordItem } from './golden-keywords.ts';
 
 /**
@@ -298,7 +299,7 @@ export async function fetchSeasonalKeywords(
   for (let i = 0; i < pool.length; i += DATALAB_GROUP_LIMIT) {
     const chunk = pool.slice(i, i + DATALAB_GROUP_LIMIT);
     try {
-      const res = await fetchImpl(DATALAB_URL, {
+      const res = await fetchJsonWithTimeout(fetchImpl, DATALAB_URL, {
         method: 'POST',
         headers: {
           'X-Naver-Client-Id': clientId,
@@ -309,7 +310,7 @@ export async function fetchSeasonalKeywords(
       });
       if (!res.ok) continue;
 
-      const series = parseDatalabSeries(await res.json());
+      const series = parseDatalabSeries(res.data);
       anySuccess = true;
       for (const [keyword, points] of Object.entries(series)) {
         boosts[keyword] = computeSeasonalBoost(points, targetMonths);
