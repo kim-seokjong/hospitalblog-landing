@@ -58,6 +58,25 @@ create table if not exists public.blog_check_reports (
   results  jsonb
 );
 
+-- 완전 멱등 가드 — 미래에 이 파일의 "부분 적용된 과거 버전"(status 없던 초기안 등)
+-- 위에서 재실행해도 안전하다. 신규 환경에서는 전부 no-op.
+alter table public.blog_check_reports
+  add column if not exists status text not null default 'pending';
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'blog_check_reports_status_check'
+      and conrelid = 'public.blog_check_reports'::regclass
+  ) then
+    alter table public.blog_check_reports
+      add constraint blog_check_reports_status_check
+      check (status in ('pending', 'done', 'failed'));
+  end if;
+end $$;
+-- 이미 nullable 이어도 no-op (Postgres DROP NOT NULL 은 멱등)
+alter table public.blog_check_reports alter column results drop not null;
+
 comment on table public.blog_check_reports is
   '네이버 블로그 무료진단 상세분석 이력 + 일일 상한 원자 예약 행. 라이프사이클: pending(예약) → done(결과 저장)/failed(실패·한도초과). 일일 카운트는 status 무관 전부 포함(실패도 소비=안전측). blog_audits(컴플라이언스 소급진단)와 별도 스키마 — 혼용 금지.';
 comment on column public.blog_check_reports.status is
@@ -68,7 +87,13 @@ comment on column public.blog_check_reports.results is
 create index if not exists idx_blog_check_reports_user_id on public.blog_check_reports(user_id);
 create index if not exists idx_blog_check_reports_run_at  on public.blog_check_reports(run_at desc);
 
--- RLS — 본인 row만 조회·생성·갱신 (갱신은 예약 라이프사이클 전이용, delete 정책 없음)
+-- RLS — 조회는 본인만(이력 화면용), **쓰기는 전부 service role 전용**.
+--
+-- insert/update 정책을 두지 않는 이유(캡 우회 차단):
+--   본인 update 정책이 있으면 클라이언트가 anon 키로 자기 행의
+--   run_at/status/results 를 직접 조작해 일일 상한 카운트를 우회할 수 있다.
+--   예약 북키핑(INSERT·COUNT·상태 전이)은 detail 라우트가 service role 로만
+--   수행한다 — user_id 는 항상 서버 세션에서 오므로 귀속 조작 여지 없음.
 alter table public.blog_check_reports enable row level security;
 
 drop policy if exists "사용자는 자신의 무료진단만 조회" on public.blog_check_reports;
@@ -76,13 +101,6 @@ create policy "사용자는 자신의 무료진단만 조회"
   on public.blog_check_reports for select
   using (auth.uid() = user_id);
 
+-- 과거 초기안으로 부분 적용된 환경 대비 — 쓰기 정책이 있으면 제거(멱등)
 drop policy if exists "사용자는 자신의 무료진단만 생성" on public.blog_check_reports;
-create policy "사용자는 자신의 무료진단만 생성"
-  on public.blog_check_reports for insert
-  with check (auth.uid() = user_id);
-
 drop policy if exists "사용자는 자신의 무료진단만 갱신" on public.blog_check_reports;
-create policy "사용자는 자신의 무료진단만 갱신"
-  on public.blog_check_reports for update
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);

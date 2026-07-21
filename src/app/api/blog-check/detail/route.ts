@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
 import { parseBlogCheckInput } from '@/content/lib/blog-check-input';
+import { readUserDailyLimit } from '@/content/lib/blog-check-limits';
 import {
-  consumeUserQuota,
-  evaluateReservation,
-  kstDayRangeUtc,
-  readUserDailyLimit,
-} from '@/content/lib/blog-check-limits';
+  reserveDetailSlot,
+  type ReservationStore,
+} from '@/content/lib/blog-check-reservation';
 import {
   runBlogCheck,
   buildQualityDiagnosis,
@@ -44,6 +43,8 @@ export const maxDuration = 120;
  * 본인 행 수를 COUNT 하는 **DB 원자 예약** 방식(크로스 인스턴스 레이스 안전).
  * 한도 초과면 자기 예약 행을 'failed' 로 갱신하고 429. 파이프라인 성공 시
  * 예약 행에 결과 UPDATE(status='done'), 실패 시 'failed'.
+ * 예약 북키핑은 전부 service-role 로 수행한다(buildReservationStore 주석 참조)
+ * — anon 경로에는 update 정책이 없어 클라이언트가 캡을 우회할 수 없다.
  * 테이블 미적용(마이그 045 전) 환경은 인메모리 consumeUserQuota 폴백.
  *
  * 리드-회원 연결은 blog_check_reports(user_id+blog_id) 저장으로 충분하다.
@@ -153,86 +154,76 @@ function getUserQuotaStore(): Map<string, number> {
   return g[USER_QUOTA_KEY] as Map<string, number>;
 }
 
-/** 예약 결과 — db(예약 행 확보) / memory(테이블 미적용 폴백) / denied(한도 초과). */
-type DetailReservation =
-  | { mode: 'db'; id: string }
-  | { mode: 'memory' }
-  | { mode: 'denied'; limit: number };
-
 /**
- * 회원당 일일 상한 — DB 원자 예약 (크로스 인스턴스 레이스 안전).
+ * 예약 저장소 — **service-role 클라이언트** 로 구현한다 (흐름은 blog-check-reservation.ts).
  *
- * ① 예약 행 INSERT(status='pending') → ② 오늘(KST) 본인 행 수 COUNT(자기 행 포함,
- * pending·done·failed 전부 — 실패도 소비=안전측) → ③ 한도 초과면 자기 예약 행을
- * 'failed' 로 갱신하고 denied.
- * INSERT 가 COUNT 보다 먼저라 동시 N요청도 "한도+ε" 로 바운드된다
- * (ε = 거의 동시 INSERT 트랜잭션의 가시성 지연분 — evaluateReservation 참조).
+ * service-role 을 쓰는 이유(리드 백필 제거와의 구분 — 중요):
+ * - 예약 행 INSERT·COUNT·상태 전이 UPDATE 는 서버 전용 북키핑이고, user_id 는
+ *   항상 서버 세션(auth.getUser)에서 온다. 클라이언트 입력(blogId)이 소유 귀속을
+ *   결정하지 않으므로, 임의 blogId 로 남의 데이터를 귀속시킬 수 있었던 리드
+ *   백필과 달리 귀속 조작 여지가 없다.
+ * - 반대로 본인 UPDATE RLS 정책을 열어두면 클라이언트가 anon 키로 자기 행의
+ *   run_at/status/results 를 직접 조작해 일일 캡을 우회할 수 있다 → 마이그 045
+ *   에서 update(및 insert) 정책을 제거하고 쓰기는 service role 전용으로 했다.
  *
- * 테이블 미적용(마이그 045 전) 등 INSERT 실패 환경은 기존 인메모리
- * consumeUserQuota(동일 인스턴스 한정 원자 소비) 폴백을 유지한다.
+ * service key 미설정 등 클라이언트 생성 실패 시 null → 인메모리 폴백.
  */
-async function reserveDetailSlot(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  userId: string,
-  blogId: string,
-): Promise<DetailReservation> {
-  const limit = readUserDailyLimit();
-
-  // ① 예약 행 INSERT
-  const { data: inserted, error: insertError } = await supabase
-    .from('blog_check_reports')
-    .insert({ user_id: userId, blog_id: blogId, status: 'pending', results: null })
-    .select('id')
-    .single();
-
-  if (insertError || !inserted?.id) {
-    // 테이블/컬럼 미적용 등 → 인메모리 폴백 (검사+소비 원자)
-    const mem = consumeUserQuota(getUserQuotaStore(), { userId, limit });
-    return mem.allowed ? { mode: 'memory' } : { mode: 'denied', limit };
-  }
-  const reservationId = String(inserted.id);
-
-  // ② 오늘(KST) 본인 행 수 COUNT — status 필터 없음(실패도 소비)
-  const range = kstDayRangeUtc();
-  const { count, error: countError } = await supabase
-    .from('blog_check_reports')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('run_at', range.startIso)
-    .lt('run_at', range.endIso);
-
-  // ③ 초과 판정 — 카운트 실패는 진행(그레이스풀, 예약 행이 하한을 유지)
-  const verdict = evaluateReservation(countError ? null : count ?? null, limit);
-  if (verdict === 'over_limit') {
-    await markReservation(supabase, reservationId, 'failed');
-    return { mode: 'denied', limit };
-  }
-  return { mode: 'db', id: reservationId };
-}
-
-/** 예약 행 상태 갱신 — 실패해도 응답을 막지 않는다 (그레이스풀). */
-async function markReservation(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  reservationId: string,
-  status: 'done' | 'failed',
-  results?: unknown,
-): Promise<boolean> {
+function buildReservationStore(): ReservationStore | null {
+  let admin: ReturnType<typeof createAdminClient>;
   try {
-    const patch: Record<string, unknown> =
-      status === 'done' ? { status, results: results ?? null } : { status };
-    const { error } = await supabase
-      .from('blog_check_reports')
-      .update(patch)
-      .eq('id', reservationId);
-    if (error) {
-      console.error('[blog-check/detail] 예약 갱신 실패(무시):', error.message);
-      return false;
-    }
-    return true;
+    admin = createAdminClient();
   } catch (e) {
-    console.error('[blog-check/detail] 예약 갱신 예외(무시):', e instanceof Error ? e.message : e);
-    return false;
+    console.error(
+      '[blog-check/detail] service-role 클라이언트 생성 실패 — 인메모리 폴백:',
+      e instanceof Error ? e.message : e,
+    );
+    return null;
   }
+
+  return {
+    async insertPending(userId, blogId) {
+      try {
+        const { data, error } = await admin
+          .from('blog_check_reports')
+          .insert({ user_id: userId, blog_id: blogId, status: 'pending', results: null })
+          .select('id')
+          .single();
+        if (error || !data?.id) return null; // 테이블/컬럼 미적용 포함 → 폴백
+        return String(data.id);
+      } catch {
+        return null;
+      }
+    },
+    async countToday(userId, startIso, endIso) {
+      try {
+        const { count, error } = await admin
+          .from('blog_check_reports')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .gte('run_at', startIso)
+          .lt('run_at', endIso);
+        if (error) return null;
+        return count ?? null;
+      } catch {
+        return null;
+      }
+    },
+    async mark(id, status, results) {
+      try {
+        const patch: Record<string, unknown> =
+          status === 'done' ? { status, results: results ?? null } : { status };
+        const { error } = await admin.from('blog_check_reports').update(patch).eq('id', id);
+        if (error) {
+          console.error('[blog-check/detail] 예약 갱신 실패(무시):', error.message);
+          return false;
+        }
+        return true;
+      } catch (e) {
+        console.error('[blog-check/detail] 예약 갱신 예외(무시):', e instanceof Error ? e.message : e);
+        return false;
+      }
+    },
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -252,8 +243,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 0) 회원당 일일 상한 — DB 원자 예약 (테이블 미적용 시 인메모리 폴백)
-    const reservation = await reserveDetailSlot(supabase, user.id, blogId);
+    // 0) 회원당 일일 상한 — DB 원자 예약 (service role, 테이블 미적용 시 인메모리 폴백)
+    const store = buildReservationStore();
+    const reservation = await reserveDetailSlot({
+      store,
+      memoryStore: getUserQuotaStore(),
+      userId: user.id,
+      blogId,
+      limit: readUserDailyLimit(),
+    });
     if (reservation.mode === 'denied') {
       return NextResponse.json(
         { error: `상세분석은 하루 ${reservation.limit}회까지 이용할 수 있어요. 내일 다시 시도해 주세요.` },
@@ -268,8 +266,8 @@ export async function POST(req: NextRequest) {
         const run = await runBlogCheck(blogId);
         if (!run.ok) {
           // 실패한 분석도 쿼터를 소비한다(예약 행을 'failed' 로만 전이, 환불 없음=안전측)
-          if (reservation.mode === 'db') {
-            await markReservation(supabase, reservation.id, 'failed');
+          if (reservation.mode === 'db' && store) {
+            await store.mark(reservation.id, 'failed');
           }
           const message =
             run.reason === 'empty'
@@ -314,11 +312,11 @@ export async function POST(req: NextRequest) {
         voiceDna,
       };
 
-      // 3) 이력 저장 — 예약 행에 결과 UPDATE(status='done').
+      // 3) 이력 저장 — 예약 행에 결과 UPDATE(status='done', service role).
       //    memory 폴백(테이블 미적용)은 저장할 곳이 없어 saved=false.
       const saved =
-        reservation.mode === 'db'
-          ? await markReservation(supabase, reservation.id, 'done', detail)
+        reservation.mode === 'db' && store
+          ? await store.mark(reservation.id, 'done', detail)
           : false;
 
       // 리드-회원 연결은 위 blog_check_reports 저장(user_id+blog_id)으로 갈음한다
@@ -327,8 +325,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ detail, saved });
     } catch (innerErr) {
       // 예기치 못한 실패 — 예약 행을 'failed' 로 전이(쿼터는 소비된 채 유지)
-      if (reservation.mode === 'db') {
-        await markReservation(supabase, reservation.id, 'failed');
+      if (reservation.mode === 'db' && store) {
+        await store.mark(reservation.id, 'failed');
       }
       throw innerErr;
     }
