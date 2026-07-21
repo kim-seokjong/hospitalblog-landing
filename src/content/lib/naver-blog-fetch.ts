@@ -75,8 +75,11 @@ function decodeEntities(text: string): string {
     .replace(/&amp;/g, '&');
 }
 
-/** HTML/스크립트/스타일을 제거하고 사람이 읽는 본문 텍스트만 남긴다. */
-function htmlToText(html: string): string {
+/**
+ * HTML/스크립트/스타일을 제거하고 사람이 읽는 본문 텍스트만 남긴다.
+ * (블로그 무료진단 blog-check-rss.ts 에서 재사용하기 위해 export)
+ */
+export function htmlToText(html: string): string {
   if (typeof html !== 'string' || html === '') return '';
   const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -99,20 +102,77 @@ function unwrapCdata(text: string): string {
   return m ? m[1] : text;
 }
 
-/** 타임아웃이 걸린 fetch. 실패·타임아웃 시 null(never throws). */
+/** 리다이렉트 수동 추적 최대 홉 수. */
+export const MAX_REDIRECT_HOPS = 3;
+
+/** safeFetchText 가 허용하는 fetch 호스트 (리다이렉트 추적 포함 고정 불변식). */
+const SAFE_FETCH_HOSTS = new Set(['rss.blog.naver.com', 'blog.naver.com', 'm.blog.naver.com']);
+
+/** URL 이 https + 네이버 블로그 계열 고정 호스트인지 (리다이렉트 목적지 검증용). */
+export function isAllowedNaverFetchUrl(url: string): boolean {
+  if (typeof url !== 'string' || url === '') return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && SAFE_FETCH_HOSTS.has(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 3xx Location 헤더를 해석해 "추적해도 되는" 절대 URL 을 반환한다 (순수 함수).
+ * 상대 경로는 현재 URL 기준으로 해석하며, 허용 판정(isAllowed)을 통과하지
+ * 못하면 null — 리다이렉트가 고정 호스트 밖으로 나가는 것을 차단한다.
+ */
+export function resolveSafeRedirect(
+  currentUrl: string,
+  location: string | null,
+  isAllowed: (url: string) => boolean = isAllowedNaverFetchUrl,
+): string | null {
+  if (!location) return null;
+  let next: string;
+  try {
+    next = new URL(location, currentUrl).toString();
+  } catch {
+    return null;
+  }
+  return isAllowed(next) ? next : null;
+}
+
+/**
+ * 타임아웃이 걸린 fetch. 실패·타임아웃 시 null(never throws).
+ * 리다이렉트는 자동 추적하지 않고(redirect:'manual') Location 을 검증해
+ * 허용 호스트일 때만 최대 MAX_REDIRECT_HOPS 홉까지 수동 추적한다 —
+ * 리다이렉트로 고정 호스트 불변식이 깨지는 것을 방지.
+ *
+ * 타임아웃은 체인 전체(모든 홉 + 본문 수신)에 **단일 절대 데드라인** 으로 건다
+ * (AbortController·타이머 1개). 홉마다 타이머를 리셋하면 최악의 경우
+ * (홉수+1)×REQUEST_TIMEOUT_MS 까지 늘어나기 때문.
+ */
 async function safeFetchText(url: string, deadline: number): Promise<string | null> {
   const remaining = deadline - Date.now();
   if (remaining <= 0) return null;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, remaining));
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xml,text/xml,*/*' },
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return await res.text();
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
+      const res = await fetch(current, {
+        signal: controller.signal,
+        headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xml,text/xml,*/*' },
+        cache: 'no-store',
+        redirect: 'manual',
+      });
+      if (res.status >= 300 && res.status < 400) {
+        const next = resolveSafeRedirect(current, res.headers.get('location'));
+        if (!next) return null; // 허용 밖 리다이렉트 → 해당 항목 스킵
+        current = next;
+        continue;
+      }
+      if (!res.ok) return null;
+      return await res.text();
+    }
+    return null; // 홉 초과
   } catch {
     return null;
   } finally {
@@ -143,13 +203,34 @@ function parseRssItems(xml: string): RssItem[] {
   return items;
 }
 
-/** item.link 또는 본문에서 logNo(글 번호)를 뽑는다. */
-function extractLogNo(link: string): string | null {
+/**
+ * item.link 또는 본문에서 logNo(글 번호)를 뽑는다.
+ * (블로그 무료진단 blog-check-rss.ts 에서 재사용하기 위해 export)
+ */
+export function extractLogNo(link: string): string | null {
   const byPath = link.match(/\/(\d{6,})(?:[/?#]|$)/);
   if (byPath?.[1]) return byPath[1];
   const byQuery = link.match(/[?&]logno=(\d+)/i);
   if (byQuery?.[1]) return byQuery[1];
   return null;
+}
+
+/**
+ * RSS item.link 를 본문 fetch 폴백으로 써도 되는지 검증한다 (고정 호스트 불변식).
+ * https + blog.naver.com/m.blog.naver.com 일 때만 허용 — RSS 에 임의 URL 이
+ * 섞여도 외부 호스트로 fetch 가 나가지 않는다. 그 외에는 해당 항목을 건너뛴다.
+ */
+export function isAllowedNaverPostUrl(link: string): boolean {
+  if (typeof link !== 'string' || link === '') return false;
+  try {
+    const url = new URL(link);
+    return (
+      url.protocol === 'https:' &&
+      (url.hostname === 'blog.naver.com' || url.hostname === 'm.blog.naver.com')
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** 수집된 글 1편 — 제목·링크 포함(소급 진단 카드 표시용). */
@@ -206,9 +287,13 @@ export async function fetchNaverBlogPostItems(
     // 2) 부족하면 PostView 본문 시도
     if (text.replace(/\s/g, '').length < MIN_BODY_CHARS) {
       const logNo = extractLogNo(item.link);
+      // logNo 가 있으면 고정 호스트로 조립. 없으면 item.link 폴백을 쓰되,
+      // https + 네이버 블로그 호스트일 때만 허용(아니면 이 항목은 본문 수집 스킵).
       const postUrl = logNo
         ? `https://m.blog.naver.com/PostView.naver?blogId=${blogId}&logNo=${logNo}`
-        : item.link;
+        : isAllowedNaverPostUrl(item.link)
+          ? item.link
+          : null;
       if (postUrl) {
         const html = await safeFetchText(postUrl, deadline);
         if (html) {
