@@ -54,6 +54,8 @@ export interface BlogCheckReport {
   runAt: string;
   /** RSS 에서 수집한 최근 글 수 (최대 50). */
   totalPosts: number;
+  /** 수집한 글 제목 목록 (상세분석 품질 진단·근거 표시용). */
+  titles: string[];
   cadence: Cadence;
   seo: SeoScoreBreakdown;
   geo: GeoScore;
@@ -333,6 +335,7 @@ export async function runBlogCheck(
       blogTitle: feed.blogTitle,
       runAt: new Date(now).toISOString(),
       totalPosts: feed.items.length,
+      titles,
       cadence,
       seo,
       geo,
@@ -348,6 +351,96 @@ export async function runBlogCheck(
       bodiesCollected: bodies.length,
     },
   };
+}
+
+/* ── 글 품질 진단 (상세분석 전용 — LLM 1콜 + 규칙 폴백) ───── */
+
+const QUALITY_SYSTEM = `당신은 병원 블로그 글 품질 코치입니다. 제목 목록과 반복도 통계를 보고
+템플릿 반복·제목 중복 관점의 진단 코멘트를 2~3문장으로 씁니다.
+
+【규칙】
+- 존댓말, 구체적으로 (예: 어떤 패턴이 반복되는지 짚기).
+- 의료광고법 금지 표현 사용 금지. 매출·방문자 추정 금지. 타 병원 비교 금지.
+- 코멘트 텍스트만 출력 (JSON·머리말 없이).`;
+
+/** 규칙 기반 품질 코멘트 (LLM 실패 폴백). */
+export function buildFallbackQualityComment(stats: TitleQualityStats): string {
+  if (stats.duplicatePairs > 0) {
+    return (
+      `제목 ${stats.pairsChecked}쌍 중 ${stats.duplicatePairs}쌍이 사실상 중복이에요(최대 유사도 ${Math.round(stats.maxSimilarity * 100)}%). ` +
+      '같은 틀의 제목이 반복되면 검색 노출에서 서로 경쟁하고 저품질 신호가 될 수 있어요. 제목 구조를 다양화해 보세요.'
+    );
+  }
+  return '제목 중복은 발견되지 않았어요. 다만 검색 수요가 있는 키워드를 제목 앞쪽에 배치하는 패턴을 유지하는 것이 좋아요.';
+}
+
+/**
+ * 글 품질 진단 코멘트 — LLM 1콜, 실패·키 없음 시 규칙 폴백 (절대 throw 금지).
+ */
+export async function buildQualityDiagnosis(
+  stats: TitleQualityStats,
+  titles: readonly string[],
+  options: { env?: NodeJS.ProcessEnv; createMessage?: RelevanceGateCreate; timeoutMs?: number } = {},
+): Promise<{ comment: string; source: 'llm' | 'rule' }> {
+  const fallback = { comment: buildFallbackQualityComment(stats), source: 'rule' as const };
+  const env = options.env ?? process.env;
+  if (!env.ANTHROPIC_API_KEY?.trim()) return fallback;
+
+  try {
+    let createMessage = options.createMessage;
+    let model = 'claude-sonnet-4-6';
+    if (!createMessage) {
+      const { getAnthropicClient, MODEL } = await import('./anthropic.ts');
+      const client = getAnthropicClient();
+      model = MODEL;
+      createMessage = (params) => client.messages.create(params);
+    }
+
+    const timeoutMs = options.timeoutMs ?? BLOG_CHECK_FEEDBACK_TIMEOUT_MS;
+    let timer: NodeJS.Timeout | undefined;
+    const response = await Promise.race([
+      createMessage({
+        model,
+        max_tokens: 512,
+        system: QUALITY_SYSTEM,
+        messages: [
+          {
+            role: 'user',
+            content:
+              `반복도 통계: ${JSON.stringify(stats)}\n\n최근 글 제목:\n` +
+              titles.slice(0, 30).map((t) => `- ${t}`).join('\n') +
+              '\n\n진단 코멘트를 2~3문장으로 작성하세요.',
+          },
+        ],
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`blog_check_quality_timeout_${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
+
+    const textBlock = response.content.find((b) => b.type === 'text');
+    const text = textBlock && typeof textBlock.text === 'string' ? textBlock.text.trim() : '';
+    if (text.length < 20 || text.length > 600) return fallback;
+    return { comment: text, source: 'llm' };
+  } catch (error) {
+    console.error(
+      '[blog-check] 품질 진단 LLM 실패 — 규칙 폴백:',
+      error instanceof Error ? error.message : error,
+    );
+    return fallback;
+  }
+}
+
+/* ── 캐시 키·TTL (간단/상세 라우트 공용) ──────────────────── */
+
+/** 진단 리포트 캐시 TTL — 7일 (스펙: blogId 7일 결과 캐시). */
+export const BLOG_CHECK_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** 진단 리포트 캐시 키 — 간단분석·상세분석 라우트가 공유한다. */
+export function blogCheckCacheKey(blogId: string): string {
+  return `blogcheck:${blogId}`;
 }
 
 /* ── 간단분석 공개 응답 (비회원용 축약) ───────────────────── */
