@@ -76,6 +76,11 @@ begin
 end $$;
 -- 이미 nullable 이어도 no-op (Postgres DROP NOT NULL 은 멱등)
 alter table public.blog_check_reports alter column results drop not null;
+-- status 없던 초기안 위에 재실행된 경우: 결과가 있는 기존 행은 완료로 백필
+-- (ADD COLUMN 기본값 'pending'이 과거 완료 행을 예약으로 오표기하는 것 방지)
+update public.blog_check_reports
+  set status = 'done'
+  where results is not null and status = 'pending';
 
 comment on table public.blog_check_reports is
   '네이버 블로그 무료진단 상세분석 이력 + 일일 상한 원자 예약 행. 라이프사이클: pending(예약) → done(결과 저장)/failed(실패·한도초과). 일일 카운트는 status 무관 전부 포함(실패도 소비=안전측). blog_audits(컴플라이언스 소급진단)와 별도 스키마 — 혼용 금지.';
