@@ -2,11 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   readBlogCheckLimits,
+  readUserDailyLimit,
   consumeBlogCheckQuota,
+  consumeUserQuota,
   kstDayKey,
+  kstDayRangeUtc,
   extractClientIp,
   DEFAULT_IP_DAILY_LIMIT,
   DEFAULT_GLOBAL_DAILY_LIMIT,
+  DEFAULT_USER_DAILY_LIMIT,
 } from '../blog-check-limits.ts';
 
 // ── readBlogCheckLimits ──
@@ -82,14 +86,68 @@ test('consumeBlogCheckQuota: 날짜가 바뀌면 카운터 리셋 + 옛 키 정�
 });
 
 // ── extractClientIp ──
-test('extractClientIp: x-forwarded-for 첫 값, 없으면 unknown', () => {
-  const headers = (map: Record<string, string>) => ({
-    get: (name: string) => map[name.toLowerCase()] ?? null,
-  });
+const headers = (map: Record<string, string>) => ({
+  get: (name: string) => map[name.toLowerCase()] ?? null,
+});
+
+test('extractClientIp: 플랫폼 헤더(x-real-ip) 우선 — 클라이언트 위조 가능한 XFF 무시', () => {
   assert.equal(
-    extractClientIp(headers({ 'x-forwarded-for': '1.2.3.4, 10.0.0.1' })),
-    '1.2.3.4',
+    extractClientIp(
+      headers({
+        'x-forwarded-for': 'fake.ip.injected, 1.2.3.4', // 클라이언트가 앞에 끼워 넣은 위조 값
+        'x-real-ip': '9.9.9.9', // Vercel 플랫폼이 덮어쓴 실제 IP
+      }),
+    ),
+    '9.9.9.9',
   );
-  assert.equal(extractClientIp(headers({ 'x-real-ip': '9.9.9.9' })), '9.9.9.9');
+});
+
+test('extractClientIp: x-real-ip 없으면 x-vercel-forwarded-for → 마지막 수단 XFF → unknown', () => {
+  assert.equal(
+    extractClientIp(headers({ 'x-vercel-forwarded-for': '8.8.8.8', 'x-forwarded-for': 'fake, 1.1.1.1' })),
+    '8.8.8.8',
+  );
+  assert.equal(extractClientIp(headers({ 'x-forwarded-for': '1.2.3.4, 10.0.0.1' })), '1.2.3.4');
   assert.equal(extractClientIp(headers({})), 'unknown');
+});
+
+// ── readUserDailyLimit / consumeUserQuota (상세분석 회원 캡) ──
+test('readUserDailyLimit: 기본 5, env 조절, 비정상 값은 기본값', () => {
+  assert.equal(readUserDailyLimit({} as NodeJS.ProcessEnv), DEFAULT_USER_DAILY_LIMIT);
+  assert.equal(readUserDailyLimit({ BLOG_CHECK_USER_DAILY_LIMIT: '9' } as NodeJS.ProcessEnv), 9);
+  assert.equal(
+    readUserDailyLimit({ BLOG_CHECK_USER_DAILY_LIMIT: '0' } as NodeJS.ProcessEnv),
+    DEFAULT_USER_DAILY_LIMIT,
+  );
+});
+
+test('consumeUserQuota: 회원별 일일 상한 소비·차단·날짜 리셋', () => {
+  const store = new Map<string, number>();
+  const day1 = Date.parse('2026-07-21T03:00:00Z');
+  const day2 = Date.parse('2026-07-22T03:00:00Z');
+  for (let i = 0; i < 5; i++) {
+    assert.deepEqual(consumeUserQuota(store, { userId: 'u1', now: day1, limit: 5 }), { allowed: true });
+  }
+  assert.deepEqual(consumeUserQuota(store, { userId: 'u1', now: day1, limit: 5 }), {
+    allowed: false,
+    reason: 'user_limit',
+  });
+  // 다른 회원은 독립, 날짜가 바뀌면 리셋 + 옛 키 정리
+  assert.equal(consumeUserQuota(store, { userId: 'u2', now: day1, limit: 5 }).allowed, true);
+  assert.equal(consumeUserQuota(store, { userId: 'u1', now: day2, limit: 5 }).allowed, true);
+  for (const key of store.keys()) {
+    assert.ok(key.startsWith('user:2026-07-22:'));
+  }
+});
+
+// ── kstDayRangeUtc (DB 일일 카운트 판정 경계) ──
+test('kstDayRangeUtc: KST 하루 = UTC 전날 15:00Z ~ 당일 15:00Z', () => {
+  const now = Date.parse('2026-07-21T03:00:00Z'); // KST 2026-07-21 12:00
+  assert.deepEqual(kstDayRangeUtc(now), {
+    startIso: '2026-07-20T15:00:00.000Z',
+    endIso: '2026-07-21T15:00:00.000Z',
+  });
+  // KST 자정 직후(UTC 15:01)는 다음 날 범위
+  const after = Date.parse('2026-07-21T15:01:00Z');
+  assert.equal(kstDayRangeUtc(after).startIso, '2026-07-21T15:00:00.000Z');
 });

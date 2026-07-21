@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
+import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { parseBlogCheckInput } from '@/content/lib/blog-check-input';
+import {
+  consumeUserQuota,
+  kstDayRangeUtc,
+  readUserDailyLimit,
+} from '@/content/lib/blog-check-limits';
 import {
   runBlogCheck,
   buildQualityDiagnosis,
@@ -32,7 +37,14 @@ export const maxDuration = 120;
  * - 글 품질 진단: 제목 반복도 통계 + LLM 코멘트(폴백 룰)
  * - VOICE-DNA: 수집 본문으로 초기 문체 프로필 생성/갱신 (learned 카드는 보존)
  * - 이력 저장: blog_check_reports (테이블 미적용 시 저장만 스킵)
- * - 리드-회원 연결: blog_check_leads.user_id backfill (그레이스풀)
+ *
+ * 가드: 회원당 일일 상한(기본 5회, env BLOG_CHECK_USER_DAILY_LIMIT) —
+ * blog_check_reports 의 오늘(KST) 카운트로 판정, 테이블 미적용 시 인메모리 폴백.
+ *
+ * 리드-회원 연결은 blog_check_reports(user_id+blog_id) 저장으로 충분하다.
+ * blog_check_leads.user_id backfill 은 하지 않는다 — 임의 회원이 남의 병원
+ * blogId 를 넣어 그 병원의 익명 리드를 자기 것으로 귀속시킬 수 있기 때문
+ * (영업 측 조인은 blog_id 기준으로 가능. 리드는 익명 그대로 둔다).
  */
 
 interface GeoDetail {
@@ -132,21 +144,40 @@ async function updateVoiceDna(
   }
 }
 
-/** 리드-회원 연결 — blog_id 가 같은 미연결 리드에 user_id backfill (그레이스풀). */
-async function linkLeads(blogId: string, userId: string): Promise<void> {
-  try {
-    const admin = createAdminClient();
-    const { error } = await admin
-      .from('blog_check_leads')
-      .update({ user_id: userId })
-      .eq('blog_id', blogId)
-      .is('user_id', null);
-    if (error && !isMissingTable(error, 'blog_check_leads')) {
-      console.error('[blog-check/detail] 리드 연결 실패(무시):', error.message);
-    }
-  } catch (e) {
-    console.error('[blog-check/detail] 리드 연결 예외(무시):', e instanceof Error ? e.message : e);
+/** 회원당 일일 상한 인메모리 폴백 카운터 (테이블 미적용 환경 전용, dev HMR 생존). */
+const USER_QUOTA_KEY = '__dp_blog_check_user_quota__';
+function getUserQuotaStore(): Map<string, number> {
+  const g = globalThis as Record<string, unknown>;
+  if (!(g[USER_QUOTA_KEY] instanceof Map)) {
+    g[USER_QUOTA_KEY] = new Map<string, number>();
   }
+  return g[USER_QUOTA_KEY] as Map<string, number>;
+}
+
+/**
+ * 회원당 일일 상세분석 상한 판정.
+ * 1순위: blog_check_reports 의 오늘(KST) 저장 건수 (인스턴스 무관, 정확).
+ * 폴백: 테이블 미적용(42P01 등) 환경에서만 인메모리 카운터 소비.
+ */
+async function checkUserDailyLimit(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  userId: string,
+): Promise<{ over: boolean; limit: number }> {
+  const limit = readUserDailyLimit();
+  const range = kstDayRangeUtc();
+  const { count, error } = await supabase
+    .from('blog_check_reports')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('run_at', range.startIso)
+    .lt('run_at', range.endIso);
+
+  if (!error) {
+    return { over: (count ?? 0) >= limit, limit };
+  }
+  // 테이블 미적용 등 조회 실패 → 인메모리 폴백 (검사+소비)
+  const decision = consumeUserQuota(getUserQuotaStore(), { userId, limit });
+  return { over: !decision.allowed, limit };
 }
 
 export async function POST(req: NextRequest) {
@@ -163,6 +194,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: '네이버 블로그 주소 또는 아이디를 확인해 주세요. 예: blog.naver.com/myclinic' },
         { status: 400 },
+      );
+    }
+
+    // 0) 회원당 일일 상한 (기본 5회) — 비용 있는 파이프라인 전에 차단
+    const quota = await checkUserDailyLimit(supabase, user.id);
+    if (quota.over) {
+      return NextResponse.json(
+        { error: `상세분석은 하루 ${quota.limit}회까지 이용할 수 있어요. 내일 다시 시도해 주세요.` },
+        { status: 429 },
       );
     }
 
@@ -229,8 +269,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4) 리드-회원 연결 (그레이스풀)
-    await linkLeads(blogId, user.id);
+    // 리드-회원 연결은 위 blog_check_reports 저장(user_id+blog_id)으로 갈음한다
+    // (blog_check_leads.user_id backfill 금지 — 파일 상단 주석 참조).
 
     return NextResponse.json({ detail, saved });
   } catch (err) {

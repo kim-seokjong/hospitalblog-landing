@@ -7,6 +7,7 @@ import {
   blogCheckCacheKey,
   BLOG_CHECK_CACHE_TTL_MS,
   type BlogCheckReport,
+  type BlogCheckRunResult,
 } from '@/content/lib/blog-check';
 import {
   consumeBlogCheckQuota,
@@ -41,6 +42,20 @@ function getQuotaStore(): Map<string, number> {
     g[QUOTA_KEY] = new Map<string, number>();
   }
   return g[QUOTA_KEY] as Map<string, number>;
+}
+
+/**
+ * 캐시 스탬피드 방지 — blogId 별 in-flight Promise 공유(single-flight).
+ * 같은 blogId 의 동시 캐시 미스 N건이 전부 풀 파이프라인을 돌지 않도록,
+ * 첫 요청(리더)의 Promise 를 나머지가 공유한다. 완료·실패 시 맵에서 제거.
+ */
+const INFLIGHT_KEY = '__dp_blog_check_inflight__';
+function getInflightMap(): Map<string, Promise<BlogCheckRunResult>> {
+  const g = globalThis as Record<string, unknown>;
+  if (!(g[INFLIGHT_KEY] instanceof Map)) {
+    g[INFLIGHT_KEY] = new Map<string, Promise<BlogCheckRunResult>>();
+  }
+  return g[INFLIGHT_KEY] as Map<string, Promise<BlogCheckRunResult>>;
 }
 
 /** 리드 적재 — 실패해도 진단 응답을 막지 않는다 (테이블 미적용 포함 그레이스풀). */
@@ -93,8 +108,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: message }, { status: 429 });
     }
 
-    // 3) 간단분석 실행
-    const run = await runBlogCheck(blogId);
+    // 3) 간단분석 실행 — single-flight: 동시 미스는 리더의 Promise 를 공유
+    const inflight = getInflightMap();
+    let pipeline = inflight.get(blogId);
+    let isLeader = false;
+    if (!pipeline) {
+      isLeader = true;
+      pipeline = runBlogCheck(blogId).finally(() => inflight.delete(blogId));
+      inflight.set(blogId, pipeline);
+    }
+    const run = await pipeline;
     if (!run.ok) {
       const message =
         run.reason === 'empty'
@@ -103,9 +126,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: message }, { status: 422 });
     }
 
-    // 4) 캐시 저장(7일) + 리드 적재(그레이스풀)
-    cacheSet(blogCheckCacheKey(blogId), run.report, BLOG_CHECK_CACHE_TTL_MS);
-    await saveLead(blogId, run.report.blogTitle);
+    // 4) 캐시 저장(7일) + 리드 적재 — 리더 1회만 (팔로워 중복 적재 방지, 그레이스풀)
+    if (isLeader) {
+      cacheSet(blogCheckCacheKey(blogId), run.report, BLOG_CHECK_CACHE_TTL_MS);
+      await saveLead(blogId, run.report.blogTitle);
+    }
 
     return NextResponse.json({ result: toSimpleResult(run.report), cached: false });
   } catch (err) {

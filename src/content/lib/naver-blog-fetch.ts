@@ -158,6 +158,24 @@ export function extractLogNo(link: string): string | null {
   return null;
 }
 
+/**
+ * RSS item.link 를 본문 fetch 폴백으로 써도 되는지 검증한다 (고정 호스트 불변식).
+ * https + blog.naver.com/m.blog.naver.com 일 때만 허용 — RSS 에 임의 URL 이
+ * 섞여도 외부 호스트로 fetch 가 나가지 않는다. 그 외에는 해당 항목을 건너뛴다.
+ */
+export function isAllowedNaverPostUrl(link: string): boolean {
+  if (typeof link !== 'string' || link === '') return false;
+  try {
+    const url = new URL(link);
+    return (
+      url.protocol === 'https:' &&
+      (url.hostname === 'blog.naver.com' || url.hostname === 'm.blog.naver.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** 수집된 글 1편 — 제목·링크 포함(소급 진단 카드 표시용). */
 export interface NaverBlogPostItem {
   title: string;
@@ -212,9 +230,13 @@ export async function fetchNaverBlogPostItems(
     // 2) 부족하면 PostView 본문 시도
     if (text.replace(/\s/g, '').length < MIN_BODY_CHARS) {
       const logNo = extractLogNo(item.link);
+      // logNo 가 있으면 고정 호스트로 조립. 없으면 item.link 폴백을 쓰되,
+      // https + 네이버 블로그 호스트일 때만 허용(아니면 이 항목은 본문 수집 스킵).
       const postUrl = logNo
         ? `https://m.blog.naver.com/PostView.naver?blogId=${blogId}&logNo=${logNo}`
-        : item.link;
+        : isAllowedNaverPostUrl(item.link)
+          ? item.link
+          : null;
       if (postUrl) {
         const html = await safeFetchText(postUrl, deadline);
         if (html) {
