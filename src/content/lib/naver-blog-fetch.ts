@@ -144,15 +144,19 @@ export function resolveSafeRedirect(
  * 리다이렉트는 자동 추적하지 않고(redirect:'manual') Location 을 검증해
  * 허용 호스트일 때만 최대 MAX_REDIRECT_HOPS 홉까지 수동 추적한다 —
  * 리다이렉트로 고정 호스트 불변식이 깨지는 것을 방지.
+ *
+ * 타임아웃은 체인 전체(모든 홉 + 본문 수신)에 **단일 절대 데드라인** 으로 건다
+ * (AbortController·타이머 1개). 홉마다 타이머를 리셋하면 최악의 경우
+ * (홉수+1)×REQUEST_TIMEOUT_MS 까지 늘어나기 때문.
  */
 async function safeFetchText(url: string, deadline: number): Promise<string | null> {
-  let current = url;
-  for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) return null;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, remaining));
-    try {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, remaining));
+  try {
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
       const res = await fetch(current, {
         signal: controller.signal,
         headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xml,text/xml,*/*' },
@@ -167,13 +171,13 @@ async function safeFetchText(url: string, deadline: number): Promise<string | nu
       }
       if (!res.ok) return null;
       return await res.text();
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timeout);
     }
+    return null; // 홉 초과
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
   }
-  return null; // 홉 초과
 }
 
 interface RssItem {

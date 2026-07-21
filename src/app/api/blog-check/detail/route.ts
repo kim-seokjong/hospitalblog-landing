@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { parseBlogCheckInput } from '@/content/lib/blog-check-input';
 import {
   consumeUserQuota,
+  evaluateReservation,
   kstDayRangeUtc,
   readUserDailyLimit,
 } from '@/content/lib/blog-check-limits';
@@ -39,7 +40,11 @@ export const maxDuration = 120;
  * - 이력 저장: blog_check_reports (테이블 미적용 시 저장만 스킵)
  *
  * 가드: 회원당 일일 상한(기본 5회, env BLOG_CHECK_USER_DAILY_LIMIT) —
- * blog_check_reports 의 오늘(KST) 카운트로 판정, 테이블 미적용 시 인메모리 폴백.
+ * blog_check_reports 에 예약 행(status='pending')을 먼저 INSERT 한 뒤 오늘(KST)
+ * 본인 행 수를 COUNT 하는 **DB 원자 예약** 방식(크로스 인스턴스 레이스 안전).
+ * 한도 초과면 자기 예약 행을 'failed' 로 갱신하고 429. 파이프라인 성공 시
+ * 예약 행에 결과 UPDATE(status='done'), 실패 시 'failed'.
+ * 테이블 미적용(마이그 045 전) 환경은 인메모리 consumeUserQuota 폴백.
  *
  * 리드-회원 연결은 blog_check_reports(user_id+blog_id) 저장으로 충분하다.
  * blog_check_leads.user_id backfill 은 하지 않는다 — 임의 회원이 남의 병원
@@ -70,12 +75,6 @@ function buildGeoDetail(report: BlogCheckReport): GeoDetail {
       'AI 크롤러를 허용하는 자체도메인 블로그를 병행 발행하면 같은 글로 AI 검색 인용 기회를 만들 수 있어요. ' +
       '닥터포스트는 네이버용 글과 자체도메인(GEO 최적화) 발행을 함께 지원합니다.',
   };
-}
-
-/** 테이블 미적용(마이그 045 전) 판정 — 42P01(undefined_table). */
-function isMissingTable(error: { code?: string; message?: string } | null, table: string): boolean {
-  if (!error) return false;
-  return error.code === '42P01' || (error.message?.includes(table) ?? false);
 }
 
 interface VoiceDnaOutcome {
@@ -154,41 +153,86 @@ function getUserQuotaStore(): Map<string, number> {
   return g[USER_QUOTA_KEY] as Map<string, number>;
 }
 
+/** 예약 결과 — db(예약 행 확보) / memory(테이블 미적용 폴백) / denied(한도 초과). */
+type DetailReservation =
+  | { mode: 'db'; id: string }
+  | { mode: 'memory' }
+  | { mode: 'denied'; limit: number };
+
 /**
- * 회원당 일일 상세분석 상한 판정 (이중 가드 — 레이스 안전).
+ * 회원당 일일 상한 — DB 원자 예약 (크로스 인스턴스 레이스 안전).
  *
- * 1) 인메모리 consumeUserQuota 를 **DB 유무와 무관하게 항상 원자적으로 먼저 소비**한다
- *    — COUNT 후 INSERT 까지의 갭을 노린 동일 인스턴스 동시 요청을 차단한다
- *    (Map 연산은 단일 이벤트루프에서 원자적).
- *    실패한 분석도 쿼터를 소비한다(환불 없음) — 남용 방어 목적이라 안전측이 맞다.
- * 2) blog_check_reports 오늘(KST) 카운트를 영속적 하한(크로스 인스턴스 백스톱)으로
- *    병행 판정한다. 테이블 미적용(42P01 등) 조회 실패 시 인메모리 판정만으로 진행.
+ * ① 예약 행 INSERT(status='pending') → ② 오늘(KST) 본인 행 수 COUNT(자기 행 포함,
+ * pending·done·failed 전부 — 실패도 소비=안전측) → ③ 한도 초과면 자기 예약 행을
+ * 'failed' 로 갱신하고 denied.
+ * INSERT 가 COUNT 보다 먼저라 동시 N요청도 "한도+ε" 로 바운드된다
+ * (ε = 거의 동시 INSERT 트랜잭션의 가시성 지연분 — evaluateReservation 참조).
+ *
+ * 테이블 미적용(마이그 045 전) 등 INSERT 실패 환경은 기존 인메모리
+ * consumeUserQuota(동일 인스턴스 한정 원자 소비) 폴백을 유지한다.
  */
-async function checkUserDailyLimit(
+async function reserveDetailSlot(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   userId: string,
-): Promise<{ over: boolean; limit: number }> {
+  blogId: string,
+): Promise<DetailReservation> {
   const limit = readUserDailyLimit();
 
-  // 1) 인메모리 원자 소비 — 동일 인스턴스 동시 요청 차단
-  const mem = consumeUserQuota(getUserQuotaStore(), { userId, limit });
-  if (!mem.allowed) {
-    return { over: true, limit };
-  }
+  // ① 예약 행 INSERT
+  const { data: inserted, error: insertError } = await supabase
+    .from('blog_check_reports')
+    .insert({ user_id: userId, blog_id: blogId, status: 'pending', results: null })
+    .select('id')
+    .single();
 
-  // 2) DB 백스톱 — 크로스 인스턴스·인스턴스 리셋 대비 영속 하한
+  if (insertError || !inserted?.id) {
+    // 테이블/컬럼 미적용 등 → 인메모리 폴백 (검사+소비 원자)
+    const mem = consumeUserQuota(getUserQuotaStore(), { userId, limit });
+    return mem.allowed ? { mode: 'memory' } : { mode: 'denied', limit };
+  }
+  const reservationId = String(inserted.id);
+
+  // ② 오늘(KST) 본인 행 수 COUNT — status 필터 없음(실패도 소비)
   const range = kstDayRangeUtc();
-  const { count, error } = await supabase
+  const { count, error: countError } = await supabase
     .from('blog_check_reports')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
     .gte('run_at', range.startIso)
     .lt('run_at', range.endIso);
 
-  if (!error && (count ?? 0) >= limit) {
-    return { over: true, limit };
+  // ③ 초과 판정 — 카운트 실패는 진행(그레이스풀, 예약 행이 하한을 유지)
+  const verdict = evaluateReservation(countError ? null : count ?? null, limit);
+  if (verdict === 'over_limit') {
+    await markReservation(supabase, reservationId, 'failed');
+    return { mode: 'denied', limit };
   }
-  return { over: false, limit };
+  return { mode: 'db', id: reservationId };
+}
+
+/** 예약 행 상태 갱신 — 실패해도 응답을 막지 않는다 (그레이스풀). */
+async function markReservation(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  reservationId: string,
+  status: 'done' | 'failed',
+  results?: unknown,
+): Promise<boolean> {
+  try {
+    const patch: Record<string, unknown> =
+      status === 'done' ? { status, results: results ?? null } : { status };
+    const { error } = await supabase
+      .from('blog_check_reports')
+      .update(patch)
+      .eq('id', reservationId);
+    if (error) {
+      console.error('[blog-check/detail] 예약 갱신 실패(무시):', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[blog-check/detail] 예약 갱신 예외(무시):', e instanceof Error ? e.message : e);
+    return false;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -208,82 +252,86 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 0) 회원당 일일 상한 (기본 5회) — 비용 있는 파이프라인 전에 차단
-    const quota = await checkUserDailyLimit(supabase, user.id);
-    if (quota.over) {
+    // 0) 회원당 일일 상한 — DB 원자 예약 (테이블 미적용 시 인메모리 폴백)
+    const reservation = await reserveDetailSlot(supabase, user.id, blogId);
+    if (reservation.mode === 'denied') {
       return NextResponse.json(
-        { error: `상세분석은 하루 ${quota.limit}회까지 이용할 수 있어요. 내일 다시 시도해 주세요.` },
+        { error: `상세분석은 하루 ${reservation.limit}회까지 이용할 수 있어요. 내일 다시 시도해 주세요.` },
         { status: 429 },
       );
     }
 
-    // 1) 리포트 — 간단분석과 7일 캐시 공유 (미스 시 재실행)
-    let report = cacheGet<BlogCheckReport>(blogCheckCacheKey(blogId));
-    if (!report) {
-      const run = await runBlogCheck(blogId);
-      if (!run.ok) {
-        const message =
-          run.reason === 'empty'
-            ? '블로그에 발행된 글이 없어요. 글을 발행한 뒤 다시 진단해 주세요.'
-            : '블로그를 찾을 수 없거나 RSS가 비공개예요. 주소를 확인해 주세요.';
-        return NextResponse.json({ error: message }, { status: 422 });
+    try {
+      // 1) 리포트 — 간단분석과 7일 캐시 공유 (미스 시 재실행)
+      let report = cacheGet<BlogCheckReport>(blogCheckCacheKey(blogId));
+      if (!report) {
+        const run = await runBlogCheck(blogId);
+        if (!run.ok) {
+          // 실패한 분석도 쿼터를 소비한다(예약 행을 'failed' 로만 전이, 환불 없음=안전측)
+          if (reservation.mode === 'db') {
+            await markReservation(supabase, reservation.id, 'failed');
+          }
+          const message =
+            run.reason === 'empty'
+              ? '블로그에 발행된 글이 없어요. 글을 발행한 뒤 다시 진단해 주세요.'
+              : '블로그를 찾을 수 없거나 RSS가 비공개예요. 주소를 확인해 주세요.';
+          return NextResponse.json({ error: message }, { status: 422 });
+        }
+        report = run.report;
+        cacheSet(blogCheckCacheKey(blogId), report, BLOG_CHECK_CACHE_TTL_MS);
       }
-      report = run.report;
-      cacheSet(blogCheckCacheKey(blogId), report, BLOG_CHECK_CACHE_TTL_MS);
-    }
 
-    // 2) 상세 섹션 — 진료과(specialty)는 프로필에서 (황금 키워드 필터용)
-    const { data: profileRow } = await supabase
-      .from('profiles')
-      .select('hospital_type')
-      .eq('id', user.id)
-      .single();
-    const specialty =
-      typeof (profileRow as { hospital_type?: unknown } | null)?.hospital_type === 'string'
-        ? ((profileRow as { hospital_type: string }).hospital_type)
-        : '';
+      // 2) 상세 섹션 — 진료과(specialty)는 프로필에서 (황금 키워드 필터용)
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('hospital_type')
+        .eq('id', user.id)
+        .single();
+      const specialty =
+        typeof (profileRow as { hospital_type?: unknown } | null)?.hospital_type === 'string'
+          ? ((profileRow as { hospital_type: string }).hospital_type)
+          : '';
 
-    let golden: GoldenKeywordResult = { available: false, docAvailable: false, items: [] };
-    if (report.seedKeyword) {
-      golden = await fetchGoldenKeywords(report.seedKeyword.base, {
-        region: report.seedKeyword.region || undefined,
-        specialty: specialty || undefined,
-      });
-    }
-
-    const [quality, voiceDna] = await Promise.all([
-      buildQualityDiagnosis(report.quality, report.titles),
-      updateVoiceDna(supabase, user.id, blogId),
-    ]);
-
-    const detail = {
-      report,
-      golden,
-      geoDetail: buildGeoDetail(report),
-      compliancePosts: report.compliancePosts,
-      quality: { stats: report.quality, comment: quality.comment, commentSource: quality.source },
-      voiceDna,
-    };
-
-    // 3) 이력 저장 — blog_check_reports (마이그 045 미적용 시 저장만 스킵)
-    let saved = true;
-    const { error: insertError } = await supabase.from('blog_check_reports').insert({
-      user_id: user.id,
-      blog_id: blogId,
-      run_at: report.runAt,
-      results: detail,
-    });
-    if (insertError) {
-      saved = false;
-      if (!isMissingTable(insertError, 'blog_check_reports')) {
-        console.error('[blog-check/detail] 이력 저장 실패(무시):', insertError.message);
+      let golden: GoldenKeywordResult = { available: false, docAvailable: false, items: [] };
+      if (report.seedKeyword) {
+        golden = await fetchGoldenKeywords(report.seedKeyword.base, {
+          region: report.seedKeyword.region || undefined,
+          specialty: specialty || undefined,
+        });
       }
+
+      const [quality, voiceDna] = await Promise.all([
+        buildQualityDiagnosis(report.quality, report.titles),
+        updateVoiceDna(supabase, user.id, blogId),
+      ]);
+
+      const detail = {
+        report,
+        golden,
+        geoDetail: buildGeoDetail(report),
+        compliancePosts: report.compliancePosts,
+        quality: { stats: report.quality, comment: quality.comment, commentSource: quality.source },
+        voiceDna,
+      };
+
+      // 3) 이력 저장 — 예약 행에 결과 UPDATE(status='done').
+      //    memory 폴백(테이블 미적용)은 저장할 곳이 없어 saved=false.
+      const saved =
+        reservation.mode === 'db'
+          ? await markReservation(supabase, reservation.id, 'done', detail)
+          : false;
+
+      // 리드-회원 연결은 위 blog_check_reports 저장(user_id+blog_id)으로 갈음한다
+      // (blog_check_leads.user_id backfill 금지 — 파일 상단 주석 참조).
+
+      return NextResponse.json({ detail, saved });
+    } catch (innerErr) {
+      // 예기치 못한 실패 — 예약 행을 'failed' 로 전이(쿼터는 소비된 채 유지)
+      if (reservation.mode === 'db') {
+        await markReservation(supabase, reservation.id, 'failed');
+      }
+      throw innerErr;
     }
-
-    // 리드-회원 연결은 위 blog_check_reports 저장(user_id+blog_id)으로 갈음한다
-    // (blog_check_leads.user_id backfill 금지 — 파일 상단 주석 참조).
-
-    return NextResponse.json({ detail, saved });
   } catch (err) {
     console.error('[blog-check/detail]', err instanceof Error ? err.message : err);
     return NextResponse.json(

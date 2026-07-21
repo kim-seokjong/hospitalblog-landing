@@ -125,6 +125,26 @@ export function consumeUserQuota(
   return { allowed: true };
 }
 
+/**
+ * DB 원자 예약(insert-then-count) 판정 (순수 함수) — detail 회원 캡용.
+ *
+ * countIncludingSelf 는 "자기 예약 행(pending)을 포함한" 오늘(KST) 행 수다.
+ * - count ≤ limit → 진행 (자기 행 포함이므로 == limit 은 정확히 limit 번째 요청)
+ * - count > limit → 한도 초과 (호출부가 자기 예약 행을 'failed' 로 갱신 후 429)
+ * - null/비정상(카운트 실패) → 진행 (그레이스풀 — 예약 행 자체는 남아 하한 유지)
+ *
+ * INSERT 가 COUNT 보다 먼저이므로 동시 N요청도 "한도+ε" 로 바운드된다
+ * (ε = 거의 동시에 INSERT 한 트랜잭션들의 가시성 지연분). 실패(failed) 행도
+ * 카운트에 포함한다 — 실패한 분석도 쿼터를 소비하는 안전측 정책.
+ */
+export function evaluateReservation(
+  countIncludingSelf: number | null,
+  limit: number,
+): 'proceed' | 'over_limit' {
+  if (countIncludingSelf === null || !Number.isFinite(countIncludingSelf)) return 'proceed';
+  return countIncludingSelf > limit ? 'over_limit' : 'proceed';
+}
+
 export type SingleFlightJoin<T> =
   | { ok: true; promise: Promise<T>; isLeader: boolean }
   | { ok: false; reason: 'ip_limit' | 'global_limit' | 'user_limit' };

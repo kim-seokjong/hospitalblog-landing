@@ -157,6 +157,36 @@ test('fetchLatestBodies: 허용 호스트로의 리다이렉트는 추적, 비�
   assert.equal(blocked.length, 0);
 });
 
+test('safeFetch 체인: 홉마다 타이머 리셋 없이 단일 AbortSignal(절대 데드라인) 공유', async () => {
+  // 302 → 302 → 200 3홉 체인. 모든 홉의 fetch 가 "같은" AbortSignal 인스턴스를
+  // 받아야 한다 — 컨트롤러·타이머가 1개라는 뜻이고, 총 소요가 timeoutMs 를
+  // 넘을 수 없다 (홉마다 새 타이머면 최악 (홉수+1)×timeoutMs 로 늘어난다).
+  const feed = parseBlogCheckFeed(SAMPLE_RSS);
+  const bodyHtml = `<div class="se-main-container"><p>${'도수치료 안내 문장입니다. '.repeat(10)}</p></div></div>`;
+  const signals: Array<AbortSignal | null | undefined> = [];
+  let hop = 0;
+
+  const bodies = await fetchLatestBodies('testclinic', feed.items.slice(0, 1), {
+    fetchImpl: (async (_input: string | URL | Request, init?: RequestInit) => {
+      signals.push(init?.signal);
+      hop += 1;
+      if (hop <= 2) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: `https://m.blog.naver.com/testclinic/hop${hop}` },
+        });
+      }
+      return new Response(bodyHtml, { status: 200 });
+    }) as typeof fetch,
+  });
+
+  assert.equal(bodies.length, 1);
+  assert.equal(signals.length, 3);
+  assert.ok(signals[0] instanceof AbortSignal);
+  assert.equal(signals[0], signals[1]); // 동일 인스턴스 = 단일 컨트롤러
+  assert.equal(signals[1], signals[2]);
+});
+
 // ── fetchLatestBodies ──
 test('fetchLatestBodies: 모바일 URL 로 본문 수집, 실패 글은 건너뜀', async () => {
   const feed = parseBlogCheckFeed(SAMPLE_RSS);

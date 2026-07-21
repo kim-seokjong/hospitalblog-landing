@@ -109,6 +109,10 @@ export function parseBlogCheckFeed(xml: string, limit: number = BLOG_CHECK_POST_
  * 리다이렉트는 자동 추적하지 않고(redirect:'manual') Location 이 허용 호스트일
  * 때만 최대 MAX_REDIRECT_HOPS 홉 수동 추적 — 고정 호스트 불변식 유지
  * (naver-blog-fetch.ts 의 resolveSafeRedirect 재사용).
+ *
+ * 타임아웃은 체인 전체(모든 홉 + 본문 수신)에 **단일 절대 데드라인** —
+ * AbortController·타이머 1개를 홉들이 공유한다. 홉마다 리셋하면 최악
+ * (홉수+1)×timeoutMs 까지 늘어나기 때문.
  */
 async function safeFetchText(
   fetchImpl: typeof fetch,
@@ -116,11 +120,11 @@ async function safeFetchText(
   headers: Record<string, string>,
   timeoutMs: number,
 ): Promise<string | null> {
-  let current = url;
-  for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
       const res = await fetchImpl(current, {
         signal: controller.signal,
         headers,
@@ -135,13 +139,13 @@ async function safeFetchText(
       }
       if (!res.ok) return null;
       return await res.text();
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timer);
     }
+    return null; // 홉 초과
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
-  return null; // 홉 초과
 }
 
 export type BlogCheckRssResult =

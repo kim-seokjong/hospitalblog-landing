@@ -5,6 +5,7 @@ import {
   readUserDailyLimit,
   consumeBlogCheckQuota,
   consumeUserQuota,
+  evaluateReservation,
   joinOrStartSingleFlight,
   kstDayKey,
   kstDayRangeUtc,
@@ -152,6 +153,30 @@ test('consumeUserQuota: 동시 요청 레이스 — 원자 소비라 COUNT→INS
   );
   assert.equal(results.filter((r) => r.allowed).length, 5);
   assert.equal(results.filter((r) => !r.allowed).length, 15);
+});
+
+// ── evaluateReservation (detail 회원 캡 — DB 원자 예약 판정) ──
+test('evaluateReservation: 자기 행 포함 count ≤ limit 은 진행, 초과는 차단', () => {
+  // 1~5번째 요청 (limit 5): count 는 자기 예약 행 포함이므로 1..5 → 전부 진행
+  for (let count = 1; count <= 5; count++) {
+    assert.equal(evaluateReservation(count, 5), 'proceed');
+  }
+  // 6번째부터: count 6 이상 → 초과 (자기 예약 행은 'failed' 전이)
+  assert.equal(evaluateReservation(6, 5), 'over_limit');
+  assert.equal(evaluateReservation(20, 5), 'over_limit');
+});
+
+test('evaluateReservation: 동시 N요청 — insert-then-count 라 한도+ε 로 바운드', () => {
+  // 동시 20요청이 전부 INSERT 를 마친 뒤 각자 COUNT 하는 최악 시나리오:
+  // 모두 count=20 을 보게 되어 전부 over_limit — 한도를 넘는 통과가 발생하지 않는다.
+  // (ε 는 COUNT 시점에 아직 안 보이는 극소수 동시 트랜잭션의 가시성 지연분뿐)
+  const verdicts = Array.from({ length: 20 }, () => evaluateReservation(20, 5));
+  assert.ok(verdicts.every((v) => v === 'over_limit'));
+});
+
+test('evaluateReservation: 카운트 실패(null·비정상)는 진행 — 그레이스풀', () => {
+  assert.equal(evaluateReservation(null, 5), 'proceed');
+  assert.equal(evaluateReservation(Number.NaN, 5), 'proceed');
 });
 
 // ── joinOrStartSingleFlight (공개 라우트 쿼터-조인 순서) ──

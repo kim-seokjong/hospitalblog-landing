@@ -37,24 +37,38 @@ create index if not exists idx_blog_check_leads_created_at on public.blog_check_
 -- RLS: 정책 없이 활성화만 → anon/authenticated 접근 전면 차단, service role 만 사용.
 alter table public.blog_check_leads enable row level security;
 
--- 2) blog_check_reports — 회원 상세분석 이력 (본인 것만, append-only)
+-- 2) blog_check_reports — 회원 상세분석 이력 + 일일 상한의 원자 예약(pending) 행
+--
+-- 회원당 일일 상한(기본 5회)은 이 테이블로 원자 판정한다 (크로스 인스턴스 안전):
+--   ① 예약 행 INSERT(status='pending', results NULL)
+--   ② 오늘(KST) 본인 행 수 COUNT — pending·done·failed 전부 포함
+--      (실패한 분석도 쿼터를 소비한다 = 남용 방어 목적의 안전측 정책)
+--   ③ 한도 초과면 자기 예약 행을 'failed' 로 갱신하고 429
+--   insert-then-count 순서라 동시 N요청도 "한도+ε" 로 바운드된다
+--   (ε = 거의 동시에 INSERT 한 트랜잭션들의 가시성 지연분).
+--   ④ 파이프라인 성공 시 결과 UPDATE(status='done'), 실패 시 'failed'.
 create table if not exists public.blog_check_reports (
   id       uuid primary key default gen_random_uuid(),
   user_id  uuid not null references public.profiles(id) on delete cascade,
   blog_id  text not null,
   run_at   timestamptz not null default now(),
-  results  jsonb not null
+  /** pending=예약(실행 중) / done=완료 / failed=실패·한도초과. */
+  status   text not null default 'pending' check (status in ('pending', 'done', 'failed')),
+  /** 상세분석 결과 JSON. 예약(pending)·실패(failed) 행은 NULL. */
+  results  jsonb
 );
 
 comment on table public.blog_check_reports is
-  '네이버 블로그 무료진단 상세분석 결과(BlogCheckReport JSON + 상세 부가 섹션). blog_audits(컴플라이언스 소급진단)와 별도 스키마 — 혼용 금지.';
+  '네이버 블로그 무료진단 상세분석 이력 + 일일 상한 원자 예약 행. 라이프사이클: pending(예약) → done(결과 저장)/failed(실패·한도초과). 일일 카운트는 status 무관 전부 포함(실패도 소비=안전측). blog_audits(컴플라이언스 소급진단)와 별도 스키마 — 혼용 금지.';
+comment on column public.blog_check_reports.status is
+  '예약 라이프사이클 — pending(INSERT 직후)·done(결과 UPDATE)·failed(파이프라인 실패 또는 한도 초과 판정).';
 comment on column public.blog_check_reports.results is
-  '진단 결과 JSON — version/blogId/점수(SEO·GEO)/키워드 실측/컴플라이언스 검출/제목 반복도/장단점.';
+  '진단 결과 JSON — version/blogId/점수(SEO·GEO)/키워드 실측/컴플라이언스 검출/제목 반복도/장단점. pending/failed 는 NULL.';
 
 create index if not exists idx_blog_check_reports_user_id on public.blog_check_reports(user_id);
 create index if not exists idx_blog_check_reports_run_at  on public.blog_check_reports(run_at desc);
 
--- RLS — 본인 row만 조회·생성 (blog_audits 패턴 동일, update/delete 정책 없음=불변 이력)
+-- RLS — 본인 row만 조회·생성·갱신 (갱신은 예약 라이프사이클 전이용, delete 정책 없음)
 alter table public.blog_check_reports enable row level security;
 
 drop policy if exists "사용자는 자신의 무료진단만 조회" on public.blog_check_reports;
@@ -65,4 +79,10 @@ create policy "사용자는 자신의 무료진단만 조회"
 drop policy if exists "사용자는 자신의 무료진단만 생성" on public.blog_check_reports;
 create policy "사용자는 자신의 무료진단만 생성"
   on public.blog_check_reports for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "사용자는 자신의 무료진단만 갱신" on public.blog_check_reports;
+create policy "사용자는 자신의 무료진단만 갱신"
+  on public.blog_check_reports for update
+  using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
