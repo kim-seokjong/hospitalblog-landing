@@ -17,6 +17,7 @@ import FloatingCta from '@/components/landing/FloatingCta';
 import BlindTestSection from '@/components/landing/BlindTestSection';
 import WhyDoctorPostSection from '@/components/landing/WhyDoctorPostSection';
 import EbookLeadSection from '@/components/landing/EbookLeadSection';
+import BlogCheckSection from '@/components/landing/BlogCheckSection';
 import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildFaqPageJsonLd } from '@/dev/lib/seo/schemas';
 import { HOME_FAQS } from '@/dev/lib/seo/homeFaq';
@@ -484,6 +485,9 @@ export default function LandingPage() {
 
       {/* 왜 닥터포스트인가 — 이유 응집 섹션 */}
       <WhyDoctorPostSection />
+
+      {/* 네이버 블로그 무료진단 — 실측 리드마그넷 (/blog-check 진입) */}
+      <BlogCheckSection />
 
       {/* 의료광고법 요약판 무료 다운로드 — 리드마그넷 */}
       <EbookLeadSection />
