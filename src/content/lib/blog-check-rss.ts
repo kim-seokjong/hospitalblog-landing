@@ -1,4 +1,9 @@
-import { htmlToText, extractLogNo } from './naver-blog-fetch.ts';
+import {
+  htmlToText,
+  extractLogNo,
+  resolveSafeRedirect,
+  MAX_REDIRECT_HOPS,
+} from './naver-blog-fetch.ts';
 import { BLOG_CHECK_ID_PATTERN } from './blog-check-input.ts';
 
 /**
@@ -99,24 +104,44 @@ export function parseBlogCheckFeed(xml: string, limit: number = BLOG_CHECK_POST_
   return { blogTitle, items };
 }
 
-/** 타임아웃 걸린 텍스트 fetch. 실패·비 2xx·타임아웃 전부 null (never throws). */
+/**
+ * 타임아웃 걸린 텍스트 fetch. 실패·비 2xx·타임아웃 전부 null (never throws).
+ * 리다이렉트는 자동 추적하지 않고(redirect:'manual') Location 이 허용 호스트일
+ * 때만 최대 MAX_REDIRECT_HOPS 홉 수동 추적 — 고정 호스트 불변식 유지
+ * (naver-blog-fetch.ts 의 resolveSafeRedirect 재사용).
+ */
 async function safeFetchText(
   fetchImpl: typeof fetch,
   url: string,
   headers: Record<string, string>,
   timeoutMs: number,
 ): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetchImpl(url, { signal: controller.signal, headers, cache: 'no-store' });
-    if (!res.ok) return null;
-    return await res.text();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
+  let current = url;
+  for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetchImpl(current, {
+        signal: controller.signal,
+        headers,
+        cache: 'no-store',
+        redirect: 'manual',
+      });
+      if (res.status >= 300 && res.status < 400) {
+        const next = resolveSafeRedirect(current, res.headers.get('location'));
+        if (!next) return null; // 허용 밖 리다이렉트 → 스킵
+        current = next;
+        continue;
+      }
+      if (!res.ok) return null;
+      return await res.text();
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  return null; // 홉 초과
 }
 
 export type BlogCheckRssResult =

@@ -5,12 +5,14 @@ import {
   readUserDailyLimit,
   consumeBlogCheckQuota,
   consumeUserQuota,
+  joinOrStartSingleFlight,
   kstDayKey,
   kstDayRangeUtc,
   extractClientIp,
   DEFAULT_IP_DAILY_LIMIT,
   DEFAULT_GLOBAL_DAILY_LIMIT,
   DEFAULT_USER_DAILY_LIMIT,
+  type RateLimitDecision,
 } from '../blog-check-limits.ts';
 
 // ── readBlogCheckLimits ──
@@ -138,6 +140,76 @@ test('consumeUserQuota: 회원별 일일 상한 소비·차단·날짜 리셋', 
   for (const key of store.keys()) {
     assert.ok(key.startsWith('user:2026-07-22:'));
   }
+});
+
+test('consumeUserQuota: 동시 요청 레이스 — 원자 소비라 COUNT→INSERT 갭 없이 정확히 limit 회만 통과', () => {
+  // detail 라우트의 이중 가드 1단계: DB COUNT 판정과 달리 검사+소비가 한 호출에서
+  // 원자적으로 일어나므로, 동일 인스턴스 동시 20요청도 limit(5) 회만 통과한다.
+  const store = new Map<string, number>();
+  const now = Date.parse('2026-07-22T03:00:00Z');
+  const results = Array.from({ length: 20 }, () =>
+    consumeUserQuota(store, { userId: 'racer', now, limit: 5 }),
+  );
+  assert.equal(results.filter((r) => r.allowed).length, 5);
+  assert.equal(results.filter((r) => !r.allowed).length, 15);
+});
+
+// ── joinOrStartSingleFlight (공개 라우트 쿼터-조인 순서) ──
+test('joinOrStartSingleFlight: 팔로워는 무과금 조인 — 쿼터는 리더 1회만 소비', async () => {
+  const inflight = new Map<string, Promise<string>>();
+  let consumed = 0;
+  const consume = (): RateLimitDecision => {
+    consumed += 1;
+    return { allowed: true };
+  };
+  let resolveRun: (v: string) => void = () => {};
+  const start = () => new Promise<string>((resolve) => { resolveRun = resolve; });
+
+  const leader = joinOrStartSingleFlight(inflight, 'blog1', consume, start);
+  assert.ok(leader.ok && leader.isLeader);
+  const follower = joinOrStartSingleFlight(inflight, 'blog1', consume, start);
+  assert.ok(follower.ok && !follower.isLeader);
+  assert.equal(consumed, 1); // 동시 3요청이 IP 일일 허용량을 태우지 않는다
+  if (leader.ok && follower.ok) {
+    assert.equal(leader.promise, follower.promise); // 같은 파이프라인 공유
+  }
+
+  resolveRun('done');
+  if (leader.ok) assert.equal(await leader.promise, 'done');
+  await Promise.resolve(); // finally 정리 틱
+  assert.equal(inflight.size, 0); // 완료 시 맵 제거 → 다음 요청은 새 리더
+});
+
+test('joinOrStartSingleFlight: 쿼터 거부 시 시작하지 않음, 실패해도 맵 정리', async () => {
+  const inflight = new Map<string, Promise<string>>();
+  let started = 0;
+
+  const denied = joinOrStartSingleFlight(
+    inflight,
+    'blog1',
+    () => ({ allowed: false, reason: 'ip_limit' }),
+    () => {
+      started += 1;
+      return Promise.resolve('x');
+    },
+  );
+  assert.deepEqual(denied, { ok: false, reason: 'ip_limit' });
+  assert.equal(started, 0);
+  assert.equal(inflight.size, 0);
+
+  // 실패하는 파이프라인도 맵에서 제거된다
+  const failing = joinOrStartSingleFlight(
+    inflight,
+    'blog2',
+    () => ({ allowed: true }),
+    () => Promise.reject(new Error('boom')),
+  );
+  assert.ok(failing.ok);
+  if (failing.ok) {
+    await assert.rejects(failing.promise);
+  }
+  await Promise.resolve();
+  assert.equal(inflight.size, 0);
 });
 
 // ── kstDayRangeUtc (DB 일일 카운트 판정 경계) ──

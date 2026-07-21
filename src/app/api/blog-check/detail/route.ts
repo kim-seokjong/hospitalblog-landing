@@ -155,15 +155,28 @@ function getUserQuotaStore(): Map<string, number> {
 }
 
 /**
- * 회원당 일일 상세분석 상한 판정.
- * 1순위: blog_check_reports 의 오늘(KST) 저장 건수 (인스턴스 무관, 정확).
- * 폴백: 테이블 미적용(42P01 등) 환경에서만 인메모리 카운터 소비.
+ * 회원당 일일 상세분석 상한 판정 (이중 가드 — 레이스 안전).
+ *
+ * 1) 인메모리 consumeUserQuota 를 **DB 유무와 무관하게 항상 원자적으로 먼저 소비**한다
+ *    — COUNT 후 INSERT 까지의 갭을 노린 동일 인스턴스 동시 요청을 차단한다
+ *    (Map 연산은 단일 이벤트루프에서 원자적).
+ *    실패한 분석도 쿼터를 소비한다(환불 없음) — 남용 방어 목적이라 안전측이 맞다.
+ * 2) blog_check_reports 오늘(KST) 카운트를 영속적 하한(크로스 인스턴스 백스톱)으로
+ *    병행 판정한다. 테이블 미적용(42P01 등) 조회 실패 시 인메모리 판정만으로 진행.
  */
 async function checkUserDailyLimit(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   userId: string,
 ): Promise<{ over: boolean; limit: number }> {
   const limit = readUserDailyLimit();
+
+  // 1) 인메모리 원자 소비 — 동일 인스턴스 동시 요청 차단
+  const mem = consumeUserQuota(getUserQuotaStore(), { userId, limit });
+  if (!mem.allowed) {
+    return { over: true, limit };
+  }
+
+  // 2) DB 백스톱 — 크로스 인스턴스·인스턴스 리셋 대비 영속 하한
   const range = kstDayRangeUtc();
   const { count, error } = await supabase
     .from('blog_check_reports')
@@ -172,12 +185,10 @@ async function checkUserDailyLimit(
     .gte('run_at', range.startIso)
     .lt('run_at', range.endIso);
 
-  if (!error) {
-    return { over: (count ?? 0) >= limit, limit };
+  if (!error && (count ?? 0) >= limit) {
+    return { over: true, limit };
   }
-  // 테이블 미적용 등 조회 실패 → 인메모리 폴백 (검사+소비)
-  const decision = consumeUserQuota(getUserQuotaStore(), { userId, limit });
-  return { over: !decision.allowed, limit };
+  return { over: false, limit };
 }
 
 export async function POST(req: NextRequest) {

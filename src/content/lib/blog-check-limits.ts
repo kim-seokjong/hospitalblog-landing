@@ -125,6 +125,39 @@ export function consumeUserQuota(
   return { allowed: true };
 }
 
+export type SingleFlightJoin<T> =
+  | { ok: true; promise: Promise<T>; isLeader: boolean }
+  | { ok: false; reason: 'ip_limit' | 'global_limit' | 'user_limit' };
+
+/**
+ * single-flight 조인 — 쿼터 소비 순서 보장 (순수 로직).
+ *
+ * 같은 key 의 in-flight 작업이 있으면 **쿼터를 소비하지 않고** 그 Promise 에
+ * 조인한다(팔로워 무과금). 없을 때만 쿼터를 소비하고(리더), 통과 시 작업을
+ * 시작해 맵에 등록한다. 완료·실패 시 맵에서 제거된다.
+ * → 동시 N요청이 파이프라인 1회에 IP 일일 허용량을 다 태우는 문제 방지.
+ */
+export function joinOrStartSingleFlight<T>(
+  inflight: Map<string, Promise<T>>,
+  key: string,
+  consumeQuota: () => RateLimitDecision,
+  start: () => Promise<T>,
+): SingleFlightJoin<T> {
+  const existing = inflight.get(key);
+  if (existing) {
+    return { ok: true, promise: existing, isLeader: false };
+  }
+
+  const decision = consumeQuota();
+  if (!decision.allowed) {
+    return { ok: false, reason: decision.reason };
+  }
+
+  const promise = start().finally(() => inflight.delete(key));
+  inflight.set(key, promise);
+  return { ok: true, promise, isLeader: true };
+}
+
 /**
  * 요청 헤더에서 클라이언트 IP 를 추출한다. 없으면 'unknown'.
  *

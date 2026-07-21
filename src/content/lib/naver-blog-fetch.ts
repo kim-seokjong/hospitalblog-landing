@@ -102,25 +102,78 @@ function unwrapCdata(text: string): string {
   return m ? m[1] : text;
 }
 
-/** 타임아웃이 걸린 fetch. 실패·타임아웃 시 null(never throws). */
-async function safeFetchText(url: string, deadline: number): Promise<string | null> {
-  const remaining = deadline - Date.now();
-  if (remaining <= 0) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, remaining));
+/** 리다이렉트 수동 추적 최대 홉 수. */
+export const MAX_REDIRECT_HOPS = 3;
+
+/** safeFetchText 가 허용하는 fetch 호스트 (리다이렉트 추적 포함 고정 불변식). */
+const SAFE_FETCH_HOSTS = new Set(['rss.blog.naver.com', 'blog.naver.com', 'm.blog.naver.com']);
+
+/** URL 이 https + 네이버 블로그 계열 고정 호스트인지 (리다이렉트 목적지 검증용). */
+export function isAllowedNaverFetchUrl(url: string): boolean {
+  if (typeof url !== 'string' || url === '') return false;
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xml,text/xml,*/*' },
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return await res.text();
+    const u = new URL(url);
+    return u.protocol === 'https:' && SAFE_FETCH_HOSTS.has(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 3xx Location 헤더를 해석해 "추적해도 되는" 절대 URL 을 반환한다 (순수 함수).
+ * 상대 경로는 현재 URL 기준으로 해석하며, 허용 판정(isAllowed)을 통과하지
+ * 못하면 null — 리다이렉트가 고정 호스트 밖으로 나가는 것을 차단한다.
+ */
+export function resolveSafeRedirect(
+  currentUrl: string,
+  location: string | null,
+  isAllowed: (url: string) => boolean = isAllowedNaverFetchUrl,
+): string | null {
+  if (!location) return null;
+  let next: string;
+  try {
+    next = new URL(location, currentUrl).toString();
   } catch {
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
+  return isAllowed(next) ? next : null;
+}
+
+/**
+ * 타임아웃이 걸린 fetch. 실패·타임아웃 시 null(never throws).
+ * 리다이렉트는 자동 추적하지 않고(redirect:'manual') Location 을 검증해
+ * 허용 호스트일 때만 최대 MAX_REDIRECT_HOPS 홉까지 수동 추적한다 —
+ * 리다이렉트로 고정 호스트 불변식이 깨지는 것을 방지.
+ */
+async function safeFetchText(url: string, deadline: number): Promise<string | null> {
+  let current = url;
+  for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return null;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, remaining));
+    try {
+      const res = await fetch(current, {
+        signal: controller.signal,
+        headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xml,text/xml,*/*' },
+        cache: 'no-store',
+        redirect: 'manual',
+      });
+      if (res.status >= 300 && res.status < 400) {
+        const next = resolveSafeRedirect(current, res.headers.get('location'));
+        if (!next) return null; // 허용 밖 리다이렉트 → 해당 항목 스킵
+        current = next;
+        continue;
+      }
+      if (!res.ok) return null;
+      return await res.text();
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return null; // 홉 초과
 }
 
 interface RssItem {

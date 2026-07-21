@@ -12,6 +12,7 @@ import {
 import {
   consumeBlogCheckQuota,
   extractClientIp,
+  joinOrStartSingleFlight,
   readBlogCheckLimits,
 } from '@/content/lib/blog-check-limits';
 import { cacheGet, cacheSet } from '@/content/lib/scoreboard/cache';
@@ -95,29 +96,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ result: toSimpleResult(cached), cached: true });
     }
 
-    // 2) 실행 캡 — IP당 일 3회 + 전체 일 100회
-    const decision = consumeBlogCheckQuota(getQuotaStore(), {
-      ip: extractClientIp(req.headers),
-      limits: readBlogCheckLimits(),
-    });
-    if (!decision.allowed) {
+    // 2+3) single-flight 조인 → 리더만 실행 캡 소비 (IP당 일 3회 + 전체 일 100회)
+    //      — in-flight 확인이 쿼터보다 먼저: 같은 blogId 의 동시 요청(팔로워)은
+    //        무과금으로 리더의 파이프라인 Promise 에 조인한다. 파이프라인 1회에
+    //        IP 일일 허용량이 전부 소진되는 문제 방지.
+    const join = joinOrStartSingleFlight(
+      getInflightMap(),
+      blogId,
+      () =>
+        consumeBlogCheckQuota(getQuotaStore(), {
+          ip: extractClientIp(req.headers),
+          limits: readBlogCheckLimits(),
+        }),
+      () => runBlogCheck(blogId),
+    );
+    if (!join.ok) {
       const message =
-        decision.reason === 'ip_limit'
+        join.reason === 'ip_limit'
           ? '무료진단은 하루 3회까지 이용할 수 있어요. 내일 다시 시도해 주세요.'
           : '오늘 무료진단 사용량이 모두 소진됐어요. 내일 다시 시도해 주세요.';
       return NextResponse.json({ error: message }, { status: 429 });
     }
-
-    // 3) 간단분석 실행 — single-flight: 동시 미스는 리더의 Promise 를 공유
-    const inflight = getInflightMap();
-    let pipeline = inflight.get(blogId);
-    let isLeader = false;
-    if (!pipeline) {
-      isLeader = true;
-      pipeline = runBlogCheck(blogId).finally(() => inflight.delete(blogId));
-      inflight.set(blogId, pipeline);
-    }
-    const run = await pipeline;
+    const { isLeader } = join;
+    const run = await join.promise;
     if (!run.ok) {
       const message =
         run.reason === 'empty'

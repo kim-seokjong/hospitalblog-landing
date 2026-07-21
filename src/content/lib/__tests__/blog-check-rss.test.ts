@@ -126,6 +126,37 @@ test('fetchBlogCheckFeed: 글 0편 → empty, 잘못된 ID → invalid_id (fetch
   assert.deepEqual(invalid, { ok: false, reason: 'invalid_id' });
 });
 
+// ── 리다이렉트 수동 추적 (고정 호스트 불변식) ──
+test('fetchLatestBodies: 허용 호스트로의 리다이렉트는 추적, 비허용(evil)으로의 리다이렉트는 스킵', async () => {
+  const feed = parseBlogCheckFeed(SAMPLE_RSS);
+  const bodyHtml = `<div class="se-main-container"><p>${'도수치료 안내 문장입니다. '.repeat(10)}</p></div></div>`;
+
+  // 1) 허용 호스트 내부 리다이렉트 → 최종 본문 수집 성공
+  const followed = await fetchLatestBodies('testclinic', feed.items.slice(0, 1), {
+    fetchImpl: (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === 'https://m.blog.naver.com/testclinic/223999888') {
+        return new Response(null, {
+          status: 302,
+          headers: { location: 'https://m.blog.naver.com/PostView.naver?blogId=testclinic&logNo=223999888' },
+        });
+      }
+      return new Response(bodyHtml, { status: 200 });
+    }) as typeof fetch,
+  });
+  assert.equal(followed.length, 1);
+
+  // 2) 허용 밖(evil.com) 리다이렉트 → 자동 추적 없이 해당 항목 스킵
+  const blocked = await fetchLatestBodies('testclinic', feed.items.slice(0, 1), {
+    fetchImpl: (async () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: 'https://evil.com/steal' },
+      })) as typeof fetch,
+  });
+  assert.equal(blocked.length, 0);
+});
+
 // ── fetchLatestBodies ──
 test('fetchLatestBodies: 모바일 URL 로 본문 수집, 실패 글은 건너뜀', async () => {
   const feed = parseBlogCheckFeed(SAMPLE_RSS);
