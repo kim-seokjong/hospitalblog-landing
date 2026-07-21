@@ -75,8 +75,11 @@ function decodeEntities(text: string): string {
     .replace(/&amp;/g, '&');
 }
 
-/** HTML/스크립트/스타일을 제거하고 사람이 읽는 본문 텍스트만 남긴다. */
-function htmlToText(html: string): string {
+/**
+ * HTML/스크립트/스타일을 제거하고 사람이 읽는 본문 텍스트만 남긴다.
+ * (블로그 무료진단 blog-check-rss.ts 에서 재사용하기 위해 export)
+ */
+export function htmlToText(html: string): string {
   if (typeof html !== 'string' || html === '') return '';
   const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -143,8 +146,11 @@ function parseRssItems(xml: string): RssItem[] {
   return items;
 }
 
-/** item.link 또는 본문에서 logNo(글 번호)를 뽑는다. */
-function extractLogNo(link: string): string | null {
+/**
+ * item.link 또는 본문에서 logNo(글 번호)를 뽑는다.
+ * (블로그 무료진단 blog-check-rss.ts 에서 재사용하기 위해 export)
+ */
+export function extractLogNo(link: string): string | null {
   const byPath = link.match(/\/(\d{6,})(?:[/?#]|$)/);
   if (byPath?.[1]) return byPath[1];
   const byQuery = link.match(/[?&]logno=(\d+)/i);
