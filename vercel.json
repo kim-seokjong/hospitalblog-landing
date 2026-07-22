@@ -61,6 +61,9 @@
     },
     "app/api/cron/site-auto-publish/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/cron/trial-report/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -99,6 +102,10 @@
     {
       "path": "/api/cron/site-auto-publish",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/trial-report",
+      "schedule": "0 22 * * *"
     }
   ]
 }

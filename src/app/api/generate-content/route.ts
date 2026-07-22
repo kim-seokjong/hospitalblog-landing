@@ -13,6 +13,7 @@ import { buildGoogleContentSystemPrompt, buildGoogleContentUserPrompt } from '@/
 import { buildVoiceDnaPrompt, parseVoiceDnaCard } from '@/content/lib/voice-dna';
 import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
 import { fetchTopPostPatterns, buildPerformanceDnaBlock } from '@/content/lib/performance-dna';
+import { recordFunnelEventOnce } from '@/dev/lib/funnel-server';
 import type { TargetSite, Readability } from '@/types';
 
 export const maxDuration = 300;
@@ -680,6 +681,23 @@ ${formatGuide}
       user_id: guard.userId,
       user_agent: req.headers.get('user-agent') ?? null,
     });
+
+    // 퍼널 계측(활성화 = 첫 글 생성). newCount 는 **월** 사용량이라 월초 리셋·유료 전환
+    // 후 다시 1이 된다 → newCount===1 은 저렴한 사전 필터로만 쓰고, 계정 통산 첫 글
+    // 여부는 recordFunnelEventOnce 가 funnel_events 기존 이벤트 조회로 확정한다.
+    // await: 서버리스에서 fire-and-forget 은 응답 종료 후 실행이 보장되지 않아 전환
+    // 유실 가능 — insert 1건이라 지연은 무시 수준. 실패해도 응답은 안 막는다(그레이스풀).
+    if (!guard.isAdmin && guard.newCount === 1) {
+      try {
+        await recordFunnelEventOnce({
+          event: 'first_post_generated',
+          userId: guard.userId,
+          meta: { free_credit: guard.freeCredit === true, target_site: targetSite },
+        });
+      } catch {
+        /* 계측 실패는 무시 — 글 생성 응답에 영향 금지 */
+      }
+    }
 
     return NextResponse.json({
       title,

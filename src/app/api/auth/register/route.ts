@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { suggestClinicProfile } from '@/content/lib/clinic-profile';
 import { applyReturningUserFreeBenefitPolicy } from '@/payment/lib/free-benefit';
+import { recordFunnelEvent } from '@/dev/lib/funnel-server';
+import { ANON_ID_COOKIE, isValidAnonId } from '@/content/lib/funnel-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,6 +133,16 @@ export async function POST(req: NextRequest) {
     if (!targetUser.email_confirmed_at) {
       await supabaseAdmin.auth.admin.updateUserById(userId, { email_confirm: true });
     }
+
+    // 퍼널 계측: 가입 완료(전환 확정) — 서버에서만 기록해 위조 방지.
+    // 랜딩 방문(landing_view)의 anon_id 쿠키와 이어 붙여 방문→가입 전환을 측정한다.
+    const anonRaw = req.cookies.get(ANON_ID_COOKIE)?.value;
+    await recordFunnelEvent({
+      event: 'signup_complete',
+      userId,
+      anonId: isValidAnonId(anonRaw) ? anonRaw : null,
+      meta: { hospital_type: hospitalType },
+    });
 
     return NextResponse.json({ success: true });
   } catch (e) {
