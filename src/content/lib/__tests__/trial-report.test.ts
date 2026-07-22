@@ -9,6 +9,7 @@ import {
   buildTrialReportEmail,
   buildTrialReportAdminDigest,
   TRIAL_REPORT_WINDOW_DAYS,
+  TRIAL_REPORT_MIN_DAYS,
   type TrialCandidate,
   type TrialReportInput,
 } from '../trial-report.ts';
@@ -36,24 +37,60 @@ test('isDMinus3Window: 정확히 D-3 만 true', () => {
 });
 
 // ── findTrialReportTargets ──
-test('findTrialReportTargets: D-3 만 남기고 userId 중복 제거', () => {
+test('findTrialReportTargets: D-3~D-1 윈도우 + userId 중복 제거', () => {
   const now = new Date('2026-07-22T01:00:00Z');
   const plus3 = '2026-07-25T00:00:00Z';
   const plus2 = '2026-07-24T00:00:00Z';
   const candidates: TrialCandidate[] = [
     { userId: 'u1', email: 'a@x.com', hospitalName: 'A', expiresAt: plus3, source: 'trial_until' },
     { userId: 'u1', email: 'a@x.com', hospitalName: 'A', expiresAt: plus3, source: 'plan_expires_at' }, // 중복
-    { userId: 'u2', email: 'b@x.com', hospitalName: 'B', expiresAt: plus2, source: 'trial_until' }, // D-2 제외
+    { userId: 'u2', email: 'b@x.com', hospitalName: 'B', expiresAt: plus2, source: 'trial_until' }, // D-2 = 재시도 윈도우 포함
     { userId: 'u3', email: null, hospitalName: null, expiresAt: plus3, source: 'plan_expires_at' },
     { userId: '', email: null, hospitalName: null, expiresAt: plus3, source: 'trial_until' }, // 빈 id 제외
   ];
   const targets = findTrialReportTargets(candidates, now);
+  // 만료 임박순 정렬 → D-2(u2)가 먼저, 그다음 D-3(u1, u3 — 등장순 안정)
   assert.deepEqual(
     targets.map((t) => t.userId),
-    ['u1', 'u3'],
+    ['u2', 'u1', 'u3'],
   );
-  assert.equal(targets[0].source, 'trial_until'); // 먼저 등장한 소스 유지
-  assert.equal(targets[0].daysLeft, 3);
+  const u1 = targets.find((t) => t.userId === 'u1');
+  assert.equal(u1?.source, 'trial_until'); // 먼저 등장한 소스 유지 (중복 제거)
+  assert.equal(u1?.daysLeft, 3);
+  assert.equal(targets[0].daysLeft, 2);
+});
+
+test('findTrialReportTargets: 윈도우 밖(D-0·D-4·과거·불명) 제외', () => {
+  const now = new Date('2026-07-22T01:00:00Z');
+  const candidates: TrialCandidate[] = [
+    { userId: 'd0', email: null, hospitalName: null, expiresAt: '2026-07-22T10:00:00Z', source: 'trial_until' }, // D-0
+    { userId: 'd1', email: null, hospitalName: null, expiresAt: '2026-07-23T00:00:00Z', source: 'trial_until' }, // D-1
+    { userId: 'd4', email: null, hospitalName: null, expiresAt: '2026-07-26T00:00:00Z', source: 'trial_until' }, // D-4
+    { userId: 'past', email: null, hospitalName: null, expiresAt: '2026-07-20T00:00:00Z', source: 'trial_until' },
+    { userId: 'bad', email: null, hospitalName: null, expiresAt: 'not-a-date', source: 'trial_until' },
+    { userId: 'nul', email: null, hospitalName: null, expiresAt: null, source: 'trial_until' },
+  ];
+  const targets = findTrialReportTargets(candidates, now);
+  assert.deepEqual(
+    targets.map((t) => t.userId),
+    ['d1'],
+  );
+  assert.equal(TRIAL_REPORT_MIN_DAYS, 1);
+});
+
+test('findTrialReportTargets: 만료 임박순 정렬 — trial_until 이 plan 후보를 밀어내지 않음', () => {
+  const now = new Date('2026-07-22T01:00:00Z');
+  const candidates: TrialCandidate[] = [
+    // trial_until 후보(늦은 만료)를 먼저 넣어도, 임박한 plan 후보가 앞으로 온다
+    { userId: 't1', email: null, hospitalName: null, expiresAt: '2026-07-25T12:00:00Z', source: 'trial_until' },
+    { userId: 'p1', email: null, hospitalName: null, expiresAt: '2026-07-23T00:00:00Z', source: 'plan_expires_at' },
+    { userId: 'p2', email: null, hospitalName: null, expiresAt: '2026-07-24T00:00:00Z', source: 'plan_expires_at' },
+  ];
+  const targets = findTrialReportTargets(candidates, now);
+  assert.deepEqual(
+    targets.map((t) => t.userId),
+    ['p1', 'p2', 't1'],
+  );
 });
 
 // ── buildTrialReportSummary ──

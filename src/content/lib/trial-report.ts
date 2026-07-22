@@ -6,7 +6,7 @@
  * 체험 종료 3일 전에 "당신이 만든 N개 글의 성과"를 요약해 전환을 유도한다.
  *
  * 이 모듈은 순수 함수만 담는다(DB/네트워크/LLM 없음) — node:test 로 직접 검증.
- *  1) D-3 대상 탐색 (만료일 KST 기준 정확히 3일 뒤)
+ *  1) 발송 대상 탐색 (만료일 KST 기준 D-3, 실패 재시도용으로 D-2·D-1 포함)
  *  2) "당신이 만든 글" 성과 요약 조립 (글 수·키워드 순위·GEO 노출)
  *  3) 리포트 이메일(제목·HTML) 조립 — 실발송은 cron 이 게이트 뒤에서 수행
  */
@@ -15,6 +15,13 @@ import { sanitizeExcerpt } from './geo-tracking.ts';
 
 /** 체험 종료 며칠 전에 리포트를 보낼지 (D-3). */
 export const TRIAL_REPORT_WINDOW_DAYS = 3;
+
+/**
+ * 재시도 하한 (D-1까지). D-3 발송이 실패하면 notifications 미기록으로 남고,
+ * 다음날(D-2·D-1) 배치가 다시 대상으로 잡아 재시도한다 — 발송 성공 시에만
+ * notification 이 기록되므로 성공한 계정은 중복 발송되지 않는다.
+ */
+export const TRIAL_REPORT_MIN_DAYS = 1;
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -50,6 +57,11 @@ export interface TrialCandidate {
   hospitalName: string | null;
   expiresAt: string | null;
   source: TrialTargetSource;
+  /**
+   * 체험/구독 시작 시각(billing_keys.created_at 등) — 성과 집계 스코프 하한.
+   * null 이면 호출부가 계정 생성 시각(profiles.created_at)으로 폴백한다.
+   */
+  startedAt?: string | null;
 }
 
 export interface TrialTarget extends TrialCandidate {
@@ -57,9 +69,13 @@ export interface TrialTarget extends TrialCandidate {
 }
 
 /**
- * D-3 대상 필터 + 중복 제거 (순수 함수).
- * 여러 소스(billing_keys.trial_until, profiles.plan_expires_at)에서 온 후보를
- * userId 로 합치되, 먼저 등장한 후보를 유지한다(호출부가 우선순위 순으로 넣는다).
+ * 발송 대상 필터 + 중복 제거 + 만료 임박순 정렬 (순수 함수).
+ *
+ * - 윈도우: D-3 ~ D-1 (daysLeft ∈ [TRIAL_REPORT_MIN_DAYS, TRIAL_REPORT_WINDOW_DAYS]).
+ *   D-2·D-1 은 "D-3 발송 실패분 재시도"용 — 성공분은 notifications 기록으로 중복 차단.
+ * - 중복 제거: userId 기준 먼저 등장한 후보 유지(호출부가 trial_until 우선으로 넣는다).
+ * - 정렬: 만료시각(expiresAt) 오름차순 — 호출부가 cap 으로 자르더라도 임박 대상이
+ *   먼저 처리되고, 특정 소스(trial_until) 후보가 다른 소스 후보를 지속적으로 밀어내지 않는다.
  */
 export function findTrialReportTargets(
   candidates: readonly TrialCandidate[],
@@ -70,11 +86,16 @@ export function findTrialReportTargets(
   for (const c of candidates) {
     if (!c.userId || seen.has(c.userId)) continue;
     const daysLeft = daysUntilKST(c.expiresAt, now);
-    if (daysLeft !== TRIAL_REPORT_WINDOW_DAYS) continue;
+    if (daysLeft === null) continue;
+    if (daysLeft < TRIAL_REPORT_MIN_DAYS || daysLeft > TRIAL_REPORT_WINDOW_DAYS) continue;
     seen.add(c.userId);
     out.push({ ...c, daysLeft });
   }
-  return out;
+  return out.sort((a, b) => {
+    const ta = a.expiresAt ? Date.parse(a.expiresAt) : Number.MAX_SAFE_INTEGER;
+    const tb = b.expiresAt ? Date.parse(b.expiresAt) : Number.MAX_SAFE_INTEGER;
+    return ta - tb;
+  });
 }
 
 // ---------------------------------------------------------------------------
