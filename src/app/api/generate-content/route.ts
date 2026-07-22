@@ -689,7 +689,7 @@ ${formatGuide}
       void recordFunnelEvent({
         event: 'first_post_generated',
         userId: guard.userId,
-        meta: { freeCredit: guard.freeCredit === true, targetSite },
+        meta: { free_credit: guard.freeCredit === true, target_site: targetSite },
       });
     }
 

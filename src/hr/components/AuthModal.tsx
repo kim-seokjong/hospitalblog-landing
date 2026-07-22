@@ -198,7 +198,8 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
 
     // 퍼널 계측: 가입 시작 (필수값 검증 통과 후, 실제 가입 시도 직전).
     // anon_id 쿠키로 랜딩 방문(landing_view)과 이어 붙는다. Meta 픽셀과 병행.
-    trackFunnel('signup_start', { hospitalType });
+    // signup_complete(전환 확정)는 위조 방지를 위해 서버(/api/auth/register)에서만 기록한다.
+    trackFunnel('signup_start', { hospital_type: hospitalType });
 
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
@@ -256,9 +257,8 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
       return;
     }
 
-    // 퍼널 계측: 가입 완료 (프로필 등록 + 자동 로그인까지 성공한 지점).
-    // 세션 쿠키가 방금 세팅됐으므로 서버가 user_id 를 귀속한다(anon_id 도 함께).
-    trackFunnel('signup_complete', { hospitalType });
+    // signup_complete 는 서버(/api/auth/register)가 프로필 생성 성공 시 service-role 로
+    // 기록한다 — 익명 클라이언트 위조 방지(공개 엔드포인트는 이 이벤트를 거부).
 
     onSuccess('signup');
     onClose();

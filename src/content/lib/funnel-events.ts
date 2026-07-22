@@ -24,9 +24,26 @@ export const FUNNEL_EVENTS = [
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
 
-/** 이벤트명이 화이트리스트에 속하는지 (타입 가드). */
+/**
+ * 공개 엔드포인트(/api/funnel-event)에서 허용하는 이벤트 = **저신뢰 의도 이벤트만**.
+ *
+ * signup_complete·first_post_generated·payment_success 같은 "서버 확정 전환 이벤트"는
+ * 익명 클라이언트가 위조하면 지표가 오염되므로 공개 엔드포인트에서 받지 않는다.
+ * 이 전환 이벤트들은 각각 서버 라우트(register·generate-content·billing confirm)에서
+ * service-role 로만 기록한다(recordFunnelEvent). 여기(공개)는 방문/가입시도 의도만 받는다.
+ */
+export const PUBLIC_FUNNEL_EVENTS = ['landing_view', 'signup_start'] as const;
+
+export type PublicFunnelEvent = (typeof PUBLIC_FUNNEL_EVENTS)[number];
+
+/** 이벤트명이 전체 화이트리스트에 속하는지 (서버 기록용, 타입 가드). */
 export function isFunnelEvent(value: unknown): value is FunnelEvent {
   return typeof value === 'string' && (FUNNEL_EVENTS as readonly string[]).includes(value);
+}
+
+/** 이벤트명이 공개 엔드포인트 허용 목록에 속하는지 (타입 가드). */
+export function isPublicFunnelEvent(value: unknown): value is PublicFunnelEvent {
+  return typeof value === 'string' && (PUBLIC_FUNNEL_EVENTS as readonly string[]).includes(value);
 }
 
 /** anon_id 쿠키 이름 — 브라우저·서버 공통 상수. */
@@ -54,46 +71,71 @@ export function generateAnonId(randomFn: () => number = Math.random): string {
   return out;
 }
 
-/** meta payload 상한 — 직렬화 후 이 바이트를 넘으면 거부(거대 payload 방어). */
-export const MAX_META_BYTES = 2048;
+/** meta 문자열 값 최대 길이. */
+export const MAX_META_STRING = 200;
 
 export type MetaValue = string | number | boolean | null;
 export type SanitizedMeta = Record<string, MetaValue> | null;
 
+type MetaValidator = (raw: unknown) => MetaValue | undefined;
+
+/** 문자열 값 검증기 — 비문자열은 드롭, 길이 절단. */
+function strMeta(raw: unknown): MetaValue | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.slice(0, MAX_META_STRING);
+  return trimmed;
+}
+/** 유한 숫자 검증기. */
+function numMeta(raw: unknown): MetaValue | undefined {
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
+}
+/** boolean 검증기. */
+function boolMeta(raw: unknown): MetaValue | undefined {
+  return typeof raw === 'boolean' ? raw : undefined;
+}
+
 /**
- * meta(jsonb) 새니타이즈 — 1단 깊이의 원시값 맵만 허용한다.
+ * meta(jsonb) 허용 키 화이트리스트 (PII 미저장 원칙 — 마이그 046 주석과 일치).
+ *
+ * 임의 키(이메일·전화·이름·병원명 등 PII 가능)를 저장하지 못하도록, 이벤트 계측에
+ * 필요한 **비-PII 저기수(low-cardinality) 속성만** 명시 허용한다. 그 외 키는 드롭한다.
+ *  - path / source / referrer_host : 유입/맥락 (호스트·경로만, 쿼리·PII 아님)
+ *  - plan / target_site / hospital_type : 저기수 분류값 (진료과=PII 아님)
+ *  - free_credit : 무료 크레딧 사용 여부 (boolean)
+ *  - value : 결제 금액 등 수치
+ */
+const META_KEY_VALIDATORS: Record<string, MetaValidator> = {
+  path: strMeta,
+  source: strMeta,
+  referrer_host: strMeta,
+  plan: strMeta,
+  target_site: strMeta,
+  hospital_type: strMeta,
+  free_credit: boolMeta,
+  value: numMeta,
+};
+
+/** 허용 meta 키 목록 (읽기 전용 노출 — 호출부/테스트 참조용). */
+export const ALLOWED_META_KEYS = Object.freeze(Object.keys(META_KEY_VALIDATORS));
+
+/**
+ * meta(jsonb) 새니타이즈 — **허용 키 화이트리스트 기반** (PII 유입 차단).
  *  - 객체가 아니면 null
- *  - 값이 string/number(유한)/boolean/null 이 아닌 키는 제거 (중첩·함수·배열 차단)
- *  - 문자열 값은 200자로 절단
- *  - 직렬화 크기가 MAX_META_BYTES 초과면 null (안전측 — 이벤트 자체는 기록)
+ *  - ALLOWED_META_KEYS 에 없는 키는 전부 드롭
+ *  - 각 키는 정해진 타입 검증기를 통과해야 유지 (문자열은 길이 절단)
  *  - 빈 맵은 null 로 정규화
  */
 export function sanitizeMeta(input: unknown): SanitizedMeta {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) return null;
 
   const out: Record<string, MetaValue> = {};
-  for (const [key, raw] of Object.entries(input as Record<string, unknown>)) {
-    if (typeof key !== 'string' || key.length === 0 || key.length > 64) continue;
-    if (typeof raw === 'string') {
-      out[key] = raw.slice(0, 200);
-    } else if (typeof raw === 'number') {
-      if (Number.isFinite(raw)) out[key] = raw;
-    } else if (typeof raw === 'boolean' || raw === null) {
-      out[key] = raw;
-    }
-    // 그 외(객체·배열·함수·undefined)는 조용히 제거
+  for (const [key, validate] of Object.entries(META_KEY_VALIDATORS)) {
+    if (!Object.prototype.hasOwnProperty.call(input, key)) continue;
+    const value = validate((input as Record<string, unknown>)[key]);
+    if (value !== undefined) out[key] = value;
   }
 
-  const keys = Object.keys(out);
-  if (keys.length === 0) return null;
-
-  try {
-    const bytes = Buffer.byteLength(JSON.stringify(out), 'utf8');
-    if (bytes > MAX_META_BYTES) return null;
-  } catch {
-    return null;
-  }
-  return out;
+  return Object.keys(out).length === 0 ? null : out;
 }
 
 export interface ValidatedFunnelEvent {
@@ -108,13 +150,21 @@ export type FunnelValidation =
 /**
  * 요청 본문 검증 — 라우트가 파싱한 JSON 을 받아 이벤트명·meta 를 검증한다.
  * body 는 신뢰 불가 외부 입력이므로 unknown 으로 받아 안전하게 좁힌다.
+ *
+ * allowed 로 허용 이벤트 집합을 주입한다(기본 = 공개 엔드포인트용 저신뢰 이벤트만).
+ * 서버 라우트가 전체 이벤트를 검증하려면 FUNNEL_EVENTS 를 넘긴다.
  */
-export function validateFunnelBody(body: unknown): FunnelValidation {
+export function validateFunnelBody(
+  body: unknown,
+  allowed: readonly string[] = PUBLIC_FUNNEL_EVENTS,
+): FunnelValidation {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     return { ok: false, reason: 'invalid_body' };
   }
   const { event, meta } = body as { event?: unknown; meta?: unknown };
-  if (!isFunnelEvent(event)) return { ok: false, reason: 'invalid_event' };
+  if (typeof event !== 'string' || !allowed.includes(event) || !isFunnelEvent(event)) {
+    return { ok: false, reason: 'invalid_event' };
+  }
   return { ok: true, value: { event, meta: sanitizeMeta(meta) } };
 }
 
@@ -122,6 +172,11 @@ export function validateFunnelBody(body: unknown): FunnelValidation {
 // 레이트리밋 (공개 엔드포인트 남용 방어) — blog-check-limits 와 동일 철학:
 // globalThis 인메모리 Map, KST 일 경계, best-effort. 이벤트는 대량 발생하므로
 // IP당 상한을 넉넉히 두되(기본 300/일), 전체 상한(기본 20000/일)으로 폭주만 막는다.
+//
+// ⚠️ 한계(수용된 트레이드오프): 인메모리 카운터는 **서버리스 인스턴스 단위**로만
+// 유효하다 — Vercel 이 인스턴스를 여러 개 띄우면 캡이 인스턴스별로 따로 적용되고,
+// 콜드스타트 시 리셋된다. 남용 "완화" 목적의 best-effort 이며 정확한 전역 상한이
+// 필요해지면 DB/KV 기반으로 교체한다(현 단계 과설계 금지).
 // ---------------------------------------------------------------------------
 
 /** IP당 일일 기본 캡. env: FUNNEL_IP_DAILY_LIMIT */

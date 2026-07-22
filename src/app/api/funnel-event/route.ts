@@ -20,10 +20,14 @@ export const dynamic = 'force-dynamic';
  * body: { event: FunnelEvent, meta?: Record<string, string|number|boolean|null> }
  *
  * 가드 (blog-check-limits 패턴):
- * - 이벤트명 화이트리스트 검증 (임의 이벤트 적재 차단)
- * - meta 새니타이즈 (1단 원시값 맵·크기 제한 — 거대 payload·중첩 폭탄 방어)
- * - 레이트리밋: IP당 일 300회 + 전체 일 20000회 (env FUNNEL_* 조절, 인메모리 best-effort)
- * - anon_id 쿠키(32 hex) 발급/검증 — 비로그인 방문자 식별, 로그인 시 user_id 도 귀속
+ * - 이벤트명 화이트리스트: **저신뢰 의도 이벤트(PUBLIC_FUNNEL_EVENTS)만** 허용.
+ *   전환 확정 이벤트(signup_complete·first_post_generated·payment_success)는 익명 위조로
+ *   지표가 오염되므로 여기서 400 거부 — 각 서버 라우트가 service-role 로만 기록한다.
+ * - meta 새니타이즈 (허용 키 화이트리스트 + 타입·길이 검증 — PII·중첩 폭탄 차단)
+ * - 레이트리밋: IP당 일 300회 + 전체 일 20000회 (env FUNNEL_* 조절, 인메모리 best-effort
+ *   — 서버리스 인스턴스 단위 한계는 funnel-events.ts 주석 참조)
+ * - anon_id 쿠키(32 hex): 없거나 형식 불일치면 서버가 httpOnly 로 새로 발급, 클라 제공값은
+ *   형식 통과 시에만 사용. 쿠키 삭제·다중 브라우저로 중복될 수 있는 **best-effort 신원**이다.
  * - service role insert (클라 직접 쓰기 금지 — RLS 정책 없음)
  *
  * 실패해도(레이트리밋·검증 외) 200 을 돌려준다 — 계측이 UX 를 막지 않는다.
