@@ -90,6 +90,12 @@ export default function LandingPage() {
     }
   };
 
+  // 무료 블로그 진단(문턱 낮은 리드마그넷) — 회원가입 없이 /blog-check 로.
+  // 방문→가입 전환의 첫 접점: 진단 결과의 상세분석 게이트가 자연스럽게 가입으로 잇는다.
+  const handleDiagnose = () => {
+    router.push('/blog-check');
+  };
+
   const handleLogin = () => {
     setAuthMode('login');
     setShowAuthModal(true);
@@ -243,24 +249,26 @@ export default function LandingPage() {
                 금지 표현 필터 · AI 검사 · 주간 점검 — 잘 쓰는 AI는 많지만, 안전까지 책임지는 건 닥터포스트입니다.
               </p>
 
+              {/* CTA — 문턱 낮은 "무료 진단"을 1순위로(회원가입 없이 30초), 가입은 2순위.
+                  방문→가입 전환 누수 방어: 낯선 방문자에게 가입부터 요구하지 않는다. */}
               <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mt-8">
                 <button
-                  onClick={handleStart}
+                  onClick={handleDiagnose}
                   className="px-7 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 hover:-translate-y-0.5"
                 >
-                  무료로 시작하기 →
+                  무료로 내 블로그 진단받기 →
                 </button>
-                <a
-                  href="#features"
+                <button
+                  onClick={handleStart}
                   className="px-7 sm:px-8 py-3.5 sm:py-4 bg-white border border-[#dbe2ea] text-[#202020] font-semibold text-base sm:text-lg rounded-xl hover:bg-[#eef2f6] transition-colors text-center"
                 >
-                  기능 살펴보기
-                </a>
+                  회원가입하고 글 생성 →
+                </button>
               </div>
-              {/* 가입 혜택 배지 — 상시 혜택(프로모 아님), "2회 무료 생성 + 카드 등록 없음" 강조 */}
+              {/* 문턱 안내 배지 — 진단은 회원가입 없이, 가입 시 무료 2회 생성 혜택 병기 */}
               <p className="mt-4 flex justify-center lg:justify-start">
                 <span className="inline-block bg-[#ff4628]/10 border border-[#ff4628]/25 text-[#e63a1c] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
-                  🎁 가입하면 블로그 글 <b className="font-extrabold">2회 무료 생성</b> · 카드 등록 없음
+                  🔍 진단은 <b className="font-extrabold">회원가입 없이 30초</b> · 가입하면 블로그 글 2회 무료 생성
                 </span>
               </p>
             </div>
