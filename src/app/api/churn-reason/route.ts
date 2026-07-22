@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
 
     // 사용자당 24h 1건 dedup — 취소/만료 UI 반복 제출·스크립트 남용으로 무제한 insert 방지.
     // 조회 실패(마이그 미적용 등)면 dedup 없이 insert 시도(insert 도 같은 이유로 실패 → 그레이스풀).
+    // check-then-insert 비원자: 병렬 남용이 겹치면 행 몇 개 추가될 수 있으나 PII 는 이미
+    // 마스킹되고 수집 데이터 특성상 무해 — best-effort 수용(DB unique 제약은 과잉).
     const since = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString();
     const { data: recent, error: dedupErr } = await admin
       .from('churn_reasons')

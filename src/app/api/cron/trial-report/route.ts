@@ -97,7 +97,9 @@ async function collectCandidates(admin: Admin, now: Date): Promise<TrialCandidat
   const { startIso, endIso } = candidateRange(now);
   const candidates: TrialCandidate[] = [];
 
-  // ① billing_keys.trial_until (체험 종료일) — ACTIVE 만
+  // ① billing_keys.trial_until (체험 종료일) — ACTIVE 만.
+  //    만료 임박순 정렬을 **DB 쿼리에** 건다 — limit 이 정렬 없이 걸리면 후보 초과 시
+  //    임의 N건이 잘려 나가 애플리케이션 정렬로도 복구 불가(누락 대상 인지도 불가).
   const { data: trialRows, error: trialErr } = await admin
     .from('billing_keys')
     .select('user_id, trial_until, created_at')
@@ -105,8 +107,14 @@ async function collectCandidates(admin: Admin, now: Date): Promise<TrialCandidat
     .not('trial_until', 'is', null)
     .gte('trial_until', startIso)
     .lt('trial_until', endIso)
+    .order('trial_until', { ascending: true })
     .limit(MAX_TARGETS);
   if (trialErr) throw new Error(`billing_keys(trial_until) 조회 실패: ${trialErr.message}`);
+  if ((trialRows ?? []).length >= MAX_TARGETS) {
+    console.warn(
+      `[trial-report] billing_keys 후보가 limit(${MAX_TARGETS})에 도달 — 만료 임박순 상위만 조회됨, 잔여는 익일 윈도우에서 처리`,
+    );
+  }
 
   const trialByUser = new Map<string, { trialUntil: string; startedAt: string | null }>();
   for (const r of (trialRows ?? []) as TrialKeyRow[]) {
@@ -124,8 +132,14 @@ async function collectCandidates(admin: Admin, now: Date): Promise<TrialCandidat
     .not('plan_expires_at', 'is', null)
     .gte('plan_expires_at', startIso)
     .lt('plan_expires_at', endIso)
+    .order('plan_expires_at', { ascending: true })
     .limit(MAX_TARGETS);
   if (planErr) throw new Error(`profiles(plan_expires_at) 조회 실패: ${planErr.message}`);
+  if ((planRows ?? []).length >= MAX_TARGETS) {
+    console.warn(
+      `[trial-report] profiles 후보가 limit(${MAX_TARGETS})에 도달 — 만료 임박순 상위만 조회됨, 잔여는 익일 윈도우에서 처리`,
+    );
+  }
 
   const planCandidates = ((planRows ?? []) as Array<{ id: string; plan_expires_at: string | null }>).filter(
     (r) => !!r.id,
@@ -271,6 +285,12 @@ async function aggregateUser(
  * 최근 발송 이력(trial_report 알림) 존재 여부 — 발송 직전 재확인용.
  * 발송 성공 시에만 기록되므로, true = 이미 성공 발송됨(중복 방지).
  * 조회 실패 시 안전측(true)으로 처리해 중복 발송을 막는다(다음날 재시도 여지는 유지).
+ *
+ * 수용된 한계 2가지:
+ * - cron 이 동시 실행되면(재시도·수동 트리거 겹침) 재확인~기록 사이 초 단위 틈에서
+ *   중복 발송 가능 — 일 1회 스케줄 특성상 수용(분산 락 과설계 금지).
+ * - lookback(윈도우+1일) 내 재체험을 시작한 계정은 회차 리포트가 눌릴 수 있으나,
+ *   30일 체험 구조상 4일 내 재체험은 비현실적 — 수용.
  */
 async function alreadyNotified(admin: Admin, userId: string, now: Date): Promise<boolean> {
   const since = new Date(now);
