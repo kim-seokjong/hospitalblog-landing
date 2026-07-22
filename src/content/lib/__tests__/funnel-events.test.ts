@@ -12,8 +12,10 @@ import {
   readFunnelLimits,
   consumeFunnelQuota,
   funnelKstDayKey,
-  ALLOWED_META_KEYS,
+  shouldRecordOnceEvent,
+  EVENT_META_KEYS,
   MAX_META_STRING,
+  MAX_META_NUMBER,
   DEFAULT_FUNNEL_IP_DAILY_LIMIT,
   DEFAULT_FUNNEL_GLOBAL_DAILY_LIMIT,
 } from '../funnel-events.ts';
@@ -64,47 +66,109 @@ test('generateAnonId: 서로 다른 값 (충돌 낮음)', () => {
   assert.equal(set.size, 50);
 });
 
-// ── sanitizeMeta (허용 키 화이트리스트) ──
-test('sanitizeMeta: 허용 키만 유지, 그 외 드롭', () => {
+// ── sanitizeMeta (이벤트별 허용 키 + 값 형식 검증) ──
+test('sanitizeMeta: 이벤트별 허용 키만 유지, 그 외 드롭', () => {
+  assert.deepEqual(sanitizeMeta({ plan: 'standard', value: 199000 }, 'payment_success'), {
+    plan: 'standard',
+    value: 199000,
+  });
   assert.deepEqual(
-    sanitizeMeta({ plan: 'standard', value: 199000, free_credit: true, path: '/pricing' }),
-    { plan: 'standard', value: 199000, free_credit: true, path: '/pricing' },
+    sanitizeMeta({ free_credit: true, target_site: 'naver' }, 'first_post_generated'),
+    { free_credit: true, target_site: 'naver' },
   );
   // 허용 목록에 없는 키(PII 가능)는 전부 드롭
-  assert.equal(sanitizeMeta({ email: 'a@b.com', phone: '010', name: '홍길동' }), null);
-  assert.deepEqual(sanitizeMeta({ plan: 'pro', secret: 'x' }), { plan: 'pro' });
+  assert.equal(
+    sanitizeMeta({ email: 'a@b.com', phone: '010', name: '홍길동' }, 'landing_view'),
+    null,
+  );
+  assert.deepEqual(sanitizeMeta({ plan: 'pro', secret: 'x' }, 'payment_success'), { plan: 'pro' });
 });
 
-test('sanitizeMeta: ALLOWED_META_KEYS 노출 + PII 키 미포함', () => {
-  assert.ok(ALLOWED_META_KEYS.includes('plan'));
-  assert.ok(ALLOWED_META_KEYS.includes('hospital_type'));
-  assert.ok(!ALLOWED_META_KEYS.includes('email'));
-  assert.ok(!ALLOWED_META_KEYS.includes('phone'));
+test('sanitizeMeta: 교차 이벤트 키 주입 차단 — landing_view 에 plan·value 불가', () => {
+  assert.equal(sanitizeMeta({ plan: 'pro', value: 199000, free_credit: true }, 'landing_view'), null);
+  assert.deepEqual(
+    sanitizeMeta({ path: '/pricing', plan: 'pro', hospital_type: '치과' }, 'landing_view'),
+    { path: '/pricing' },
+  );
+  // signup_start 에 결제 속성 주입 불가
+  assert.deepEqual(sanitizeMeta({ hospital_type: '치과', value: 1 }, 'signup_start'), {
+    hospital_type: '치과',
+  });
+});
+
+test('sanitizeMeta: EVENT_META_KEYS 노출 — 이벤트별 최소 키 + PII 키 미포함', () => {
+  assert.deepEqual([...EVENT_META_KEYS.landing_view], ['path', 'source', 'referrer_host']);
+  assert.ok(EVENT_META_KEYS.payment_success.includes('plan'));
+  assert.ok(!EVENT_META_KEYS.landing_view.includes('plan'));
+  assert.ok(!EVENT_META_KEYS.landing_view.includes('value'));
+  for (const keys of Object.values(EVENT_META_KEYS)) {
+    assert.ok(!keys.includes('email'));
+    assert.ok(!keys.includes('phone'));
+  }
+});
+
+test('sanitizeMeta: enum성 값 형식 검증 — 자유 문자열 거부', () => {
+  // plan·source·target_site = 소문자 토큰만 (문장·연락처류 값 주입 차단)
+  assert.equal(sanitizeMeta({ plan: '연락처 010-1234-5678' }, 'payment_success'), null);
+  assert.equal(sanitizeMeta({ plan: 'PRO!' }, 'payment_success'), null);
+  assert.equal(sanitizeMeta({ source: 'a@b.com' }, 'landing_view'), null);
+  assert.deepEqual(sanitizeMeta({ source: 'insta_bio' }, 'landing_view'), { source: 'insta_bio' });
+  // hospital_type = 짧은 분류값만 (긴 문장 거부)
+  assert.deepEqual(sanitizeMeta({ hospital_type: '정신건강의학과' }, 'signup_start'), {
+    hospital_type: '정신건강의학과',
+  });
+  assert.equal(sanitizeMeta({ hospital_type: 'x'.repeat(40) }, 'signup_start'), null);
+  assert.equal(sanitizeMeta({ hospital_type: '연락주세요 a@b.com' }, 'signup_start'), null);
+});
+
+test('sanitizeMeta: path 는 쿼리·해시 제거 + 경로 문자만', () => {
+  assert.deepEqual(sanitizeMeta({ path: '/pricing?email=a@b.com#x' }, 'landing_view'), {
+    path: '/pricing',
+  });
+  assert.equal(sanitizeMeta({ path: 'not-a-path' }, 'landing_view'), null);
+  const long = '/' + 'a'.repeat(500);
+  const out = sanitizeMeta({ path: long }, 'landing_view') as Record<string, string>;
+  assert.equal(out.path.length, MAX_META_STRING);
+});
+
+test('sanitizeMeta: referrer_host 는 호스트 문자만 + 소문자 정규화', () => {
+  assert.deepEqual(sanitizeMeta({ referrer_host: 'Search.Naver.com' }, 'landing_view'), {
+    referrer_host: 'search.naver.com',
+  });
+  assert.equal(sanitizeMeta({ referrer_host: 'evil.com/path?x=1' }, 'landing_view'), null);
 });
 
 test('sanitizeMeta: 타입 불일치 값은 드롭', () => {
   // value 는 숫자만, free_credit 은 boolean 만
-  assert.equal(sanitizeMeta({ value: 'not-number', free_credit: 'yes' }), null);
-  assert.deepEqual(sanitizeMeta({ value: 100, free_credit: 'yes' }), { value: 100 });
+  assert.equal(sanitizeMeta({ value: 'not-number' }, 'payment_success'), null);
+  assert.deepEqual(sanitizeMeta({ free_credit: 'yes', target_site: 'naver' }, 'first_post_generated'), {
+    target_site: 'naver',
+  });
 });
 
 test('sanitizeMeta: 비객체·배열은 null', () => {
-  assert.equal(sanitizeMeta(null), null);
-  assert.equal(sanitizeMeta('str'), null);
-  assert.equal(sanitizeMeta(123), null);
-  assert.equal(sanitizeMeta([1, 2, 3]), null);
-  assert.equal(sanitizeMeta(undefined), null);
+  assert.equal(sanitizeMeta(null, 'landing_view'), null);
+  assert.equal(sanitizeMeta('str', 'landing_view'), null);
+  assert.equal(sanitizeMeta(123, 'landing_view'), null);
+  assert.equal(sanitizeMeta([1, 2, 3], 'landing_view'), null);
+  assert.equal(sanitizeMeta(undefined, 'landing_view'), null);
 });
 
-test('sanitizeMeta: 문자열 값 길이 절단', () => {
-  const long = 'a'.repeat(500);
-  const out = sanitizeMeta({ source: long }) as Record<string, string>;
-  assert.equal(out.source.length, MAX_META_STRING);
+test('sanitizeMeta: 무한/NaN/음수/상한 초과 숫자 드롭', () => {
+  assert.equal(sanitizeMeta({ value: Infinity }, 'payment_success'), null);
+  assert.equal(sanitizeMeta({ value: NaN }, 'payment_success'), null);
+  assert.equal(sanitizeMeta({ value: -1 }, 'payment_success'), null);
+  assert.equal(sanitizeMeta({ value: MAX_META_NUMBER + 1 }, 'payment_success'), null);
+  assert.deepEqual(sanitizeMeta({ value: 0 }, 'payment_success'), { value: 0 });
 });
 
-test('sanitizeMeta: 무한/NaN 숫자 드롭', () => {
-  assert.equal(sanitizeMeta({ value: Infinity }), null);
-  assert.equal(sanitizeMeta({ value: NaN }), null);
+// ── shouldRecordOnceEvent (계정 통산 1회 이벤트 — first_post_generated) ──
+test('shouldRecordOnceEvent: 기존 0건일 때만 기록', () => {
+  assert.equal(shouldRecordOnceEvent(0), true); // 첫 기록
+  assert.equal(shouldRecordOnceEvent(1), false); // 이미 있음 — 월초 리셋/유료 전환 재발화 차단
+  assert.equal(shouldRecordOnceEvent(5), false);
+  // 조회 실패(확인 불가) = 기록 안 함 — 중복 기록(전환율 부풀림)이 미기록보다 해롭다
+  assert.equal(shouldRecordOnceEvent(null), false);
 });
 
 // ── validateFunnelBody (기본 = 공개 허용목록) ──

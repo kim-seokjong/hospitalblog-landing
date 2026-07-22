@@ -73,69 +73,110 @@ export function generateAnonId(randomFn: () => number = Math.random): string {
 
 /** meta 문자열 값 최대 길이. */
 export const MAX_META_STRING = 200;
+/** value(결제 금액 등) 수치 상한 — 비정상 거대값 드롭. */
+export const MAX_META_NUMBER = 100_000_000;
 
 export type MetaValue = string | number | boolean | null;
 export type SanitizedMeta = Record<string, MetaValue> | null;
 
 type MetaValidator = (raw: unknown) => MetaValue | undefined;
 
-/** 문자열 값 검증기 — 비문자열은 드롭, 길이 절단. */
-function strMeta(raw: unknown): MetaValue | undefined {
+// ── 값 형식 검증기 — 자유 문자열을 최소화해 값 자리에 PII 를 실어 보내는 것까지 차단 ──
+
+/** 경로: 쿼리스트링·해시 제거(PII 가능 영역) 후 경로 문자만 허용. */
+const PATH_RE = /^\/[A-Za-z0-9\-._~/%]*$/;
+function pathMeta(raw: unknown): MetaValue | undefined {
   if (typeof raw !== 'string') return undefined;
-  const trimmed = raw.slice(0, MAX_META_STRING);
-  return trimmed;
+  const path = raw.split(/[?#]/)[0].slice(0, MAX_META_STRING);
+  return PATH_RE.test(path) ? path : undefined;
 }
-/** 유한 숫자 검증기. */
-function numMeta(raw: unknown): MetaValue | undefined {
-  return typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
+
+/** 소문자 토큰(enum성 값): plan·source·target_site — 임의 자유 문자열 거부. */
+const TOKEN_RE = /^[a-z0-9_-]{1,32}$/;
+function tokenMeta(raw: unknown): MetaValue | undefined {
+  return typeof raw === 'string' && TOKEN_RE.test(raw) ? raw : undefined;
 }
+
+/** 리퍼러 호스트: 호스트명 문자만 (경로·쿼리 등 PII 가능 부분은 클라가 애초에 안 보냄). */
+const HOST_RE = /^[A-Za-z0-9.-]{1,100}$/;
+function hostMeta(raw: unknown): MetaValue | undefined {
+  return typeof raw === 'string' && HOST_RE.test(raw) ? raw.toLowerCase() : undefined;
+}
+
+/** 진료과(hospital_type): 한글·영숫자 짧은 분류값만 — 문장·연락처류 거부. */
+const HOSPITAL_TYPE_RE = /^[가-힣A-Za-z0-9·()/ ]{1,30}$/;
+function hospitalTypeMeta(raw: unknown): MetaValue | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  return HOSPITAL_TYPE_RE.test(trimmed) ? trimmed : undefined;
+}
+
 /** boolean 검증기. */
 function boolMeta(raw: unknown): MetaValue | undefined {
   return typeof raw === 'boolean' ? raw : undefined;
 }
 
+/** 금액 수치: 0 ~ 상한의 유한 숫자만. */
+function amountMeta(raw: unknown): MetaValue | undefined {
+  return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 && raw <= MAX_META_NUMBER
+    ? raw
+    : undefined;
+}
+
 /**
- * meta(jsonb) 허용 키 화이트리스트 (PII 미저장 원칙 — 마이그 046 주석과 일치).
+ * meta(jsonb) **이벤트별** 허용 키 화이트리스트 (PII 미저장 원칙 — 마이그 046 주석과 일치).
  *
- * 임의 키(이메일·전화·이름·병원명 등 PII 가능)를 저장하지 못하도록, 이벤트 계측에
- * 필요한 **비-PII 저기수(low-cardinality) 속성만** 명시 허용한다. 그 외 키는 드롭한다.
- *  - path / source / referrer_host : 유입/맥락 (호스트·경로만, 쿼리·PII 아님)
- *  - plan / target_site / hospital_type : 저기수 분류값 (진료과=PII 아님)
- *  - free_credit : 무료 크레딧 사용 여부 (boolean)
- *  - value : 결제 금액 등 수치
+ * 전역 키 목록이 아니라 이벤트별 맵인 이유: 공개 이벤트(landing_view 등)에 plan·value
+ * 같은 전환 속성을 임의 주입해 분석을 오염시키는 것을 막고, 각 이벤트가 실제로 필요한
+ * 최소 속성만 받게 한다. 값도 키별 형식 검증기(enum 토큰·경로·호스트·수치 범위)를
+ * 통과해야 유지된다 — 값 자리에 자유 문자열(PII 가능)을 싣는 것까지 차단.
  */
-const META_KEY_VALIDATORS: Record<string, MetaValidator> = {
-  path: strMeta,
-  source: strMeta,
-  referrer_host: strMeta,
-  plan: strMeta,
-  target_site: strMeta,
-  hospital_type: strMeta,
-  free_credit: boolMeta,
-  value: numMeta,
+const EVENT_META_VALIDATORS: Record<FunnelEvent, Record<string, MetaValidator>> = {
+  landing_view: { path: pathMeta, source: tokenMeta, referrer_host: hostMeta },
+  signup_start: { path: pathMeta, source: tokenMeta, hospital_type: hospitalTypeMeta },
+  signup_complete: { hospital_type: hospitalTypeMeta },
+  first_post_generated: { free_credit: boolMeta, target_site: tokenMeta },
+  payment_success: { plan: tokenMeta, value: amountMeta },
 };
 
-/** 허용 meta 키 목록 (읽기 전용 노출 — 호출부/테스트 참조용). */
-export const ALLOWED_META_KEYS = Object.freeze(Object.keys(META_KEY_VALIDATORS));
+/** 이벤트별 허용 meta 키 목록 (읽기 전용 노출 — 호출부/테스트 참조용). */
+export const EVENT_META_KEYS: Readonly<Record<FunnelEvent, readonly string[]>> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(EVENT_META_VALIDATORS).map(([event, validators]) => [
+      event,
+      Object.freeze(Object.keys(validators)),
+    ]),
+  ) as Record<FunnelEvent, readonly string[]>,
+);
 
 /**
- * meta(jsonb) 새니타이즈 — **허용 키 화이트리스트 기반** (PII 유입 차단).
+ * meta(jsonb) 새니타이즈 — **이벤트별 허용 키 + 값 형식 검증** (PII 유입 차단).
  *  - 객체가 아니면 null
- *  - ALLOWED_META_KEYS 에 없는 키는 전부 드롭
- *  - 각 키는 정해진 타입 검증기를 통과해야 유지 (문자열은 길이 절단)
+ *  - 해당 이벤트의 허용 키가 아니면 전부 드롭 (교차 이벤트 키 주입 차단)
+ *  - 각 키는 정해진 형식 검증기를 통과해야 유지 (enum 토큰·경로·호스트·수치 범위)
  *  - 빈 맵은 null 로 정규화
  */
-export function sanitizeMeta(input: unknown): SanitizedMeta {
+export function sanitizeMeta(input: unknown, event: FunnelEvent): SanitizedMeta {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) return null;
 
   const out: Record<string, MetaValue> = {};
-  for (const [key, validate] of Object.entries(META_KEY_VALIDATORS)) {
+  const validators = EVENT_META_VALIDATORS[event] ?? {};
+  for (const [key, validate] of Object.entries(validators)) {
     if (!Object.prototype.hasOwnProperty.call(input, key)) continue;
     const value = validate((input as Record<string, unknown>)[key]);
     if (value !== undefined) out[key] = value;
   }
 
   return Object.keys(out).length === 0 ? null : out;
+}
+
+/**
+ * 1회성 이벤트(first_post_generated 등) 기록 여부 판단 — 기존 동일 이벤트 조회 결과 기반.
+ * priorCount = 기존 동일 이벤트 수(조회 실패 시 null).
+ * null(확인 불가)이면 기록하지 않는다 — 중복 기록(전환율 부풀림)이 미기록보다 해롭다.
+ */
+export function shouldRecordOnceEvent(priorCount: number | null): boolean {
+  return priorCount === 0;
 }
 
 export interface ValidatedFunnelEvent {
@@ -165,7 +206,7 @@ export function validateFunnelBody(
   if (typeof event !== 'string' || !allowed.includes(event) || !isFunnelEvent(event)) {
     return { ok: false, reason: 'invalid_event' };
   }
-  return { ok: true, value: { event, meta: sanitizeMeta(meta) } };
+  return { ok: true, value: { event, meta: sanitizeMeta(meta, event) } };
 }
 
 // ---------------------------------------------------------------------------

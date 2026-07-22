@@ -11,6 +11,7 @@ import {
   type FunnelEvent,
   type SanitizedMeta,
   sanitizeMeta,
+  shouldRecordOnceEvent,
 } from '@/content/lib/funnel-events';
 
 export interface RecordFunnelInput {
@@ -28,7 +29,7 @@ export interface RecordFunnelInput {
  */
 export async function recordFunnelEvent(input: RecordFunnelInput): Promise<boolean> {
   try {
-    const meta: SanitizedMeta = sanitizeMeta(input.meta);
+    const meta: SanitizedMeta = sanitizeMeta(input.meta, input.event);
     const admin = createAdminClient();
     const { error } = await admin.from('funnel_events').insert({
       event: input.event,
@@ -46,6 +47,35 @@ export async function recordFunnelEvent(input: RecordFunnelInput): Promise<boole
     return true;
   } catch {
     // createAdminClient 실패(env 미설정) 등 — 계측은 부가 기능이므로 조용히 무시
+    return false;
+  }
+}
+
+/**
+ * **계정 통산 1회만** 기록해야 하는 이벤트용 (first_post_generated 등).
+ *
+ * 호출부의 월 사용량 카운터(newCount===1)는 월초 리셋·유료 전환 시 다시 1이 되므로
+ * "계정 첫 글" 판정으로 쓰면 전환율이 부풀려진다. 여기서 funnel_events 에 동일
+ * (user_id, event) 가 이미 있는지 확인하고 없을 때만 적재한다(인덱스 조회 1회 — 저렴).
+ *
+ * - 조회 실패(테이블 없음 포함) 시 기록하지 않는다: 중복 기록이 미기록보다 해롭다
+ *   (shouldRecordOnceEvent). 마이그 미적용 환경에선 insert 도 어차피 no-op.
+ * - check-then-insert 는 비원자 — 동시 요청이 겹치면 드물게 중복 1건 가능(best-effort 수용).
+ */
+export async function recordFunnelEventOnce(
+  input: RecordFunnelInput & { userId: string },
+): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { count, error } = await admin
+      .from('funnel_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', input.userId)
+      .eq('event', input.event);
+    const priorCount = error ? null : (count ?? 0);
+    if (!shouldRecordOnceEvent(priorCount)) return false;
+    return recordFunnelEvent(input);
+  } catch {
     return false;
   }
 }

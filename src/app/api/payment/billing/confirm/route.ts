@@ -127,11 +127,18 @@ export async function POST(req: NextRequest) {
 
     // 퍼널 계측(전환 완료 = 결제 성공). 서버 확정 지점에서 기록 —
     // 클라 리다이렉트/새로고침 중복 집계를 피한다. Meta 픽셀·CAPI 와 병행(우리 소유 데이터).
-    void recordFunnelEvent({
-      event: 'payment_success',
-      userId: dbPayment.user_id,
-      meta: { plan: dbPayment.plan, value: plan.price },
-    })
+    // await: 서버리스에서 fire-and-forget 은 응답 종료 후 실행이 보장되지 않아
+    // 성공 전환이 유실될 수 있다 — insert 1건이라 지연은 무시 수준.
+    // recordFunnelEvent 는 절대 throw 하지 않지만, 결제 응답 보호를 위해 이중 방어.
+    try {
+      await recordFunnelEvent({
+        event: 'payment_success',
+        userId: dbPayment.user_id,
+        meta: { plan: dbPayment.plan, value: plan.price },
+      })
+    } catch {
+      /* 계측 실패는 무시 — 결제 응답에 영향 금지 */
+    }
 
     await createBillingKey({
       userId: dbPayment.user_id,
