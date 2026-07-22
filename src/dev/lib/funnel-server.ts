@@ -12,6 +12,7 @@ import {
   type SanitizedMeta,
   sanitizeMeta,
   shouldRecordOnceEvent,
+  shouldRecordFirstPostEvent,
 } from '@/content/lib/funnel-events';
 
 export interface RecordFunnelInput {
@@ -74,6 +75,22 @@ export async function recordFunnelEventOnce(
       .eq('event', input.event);
     const priorCount = error ? null : (count ?? 0);
     if (!shouldRecordOnceEvent(priorCount)) return false;
+
+    // 레거시 폴백: funnel_events 는 마이그 046부터 쌓이므로 "이벤트 없음 = 통산 첫 글"이
+    // 아니다 — 그 이전부터 글을 만들던 기존 계정(예: 체험 중 14글)은 이벤트가 없어서
+    // 월 카운터 리셋 후 허위 첫 글 이벤트가 기록된다. saved_posts 기존 행 존재를
+    // head count 1회로 추가 확인해 기존 글이 있으면 기록을 생략한다(백필 마이그 대신
+    // 코드 폴백 — 목적은 신규 계정 전환 측정이라 레거시 계정은 이벤트 없이 종료해도 됨).
+    // 이벤트가 이미 있으면 위에서 끝나므로 이 쿼리는 상시 비용이 아니다.
+    if (input.event === 'first_post_generated') {
+      const { count: legacy, error: legacyErr } = await admin
+        .from('saved_posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', input.userId);
+      const legacyCount = legacyErr ? null : (legacy ?? 0);
+      if (!shouldRecordFirstPostEvent(priorCount, legacyCount)) return false;
+    }
+
     return recordFunnelEvent(input);
   } catch {
     return false;

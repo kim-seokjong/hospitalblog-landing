@@ -179,6 +179,23 @@ export function shouldRecordOnceEvent(priorCount: number | null): boolean {
   return priorCount === 0;
 }
 
+/**
+ * first_post_generated 전용 판단 — 이벤트 부재 + **레거시 산출물 부재**까지 요구.
+ *
+ * funnel_events 는 마이그 046부터 쌓이므로 "이벤트 없음 = 통산 첫 글"이 아니다:
+ * 그 이전부터 글을 만들던 기존 계정(예: 체험 중 14글)은 이벤트가 없어서, 월 사용량
+ * 리셋 후 newCount===1 시점에 허위 첫 글 이벤트가 기록된다. saved_posts 기존 행
+ * 수(legacyPostCount)까지 0이어야 진짜 신규 계정의 첫 생성으로 본다.
+ * 어느 쪽이든 확인 불가(null)면 기록하지 않는다 — 목적이 신규 계정 전환 측정이므로
+ * 미기록이 허위 기록보다 낫다.
+ */
+export function shouldRecordFirstPostEvent(
+  priorEventCount: number | null,
+  legacyPostCount: number | null,
+): boolean {
+  return shouldRecordOnceEvent(priorEventCount) && shouldRecordOnceEvent(legacyPostCount);
+}
+
 export interface ValidatedFunnelEvent {
   event: FunnelEvent;
   meta: SanitizedMeta;

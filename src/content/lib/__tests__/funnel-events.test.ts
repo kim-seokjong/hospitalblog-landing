@@ -13,6 +13,7 @@ import {
   consumeFunnelQuota,
   funnelKstDayKey,
   shouldRecordOnceEvent,
+  shouldRecordFirstPostEvent,
   EVENT_META_KEYS,
   MAX_META_STRING,
   MAX_META_NUMBER,
@@ -169,6 +170,19 @@ test('shouldRecordOnceEvent: 기존 0건일 때만 기록', () => {
   assert.equal(shouldRecordOnceEvent(5), false);
   // 조회 실패(확인 불가) = 기록 안 함 — 중복 기록(전환율 부풀림)이 미기록보다 해롭다
   assert.equal(shouldRecordOnceEvent(null), false);
+});
+
+test('shouldRecordFirstPostEvent: 진짜 신규 계정만 기록 (레거시 폴백)', () => {
+  // 진짜 신규: 이벤트도 없고 기존 글도 없음 → 기록
+  assert.equal(shouldRecordFirstPostEvent(0, 0), true);
+  // 마이그 046 이전 기존 계정(예: 체험 중 14글): 이벤트는 없지만 saved_posts 존재 → 기록 안 함
+  assert.equal(shouldRecordFirstPostEvent(0, 14), false);
+  assert.equal(shouldRecordFirstPostEvent(0, 1), false);
+  // 이벤트가 이미 있으면 당연히 기록 안 함
+  assert.equal(shouldRecordFirstPostEvent(1, 0), false);
+  // 어느 쪽이든 확인 불가(null) = 기록 안 함 (허위 기록 방지 우선)
+  assert.equal(shouldRecordFirstPostEvent(null, 0), false);
+  assert.equal(shouldRecordFirstPostEvent(0, null), false);
 });
 
 // ── validateFunnelBody (기본 = 공개 허용목록) ──
