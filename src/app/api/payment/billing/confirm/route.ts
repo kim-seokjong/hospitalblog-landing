@@ -12,6 +12,7 @@ import {
 import { PLANS } from '@/payment/lib/plans'
 import type { PlanId } from '@/payment/lib/plans'
 import { sendCAPIEvent } from '@/dev/lib/meta-capi'
+import { recordFunnelEvent } from '@/dev/lib/funnel-server'
 import { headers } from 'next/headers'
 
 function addOneMonth(isoDate: string): string {
@@ -122,6 +123,14 @@ export async function POST(req: NextRequest) {
       userId: dbPayment.user_id,
       plan: dbPayment.plan,
       expiresAt,
+    })
+
+    // 퍼널 계측(전환 완료 = 결제 성공). 서버 확정 지점에서 기록 —
+    // 클라 리다이렉트/새로고침 중복 집계를 피한다. Meta 픽셀·CAPI 와 병행(우리 소유 데이터).
+    void recordFunnelEvent({
+      event: 'payment_success',
+      userId: dbPayment.user_id,
+      meta: { plan: dbPayment.plan, value: plan.price },
     })
 
     await createBillingKey({

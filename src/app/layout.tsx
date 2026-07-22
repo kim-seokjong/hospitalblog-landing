@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import MetaPixel from '@/dev/components/MetaPixel';
 import NotificationBell from '@/hr/components/NotificationBell';
@@ -67,6 +68,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           strategy="lazyOnload"
         />
         <MetaPixel />
+        {/* Vercel Web Analytics — 트래픽/방문자 측정. ⚠️ Vercel 대시보드에서 Web Analytics 를
+            켜야 데이터가 수집된다 (프로젝트 → Analytics → Enable). 자체 퍼널(funnel_events)과 병행. */}
+        <Analytics />
         {isLoggedIn && (
           <div className="fixed top-3 right-3 sm:top-4 sm:right-4 z-40">
             <NotificationBell />

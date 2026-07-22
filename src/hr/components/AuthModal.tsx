@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/dev/lib/supabase/client';
 import { trackEvent } from '@/dev/lib/meta-pixel';
+import { trackFunnel } from '@/dev/lib/funnel';
 
 interface AuthModalProps {
   onClose: () => void;
@@ -195,6 +196,10 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
 
     setLoading(true); setError('');
 
+    // 퍼널 계측: 가입 시작 (필수값 검증 통과 후, 실제 가입 시도 직전).
+    // anon_id 쿠키로 랜딩 방문(landing_view)과 이어 붙는다. Meta 픽셀과 병행.
+    trackFunnel('signup_start', { hospitalType });
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -250,6 +255,10 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
       setLoading(false);
       return;
     }
+
+    // 퍼널 계측: 가입 완료 (프로필 등록 + 자동 로그인까지 성공한 지점).
+    // 세션 쿠키가 방금 세팅됐으므로 서버가 user_id 를 귀속한다(anon_id 도 함께).
+    trackFunnel('signup_complete', { hospitalType });
 
     onSuccess('signup');
     onClose();

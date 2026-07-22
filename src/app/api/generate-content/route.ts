@@ -13,6 +13,7 @@ import { buildGoogleContentSystemPrompt, buildGoogleContentUserPrompt } from '@/
 import { buildVoiceDnaPrompt, parseVoiceDnaCard } from '@/content/lib/voice-dna';
 import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
 import { fetchTopPostPatterns, buildPerformanceDnaBlock } from '@/content/lib/performance-dna';
+import { recordFunnelEvent } from '@/dev/lib/funnel-server';
 import type { TargetSite, Readability } from '@/types';
 
 export const maxDuration = 300;
@@ -680,6 +681,17 @@ ${formatGuide}
       user_id: guard.userId,
       user_agent: req.headers.get('user-agent') ?? null,
     });
+
+    // 퍼널 계측(활성화 = 첫 글 생성). newCount===1 이 이 계정의 첫 생성이다
+    // (무료 경로: 잔여 2→1, 유료 경로: 월 카운트 0→1). 관리자·재생성은 제외.
+    // Meta 픽셀과 병행하는 우리 소유 데이터. 실패해도 응답을 막지 않는다(그레이스풀).
+    if (!guard.isAdmin && guard.newCount === 1) {
+      void recordFunnelEvent({
+        event: 'first_post_generated',
+        userId: guard.userId,
+        meta: { freeCredit: guard.freeCredit === true, targetSite },
+      });
+    }
 
     return NextResponse.json({
       title,

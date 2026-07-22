@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
+import { trackFunnel } from '@/dev/lib/funnel';
 import type { User } from '@supabase/supabase-js';
 import AuthModal from '@/hr/components/AuthModal';
 import { PLANS } from '@/payment/lib/plans';
@@ -47,6 +48,12 @@ export default function LandingPage() {
   const [clinicAutoOpened, setClinicAutoOpened] = useState(false);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+
+  // 퍼널 계측: 랜딩 조회 (마운트당 1회). anon_id 쿠키 발급 시작점 —
+  // 이후 signup_start/complete 와 이어 붙어 방문→가입 전환을 측정한다.
+  useEffect(() => {
+    trackFunnel('landing_view');
+  }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
