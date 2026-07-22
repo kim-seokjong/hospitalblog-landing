@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import KeywordInput from '@/content/components/KeywordInput';
+import OnboardingFirstPost from '@/content/components/OnboardingFirstPost';
 import ContentGapSuggestions from '@/content/components/ContentGapSuggestions';
 import CrossContentRecommendations from '@/content/components/CrossContentRecommendations';
 import TitleSelector from '@/content/components/TitleSelector';
@@ -23,6 +24,7 @@ import { safeFetchJson } from '@/content/lib/safe-fetch';
 import { MULTICHANNEL_SRC_KEY, encodeMultichannelSrc } from '@/content/lib/multichannel-src';
 import { checkCompliance } from '@/content/lib/medical-compliance';
 import { buildComplianceReport } from '@/content/lib/compliance-report';
+import { getOnboardingKeywords, shouldShowOnboarding } from '@/content/lib/onboarding-keyword';
 
 type ViewStep = 'input' | 'content';
 
@@ -83,6 +85,8 @@ function parseGenPrefs(raw: string): Partial<GenPrefs> {
 const TOPIC_PREFILL_KEY = 'dp_topic_prefill';
 // 온보딩 완주 가이드 — 첫 글을 완성하면 다시 보이지 않는다
 const WELCOME_DONE_KEY = 'dp_welcome_done_v1';
+// 온보딩 첫 글 원클릭 카드 — 사용자가 닫으면 다시 보이지 않는다(넛지 과다 방지)
+const ONBOARDING_FIRST_POST_KEY = 'dp_onboarding_first_post_dismissed_v1';
 
 type DraftData = {
   keyword: string;
@@ -506,6 +510,8 @@ export default function AppPage() {
   const [prefillKeyword, setPrefillKeyword] = useState<string>('');
   // 온보딩 완주 가이드 배너 (결제 직후 ?welcome=1 또는 유료+사용량 0)
   const [showWelcome, setShowWelcome] = useState(false);
+  // 온보딩 첫 글 원클릭 카드 닫힘 여부 (마운트 시 localStorage 에서 복원)
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   // prefill 적용 시 KeywordInput 을 강제 리마운트하기 위한 키
   const [keywordInputKey, setKeywordInputKey] = useState(0);
   // 복사 시 보관함 자동 저장: 첫 복사 후 글 id 보관 → 재복사는 PATCH로 갱신 (중복 insert 방지)
@@ -691,6 +697,40 @@ export default function AppPage() {
   const dismissWelcome = () => {
     setShowWelcome(false);
     try { localStorage.setItem(WELCOME_DONE_KEY, '1'); } catch { /* 무시 */ }
+  };
+
+  // 온보딩 첫 글 카드 닫힘 여부 복원 (한 번 닫으면 넛지 반복 안 함)
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(ONBOARDING_FIRST_POST_KEY)) setOnboardingDismissed(true);
+    } catch { /* 무시 */ }
+  }, []);
+
+  const dismissOnboarding = () => {
+    setOnboardingDismissed(true);
+    try { localStorage.setItem(ONBOARDING_FIRST_POST_KEY, '1'); } catch { /* 무시 */ }
+  };
+
+  // 온보딩 첫 글 원클릭 — 키워드를 채우고 제목 생성을 자동 실행(기존 흐름 재사용).
+  // 제목 생성은 무료(크레딧 미차감), 본문 생성 시 무료 2회 중 1회 차감(기존 로직 불변).
+  const startOnboardingPost = (kw: string) => {
+    setPrefillKeyword(kw);
+    setKeyword(kw);
+    setKeywordInputKey((k) => k + 1);
+    handleKeywordSubmit(
+      kw,
+      hospitalType,
+      additionalInfo,
+      writingStyle,
+      profileRegion,
+      optimizationMode,
+      targetSite,
+      readability,
+      useVoiceDna,
+      viralHook,
+      storytelling,
+      reverseAnalysis,
+    );
   };
 
   // 마운트 시 경쟁분석 prefill 감지 → 키워드 입력란 자동 채움
@@ -1395,6 +1435,33 @@ export default function AppPage() {
                     </ol>
                   </div>
                 )}
+
+                {/* 온보딩 첫 글 — 원클릭 시작 카드 (신규 무료 회원, 흐름 미진입 시).
+                    진료과 기반 추천 키워드로 "가입→빈 화면" 대신 "가입→첫 글 시작"을 유도. */}
+                {!loadingContent && !loadingTitles && (() => {
+                  const onboardingKeywords = getOnboardingKeywords(userPlan?.hospital_type ?? hospitalType);
+                  const eligible =
+                    !onboardingDismissed &&
+                    titles.length === 0 &&
+                    !content &&
+                    shouldShowOnboarding({
+                      isLoggedIn: !!user,
+                      isAdmin: isClientAdmin(user?.email),
+                      freeCredits,
+                      hasStartedFlow: titles.length > 0 || !!content,
+                      hasSuggestion: onboardingKeywords.length > 0,
+                    });
+                  if (!eligible) return null;
+                  return (
+                    <OnboardingFirstPost
+                      keywords={onboardingKeywords}
+                      hospitalName={hospitalName || undefined}
+                      freeCredits={freeCredits}
+                      onStart={startOnboardingPost}
+                      onDismiss={dismissOnboarding}
+                    />
+                  );
+                })()}
 
                 {!loadingContent && (
                   <div className={`grid gap-4 sm:gap-5 ${titles.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-full sm:max-w-md mx-auto'}`}>
