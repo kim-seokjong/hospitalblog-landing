@@ -6,6 +6,7 @@
 // 브라우저에서만 동작하고, 절대 예외를 던지지 않는다(계측이 UX 를 막지 않음).
 
 import type { PublicFunnelEvent } from '@/content/lib/funnel-events';
+import { buildPublicFunnelMeta } from '@/dev/lib/funnel-meta';
 
 /**
  * 퍼널 이벤트를 서버(/api/funnel-event)로 비차단 전송한다. 실패는 조용히 무시.
@@ -13,6 +14,10 @@ import type { PublicFunnelEvent } from '@/content/lib/funnel-events';
  * 클라이언트에서 보낼 수 있는 이벤트는 **저신뢰 의도 이벤트(landing_view·signup_start)뿐**이다.
  * 전환 확정 이벤트(signup_complete·first_post_generated·payment_success)는 위조 방지를 위해
  * 서버 라우트에서만 기록한다 — 타입(PublicFunnelEvent)으로 컴파일 타임에 강제한다.
+ *
+ * 서버 화이트리스트가 허용하는 자동 meta(path·source·referrer_host)를 여기서 첨부한다
+ * (funnel-meta.ts 에서 정규화 — 쿼리스트링·전체 리퍼러 URL 등 PII 가능 값은 애초에 안 보냄).
+ * 호출부가 넘긴 meta(예: hospital_type)는 자동 meta 와 병합되며, 키 충돌 시 호출부 값 우선.
  */
 export function trackFunnel(
   event: PublicFunnelEvent,
@@ -20,7 +25,21 @@ export function trackFunnel(
 ): void {
   if (typeof window === 'undefined') return;
   try {
-    const body = JSON.stringify(meta ? { event, meta } : { event });
+    let autoMeta: Record<string, string> = {};
+    try {
+      autoMeta = buildPublicFunnelMeta(event, {
+        pathname: window.location.pathname,
+        search: window.location.search,
+        referrer: document.referrer,
+        ownHostname: window.location.hostname,
+      });
+    } catch {
+      /* 자동 meta 수집 실패는 무시 — 이벤트 자체는 계속 보낸다 */
+    }
+    const merged = { ...autoMeta, ...meta };
+    const body = JSON.stringify(
+      Object.keys(merged).length > 0 ? { event, meta: merged } : { event },
+    );
     // keepalive: 페이지 전환(가입 후 리다이렉트 등) 중에도 전송이 취소되지 않도록.
     void fetch('/api/funnel-event', {
       method: 'POST',
