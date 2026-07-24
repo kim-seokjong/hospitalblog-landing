@@ -5,6 +5,9 @@ import KpiDashboard from '@/components/admin/KpiDashboard';
 import MemberTable from '@/components/admin/MemberTable';
 import NoticeComposer from '@/components/admin/NoticeComposer';
 import BlogAuditPanel from '@/components/admin/BlogAuditPanel';
+import FunnelPanel from '@/components/admin/FunnelPanel';
+import { fetchFunnelStatRows } from '@/dev/lib/funnel-admin-server';
+import { aggregateFunnelStats } from '@/content/lib/funnel-admin-stats';
 import type {
   DashboardData,
   MemberRow,
@@ -236,7 +239,7 @@ export default async function AdminPage() {
 
   // ----- 데이터 fetch (Service Role) -----
   const admin = createAdminClient();
-  const [profilesRes, paymentsRes] = await Promise.all([
+  const [profilesRes, paymentsRes, funnelRes] = await Promise.all([
     admin
       .from('profiles')
       .select(
@@ -247,6 +250,8 @@ export default async function AdminPage() {
       .from('payments')
       .select('id,user_id,plan,amount,status,created_at,paid_at')
       .order('created_at', { ascending: false }),
+    // 방문자·퍼널 (읽기 전용, 실패해도 throw 안 함 — 부가 지표)
+    fetchFunnelStatRows(),
   ]);
 
   if (profilesRes.error) {
@@ -268,6 +273,7 @@ export default async function AdminPage() {
   const payments = (paymentsRes.data ?? []) as PaymentRow[];
 
   const data = buildDashboardData(profiles, payments);
+  const funnelStats = aggregateFunnelStats(funnelRes.rows);
 
   // ----- 페이지 헤더 -----
   const now = new Date();
@@ -286,6 +292,12 @@ export default async function AdminPage() {
         </div>
 
         <KpiDashboard data={data} />
+
+        <FunnelPanel
+          stats={funnelStats}
+          ok={funnelRes.ok}
+          truncated={funnelRes.truncated}
+        />
 
         <BlogAuditPanel />
 
