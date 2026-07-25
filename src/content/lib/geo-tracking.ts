@@ -5,7 +5,7 @@
  *  1) 프로필(지역·진료과·키워드) 기반 샘플 질문 생성 (규칙 기반, LLM 호출 없음)
  *  2) AI 응답 텍스트/출처 URL에서 병원명·블로그 인용 판정 (공백 변형 포함 매칭)
  *  3) 표시용 발췌 새니타이즈 (프롬프트 인젝션 방어: 태그 이스케이프 + 길이 제한)
- *  4) 발행 글의 GEO 준비도 점수 (요약·FAQ·질문형 제목·소제목 구조 — 규칙 기반)
+ *  4) 발행 글의 GEO 준비도 점수 (요약·FAQ·질문형 제목·소제목 구조·직답 — 규칙 기반)
  *
  * 외부 의존 없는 순수 모듈(@/ alias import 금지) — node:test 러너로 직접 검증 가능.
  */
@@ -209,7 +209,7 @@ export interface GeoReadinessPost {
 
 export interface GeoReadinessCheck {
   /** 검사 항목 id */
-  id: 'summary' | 'faq' | 'questionTitle' | 'subheading';
+  id: 'summary' | 'faq' | 'questionTitle' | 'subheading' | 'answerFirst';
   label: string;
   /** 해당 항목을 충족한 글 수 */
   passed: number;
@@ -234,6 +234,84 @@ const FAQ_PATTERN = /\[자주 묻는 질문\]|■\s*자주 묻는 질문|(^|\n)\
 const QUESTION_TITLE_PATTERN = /[?？]|까요|나요|인가요|할까|어떻게|방법|이유/;
 const SUBHEADING_PATTERN = /▶/;
 
+// --- 직답(answer-first) 검사용 상수 --------------------------------------
+// GEO 프롬프트는 "질문형 소제목 바로 아래 첫 1~2문장 = 100~200자 자족 직답"을 지시한다.
+// 실제 생성물은 편차가 있어, 지시치(100자)보다 낮은 80자를 충족선으로 둔다
+// (있는 글을 놓치는 오탐(false negative)이 없는 글을 통과시키는 것보다 해롭다는 판단).
+const ANSWER_FIRST_MIN_CHARS = 80;
+/** 소제목으로 볼 수 있는 줄의 최대 길이 — 본문 단락과 구분하는 기준 */
+const HEADING_MAX_CHARS = 40;
+const HEADING_MIN_CHARS = 4;
+/** 질문형 소제목 판정 — 물음표로 끝나거나 한국어 의문 어미·의문사를 포함 */
+const QUESTION_HEADING_PATTERN = /[?？]\s*$|나요|까요|은가요|인가요|을까|ㄹ까|어떻게|무엇|왜|어디|언제|얼마|방법|이유/;
+/** 구조 마커 줄([핵심 요약]·■ 자주 묻는 질문·Q1./A1.·[이미지 N: …]) — 소제목/직답 후보에서 제외 */
+const STRUCTURE_LINE_PATTERN = /^(\[|■|▷|Q\d+[.)]|A\d+[.)])/;
+const IMAGE_LINE_PATTERN = /^\[이미지\s*\d+\s*:[^\]]*\]$/;
+/** 마침표류로 끝나는 줄은 본문 문장 — 소제목에서 제외(물음표 제외) */
+const SENTENCE_END_PATTERN = /[.!。]\s*$/;
+/** 문장 단위 분해 — 종결 부호(. ! ? …)까지를 한 문장으로 본다 */
+const SENTENCE_SPLIT_PATTERN = /[^.!?…]+[.!?…]+/g;
+
+/** 요약·FAQ 블록을 제거한 본문 — FAQ 의 Q/A 가 직답으로 오인되는 것을 막는다. */
+function stripStructuredBlocks(content: string): string {
+  return content
+    .replace(/\[핵심 요약\][\s\S]*?\[\/핵심 요약\]/g, '')
+    .replace(/\[자주 묻는 질문\][\s\S]*?\[\/자주 묻는 질문\]/g, '')
+    // 네이버 발행 변환본은 닫는 마커가 없다 — FAQ 헤더 이후는 전부 제외
+    .replace(/■\s*자주 묻는 질문[\s\S]*$/, '');
+}
+
+/** 질문형 소제목 줄인가 (H2 = 기호 없는 짧은 줄, H3 = ▶ 로 시작) */
+function isQuestionHeadingLine(line: string): boolean {
+  const text = line.trim().replace(/^▶\s*/, '').trim();
+  if (text.length < HEADING_MIN_CHARS || text.length > HEADING_MAX_CHARS) return false;
+  if (STRUCTURE_LINE_PATTERN.test(text)) return false;
+  if (SENTENCE_END_PATTERN.test(text)) return false;
+  return QUESTION_HEADING_PATTERN.test(text);
+}
+
+/** 직답 후보(본문 단락) 줄인가 — 빈 줄·마커·이미지·다른 소제목은 아니다 */
+function isBodyLine(line: string): boolean {
+  const text = line.trim();
+  if (!text) return false;
+  if (IMAGE_LINE_PATTERN.test(text)) return false;
+  if (STRUCTURE_LINE_PATTERN.test(text)) return false;
+  if (text.startsWith('▶')) return false;
+  return true;
+}
+
+/** 단락의 앞 1~2문장 길이 — 종결 부호가 하나도 없으면 미완결로 보고 0 */
+function leadingSentenceLength(paragraph: string): number {
+  const sentences = paragraph.trim().match(SENTENCE_SPLIT_PATTERN);
+  if (!sentences || sentences.length === 0) return 0;
+  return sentences.slice(0, 2).join('').trim().length;
+}
+
+/**
+ * 질문형 소제목 바로 아래에 자족 직답(answer-first)이 있는지 검사한다.
+ *
+ * 판정: 질문형 소제목 줄을 찾고 → 그 아래 첫 본문 단락(빈 줄·[이미지 N] 마커는 건너뜀)의
+ * 앞 1~2문장이 종결된 문장이면서 합계 80자 이상이면 직답으로 인정한다.
+ * FAQ·핵심 요약 블록은 별도 항목이라 검사 대상에서 제외한다.
+ */
+export function hasAnswerFirstSection(content: string): boolean {
+  const lines = stripStructuredBlocks(content ?? '').split('\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!isQuestionHeadingLine(lines[i])) continue;
+
+    for (let j = i + 1; j < lines.length; j++) {
+      const candidate = lines[j].trim();
+      if (!candidate || IMAGE_LINE_PATTERN.test(candidate)) continue; // 빈 줄·이미지 마커는 통과
+      if (!isBodyLine(candidate)) break;                              // 마커·다른 소제목이면 이 소제목은 실패
+      if (leadingSentenceLength(candidate) >= ANSWER_FIRST_MIN_CHARS) return true;
+      break; // 첫 본문 단락이 기준 미달이면 이 소제목은 직답 없음
+    }
+  }
+
+  return false;
+}
+
 const CHECK_DEFS: Array<{
   id: GeoReadinessCheck['id'];
   label: string;
@@ -244,28 +322,35 @@ const CHECK_DEFS: Array<{
   {
     id: 'summary',
     label: '핵심 요약(TL;DR) 포함',
-    weight: 30,
+    weight: 25,
     test: (p) => SUMMARY_PATTERN.test(p.content),
     tip: 'AI는 글 첫머리의 3줄 요약을 우선 발췌합니다. 구글 GEO 모드로 생성하면 [핵심 요약] 블록이 자동 포함됩니다.',
   },
   {
     id: 'faq',
     label: 'FAQ(자주 묻는 질문) 포함',
-    weight: 30,
+    weight: 25,
     test: (p) => FAQ_PATTERN.test(p.content),
     tip: 'Q&A 형식은 AI 답변에 그대로 인용되기 가장 좋은 구조입니다. FAQ 섹션이 있는 글을 늘려보세요.',
   },
   {
+    id: 'answerFirst',
+    label: '질문형 소제목 직답',
+    weight: 20,
+    test: (p) => hasAnswerFirstSection(p.content),
+    tip: '질문형 소제목 바로 아래 첫 1~2문장을 그 질문에 완결적으로 답하는 직답(100~200자)으로 쓰면 AI 답변·추천 스니펫에 그대로 인용될 확률이 높아집니다. GEO 모드로 생성하면 자동 적용됩니다.',
+  },
+  {
     id: 'questionTitle',
     label: '질문형 제목',
-    weight: 20,
+    weight: 15,
     test: (p) => QUESTION_TITLE_PATTERN.test(p.title),
     tip: '"~어떻게 하나요?", "~방법" 같은 질문형 제목이 AI 검색 질의와 더 잘 매칭됩니다.',
   },
   {
     id: 'subheading',
     label: '소제목 구조화',
-    weight: 20,
+    weight: 15,
     test: (p) => SUBHEADING_PATTERN.test(p.content),
     tip: '소제목(▶)으로 섹션을 나누면 AI가 필요한 부분만 정확히 발췌할 수 있습니다.',
   },

@@ -10,6 +10,7 @@ import { getOrComputeBenchmark, shouldRunReverseAnalysis, type BenchmarkCacheSto
 import { createSupabaseBenchmarkStore } from '@/content/lib/serp-benchmark-store';
 import { checkAndConsumeUsage, refundUsage } from '@/payment/lib/usage-guard';
 import { buildGoogleContentSystemPrompt, buildGoogleContentUserPrompt } from '@/content/lib/google-prompts';
+import { GEO_ANSWER_FIRST_RULES } from '@/content/lib/geo-answer-first';
 import { buildVoiceDnaPrompt, parseVoiceDnaCard } from '@/content/lib/voice-dna';
 import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
 import { fetchTopPostPatterns, buildPerformanceDnaBlock } from '@/content/lib/performance-dna';
@@ -279,6 +280,8 @@ export async function POST(req: NextRequest) {
   좋은 예: "허리 디스크는 척추뼈 사이의 쿠션이 제자리에서 밀려나 신경을 누르는 상태입니다."
   나쁜 예: "추간판 탈출증은 디스크 수핵이 섬유륜을 뚫고 신경근을 압박하는 질환이다." (한자어 과다, 학술적)
   금지 도입: "이번에는 ○○에 대해 살펴보겠습니다" 류
+${GEO_ANSWER_FIRST_RULES}
+- 직답도 진료실에서 바로 답해드리듯 자연스러운 말투로 쓸 것 — 예고·강의 톤("~살펴보겠습니다") 금지, 딱딱한 개조식 금지
 - H2 첫 문장 이후 단락 본문은 위 "자연스러운 톤" 가이드 그대로 — 부드럽게 풀어 작성
 - 통계·수치 1~2개 자연스럽게 녹임 (강박적 나열 금지, 꼭 필요한 곳에만)
 - 권위 출처 표현 1~2회 부드럽게: "최근 학회 권고에서는", "임상 권고안에서는" — 직접 URL 금지

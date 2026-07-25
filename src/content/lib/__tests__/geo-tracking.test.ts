@@ -4,6 +4,7 @@ import {
   aggregateWeeklyCitations,
   buildGeoQuestions,
   detectCitation,
+  hasAnswerFirstSection,
   hospitalNameVariants,
   mondayOfWeek,
   sanitizeExcerpt,
@@ -155,9 +156,29 @@ test('새니타이즈: 최대 길이 초과 시 말줄임', () => {
 // GEO 준비도 점수
 // ---------------------------------------------------------------------------
 
+// 질문형 소제목 아래 자족 직답(80자 이상, 종결된 문장)
+const ANSWER_PARAGRAPH =
+  '여드름 흉터는 염증이 가라앉은 뒤 피부 속 콜라겐이 고르지 않게 채워지면서 남는 자국입니다. 흉터 모양에 따라 관리 방향이 달라져 진료실에서는 유형부터 확인합니다.';
+
 const GOOD_POST = {
   title: '여드름 흉터 치료는 어떻게 하나요?',
-  content: '[핵심 요약]\n요약 3줄\n[/핵심 요약]\n▶ 원인\n본문\n[자주 묻는 질문]\nQ1. 질문\nA1. 답\n[/자주 묻는 질문]',
+  content: [
+    '[핵심 요약]',
+    '요약 3줄',
+    '[/핵심 요약]',
+    '',
+    '여드름 흉터는 왜 생기나요',
+    '',
+    ANSWER_PARAGRAPH,
+    '',
+    '▶ 원인',
+    '본문',
+    '',
+    '[자주 묻는 질문]',
+    'Q1. 질문',
+    'A1. 답',
+    '[/자주 묻는 질문]',
+  ].join('\n'),
 };
 const BARE_POST = { title: '병원 소식', content: '그냥 본문만 있는 글입니다.' };
 
@@ -178,7 +199,7 @@ test('준비도: 구조 없는 글 → 0점 개선 필요 + 항목별 팁 제공
   assert.ok(result);
   assert.equal(result.score, 0);
   assert.equal(result.grade, '개선 필요');
-  assert.equal(result.tips.length, 4);
+  assert.equal(result.tips.length, 5);
 });
 
 test('준비도: 혼합(완전 1 + 미비 1) → 50점 보통, 충족 글 수 정확', () => {
@@ -195,11 +216,99 @@ test('준비도: 네이버 발행 변환본(■ 핵심 요약 / ■ 자주 묻�
   const result = scoreGeoReadiness([
     {
       title: '임플란트 비용이 궁금하신가요?',
-      content: '■ 핵심 요약\n요약\n▶ 소제목\n본문\n■ 자주 묻는 질문\nQ1. 질문\nA1. 답',
+      content: [
+        '■ 핵심 요약',
+        '요약',
+        '',
+        '임플란트 비용은 어떻게 정해지나요',
+        '',
+        '임플란트 비용은 잇몸뼈 상태와 뼈 이식 여부, 사용하는 픽스처와 보철 재료에 따라 달라집니다. 진료실에서는 먼저 잇몸뼈부터 확인한 뒤 필요한 단계를 안내드립니다.',
+        '',
+        '▶ 소제목',
+        '본문',
+        '',
+        '■ 자주 묻는 질문',
+        'Q1. 질문',
+        'A1. 답',
+      ].join('\n'),
     },
   ]);
   assert.ok(result);
   assert.equal(result.score, 100);
+});
+
+// ---------------------------------------------------------------------------
+// 직답(answer-first) 검사 — 준비도 점수의 신규 항목
+// ---------------------------------------------------------------------------
+
+function answerFirstPassed(post: { title: string; content: string }): boolean {
+  const result = scoreGeoReadiness([post]);
+  return result?.checks.find((c) => c.id === 'answerFirst')?.passed === 1;
+}
+
+test('직답: 질문형 소제목 아래 자족 직답 → 통과', () => {
+  assert.equal(hasAnswerFirstSection(`여드름 흉터는 왜 생기나요\n\n${ANSWER_PARAGRAPH}`), true);
+});
+
+test('직답: 질문형 소제목은 있으나 답이 짧으면 → 미통과', () => {
+  assert.equal(hasAnswerFirstSection('여드름 흉터는 왜 생기나요\n\n네, 맞습니다.'), false);
+});
+
+test('직답: 소제목이 평서형이면(질문형 아님) → 미통과', () => {
+  assert.equal(hasAnswerFirstSection(`여드름 흉터 관리 원칙\n\n${ANSWER_PARAGRAPH}`), false);
+});
+
+test('직답: FAQ 블록의 Q/A 는 직답으로 인정하지 않음 (항목 중복 방지)', () => {
+  const faqOnly = [
+    '[자주 묻는 질문]',
+    'Q1. 여드름 흉터는 왜 생기나요?',
+    `A1. ${ANSWER_PARAGRAPH}`,
+    '[/자주 묻는 질문]',
+  ].join('\n');
+  assert.equal(hasAnswerFirstSection(faqOnly), false);
+
+  // 네이버 발행 변환본(닫는 마커 없음)도 동일하게 제외
+  const naverFaqOnly = ['■ 자주 묻는 질문', 'Q1. 흉터는 왜 생기나요?', `A1. ${ANSWER_PARAGRAPH}`].join('\n');
+  assert.equal(hasAnswerFirstSection(naverFaqOnly), false);
+});
+
+test('직답: ▶ 세부 소제목(H3)이 질문형이어도 인정', () => {
+  assert.equal(hasAnswerFirstSection(`▶ 치료는 얼마나 걸리나요\n\n${ANSWER_PARAGRAPH}`), true);
+});
+
+test('직답: 소제목과 직답 사이 [이미지 N] 마커는 건너뜀', () => {
+  const content = `치료는 얼마나 걸리나요\n\n[이미지 1: 상담 장면]\n\n${ANSWER_PARAGRAPH}`;
+  assert.equal(hasAnswerFirstSection(content), true);
+});
+
+test('직답: 경계 — 80자 종결 문장은 통과, 79자는 미통과', () => {
+  const heading = '치료는 얼마나 걸리나요';
+  const exactly80 = `${'가'.repeat(79)}.`;
+  const only79 = `${'가'.repeat(78)}.`;
+  assert.equal(exactly80.length, 80);
+  assert.equal(hasAnswerFirstSection(`${heading}\n\n${exactly80}`), true);
+  assert.equal(hasAnswerFirstSection(`${heading}\n\n${only79}`), false);
+});
+
+test('직답: 종결 부호 없는 미완결 문장은 미통과', () => {
+  assert.equal(hasAnswerFirstSection(`치료는 얼마나 걸리나요\n\n${'가'.repeat(200)}`), false);
+});
+
+test('직답: 소제목 직후가 다른 소제목이면 미통과', () => {
+  const content = `치료는 얼마나 걸리나요\n\n▶ 세부 소제목\n\n${ANSWER_PARAGRAPH}`;
+  assert.equal(hasAnswerFirstSection(content), false);
+});
+
+test('준비도: answerFirst 항목이 점수에 반영됨 (직답 있음 20점 차)', () => {
+  const withAnswer = {
+    title: '병원 소식',
+    content: `여드름 흉터는 왜 생기나요\n\n${ANSWER_PARAGRAPH}`,
+  };
+  const withoutAnswer = { title: '병원 소식', content: '여드름 흉터는 왜 생기나요\n\n짧은 답.' };
+  assert.equal(answerFirstPassed(withAnswer), true);
+  assert.equal(answerFirstPassed(withoutAnswer), false);
+  assert.equal(scoreGeoReadiness([withAnswer])?.score, 20);
+  assert.equal(scoreGeoReadiness([withoutAnswer])?.score, 0);
 });
 
 // ---------------------------------------------------------------------------
