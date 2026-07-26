@@ -13,8 +13,12 @@
  */
 
 import {
-  findPostRank,
+  collectPageMatches,
+  decideRank,
+  hasUsableTitle,
+  type BlogCandidate,
   type BlogSearchResult,
+  type RankMatch,
   type RankMatchKind,
   type RankMatchOptions,
 } from './rank-tracking.ts';
@@ -66,12 +70,17 @@ export interface RankScanOptions {
   pageSize?: number;
   /** 매칭 단서 (blogId / publishedUrl / title) */
   match: Pick<RankMatchOptions, 'blogId' | 'publishedUrl' | 'title'>;
-  /**
-   * 남은 호출 예산. 이 수보다 많은 페이지는 요청하지 않는다.
-   * 예산이 0이면 아무 호출 없이 failed('budget_exhausted') 로 즉시 반환한다.
-   */
-  callBudget?: number;
 }
+
+/**
+ * ★ 호출 예산은 이 모듈이 관리하지 않는다.
+ *   스캔은 어떤 페이지가 캐시 히트인지 알 수 없어서, 페이지 수를 세면
+ *   실제 API 호출을 쓰지 않은 캐시 히트까지 예산으로 차감해 버린다.
+ *   예산이 없으면 fetchPage 가 { ok:false, errorCode:'budget_exhausted' } 를 돌려주면 되고,
+ *   그러면 스캔은 다른 실패와 동일하게 status='failed' 로 보고한다.
+ *   (실제 호출 여부를 아는 쪽이 판단한다)
+ */
+export const BUDGET_EXHAUSTED = 'budget_exhausted';
 
 /**
  * 스캔 가능한 최대 깊이 = 1000위.
@@ -89,6 +98,12 @@ export const NAVER_MAX_START = 1000;
 /**
  * 키워드 1개의 순위를 depth 위까지 스캔한다.
  *
+ * 판정 시점:
+ *  - publishedUrl 정확 일치, 또는 제목 임계를 넘는 후보를 만나면 즉시 확정하고 멈춘다
+ *    (두 근거는 그 자체로 충분히 신뢰할 수 있다).
+ *  - 그 외에는 ★ 전체 깊이의 후보를 모두 모은 뒤 한 번만 판정한다.
+ *    페이지 단위로 "후보가 1건뿐이니 이 글"이라고 확정하면 뒤 페이지의 진짜 내 글을 놓친다.
+ *
  * 페이지 실패 시:
  *  - 어떤 페이지든 실패하면 status='failed'. 앞 페이지를 정상 조회했더라도
  *    "뒤를 못 봤으니 없다"고 단정할 수 없기 때문이다 (조용한 오측정 방지).
@@ -100,7 +115,7 @@ export async function scanKeywordRank(
   const pageSize = Math.min(Math.max(Math.floor(options.pageSize ?? 100), 1), 100);
   const requestedDepth = Math.max(Math.floor(options.depth), 1);
   const depth = Math.min(requestedDepth, MAX_SCAN_DEPTH);
-  const budget = options.callBudget ?? Number.POSITIVE_INFINITY;
+  const hasTitle = hasUsableTitle(options.match.title);
 
   const base = (extra: Partial<RankScanOutcome>): RankScanOutcome => ({
     status: 'failed',
@@ -112,63 +127,82 @@ export async function scanKeywordRank(
     ...extra,
   });
 
-  if (budget <= 0) {
-    return base({ errorCode: 'budget_exhausted', errorMessage: '이번 회차 호출 예산 소진' });
-  }
   if (!options.match.blogId && !options.match.publishedUrl) {
     return base({ errorCode: 'no_match_key', errorMessage: '블로그 주소·발행 URL 이 없어 매칭 불가' });
   }
 
+  const confirmed = (match: RankMatch, scanned: number, pages: number): RankScanOutcome => ({
+    status: 'ok',
+    rank: match.rank,
+    matchedBy: match.matchedBy,
+    matchedLink: match.link,
+    scannedDepth: scanned,
+    pagesFetched: pages,
+  });
+
   let scanned = 0;
   let pagesFetched = 0;
-  let sawAmbiguous = false;
+  // 전체 깊이에 걸쳐 누적하는 후보들
+  const allBlogCandidates: BlogCandidate[] = [];
+  const allTitleCandidates: BlogCandidate[] = [];
 
   for (let start = 1; start <= depth && start <= NAVER_MAX_START; start += pageSize) {
-    if (pagesFetched >= budget) {
-      // 예산이 도중에 끊겼다 — 여기까지의 결과로 "없다"고 말하지 않는다.
-      return base({
-        scannedDepth: scanned,
-        pagesFetched,
-        errorCode: 'budget_exhausted',
-        errorMessage: `호출 예산 소진 (${scanned}위까지만 확인)`,
-      });
-    }
-
     const display = Math.min(pageSize, depth - start + 1);
     const page = await fetchPage({ keyword: options.keyword, start, display });
     pagesFetched++;
 
     if (!page.ok) {
+      // 예산 소진 포함 — 어떤 이유든 "뒤를 못 봤으니 없다"고 단정하지 않는다.
       return base({
         scannedDepth: scanned,
-        pagesFetched,
+        pagesFetched: page.errorCode === BUDGET_EXHAUSTED ? pagesFetched - 1 : pagesFetched,
         errorCode: page.errorCode,
         errorMessage: page.message,
       });
     }
 
     const items = page.items;
-    const outcome = findPostRank(items, { ...options.match, startOffset: start - 1 });
+    const matches = collectPageMatches(items, { ...options.match, startOffset: start - 1 });
     scanned += items.length;
 
-    if (outcome.found) {
+    // 발행 URL 정확 일치 — 더 볼 것 없다
+    if (matches.urlMatch) return confirmed(matches.urlMatch, scanned, pagesFetched);
+
+    allBlogCandidates.push(...matches.blogCandidates);
+    allTitleCandidates.push(...matches.titleCandidates);
+
+    // 제목 임계를 넘은 후보를 만났으면 확정하고 멈춘다.
+    // (관련도순이라 뒤 페이지에 더 좋은 후보가 있을 가능성은 낮고, 있어도 순위는 더 낮다)
+    if (matches.titleCandidates.length > 0) {
+      const decided = decideRank(
+        { urlMatch: null, titleCandidates: allTitleCandidates, blogCandidates: allBlogCandidates },
+        { hasTitle },
+      );
+      if (decided.found) return confirmed(decided.match, scanned, pagesFetched);
+      // 1·2등이 근소해 특정 불가 — 계속 보지 않고 모호로 종료한다
       return {
-        status: 'ok',
-        rank: outcome.match.rank,
-        matchedBy: outcome.match.matchedBy,
-        matchedLink: outcome.match.link,
+        status: 'ambiguous',
+        rank: null,
+        matchedBy: null,
+        matchedLink: null,
         scannedDepth: scanned,
         pagesFetched,
       };
     }
-    if (outcome.ambiguous) sawAmbiguous = true;
 
     // 결과 소진 — 더 요청해도 빈 페이지다
     if (items.length < display) break;
   }
 
+  // ★ 전체 깊이를 다 본 뒤 한 번만 판정한다
+  const decided = decideRank(
+    { urlMatch: null, titleCandidates: allTitleCandidates, blogCandidates: allBlogCandidates },
+    { hasTitle },
+  );
+  if (decided.found) return confirmed(decided.match, scanned, pagesFetched);
+
   return {
-    status: sawAmbiguous ? 'ambiguous' : 'not_found',
+    status: decided.ambiguous ? 'ambiguous' : 'not_found',
     rank: null,
     matchedBy: null,
     matchedLink: null,

@@ -4,7 +4,9 @@ import {
   scanKeywordRank,
   MAX_SCAN_DEPTH,
   NAVER_MAX_START,
+  BUDGET_EXHAUSTED,
   type RankPageFetcher,
+  type RankScanPageResult,
 } from '../rank-scan.ts';
 import type { BlogSearchResult } from '../rank-tracking.ts';
 
@@ -134,21 +136,58 @@ test('결과가 소진되면 더 요청하지 않는다', async () => {
 });
 
 // ── 호출 예산 ──
-test('★ 예산 0 이면 호출 없이 failed(budget_exhausted) — 미발견으로 위장하지 않는다', async () => {
-  const { fetch, calls } = fakeIndex(5);
-  const out = await scanKeywordRank(fetch, { keyword: 'x', depth: 300, match: MATCH, callBudget: 0 });
+/** 호출부(cron)의 캐시 + 예산 게이트를 그대로 재현한 페처. */
+function budgetedFetcher(inner: RankPageFetcher, maxCalls: number) {
+  const cache = new Map<number, RankScanPageResult>();
+  const state = { realCalls: 0 };
+  const fetch: RankPageFetcher = async (req) => {
+    const hit = cache.get(req.start);
+    if (hit) return hit;                       // 캐시 히트 — 예산 소모 없음
+    if (state.realCalls >= maxCalls) {
+      return { ok: false, errorCode: BUDGET_EXHAUSTED, message: '예산 소진' };
+    }
+    state.realCalls++;
+    const page = await inner(req);
+    cache.set(req.start, page);
+    return page;
+  };
+  return { fetch, state };
+}
+
+test('★ 예산 0 이면 failed(budget_exhausted) — 미발견으로 위장하지 않는다', async () => {
+  const { fetch: inner, calls } = fakeIndex(5);
+  const { fetch } = budgetedFetcher(inner, 0);
+  const out = await scanKeywordRank(fetch, { keyword: 'x', depth: 300, match: MATCH });
   assert.equal(out.status, 'failed');
-  assert.equal(out.errorCode, 'budget_exhausted');
-  assert.equal(calls.length, 0);
+  assert.equal(out.errorCode, BUDGET_EXHAUSTED);
+  assert.equal(calls.length, 0, '실제 API 호출은 없어야 한다');
 });
 
 test('예산이 도중에 끊기면 failed — 확인한 깊이를 함께 보고한다', async () => {
-  const { fetch, calls } = fakeIndex(250);
-  const out = await scanKeywordRank(fetch, { keyword: 'x', depth: 300, match: MATCH, callBudget: 2 });
+  const { fetch: inner } = fakeIndex(250);
+  const { fetch, state } = budgetedFetcher(inner, 2);
+  const out = await scanKeywordRank(fetch, { keyword: 'x', depth: 300, match: MATCH });
   assert.equal(out.status, 'failed');
-  assert.equal(out.errorCode, 'budget_exhausted');
-  assert.equal(out.scannedDepth, 200);
-  assert.equal(calls.length, 2);
+  assert.equal(out.errorCode, BUDGET_EXHAUSTED);
+  assert.equal(out.scannedDepth, 200, '200위까지는 확인했음을 남긴다');
+  assert.equal(state.realCalls, 2);
+});
+
+// ★ 캐시 히트가 예산을 갉아먹으면 안 된다 — 예산 판정은 실제 호출 여부를 아는 쪽(페처)이 한다
+test('★ 캐시 히트는 예산을 소모하지 않는다 (예산 0이어도 캐시로 끝까지 스캔)', async () => {
+  const { fetch: inner } = fakeIndex(250);
+  const { fetch, state } = budgetedFetcher(inner, 3);
+
+  const first = await scanKeywordRank(fetch, { keyword: 'x', depth: 300, match: MATCH });
+  assert.equal(first.status, 'ok');
+  assert.equal(first.rank, 250);
+  assert.equal(state.realCalls, 3);
+
+  // 예산은 이미 소진됐지만 전부 캐시 히트라 정상 완주해야 한다
+  const second = await scanKeywordRank(fetch, { keyword: 'x', depth: 300, match: MATCH });
+  assert.equal(second.status, 'ok', '캐시로 처리 가능한 대상은 예산과 무관하게 측정된다');
+  assert.equal(second.rank, 250);
+  assert.equal(state.realCalls, 3, '추가 API 호출 없음');
 });
 
 // ── 매칭 단서 없음 ──
@@ -160,13 +199,15 @@ test('blogId·publishedUrl 둘 다 없으면 호출 없이 failed', async () => 
   assert.equal(calls.length, 0);
 });
 
-// ── 모호 ──
-test('같은 블로그 글이 여럿이고 제목으로 못 가르면 ambiguous', async () => {
+// ── 제목 단서가 있을 때: 내 블로그 글이 보여도 이 글이 아니면 미발견 ──
+// ★ 예전 로직은 "내 블로그 글이 1건뿐이면 그것"으로 확정해서, 색인되지 않은 글이
+//   같은 블로그의 다른 글 순위를 가져갔다. 제목 단서가 있으면 그 판정을 하지 않는다.
+test('★ 내 블로그의 다른 글만 잡히면 그 순위를 가져오지 않는다 (not_found)', async () => {
   const fetch: RankPageFetcher = async ({ start, display }) => {
     const items: BlogSearchResult[] = [];
     for (let i = 0; i < display; i++) {
       const pos = start + i;
-      items.push(pos === 3 || pos === 7 ? item('myclinic', pos, '전혀 다른 글') : item('other', pos));
+      items.push(pos === 30 ? item('myclinic', pos, '전혀 다른 주제의 글') : item('other', pos));
     }
     return { ok: true, items };
   };
@@ -175,8 +216,71 @@ test('같은 블로그 글이 여럿이고 제목으로 못 가르면 ambiguous'
     depth: 100,
     match: { blogId: 'myclinic', title: '내가 쓴 임플란트 보험 안내' },
   });
+  assert.equal(out.status, 'not_found');
+  assert.equal(out.rank, null);
+});
+
+test('제목 단서가 없고 내 글이 여럿이면 ambiguous', async () => {
+  const fetch: RankPageFetcher = async ({ start, display }) => {
+    const items: BlogSearchResult[] = [];
+    for (let i = 0; i < display; i++) {
+      const pos = start + i;
+      items.push(pos === 3 || pos === 7 ? item('myclinic', pos) : item('other', pos));
+    }
+    return { ok: true, items };
+  };
+  const out = await scanKeywordRank(fetch, { keyword: 'x', depth: 100, match: { blogId: 'myclinic' } });
+  assert.equal(out.status, 'ambiguous');
+});
+
+// ★ 페이지 단위 판정 금지 — 1페이지에 후보 1건이라고 확정하면 2페이지의 진짜 내 글을 놓친다
+test('★ 제목 단서 없을 때 후보 판정은 전체 깊이를 다 본 뒤에 한다', async () => {
+  const fetch: RankPageFetcher = async ({ start, display }) => {
+    const items: BlogSearchResult[] = [];
+    for (let i = 0; i < display; i++) {
+      const pos = start + i;
+      items.push(pos === 50 || pos === 150 ? item('myclinic', pos) : item('other', pos));
+    }
+    return { ok: true, items };
+  };
+  const out = await scanKeywordRank(fetch, { keyword: 'x', depth: 300, match: { blogId: 'myclinic' } });
+  // 1페이지만 보고 50위로 확정하면 안 된다 — 150위에도 내 글이 있다
   assert.equal(out.status, 'ambiguous');
   assert.equal(out.rank, null);
+});
+
+test('제목 단서 없고 전체 깊이에서 내 글이 딱 1건이면 확정', async () => {
+  const fetch: RankPageFetcher = async ({ start, display }) => {
+    const items: BlogSearchResult[] = [];
+    for (let i = 0; i < display; i++) {
+      const pos = start + i;
+      items.push(pos === 150 ? item('myclinic', pos) : item('other', pos));
+    }
+    return { ok: true, items };
+  };
+  const out = await scanKeywordRank(fetch, { keyword: 'x', depth: 300, match: { blogId: 'myclinic' } });
+  assert.equal(out.status, 'ok');
+  assert.equal(out.rank, 150);
+  assert.equal(out.matchedBy, 'blog');
+});
+
+test('제목이 비슷한 두 글이 근소하면 특정하지 않는다 (ambiguous)', async () => {
+  const fetch: RankPageFetcher = async ({ start, display }) => {
+    const items: BlogSearchResult[] = [];
+    for (let i = 0; i < display; i++) {
+      const pos = start + i;
+      if (pos === 4) items.push(item('myclinic', pos, '구로동치과 신경치료 주의사항 3가지'));
+      else if (pos === 9) items.push(item('myclinic', pos, '구로동치과 신경치료 주의사항 4가지'));
+      else items.push(item('other', pos));
+    }
+    return { ok: true, items };
+  };
+  const out = await scanKeywordRank(fetch, {
+    keyword: '구로동치과',
+    depth: 100,
+    match: { blogId: 'myclinic', title: '구로동치과 신경치료 주의사항 5가지' },
+  });
+  assert.equal(out.status, 'ambiguous');
 });
 
 test('제목이 일치하면 여럿 중에서도 올바른 글을 고른다', async () => {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   findRankInResults,
   findPostRank,
+  parseNaverPostUrl,
   titleSimilarity,
   extractBlogId,
   extractNaverBlogId,
@@ -129,11 +130,47 @@ test('publishedUrl 없으면 link 의 blogId 매칭', () => {
   assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 3);
 });
 
-test('link 매칭 실패 시 bloggername 매칭', () => {
-  const results = [
-    r('https://blog.naver.com/PostView.nhn?blogId=x&logNo=1', 'happyclinic'),
-  ];
+// ★ bloggername 은 블로그 ID 가 아니라 표시용 별명이라 오탐 위험이 있다.
+//   link 를 전혀 파싱할 수 없을 때만 최후 수단으로 쓴다.
+test('link 를 파싱할 수 없을 때만 bloggername 으로 매칭', () => {
+  const results = [r('', 'happyclinic')];
   assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 1);
+});
+
+test('★ link 로 블로그를 판별할 수 있으면 bloggername 은 쓰지 않는다 (오탐 방지)', () => {
+  // 남의 블로그 글인데 별명이 우연히 내 블로그 ID 와 같은 경우
+  const results = [r('https://blog.naver.com/someoneelse/123', 'happyclinic')];
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), null);
+});
+
+test('쿼리스트링 형태 link 에서 blogId 를 뽑아 매칭', () => {
+  const results = [r('https://blog.naver.com/PostView.nhn?blogId=happyclinic&logNo=1')];
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 1);
+});
+
+// ── URL 정확 매칭 (글 번호까지) ──
+test('★ 글 번호가 접두어로 겹쳐도 다른 글로 본다 (/123 vs /1234)', () => {
+  const results = [r('https://blog.naver.com/happyclinic/1234')];
+  const outcome = findPostRank(results, {
+    publishedUrl: 'https://blog.naver.com/happyclinic/123',
+  });
+  assert.equal(outcome.found, false);
+});
+
+test('★ 블로그 홈 주소는 어떤 글과도 일치하지 않는다', () => {
+  const results = [r('https://blog.naver.com/happyclinic/223456')];
+  const outcome = findPostRank(results, { publishedUrl: 'https://blog.naver.com/happyclinic' });
+  assert.equal(outcome.found, false);
+});
+
+test('parseNaverPostUrl: 형태별 (blogId, logNo) 추출', () => {
+  assert.deepEqual(parseNaverPostUrl('https://blog.naver.com/happyclinic/223456'), { blogId: 'happyclinic', logNo: '223456' });
+  assert.deepEqual(parseNaverPostUrl('https://m.blog.naver.com/happyclinic/223456'), { blogId: 'happyclinic', logNo: '223456' });
+  assert.deepEqual(parseNaverPostUrl('https://blog.naver.com/PostView.naver?blogId=happyclinic&logNo=223456'), { blogId: 'happyclinic', logNo: '223456' });
+  assert.deepEqual(parseNaverPostUrl('https://happyclinic.blog.me/223456'), { blogId: 'happyclinic', logNo: '223456' });
+  assert.equal(parseNaverPostUrl('https://blog.naver.com/happyclinic'), null, '글 번호 없음');
+  assert.equal(parseNaverPostUrl('https://example.com/a/1'), null);
+  assert.equal(parseNaverPostUrl(''), null);
 });
 
 test('내 글이 1건만 잡히면 그 위치 반환', () => {

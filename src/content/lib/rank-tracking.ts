@@ -109,17 +109,48 @@ export function extractNaverBlogId(input: unknown): string | null {
   return isValid(raw);
 }
 
-/** 두 URL이 같은 글을 가리키는지(정확 또는 부분 일치) 판단. */
+/**
+ * 네이버 블로그 글 URL을 (blogId, logNo)로 분해한다. 글 식별이 불가하면 null.
+ *
+ *  - https://blog.naver.com/{blogId}/{logNo}
+ *  - https://m.blog.naver.com/{blogId}/{logNo}
+ *  - .../PostView.naver?blogId={blogId}&logNo={logNo}
+ *  - https://{blogId}.blog.me/{logNo}
+ *
+ * ★ 글 번호(logNo)까지 봐야 한다. 예전에는 문자열 부분일치로 비교해서
+ *   ".../happyclinic/123" 과 ".../happyclinic/1234" 가 같은 글로 판정됐고,
+ *   블로그 홈 주소는 그 블로그의 모든 글과 일치해 버렸다.
+ */
+export function parseNaverPostUrl(rawUrl: unknown): { blogId: string; logNo: string } | null {
+  const url = norm(rawUrl);
+  if (!url) return null;
+
+  // 쿼리형: blogId= & logNo=
+  const qBlog = url.match(/[?&]blogid=([a-z0-9_-]+)/);
+  const qLog = url.match(/[?&]logno=(\d+)/);
+  if (qBlog?.[1] && qLog?.[1]) return { blogId: qBlog[1], logNo: qLog[1] };
+
+  // {blogId}.blog.me/{logNo}
+  const blogMe = url.match(/^(?:https?:\/\/)?([a-z0-9_-]+)\.blog\.me\/(\d+)/);
+  if (blogMe?.[1] && blogMe[2]) return { blogId: blogMe[1], logNo: blogMe[2] };
+
+  // (m.)blog.naver.com/{blogId}/{logNo}
+  const path = url.match(/(?:^|\/\/)(?:m\.)?blog\.naver\.com\/([a-z0-9_-]+)\/(\d+)/);
+  if (path?.[1] && path[2]) return { blogId: path[1], logNo: path[2] };
+
+  return null;
+}
+
+/**
+ * 두 URL이 "같은 글"을 가리키는지 판단한다.
+ * 양쪽 모두에서 (blogId, logNo)를 뽑아 정확히 비교한다.
+ * 한쪽이라도 글 번호를 못 뽑으면(예: 블로그 홈 주소) 일치로 보지 않는다.
+ */
 function urlMatches(resultLink: string, publishedUrl: string): boolean {
-  const a = norm(resultLink);
-  const b = norm(publishedUrl);
+  const a = parseNaverPostUrl(resultLink);
+  const b = parseNaverPostUrl(publishedUrl);
   if (!a || !b) return false;
-  if (a === b) return true;
-  // 프로토콜/모바일(m.) 차이를 흡수한 부분 일치
-  const stripA = a.replace(/^https?:\/\/(m\.)?/, '');
-  const stripB = b.replace(/^https?:\/\/(m\.)?/, '');
-  if (!stripA || !stripB) return false;
-  return stripA === stripB || stripA.includes(stripB) || stripB.includes(stripA);
+  return a.blogId === b.blogId && a.logNo === b.logNo;
 }
 
 /** 제목 비교용 정규화: HTML 태그·문장부호·공백 제거 후 소문자. */
@@ -163,6 +194,12 @@ export function titleSimilarity(a: unknown, b: unknown): number {
 /** 제목이 "같은 글"이라고 볼 최소 유사도. */
 export const TITLE_MATCH_THRESHOLD = 0.6;
 
+/**
+ * 1등과 2등 제목 점수가 이 폭 안으로 붙어 있으면 특정하지 않는다.
+ * 병원 글은 제목 형식이 비슷해("○○치과 신경치료 …") 근소한 차이로 엉뚱한 글을 고를 수 있다.
+ */
+export const TITLE_MARGIN = 0.05;
+
 /** 매칭 근거 — 신뢰도 순 (url > title > blog). */
 export type RankMatchKind = 'url' | 'title' | 'blog';
 
@@ -174,41 +211,49 @@ export interface RankMatch {
   link: string;
 }
 
-/**
- * 매칭 결과.
- *  - found      : 순위 확정
- *  - ambiguous  : 내 블로그 글은 여럿 잡혔는데 어느 것이 이 글인지 특정 불가
- *                 (제목 단서가 없거나 어느 것도 임계 미달) → "미발견"으로 기록하면 거짓말이 된다
- *  - 그 외      : 이 결과범위에서 미발견
- */
-export type RankMatchOutcome =
-  | { found: true; match: RankMatch }
-  | { found: false; ambiguous: boolean };
+/** 내 블로그로 판정된 검색결과 1건. */
+export interface BlogCandidate {
+  rank: number;
+  link: string;
+  /** 제목 단서가 있을 때의 유사도 (0~1). 단서가 없으면 0 */
+  score: number;
+}
 
 /**
- * 검색결과 배열에서 사용자 글의 위치를 찾는다.
+ * 한 페이지에서 뽑은 후보들 (판정은 하지 않는다).
  *
- * 매칭 우선순위:
- *   1) publishedUrl 정확/부분 일치 — 가장 신뢰. 즉시 확정.
- *   2) blogId 히트 중 제목 유사도가 임계 이상인 것 (여럿이면 최고점, 동점이면 앞선 위치)
- *   3) blogId 히트가 정확히 1건뿐이면 그것 (후보가 하나뿐이라 모호하지 않다)
- *
- * ★ blogId 히트가 2건 이상인데 제목으로 못 가르면 ambiguous 다.
- *   예전 로직은 이때 "첫 히트"를 돌려줘, 같은 키워드로 쓴 글 여러 편에
- *   모두 같은 순위를 부여하는 오류를 냈다.
- *
- * 결과 배열은 관련도순(sim)으로 정렬돼 있다고 가정한다.
+ * ★ 판정을 페이지 단위로 내리면 안 된다. 1페이지에 내 블로그 글이 1건뿐이라고
+ *   확정해 버리면, 2페이지에 있는 진짜 내 글을 영영 못 본다.
+ *   호출부(rank-scan)가 전체 깊이의 후보를 모은 뒤 한 번만 판정한다.
  */
-export function findPostRank(
+export interface PageMatches {
+  /** publishedUrl 이 정확히 일치한 결과 — 가장 신뢰. 있으면 즉시 확정해도 된다 */
+  urlMatch: RankMatch | null;
+  /** 제목 유사도가 임계 이상인 후보들 (점수 내림차순) */
+  titleCandidates: BlogCandidate[];
+  /** 내 블로그로 판정된 모든 후보 (제목 점수 무관) */
+  blogCandidates: BlogCandidate[];
+}
+
+/**
+ * 검색결과 한 페이지에서 후보를 수집한다 (판정 없음, 순수).
+ *
+ * "내 블로그" 판정 근거:
+ *   1) link 에서 파싱한 blogId 일치 (경계 매칭 — happyclinic2 오탐 방지)
+ *   2) link 를 전혀 파싱할 수 없을 때에 한해 bloggername 일치
+ *      ★ bloggername 은 블로그 ID 가 아니라 표시용 별명이라 오탐 가능성이 있다.
+ *        link 로 판별되는 정상 응답에서는 쓰지 않는다.
+ */
+export function collectPageMatches(
   results: readonly BlogSearchResult[] | null | undefined,
   opts: RankMatchOptions = {},
-): RankMatchOutcome {
-  const notFound: RankMatchOutcome = { found: false, ambiguous: false };
-  if (!Array.isArray(results) || results.length === 0) return notFound;
+): PageMatches {
+  const empty: PageMatches = { urlMatch: null, titleCandidates: [], blogCandidates: [] };
+  if (!Array.isArray(results) || results.length === 0) return empty;
 
   const blogId = norm(opts.blogId);
   const publishedUrl = norm(opts.publishedUrl);
-  if (!blogId && !publishedUrl) return notFound;
+  if (!blogId && !publishedUrl) return empty;
 
   const offset =
     typeof opts.startOffset === 'number' && Number.isFinite(opts.startOffset) && opts.startOffset > 0
@@ -216,33 +261,31 @@ export function findPostRank(
       : 0;
   const hasTitle = typeof opts.title === 'string' && normTitle(opts.title).length > 0;
 
-  const blogHits: Array<{ rank: number; link: string; score: number }> = [];
+  let urlMatch: RankMatch | null = null;
+  const blogCandidates: BlogCandidate[] = [];
 
   for (let i = 0; i < results.length; i++) {
     const item = results[i];
     if (!item || typeof item !== 'object') continue;
     const rawLink = typeof item.link === 'string' ? item.link : '';
     const link = norm(rawLink);
-    const blogger = norm(item.bloggername);
     const rank = offset + i + 1;
 
-    // 1) publishedUrl 일치 — 즉시 확정
-    if (publishedUrl && link && urlMatches(link, publishedUrl)) {
-      return { found: true, match: { rank, matchedBy: 'url', link: rawLink } };
+    if (publishedUrl && link && urlMatch === null && urlMatches(link, publishedUrl)) {
+      urlMatch = { rank, matchedBy: 'url', link: rawLink };
+      continue;
     }
 
     if (!blogId) continue;
 
-    const isMine =
-      // link 에서 추출한 blogId 정확 일치 (경계 매칭 — happyclinic2 오탐 방지)
-      (link !== '' && extractBlogId(link) === blogId) ||
-      // PostView.nhn?blogId=... 쿼리스트링 형태
-      (link !== '' && link.includes(`blogid=${blogId}&`)) ||
-      // bloggername 일치
-      (blogger !== '' && blogger === blogId);
+    const parsed = parseNaverPostUrl(link);
+    const linkBlogId = parsed?.blogId ?? extractBlogId(link);
+    const isMine = linkBlogId
+      ? linkBlogId === blogId
+      : norm(item.bloggername) === blogId && norm(item.bloggername) !== '';
 
     if (isMine) {
-      blogHits.push({
+      blogCandidates.push({
         rank,
         link: rawLink,
         score: hasTitle ? titleSimilarity(item.title, opts.title) : 0,
@@ -250,26 +293,75 @@ export function findPostRank(
     }
   }
 
-  if (blogHits.length === 0) return notFound;
+  const titleCandidates = hasTitle
+    ? blogCandidates
+        .filter((c) => c.score >= TITLE_MATCH_THRESHOLD)
+        .sort((a, b) => (b.score - a.score) || (a.rank - b.rank))
+    : [];
 
-  // 2) 제목으로 특정 — 임계 이상 중 최고점 (동점이면 앞선 위치)
-  if (hasTitle) {
-    const best = blogHits
-      .filter((h) => h.score >= TITLE_MATCH_THRESHOLD)
-      .sort((a, b) => (b.score - a.score) || (a.rank - b.rank))[0];
-    if (best) {
-      return { found: true, match: { rank: best.rank, matchedBy: 'title', link: best.link } };
+  return { urlMatch, titleCandidates, blogCandidates };
+}
+
+/**
+ * 매칭 결과.
+ *  - found      : 순위 확정
+ *  - ambiguous  : 내 블로그 글은 잡혔는데 어느 것이 이 글인지 특정 불가
+ *                 → "미발견"으로 기록하면 거짓말이 된다
+ */
+export type RankMatchOutcome =
+  | { found: true; match: RankMatch }
+  | { found: false; ambiguous: boolean };
+
+/**
+ * 모아둔 후보로 최종 판정한다 (순수).
+ *
+ * ★ 제목 단서가 있는데 임계를 넘는 후보가 없으면 "미발견"이다.
+ *   예전 로직은 이때 "내 블로그 글이 1건뿐이면 그것" 으로 확정해서,
+ *   색인되지 않은 글 A 가 같은 블로그의 다른 글 B 의 순위를 가져가는 오류를 냈다.
+ *   제목 단서가 아예 없을 때만 blogId 단독 판정을 허용한다.
+ */
+export function decideRank(
+  matches: Pick<PageMatches, 'urlMatch' | 'titleCandidates' | 'blogCandidates'>,
+  opts: { hasTitle: boolean },
+): RankMatchOutcome {
+  if (matches.urlMatch) return { found: true, match: matches.urlMatch };
+
+  if (opts.hasTitle) {
+    const [best, second] = matches.titleCandidates;
+    if (!best) {
+      // 내 블로그 글은 보였지만 이 글은 아니다 → 미발견(모호 아님)
+      return { found: false, ambiguous: false };
     }
+    // 1·2등이 근소하면 특정하지 않는다 (제목이 비슷한 글 오매칭 방지)
+    if (second && best.score - second.score < TITLE_MARGIN) {
+      return { found: false, ambiguous: true };
+    }
+    return { found: true, match: { rank: best.rank, matchedBy: 'title', link: best.link } };
   }
 
-  // 3) 후보가 하나뿐이면 그것으로 확정 (모호할 여지가 없다)
-  if (blogHits.length === 1) {
-    const only = blogHits[0];
+  if (matches.blogCandidates.length === 1) {
+    const only = matches.blogCandidates[0];
     return { found: true, match: { rank: only.rank, matchedBy: 'blog', link: only.link } };
   }
+  if (matches.blogCandidates.length > 1) return { found: false, ambiguous: true };
+  return { found: false, ambiguous: false };
+}
 
-  // 내 글이 여러 개 잡혔는데 특정 불가 → 모호. "미발견"과 구분해서 보고한다.
-  return { found: false, ambiguous: true };
+/** 제목 단서가 유효한지 (decideRank 분기 기준과 동일하게 판단). */
+export function hasUsableTitle(title: unknown): boolean {
+  return typeof title === 'string' && normTitle(title).length > 0;
+}
+
+/**
+ * 단일 페이지 편의 함수 — 수집 + 판정을 한 번에.
+ * 여러 페이지를 순회할 때는 collectPageMatches + decideRank 를 직접 쓴다.
+ */
+export function findPostRank(
+  results: readonly BlogSearchResult[] | null | undefined,
+  opts: RankMatchOptions = {},
+): RankMatchOutcome {
+  const matches = collectPageMatches(results, opts);
+  return decideRank(matches, { hasTitle: hasUsableTitle(opts.title) });
 }
 
 /**

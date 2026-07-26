@@ -18,6 +18,10 @@
 --   3) (post_id, keyword, target_site, checked_on) 1일 1행 UPSERT 를 위한 유니크 인덱스
 --      → 매일 무한 누적되던 행 증가를 멈춘다 (15편 × 23일 = 351행이 그 결과였다)
 
+-- ★ 전체를 한 트랜잭션으로 실행한다. 중간에 실패하면 통째로 되돌아가
+--   "제약은 지웠는데 인덱스는 안 만들어진" 부분 적용 상태가 남지 않는다.
+begin;
+
 -- ─────────────────────────────────────────────────────────────
 -- 1) 컬럼 신설
 -- ─────────────────────────────────────────────────────────────
@@ -80,12 +84,25 @@ alter table public.post_rankings
   add constraint post_rankings_status_check
   check (status in ('ok', 'not_found', 'failed', 'ambiguous', 'invalid'));
 
--- rank 는 status=ok 일 때만 값을 가진다 (실패가 순위로 둔갑하는 것을 DB 가 막는다)
+-- ★ rank 와 status 는 완전히 동기여야 한다 (양방향).
+--   ok  → rank 반드시 있음   (rank 없는 'ok' = "측정은 됐는데 순위가 없다" 는 거짓말)
+--   그 외 → rank 반드시 없음 (실패가 순위로 둔갑하는 것을 DB 가 막는다)
+--   invalid(구 데이터)만 예외로 둔다.
+--
+--   이 제약은 안전장치이기도 하다: 마이그 적용 직후 PostgREST 스키마 캐시가 잠깐
+--   낡아 코드가 구 스키마 폴백(status 미지정 → default 'ok')으로 빠지더라도,
+--   rank 가 null 인 행은 여기서 막혀 "측정 실패인데 ok 로 저장" 되지 않는다.
 alter table public.post_rankings
   drop constraint if exists post_rankings_rank_status_check;
 alter table public.post_rankings
   add constraint post_rankings_rank_status_check
-  check (rank is null or status in ('ok', 'invalid'));
+  check (
+    case
+      when status = 'invalid' then true
+      when status = 'ok'      then rank is not null
+      else rank is null
+    end
+  );
 
 -- ─────────────────────────────────────────────────────────────
 -- 4) 중복 제거 → 1일 1행 유니크 인덱스
@@ -105,17 +122,32 @@ delete from public.post_rankings a
 -- post_id 를 채우므로 실사용에 영향이 없다. 운영 데이터를 지우지 않기 위해
 -- NOT NULL 강제·일괄 삭제는 하지 않는다 (필요하면 §6 에서 함께 판단).
 
-create unique index if not exists uq_post_rankings_daily
+-- ★ `if not exists` 만 쓰면 같은 이름의 "다른 정의" 인덱스가 이미 있을 때 조용히 건너뛴다.
+--   그러면 마이그레이션은 성공처럼 보이는데 UPSERT 는 계속 42P10 으로 실패한다.
+--   반드시 지우고 다시 만든다(정의가 코드의 onConflict 와 일치함을 보장).
+drop index if exists public.uq_post_rankings_daily;
+create unique index uq_post_rankings_daily
   on public.post_rankings (post_id, keyword, target_site, checked_on);
 
 -- 최신 상태 조회용 (마이페이지 성과 리포트)
 create index if not exists idx_post_rankings_post_keyword
   on public.post_rankings (post_id, keyword, checked_on desc);
 
+-- ★ PostgREST 스키마 캐시 갱신 — 이걸 안 하면 적용 직후 몇 초간 신규 컬럼이
+--   "없는 것"으로 보여(PGRST204) 코드가 구 스키마 폴백으로 빠진다.
+notify pgrst, 'reload schema';
+
+commit;
+
 -- ─────────────────────────────────────────────────────────────
--- 5) 확인 쿼리 (선택 — 적용 후 눈으로 검증)
+-- 5) 확인 쿼리 (적용 후 눈으로 검증 — 위 트랜잭션과 별도로 실행)
 -- ─────────────────────────────────────────────────────────────
 -- select status, count(*) from public.post_rankings group by status order by 2 desc;
+--
+-- 유니크 인덱스가 코드의 onConflict 와 정확히 같은 컬럼 구성인지 확인:
+-- select indexdef from pg_indexes
+--  where schemaname='public' and indexname='uq_post_rankings_daily';
+--   기대: UNIQUE INDEX ... (post_id, keyword, target_site, checked_on)
 
 -- ─────────────────────────────────────────────────────────────
 -- 6) ★ 선택 — 고장난 구 데이터 완전 삭제 (대표 판단 후 별도 실행)

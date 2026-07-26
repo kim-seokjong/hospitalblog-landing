@@ -243,19 +243,40 @@ async function aggregateUser(
   );
 
   // 순위 시계열 집계 (체험 기간의 측정만)
-  let rankQ = admin
-    .from('post_rankings')
-    .select('post_id, keyword, rank, checked_at')
-    .eq('user_id', userId)
-    .order('checked_at', { ascending: true })
-    .limit(MAX_RANKING_ROWS);
-  if (sinceIso) rankQ = rankQ.gte('checked_at', sinceIso);
-  const { data: rankRows, error: rankErr } = await rankQ;
-  if (rankErr) throw new Error(`post_rankings 조회 실패: ${rankErr.message}`);
+  // status 는 마이그 052 이후 컬럼 — 미적용 환경에서는 빼고 재조회한다.
+  // ★ status='invalid'(2026-07 이전 고장난 파이프라인 산출물)은 리포트에서 제외한다.
+  type TrialRankRow = {
+    post_id: string | null;
+    keyword: string;
+    rank: number | null;
+    checked_at: string;
+    status?: string | null;
+  };
+  const buildRankQuery = (columns: string) => {
+    let q = admin
+      .from('post_rankings')
+      .select(columns)
+      .eq('user_id', userId)
+      .order('checked_at', { ascending: true })
+      .limit(MAX_RANKING_ROWS);
+    if (sinceIso) q = q.gte('checked_at', sinceIso);
+    return q;
+  };
+  let rankRows: TrialRankRow[];
+  {
+    const withStatus = await buildRankQuery('post_id, keyword, rank, checked_at, status');
+    if (withStatus.error) {
+      const legacy = await buildRankQuery('post_id, keyword, rank, checked_at');
+      if (legacy.error) throw new Error(`post_rankings 조회 실패: ${legacy.error.message}`);
+      rankRows = (legacy.data ?? []) as unknown as TrialRankRow[];
+    } else {
+      rankRows = (withStatus.data ?? []) as unknown as TrialRankRow[];
+    }
+  }
   const rankings = aggregateRankings(
-    ((rankRows ?? []) as Array<{ post_id: string | null; keyword: string; rank: number | null; checked_at: string }>).map(
-      (r): RankingPointRow => ({ postId: r.post_id, keyword: r.keyword, rank: r.rank, checkedAt: r.checked_at }),
-    ),
+    rankRows
+      .filter((r) => r.status !== 'invalid')
+      .map((r): RankingPointRow => ({ postId: r.post_id, keyword: r.keyword, rank: r.rank, checkedAt: r.checked_at })),
   );
 
   // AI 검색 인용 건수 (cited=true, 체험 기간 내 측정)
