@@ -6,6 +6,9 @@ import {
   GEO_RUNS_PER_MONTH,
   MAX_API_CALLS_PER_RUN,
   MAX_CALLS_PER_ENGINE,
+  MAX_HTTP_ATTEMPTS_PER_RUN,
+  QUERY_DEADLINE_MS,
+  SAVE_RESERVE_MS,
   capQuestionPlan,
   geminiPerRunSearchBudget,
   maxUniqueQuestionsFor,
@@ -42,12 +45,27 @@ test('Gemini 예산: 잘못된 입력에도 음수·0으로 나누지 않는다'
 // ---------------------------------------------------------------------------
 
 test('고유 질의 상한: 엔진 수에 따라 재산정', () => {
-  assert.equal(MAX_API_CALLS_PER_RUN, 300);
+  assert.equal(MAX_API_CALLS_PER_RUN, 240);
   assert.equal(MAX_CALLS_PER_ENGINE, 120);
-  assert.equal(maxUniqueQuestionsFor(1), 120); // min(120, 300) — OpenAI 단독(현재 상태)
-  assert.equal(maxUniqueQuestionsFor(2), 120); // min(120, 150)
-  assert.equal(maxUniqueQuestionsFor(3), 100); // min(120, 100) → 100 × 3엔진 = 300 호출
+  assert.equal(maxUniqueQuestionsFor(1), 120); // min(120, 240) — OpenAI 단독
+  assert.equal(maxUniqueQuestionsFor(2), 120); // min(120, 120) — 운영 기본 2엔진
+  assert.equal(maxUniqueQuestionsFor(3), 80); // min(120, 80) — Gemini 옵트인 시
   assert.equal(maxUniqueQuestionsFor(0), 0);
+});
+
+test('HTTP 시도 상한: 논리 호출 상한 + 재시도 여유 20%', () => {
+  assert.equal(MAX_HTTP_ATTEMPTS_PER_RUN, 288);
+  assert.equal(MAX_HTTP_ATTEMPTS_PER_RUN, Math.round(MAX_API_CALLS_PER_RUN * 1.2));
+  // 상한이 논리 호출보다 커야 재시도가 완전히 봉쇄되지 않는다
+  assert.ok(MAX_HTTP_ATTEMPTS_PER_RUN > MAX_API_CALLS_PER_RUN);
+});
+
+test('데드라인·저장 몫 합계가 플랫폼 제한(300초)을 넘지 않는다', () => {
+  assert.equal(QUERY_DEADLINE_MS, 240_000);
+  assert.equal(SAVE_RESERVE_MS, 60_000);
+  assert.ok(QUERY_DEADLINE_MS + SAVE_RESERVE_MS <= 300_000);
+  // 저장 몫이 0이면 수집분이 DB 도달 전에 함수가 죽는다
+  assert.ok(SAVE_RESERVE_MS > 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -103,12 +121,14 @@ test('절단: 상한 0 이면 전원 제외되고 그 수가 보고된다', () =
   assert.equal(result.droppedQuestions, 2);
 });
 
-test('절단: 구 버그 재현 방지 — 100명×5질의를 3엔진 상한(100 고유질의)에 넣으면 잘린 수가 드러난다', () => {
+test('절단: 구 버그 재현 방지 — 100명×5질의를 2엔진 상한(120 고유질의)에 넣으면 잘린 수가 드러난다', () => {
   const plans = Array.from({ length: 100 }, (_, i) =>
     plan(`u${i}`, [`u${i}-q1`, `u${i}-q2`, `u${i}-q3`, `u${i}-q4`, `u${i}-q5`]),
   );
-  const result = capQuestionPlan(plans, maxUniqueQuestionsFor(3));
-  assert.equal(result.kept.length, 20); // 100 고유질의 ÷ 5 = 20명
-  assert.equal(result.truncatedUsers, 80);
-  assert.equal(result.droppedQuestions, 400);
+  const result = capQuestionPlan(plans, maxUniqueQuestionsFor(2));
+  assert.equal(result.kept.length, 24); // 120 고유질의 ÷ 5 = 24명
+  assert.equal(result.truncatedUsers, 76);
+  assert.equal(result.droppedQuestions, 380);
+  // 구 코드처럼 조용히 사라지지 않고 수가 드러나야 한다
+  assert.ok(result.truncatedUsers > 0);
 });

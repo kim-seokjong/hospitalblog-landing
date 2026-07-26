@@ -8,6 +8,8 @@
  * 외부 의존 없는 순수 모듈(@/ alias import 금지) — node:test 러너로 직접 검증 가능.
  */
 
+import type { AttemptBudget } from './attempts.ts';
+
 /** geo_citations.engine 에 그대로 기록되는 엔진 식별자 */
 export type GeoEngineId = 'openai' | 'perplexity' | 'gemini';
 
@@ -39,10 +41,18 @@ export interface GeoEngineRunContext {
   /** 테스트에서 스텁 주입 가능 */
   readonly fetchImpl: typeof fetch;
   readonly env: GeoEngineEnv;
-  /** 1회 요청 타임아웃 */
+  /** 1회 요청 타임아웃 (데드라인이 더 가까우면 그쪽으로 좁혀진다) */
   readonly timeoutMs: number;
   /** 재시도 포함 최대 시도 횟수 (1 = 재시도 없음) */
   readonly maxAttempts: number;
+  /** Date.now() 기준 절대 데드라인 — 요청 타임아웃·재시도 판단에 쓰인다 */
+  readonly deadlineAt?: number;
+  /** 데드라인 도달 시 진행 중인 요청까지 취소하는 공통 시그널 */
+  readonly signal?: AbortSignal;
+  /** 재시도를 포함한 실제 HTTP 시도 수 예산 (비용 상한의 정본) */
+  readonly attemptBudget?: AttemptBudget;
+  readonly now?: () => number;
+  readonly sleepImpl?: (ms: number) => Promise<void>;
 }
 
 export interface GeoEngineAdapter {

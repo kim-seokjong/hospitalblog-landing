@@ -25,43 +25,41 @@
  */
 
 import { postJsonWithRetry } from './http.ts';
+import { asArray, asRecord, asString, requireArray, requireRecord } from './parse-utils.ts';
 import { MAX_SOURCES, type GeoEngineAdapter, type GeoEngineEnv, type GeoEngineRunContext, type GeoLiveAnswer, type GeoSource } from './types.ts';
 
 const DEFAULT_MODEL = 'sonar';
 const ENDPOINT = 'https://api.perplexity.ai/v1/sonar';
 const MAX_TOKENS = 700;
 
-interface SonarSearchResult {
-  title?: string;
-  url?: string;
-}
-
-interface SonarPayload {
-  choices?: Array<{ message?: { content?: string } }>;
-  search_results?: SonarSearchResult[];
-  citations?: string[];
-}
-
 /** search_results 우선, 없으면 구 citations(URL 문자열) 폴백 */
-function collectSources(data: SonarPayload): GeoSource[] {
+function collectSources(data: Readonly<Record<string, unknown>>): GeoSource[] {
   const sources: GeoSource[] = [];
-  for (const item of data.search_results ?? []) {
-    if (!item?.url || sources.length >= MAX_SOURCES) continue;
-    sources.push({ url: item.url, title: item.title ?? '' });
+  for (const raw of asArray(data.search_results)) {
+    const item = asRecord(raw);
+    const url = asString(item.url);
+    if (!url || sources.length >= MAX_SOURCES) continue;
+    sources.push({ url, title: asString(item.title) });
   }
   if (sources.length > 0) return sources;
 
-  for (const url of data.citations ?? []) {
-    if (typeof url !== 'string' || !url || sources.length >= MAX_SOURCES) continue;
+  for (const raw of asArray(data.citations)) {
+    const url = asString(raw);
+    if (!url || sources.length >= MAX_SOURCES) continue;
     sources.push({ url, title: '' });
   }
   return sources;
 }
 
-/** 응답 파싱만 분리 — 스텁 없이 단위 테스트 가능 */
+/**
+ * 응답 파싱만 분리 — 스텁 없이 단위 테스트 가능.
+ * 타입 단언 대신 런타임 가드로 형태를 확인해, 스키마가 바뀌면
+ * "무엇이 예상과 달랐는지"가 실패 사유에 그대로 남게 한다.
+ */
 export function parsePerplexityResponse(payload: unknown): GeoLiveAnswer {
-  const data = (payload ?? {}) as SonarPayload;
-  const text = data.choices?.[0]?.message?.content ?? '';
+  const data = requireRecord(payload, 'Perplexity');
+  const choices = requireArray(data.choices, 'Perplexity', 'choices');
+  const text = asString(asRecord(asRecord(choices[0]).message).content);
   if (!text.trim()) {
     throw new Error('Perplexity 응답 텍스트가 비어있습니다.');
   }
@@ -99,6 +97,11 @@ export const perplexityEngine: GeoEngineAdapter = {
       maxAttempts: ctx.maxAttempts,
       fetchImpl: ctx.fetchImpl,
       label: 'Perplexity',
+      deadlineAt: ctx.deadlineAt,
+      signal: ctx.signal,
+      attemptBudget: ctx.attemptBudget,
+      now: ctx.now,
+      sleepImpl: ctx.sleepImpl,
     });
 
     return parsePerplexityResponse(payload);

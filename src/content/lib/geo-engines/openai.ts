@@ -23,6 +23,7 @@
  */
 
 import { postJsonWithRetry } from './http.ts';
+import { asArray, asRecord, asString, requireArray, requireRecord } from './parse-utils.ts';
 import { MAX_SOURCES, type GeoEngineAdapter, type GeoEngineEnv, type GeoEngineRunContext, type GeoLiveAnswer, type GeoSource } from './types.ts';
 
 const DEFAULT_MODEL = 'gpt-5-mini';
@@ -30,41 +31,30 @@ const ENDPOINT = 'https://api.openai.com/v1/responses';
 /** reasoning 토큰 포함 상한 (실측: 완결 응답 ~530 토큰) */
 const MAX_OUTPUT_TOKENS = 1200;
 
-interface ResponsesAnnotation {
-  type?: string;
-  url?: string;
-  title?: string;
-}
-
-interface ResponsesOutputContent {
-  type?: string;
-  text?: string;
-  annotations?: ResponsesAnnotation[];
-}
-
-interface ResponsesOutputItem {
-  type?: string;
-  content?: ResponsesOutputContent[];
-}
-
-interface ResponsesPayload {
-  output?: ResponsesOutputItem[];
-}
-
-/** 응답 파싱만 분리 — 스텁 없이 단위 테스트 가능 */
+/**
+ * 응답 파싱만 분리 — 스텁 없이 단위 테스트 가능.
+ * 타입 단언 대신 런타임 가드로 형태를 확인해, 스키마가 바뀌면
+ * "무엇이 예상과 달랐는지"가 실패 사유에 그대로 남게 한다.
+ */
 export function parseOpenAiResponse(payload: unknown): GeoLiveAnswer {
-  const data = (payload ?? {}) as ResponsesPayload;
+  const data = requireRecord(payload, 'OpenAI');
+  const output = requireArray(data.output, 'OpenAI', 'output');
+
   let text = '';
   const sources: GeoSource[] = [];
 
-  for (const item of data.output ?? []) {
+  for (const rawItem of output) {
+    const item = asRecord(rawItem);
     if (item.type !== 'message') continue;
-    for (const content of item.content ?? []) {
+    for (const rawContent of asArray(item.content)) {
+      const content = asRecord(rawContent);
       if (content.type !== 'output_text') continue;
-      text += content.text ?? '';
-      for (const ann of content.annotations ?? []) {
-        if (ann.type === 'url_citation' && ann.url && sources.length < MAX_SOURCES) {
-          sources.push({ url: ann.url, title: ann.title ?? '' });
+      text += asString(content.text);
+      for (const rawAnn of asArray(content.annotations)) {
+        const ann = asRecord(rawAnn);
+        const url = asString(ann.url);
+        if (ann.type === 'url_citation' && url && sources.length < MAX_SOURCES) {
+          sources.push({ url, title: asString(ann.title) });
         }
       }
     }
@@ -104,6 +94,11 @@ export const openAiEngine: GeoEngineAdapter = {
       maxAttempts: ctx.maxAttempts,
       fetchImpl: ctx.fetchImpl,
       label: 'OpenAI',
+      deadlineAt: ctx.deadlineAt,
+      signal: ctx.signal,
+      attemptBudget: ctx.attemptBudget,
+      now: ctx.now,
+      sleepImpl: ctx.sleepImpl,
     });
 
     return parseOpenAiResponse(payload);

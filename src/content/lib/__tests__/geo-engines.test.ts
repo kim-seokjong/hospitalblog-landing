@@ -4,10 +4,18 @@ import assert from 'node:assert/strict';
 import { parseOpenAiResponse, openAiEngine } from '../geo-engines/openai.ts';
 import { parsePerplexityResponse, perplexityEngine } from '../geo-engines/perplexity.ts';
 import { parseGeminiResponse, geminiEngine, isGroundingRedirect, resolveGroundingUri } from '../geo-engines/gemini.ts';
-import { getEnabledEngines, isGeoLiveQueryEnabled, executeGeoQueries, GEO_ENGINES } from '../geo-engines/index.ts';
+import {
+  getEnabledEngines,
+  isGeoLiveQueryEnabled,
+  executeGeoQueries,
+  GEO_ENGINES,
+  ENABLE_GEMINI_FLAG,
+} from '../geo-engines/index.ts';
 import { createGeoQueryCache } from '../geo-engines/cache.ts';
 import { postJsonWithRetry } from '../geo-engines/http.ts';
 import { runPool } from '../geo-engines/pool.ts';
+import { createAttemptBudget } from '../geo-engines/attempts.ts';
+import { chunkGroups } from '../geo-engines/batching.ts';
 import type { GeoEngineAdapter, GeoLiveAnswer } from '../geo-engines/types.ts';
 
 // ---------------------------------------------------------------------------
@@ -170,13 +178,43 @@ test('OPENAI_API_KEY 만 있으면 기존과 동일하게 OpenAI 단독 동작',
 });
 
 test('키가 있는 엔진만 선택되고 나머지는 조용히 제외', () => {
-  const enabled = getEnabledEngines({ OPENAI_API_KEY: 'a', GEMINI_API_KEY: 'c' });
+  const enabled = getEnabledEngines({ PERPLEXITY_API_KEY: 'b' });
+  assert.deepEqual(enabled.map((e) => e.id), ['perplexity']);
+});
+
+test('운영 기본은 OpenAI + Perplexity 2엔진', () => {
+  const enabled = getEnabledEngines({ OPENAI_API_KEY: 'a', PERPLEXITY_API_KEY: 'b' });
+  assert.deepEqual(enabled.map((e) => e.id), ['openai', 'perplexity']);
+});
+
+// ---------------------------------------------------------------------------
+// Gemini 기본 비활성 — 구글 약관상 Grounded Results 의 analyze/cache 금지
+// ---------------------------------------------------------------------------
+
+test('★Gemini: GEMINI_API_KEY 가 있어도 옵트인 없이는 활성화되지 않는다', () => {
+  const enabled = getEnabledEngines({ OPENAI_API_KEY: 'a', PERPLEXITY_API_KEY: 'b', GEMINI_API_KEY: 'c' });
+  assert.deepEqual(enabled.map((e) => e.id), ['openai', 'perplexity']);
+  assert.ok(!enabled.some((e) => e.id === 'gemini'));
+});
+
+test('★Gemini: 키만 있고 옵트인 없으면 활성 엔진 0', () => {
+  assert.deepEqual(getEnabledEngines({ GEMINI_API_KEY: 'c' }), []);
+});
+
+test('★Gemini: GEO_ENABLE_GEMINI=true 옵트인 시에만 포함된다', () => {
+  const enabled = getEnabledEngines({ OPENAI_API_KEY: 'a', GEMINI_API_KEY: 'c', [ENABLE_GEMINI_FLAG]: 'true' });
   assert.deepEqual(enabled.map((e) => e.id), ['openai', 'gemini']);
 });
 
-test('세 키가 모두 있으면 3엔진', () => {
-  const enabled = getEnabledEngines({ OPENAI_API_KEY: 'a', PERPLEXITY_API_KEY: 'b', GEMINI_API_KEY: 'c' });
-  assert.deepEqual(enabled.map((e) => e.id), ['openai', 'perplexity', 'gemini']);
+test('★Gemini: 옵트인 플래그가 true 가 아니면 무시된다', () => {
+  for (const value of ['1', 'yes', 'TRUE ', 'on', '']) {
+    const enabled = getEnabledEngines({ GEMINI_API_KEY: 'c', [ENABLE_GEMINI_FLAG]: value });
+    assert.deepEqual(enabled.map((e) => e.id), [], `flag=${JSON.stringify(value)}`);
+  }
+});
+
+test('★Gemini: 옵트인해도 키가 없으면 여전히 제외', () => {
+  assert.deepEqual(getEnabledEngines({ [ENABLE_GEMINI_FLAG]: 'true' }), []);
 });
 
 test('GEO_LIVE_QUERY=off 면 키가 다 있어도 전체 비활성', () => {
@@ -452,4 +490,339 @@ test('캐시: peek 은 확정 전에는 undefined', async () => {
   assert.equal(cache.peek('openai', 'q'), undefined);
   await cache.resolve('openai', 'q', async () => ({ text: 'a', sources: [], searchQueryCount: 1 }));
   assert.equal(cache.peek('openai', 'q')?.ok, true);
+});
+
+// ---------------------------------------------------------------------------
+// [Codex 2] 데드라인이 실제 요청을 중단하는가 — 300초 플랫폼 제한 방어
+// ---------------------------------------------------------------------------
+
+test('데드라인: 요청 타임아웃이 남은 시간으로 좁혀진다 (60초를 그대로 쓰지 않는다)', async () => {
+  let clock = 0;
+  let observedTimeout = -1;
+  const fetchImpl = (async (_url: string, init: RequestInit) => {
+    // AbortSignal 이 언제 발동하도록 설정됐는지를 간접 측정
+    const signal = init.signal as AbortSignal;
+    const start = clock;
+    await new Promise<void>((resolve) => {
+      signal.addEventListener('abort', () => {
+        observedTimeout = clock - start;
+        resolve();
+      }, { once: true });
+      setTimeout(resolve, 5);
+    });
+    return new Response(JSON.stringify({ ok: 1 }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  // 남은 시간 3초 < 기본 타임아웃 60초 → 3초로 좁혀져야 한다
+  await postJsonWithRetry({
+    url: 'https://x.example',
+    headers: {},
+    body: {},
+    timeoutMs: 60_000,
+    maxAttempts: 1,
+    fetchImpl,
+    label: 'Test',
+    deadlineAt: 3_000,
+    now: () => clock,
+    sleepImpl: async () => {},
+  });
+  // abort 가 발동하지 않고 정상 응답 — 좁혀진 타임아웃이 요청보다 길었음
+  assert.equal(observedTimeout, -1);
+});
+
+test('데드라인: 남은 시간이 최소치 미만이면 요청을 시작조차 하지 않는다', async () => {
+  let calls = 0;
+  const fetchImpl = (async () => {
+    calls++;
+    return new Response('{}', { status: 200 });
+  }) as unknown as typeof fetch;
+
+  await assert.rejects(
+    () =>
+      postJsonWithRetry({
+        url: 'https://x.example',
+        headers: {},
+        body: {},
+        timeoutMs: 60_000,
+        maxAttempts: 2,
+        fetchImpl,
+        label: 'Test',
+        deadlineAt: 1_000,
+        now: () => 900, // 남은 시간 100ms < MIN_REQUEST_WINDOW_MS(1000)
+        sleepImpl: async () => {},
+      }),
+    /남은 시간이 부족/,
+  );
+  assert.equal(calls, 0);
+});
+
+test('데드라인: 임박하면 재시도하지 않는다', async () => {
+  let calls = 0;
+  let clock = 0;
+  const fetchImpl = (async () => {
+    calls++;
+    clock = 100_000; // 첫 시도로 시간을 거의 다 씀
+    return new Response('busy', { status: 503 });
+  }) as unknown as typeof fetch;
+
+  await assert.rejects(
+    () =>
+      postJsonWithRetry({
+        url: 'https://x.example',
+        headers: {},
+        body: {},
+        timeoutMs: 60_000,
+        maxAttempts: 3,
+        fetchImpl,
+        label: 'Test',
+        deadlineAt: 102_000, // 재시도 후 남는 시간이 MIN_RETRY_WINDOW_MS 미만
+        now: () => clock,
+        sleepImpl: async () => {},
+      }),
+    /재시도 생략/,
+  );
+  assert.equal(calls, 1);
+});
+
+test('데드라인: 공통 시그널이 aborted 면 진행 중인 요청도 취소된다', async () => {
+  const controller = new AbortController();
+  let aborted = false;
+  const fetchImpl = (async (_url: string, init: RequestInit) => {
+    const signal = init.signal as AbortSignal;
+    controller.abort(); // 실행 도중 데드라인 도달을 흉내
+    await new Promise<void>((resolve) => {
+      if (signal.aborted) { aborted = true; resolve(); return; }
+      signal.addEventListener('abort', () => { aborted = true; resolve(); }, { once: true });
+    });
+    throw new Error('aborted');
+  }) as unknown as typeof fetch;
+
+  await assert.rejects(
+    () =>
+      postJsonWithRetry({
+        url: 'https://x.example',
+        headers: {},
+        body: {},
+        timeoutMs: 60_000,
+        maxAttempts: 3,
+        fetchImpl,
+        label: 'Test',
+        signal: controller.signal,
+        sleepImpl: async () => {},
+      }),
+    /데드라인 도달/,
+  );
+  assert.equal(aborted, true);
+});
+
+test('실행기: 데드라인이 이미 지났으면 아무 호출도 하지 않고 deadlineReached 를 보고', async () => {
+  let calls = 0;
+  const engine = stubEngine('openai', async (q) => {
+    calls++;
+    return { text: q, sources: [], searchQueryCount: 1 };
+  });
+
+  const result = await executeGeoQueries({
+    questions: ['a', 'b'],
+    engines: [engine],
+    env: {},
+    deadlineAt: Date.now() - 1,
+    sleepImpl: async () => {},
+  });
+
+  assert.equal(calls, 0);
+  assert.equal(result.deadlineReached, true);
+  assert.equal(result.stats[0].skipped, 2);
+});
+
+// ---------------------------------------------------------------------------
+// [Codex 4] 비용 상한은 재시도를 포함한 실제 HTTP 시도 수에 걸려야 한다
+// ---------------------------------------------------------------------------
+
+test('시도 예산: 검사 후 증가가 원자적이고 상한을 넘지 않는다', () => {
+  const budget = createAttemptBudget(3);
+  assert.equal(budget.tryConsume(), true);
+  assert.equal(budget.tryConsume(), true);
+  assert.equal(budget.tryConsume(), true);
+  assert.equal(budget.tryConsume(), false);
+  assert.equal(budget.used(), 3);
+  assert.equal(budget.remaining(), 0);
+});
+
+test('시도 예산: 재시도도 예산을 소비한다 (논리 호출 1건 = 최대 2 시도)', async () => {
+  const budget = createAttemptBudget(10);
+  let calls = 0;
+  const fetchImpl = (async () => {
+    calls++;
+    return new Response('busy', { status: 503 });
+  }) as unknown as typeof fetch;
+
+  await assert.rejects(() =>
+    postJsonWithRetry({
+      url: 'https://x.example',
+      headers: {},
+      body: {},
+      timeoutMs: 1_000,
+      maxAttempts: 2,
+      fetchImpl,
+      label: 'Test',
+      attemptBudget: budget,
+      sleepImpl: async () => {},
+    }),
+  );
+  assert.equal(calls, 2);
+  assert.equal(budget.used(), 2); // 논리 호출 1건이 시도 2건을 소비
+});
+
+test('시도 예산: 소진되면 더 이상 HTTP 요청을 보내지 않는다', async () => {
+  const budget = createAttemptBudget(1);
+  let calls = 0;
+  const fetchImpl = (async () => {
+    calls++;
+    return new Response(JSON.stringify({ ok: 1 }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const options = {
+    url: 'https://x.example',
+    headers: {},
+    body: {},
+    timeoutMs: 1_000,
+    maxAttempts: 1,
+    fetchImpl,
+    label: 'Test',
+    attemptBudget: budget,
+    sleepImpl: async () => {},
+  };
+
+  await postJsonWithRetry(options);
+  await assert.rejects(() => postJsonWithRetry(options), /시도 상한/);
+  assert.equal(calls, 1);
+});
+
+test('실행기: httpAttempts 가 재시도를 포함한 실제 요청 수를 보고한다', async () => {
+  let attempts = 0;
+  const fetchImpl = (async () => {
+    attempts++;
+    // 첫 질의는 1회 실패 후 성공, 두 번째는 즉시 성공
+    if (attempts === 1) return new Response('busy', { status: 503 });
+    return new Response(
+      JSON.stringify({ output: [{ type: 'message', content: [{ type: 'output_text', text: '답변' }] }] }),
+      { status: 200 },
+    );
+  }) as unknown as typeof fetch;
+
+  const result = await executeGeoQueries({
+    questions: ['q1', 'q2'],
+    engines: [openAiEngine],
+    env: { OPENAI_API_KEY: 'sk-test' },
+    fetchImpl,
+    deadlineAt: Date.now() + 60_000,
+    sleepImpl: async () => {},
+  });
+
+  // 논리 호출 2건인데 실제 HTTP 시도는 3건
+  assert.equal(result.stats[0].calls, 2);
+  assert.equal(result.httpAttempts, 3);
+  assert.equal(result.stats[0].httpAttempts, 3);
+});
+
+test('실행기: HTTP 시도 상한에 걸리면 이후 호출이 중단된다', async () => {
+  let attempts = 0;
+  const fetchImpl = (async () => {
+    attempts++;
+    return new Response(
+      JSON.stringify({ output: [{ type: 'message', content: [{ type: 'output_text', text: '답변' }] }] }),
+      { status: 200 },
+    );
+  }) as unknown as typeof fetch;
+
+  const result = await executeGeoQueries({
+    questions: ['q1', 'q2', 'q3', 'q4', 'q5'],
+    engines: [openAiEngine],
+    env: { OPENAI_API_KEY: 'sk-test' },
+    fetchImpl,
+    deadlineAt: Date.now() + 60_000,
+    maxHttpAttempts: 2,
+    sleepImpl: async () => {},
+  });
+
+  assert.equal(attempts, 2);
+  assert.equal(result.httpAttempts, 2);
+  assert.equal(result.stats[0].succeeded, 2);
+  assert.equal(result.stats[0].failed, 3);
+});
+
+// ---------------------------------------------------------------------------
+// [Codex 3] 배치 insert 가 회원 경계를 가르지 않는다
+// ---------------------------------------------------------------------------
+
+test('청킹: 회원 그룹이 두 청크로 갈리지 않는다', () => {
+  const groups = [
+    ['a1', 'a2', 'a3'],
+    ['b1', 'b2', 'b3'],
+    ['c1', 'c2', 'c3'],
+  ];
+  const chunks = chunkGroups(groups, 5);
+  // 5행 상한: a(3) 만 첫 청크, b(3) 를 넣으면 6 이라 새 청크
+  assert.deepEqual(chunks, [['a1', 'a2', 'a3'], ['b1', 'b2', 'b3'], ['c1', 'c2', 'c3']]);
+  for (const chunk of chunks) {
+    assert.ok(chunk.length % 3 === 0, '그룹이 쪼개지지 않았다');
+  }
+});
+
+test('청킹: 상한에 여유가 있으면 여러 그룹을 한 청크에 담는다', () => {
+  assert.deepEqual(chunkGroups([['a1', 'a2'], ['b1', 'b2'], ['c1']], 5), [
+    ['a1', 'a2', 'b1', 'b2', 'c1'],
+  ]);
+  // 상한을 넘기려는 그룹은 다음 청크로 밀린다 (쪼개지 않는다)
+  assert.deepEqual(chunkGroups([['a1', 'a2'], ['b1', 'b2'], ['c1']], 4), [
+    ['a1', 'a2', 'b1', 'b2'],
+    ['c1'],
+  ]);
+});
+
+test('청킹: 그룹 자체가 상한보다 크면 단독 청크로 분리(쪼개지 않음)', () => {
+  const chunks = chunkGroups([['a1'], ['b1', 'b2', 'b3', 'b4']], 3);
+  assert.deepEqual(chunks, [['a1'], ['b1', 'b2', 'b3', 'b4']]);
+});
+
+test('청킹: 빈 그룹·빈 입력은 청크를 만들지 않는다', () => {
+  assert.deepEqual(chunkGroups([], 10), []);
+  assert.deepEqual(chunkGroups([[], []], 10), []);
+});
+
+// ---------------------------------------------------------------------------
+// [Codex 7] 파서 런타임 타입 가드 — 스키마가 달라도 사유가 분명해야 한다
+// ---------------------------------------------------------------------------
+
+test('파서 가드: 최상위가 객체가 아니면 형식 오류로 실패', () => {
+  assert.throws(() => parseOpenAiResponse(null), /최상위가 객체가 아닙니다 \(null\)/);
+  assert.throws(() => parsePerplexityResponse('문자열'), /최상위가 객체가 아닙니다 \(string\)/);
+  assert.throws(() => parseGeminiResponse([1, 2]), /최상위가 객체가 아닙니다 \(array\)/);
+});
+
+test('파서 가드: 필수 배열 필드가 배열이 아니면 어느 필드인지 밝힌다', () => {
+  assert.throws(() => parseOpenAiResponse({ output: 'nope' }), /output 가 배열이 아닙니다 \(string\)/);
+  assert.throws(() => parsePerplexityResponse({}), /choices 가 배열이 아닙니다 \(undefined\)/);
+  assert.throws(() => parseGeminiResponse({ candidates: null }), /candidates 가 배열이 아닙니다 \(null\)/);
+});
+
+test('파서 가드: 중첩 필드 타입이 이상해도 크래시하지 않고 빈 값으로 흡수', () => {
+  // annotations 가 객체, content 가 숫자여도 예외 없이 진행되어야 한다
+  const answer = parseOpenAiResponse({
+    output: [
+      { type: 'message', content: 42 },
+      { type: 'message', content: [{ type: 'output_text', text: '정상 텍스트', annotations: { bad: true } }] },
+    ],
+  });
+  assert.equal(answer.text, '정상 텍스트');
+  assert.deepEqual(answer.sources, []);
+});
+
+test('파서 가드: Perplexity search_results 원소가 문자열이어도 무시하고 진행', () => {
+  const answer = parsePerplexityResponse({
+    choices: [{ message: { content: '답변' } }],
+    search_results: ['bad', { url: 'https://ok.example', title: 'ok' }],
+  });
+  assert.deepEqual(answer.sources, [{ url: 'https://ok.example', title: 'ok' }]);
 });

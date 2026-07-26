@@ -1,4 +1,23 @@
 /**
+ * ⚠️⚠️ 이 엔진은 기본 비활성이다. 켜지 말 것. ⚠️⚠️
+ *
+ * Google Gemini API 약관상 Grounded Results 의 analyze/cache 가 금지되어 있어
+ * 이 용도로 사용할 수 없다. 구글과 별도 계약 또는 약관 변경 없이 켜지 말 것.
+ *
+ *   약관 원문: "You will not ... cache, frame, syndicate, resell, **analyze**,
+ *   train on, or otherwise learn from Grounded Results or Search Suggestions."
+ *
+ * 우리가 하는 일(응답을 분석해 병원 언급 여부를 판정하고 근거 발췌·출처 URL 을
+ * geo_citations 에 저장)이 정확히 "analyze" 와 "cache" 에 해당한다.
+ * 약관의 예외 조항은 전부 "앱 내 표시(display) 목적"이라 우리 경우와 다르다.
+ * 추가로 월 5,000건 무료 할당량도 결제 등록(paid tier)이 전제였다.
+ *
+ * 코드는 향후 구글과 별도 계약이 성사될 경우를 대비해 남겨 두되,
+ * 레지스트리(index.ts)에서 GEO_ENABLE_GEMINI=true 옵트인이 없으면 제외한다.
+ * GEMINI_API_KEY 가 있어도 그것만으로는 활성화되지 않는다.
+ * → 운영 엔진은 OpenAI + Perplexity 2종이다.
+ *
+ * ---------------------------------------------------------------------------
  * Gemini 어댑터 — Google Search grounding.
  *
  * ── 공식 문서 확인 (2026-07-25, ai.google.dev)
@@ -38,6 +57,7 @@
  */
 
 import { postJsonWithRetry } from './http.ts';
+import { asArray, asRecord, asString, requireArray, requireRecord } from './parse-utils.ts';
 import { MAX_SOURCES, type GeoEngineAdapter, type GeoEngineEnv, type GeoEngineRunContext, type GeoLiveAnswer, type GeoSource } from './types.ts';
 
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
@@ -49,20 +69,6 @@ const MAX_OUTPUT_TOKENS = 2048;
 const GROUNDING_REDIRECT_HOST_SUFFIX = 'vertexaisearch.cloud.google.com';
 const REDIRECT_MAX_HOPS = 2;
 const REDIRECT_TIMEOUT_MS = 3_000;
-
-interface GeminiWebChunk {
-  web?: { uri?: string; title?: string };
-}
-
-interface GeminiPayload {
-  candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
-    groundingMetadata?: {
-      groundingChunks?: GeminiWebChunk[];
-      webSearchQueries?: string[];
-    };
-  }>;
-}
 
 /** 구글 그라운딩 리다이렉트 호스트인가 */
 export function isGroundingRedirect(url: string): boolean {
@@ -108,27 +114,34 @@ export async function resolveGroundingUri(
   return current;
 }
 
-/** 응답 파싱(리다이렉트 복원 전) — 스텁 없이 단위 테스트 가능 */
+/**
+ * 응답 파싱(리다이렉트 복원 전) — 스텁 없이 단위 테스트 가능.
+ * 타입 단언 대신 런타임 가드로 형태를 확인해, 스키마가 바뀌면
+ * "무엇이 예상과 달랐는지"가 실패 사유에 그대로 남게 한다.
+ */
 export function parseGeminiResponse(payload: unknown): GeoLiveAnswer {
-  const data = (payload ?? {}) as GeminiPayload;
-  const candidate = data.candidates?.[0];
+  const data = requireRecord(payload, 'Gemini');
+  const candidates = requireArray(data.candidates, 'Gemini', 'candidates');
+  const candidate = asRecord(candidates[0]);
 
-  const text = (candidate?.content?.parts ?? [])
-    .map((part) => part?.text ?? '')
+  const text = asArray(asRecord(candidate.content).parts)
+    .map((part) => asString(asRecord(part).text))
     .join('');
   if (!text.trim()) {
     throw new Error('Gemini 응답 텍스트가 비어있습니다 (안전 필터·토큰 상한 가능성).');
   }
 
+  const grounding = asRecord(candidate.groundingMetadata);
   const sources: GeoSource[] = [];
-  for (const chunk of candidate?.groundingMetadata?.groundingChunks ?? []) {
-    const uri = chunk?.web?.uri;
+  for (const rawChunk of asArray(grounding.groundingChunks)) {
+    const web = asRecord(asRecord(rawChunk).web);
+    const uri = asString(web.uri);
     if (!uri || sources.length >= MAX_SOURCES) continue;
-    sources.push({ url: uri, title: chunk.web?.title ?? '' });
+    sources.push({ url: uri, title: asString(web.title) });
   }
 
   // Gemini 3 는 실행된 검색 질의 단위로 무료 할당량이 차감된다. 미보고 시 최소 1건.
-  const executed = candidate?.groundingMetadata?.webSearchQueries?.length ?? 0;
+  const executed = asArray(grounding.webSearchQueries).length;
   return { text, sources, searchQueryCount: Math.max(1, executed) };
 }
 
@@ -157,6 +170,11 @@ export const geminiEngine: GeoEngineAdapter = {
       maxAttempts: ctx.maxAttempts,
       fetchImpl: ctx.fetchImpl,
       label: 'Gemini',
+      deadlineAt: ctx.deadlineAt,
+      signal: ctx.signal,
+      attemptBudget: ctx.attemptBudget,
+      now: ctx.now,
+      sleepImpl: ctx.sleepImpl,
     });
 
     const parsed = parseGeminiResponse(payload);
