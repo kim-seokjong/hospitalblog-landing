@@ -182,7 +182,12 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
     // 마이그 034(compliance_report) 미적용 환경 폴백 — 컬럼 없음(42703)이면
     // 리포트만 제외하고 재시도한다(글 수정 자체를 막지 않는다).
-    if (error && incomingReport && error.code === '42703') {
+    //
+    // 조건은 `incomingReport` 가 아니라 **updates 에 컬럼이 들어갔는지**로 판정한다.
+    // 무효화 경로(compliance_report = null)는 incomingReport 가 null 이라
+    // 예전 조건으로는 폴백을 타지 못해, 컬럼 미존재 환경에서 PostEditor 의
+    // 본문 저장이 500 으로 실패했다.
+    if (error && 'compliance_report' in updates && error.code === '42703') {
       const { compliance_report: _omitted, ...withoutReport } = updates;
       ({ data, error } = await supabase
         .from('saved_posts')
