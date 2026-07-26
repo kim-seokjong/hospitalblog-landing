@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isDue, pickNextPost, isValidCadence } from '../auto-publish.ts';
+import {
+  isDue,
+  pickNextPost,
+  pickNextPosts,
+  isValidCadence,
+  maxPostsPerRun,
+  CADENCE_MAX_POSTS_PER_RUN,
+} from '../auto-publish.ts';
 
 const NOW = new Date('2026-07-12T02:00:00.000Z');
 
@@ -36,6 +43,7 @@ test('isDue biweekly: 14일 경계', () => {
 
 test('isValidCadence: 허용값만 통과', () => {
   assert.equal(isValidCadence('off'), true);
+  assert.equal(isValidCadence('auto'), true);
   assert.equal(isValidCadence('weekly'), true);
   assert.equal(isValidCadence('biweekly'), true);
   assert.equal(isValidCadence('daily'), false);
@@ -76,4 +84,67 @@ test('pickNextPost: created_at 파싱 불가 후보는 뒤로 밀려 유효 후�
 test('pickNextPost: 후보가 1편이면 그 글', () => {
   const picked = pickNextPost([{ id: 'only', createdAt: '2026-07-03T00:00:00.000Z' }]);
   assert.equal(picked?.id, 'only');
+});
+
+// ---------------------------------------------------------------------------
+// 'auto' 주기 (검수 통과 시 바로 발행)
+// ---------------------------------------------------------------------------
+
+test("isDue auto: lastRun 과 무관하게 항상 true (대기 없음)", () => {
+  assert.equal(isDue('auto', null, NOW), true);
+  assert.equal(isDue('auto', NOW.toISOString(), NOW), true);
+  const oneMinuteAgo = new Date(NOW.getTime() - 60_000).toISOString();
+  assert.equal(isDue('auto', oneMinuteAgo, NOW), true);
+});
+
+test('maxPostsPerRun: off=0, auto=3(하루 최대 3편), weekly/biweekly=1(기존 동작 유지)', () => {
+  assert.equal(maxPostsPerRun('off'), 0);
+  assert.equal(maxPostsPerRun('auto'), 3);
+  assert.equal(maxPostsPerRun('weekly'), 1);
+  assert.equal(maxPostsPerRun('biweekly'), 1);
+  assert.equal(CADENCE_MAX_POSTS_PER_RUN.auto, 3);
+});
+
+test('pickNextPosts: 오래된 순으로 limit 편까지 선택한다', () => {
+  const picked = pickNextPosts(
+    [
+      { id: 'd', createdAt: '2026-07-10T00:00:00.000Z' },
+      { id: 'a', createdAt: '2026-07-01T00:00:00.000Z' },
+      { id: 'c', createdAt: '2026-07-07T00:00:00.000Z' },
+      { id: 'b', createdAt: '2026-07-03T00:00:00.000Z' },
+    ],
+    3,
+  );
+  assert.deepEqual(picked.map((p) => p.id), ['a', 'b', 'c']);
+});
+
+test('pickNextPosts: 후보가 limit 보다 적으면 있는 만큼만', () => {
+  const picked = pickNextPosts([{ id: 'only', createdAt: '2026-07-03T00:00:00.000Z' }], 3);
+  assert.deepEqual(picked.map((p) => p.id), ['only']);
+});
+
+test('pickNextPosts: limit 0 이하 · 후보 0 이면 빈 배열', () => {
+  assert.deepEqual(pickNextPosts([], 3), []);
+  assert.deepEqual(pickNextPosts([{ id: 'a', createdAt: '2026-07-01T00:00:00.000Z' }], 0), []);
+  assert.deepEqual(pickNextPosts([{ id: 'a', createdAt: '2026-07-01T00:00:00.000Z' }], -1), []);
+});
+
+test('pickNextPosts: 입력 배열을 변형하지 않는다 (불변)', () => {
+  const input = [
+    { id: 'b', createdAt: '2026-07-05T00:00:00.000Z' },
+    { id: 'a', createdAt: '2026-07-01T00:00:00.000Z' },
+  ];
+  const snapshot = JSON.stringify(input);
+  pickNextPosts(input, 2);
+  assert.equal(JSON.stringify(input), snapshot);
+});
+
+test('pickNextPosts: 동률·파싱불가 처리가 pickNextPost 와 동일하다', () => {
+  const candidates = [
+    { id: 'bad', createdAt: 'invalid' },
+    { id: 'z', createdAt: '2026-07-01T00:00:00.000Z' },
+    { id: 'a', createdAt: '2026-07-01T00:00:00.000Z' },
+  ];
+  assert.equal(pickNextPosts(candidates, 1)[0].id, pickNextPost(candidates)?.id);
+  assert.deepEqual(pickNextPosts(candidates, 3).map((p) => p.id), ['a', 'z', 'bad']);
 });

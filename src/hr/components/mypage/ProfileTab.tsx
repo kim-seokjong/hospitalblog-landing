@@ -602,16 +602,24 @@ export default function ProfileTab() {
                   onChange={v => setProfile(p => ({ ...p, site_publish_cadence: v }))}
                   options={[
                     { value: 'off', label: '사용 안 함' },
+                    { value: 'auto', label: '검수 통과 시 바로 발행 (하루 최대 3편)' },
                     { value: 'weekly', label: '주 1회' },
                     { value: 'biweekly', label: '격주 1회' },
                   ]}
                 />
               </Field>
               <p className="mt-1.5 text-xs text-[#5b6573] leading-relaxed">
-                검수를 통과한 글 중 아직 발행 안 된 글을 설정 주기로 하나씩 자동 발행합니다.
+                검수를 통과한 글 중 아직 발행 안 된 글을 설정 주기로 자동 발행합니다.
                 새 글을 만들지 않으며, 검수 통과 글만 대상입니다. 발행할 글이 없으면 아무 일도
                 일어나지 않습니다.
               </p>
+              {profile.site_publish_cadence === 'auto' && (
+                <p className="mt-1.5 text-xs text-[#5b6573] leading-relaxed">
+                  <strong className="text-[#202020]">바로 발행</strong>은 검수를 통과한 글이 쌓여 있으면
+                  기다리지 않고 하루 최대 3편까지 내보냅니다. 글이 빨리 쌓일수록 AI 검색(ChatGPT·Gemini)이
+                  인용할 수 있는 콘텐츠가 많아집니다.
+                </p>
+              )}
             </div>
           )}
         </Section>

@@ -3,7 +3,8 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
 import { publishBlockReason } from '@/content/lib/clinic-site/publish-gate';
-import { clinicSiteUrl } from '@/content/lib/clinic-site/slug';
+import { clinicSiteHost, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
+import { notifyIndexNow } from '@/content/lib/clinic-site/indexnow-submit';
 
 export const dynamic = 'force-dynamic';
 
@@ -143,6 +144,15 @@ export async function POST(req: NextRequest) {
 
     if (siteSlug) {
       revalidateClinicPages(siteSlug, postId);
+
+      // IndexNow — 발행/발행취소 모두 알린다. 공식 스펙상 삭제된(404/410) URL 도
+      // 제출 대상이다: "You should submit redirected URLs and pages that return
+      // HTTP 404 or HTTP 410 status codes." 색인 요청이 실패해도 발행은 성공이다
+      // (notifyIndexNow 는 절대 throw 하지 않으며 키 미설정이면 조용히 건너뛴다).
+      await notifyIndexNow(clinicSiteHost(siteSlug), [
+        clinicSiteUrl(siteSlug),
+        clinicSiteUrl(siteSlug, `/posts/${postId}`),
+      ]);
     }
 
     return NextResponse.json<ApiResponse<PublishResult>>({
