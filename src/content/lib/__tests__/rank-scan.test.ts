@@ -264,6 +264,59 @@ test('제목 단서 없고 전체 깊이에서 내 글이 딱 1건이면 확정'
   assert.equal(out.matchedBy, 'blog');
 });
 
+// ★ 부분 일치로 조기 확정하면 뒤 페이지의 더 정확한 후보를 놓치고,
+//   그 잘못된 link 가 published_url 로 백필돼 오매칭이 영구 고착된다.
+test('★ 부분 일치는 조기 확정하지 않는다 — 뒤 페이지의 더 정확한 글을 고른다', async () => {
+  const MY_TITLE = '구로동치과 신경치료 전 알아야 할 4가지 핵심 체크리스트';
+  const fetch: RankPageFetcher = async ({ start, display }) => {
+    const items: BlogSearchResult[] = [];
+    for (let i = 0; i < display; i++) {
+      const pos = start + i;
+      // 50위: 제목이 어중간하게 겹치는 다른 글 / 150위: 진짜 내 글
+      if (pos === 50) items.push(item('myclinic', pos, '구로동치과 신경치료 실패 줄이는 3가지 주의사항'));
+      else if (pos === 150) items.push(item('myclinic', pos, MY_TITLE));
+      else items.push(item('other', pos));
+    }
+    return { ok: true, items };
+  };
+  const out = await scanKeywordRank(fetch, {
+    keyword: '구로동치과',
+    depth: 300,
+    match: { blogId: 'myclinic', title: MY_TITLE },
+  });
+  assert.equal(out.status, 'ok');
+  assert.equal(out.rank, 150, '50위 글로 잘못 확정하면 안 된다');
+  assert.equal(out.matchedLink, 'https://blog.naver.com/myclinic/150');
+});
+
+test('★ 제목 완전 일치는 조기 확정한다 (1콜로 끝난다)', async () => {
+  const { fetch, calls } = fakeIndex(7, 1000, '내 글');
+  const out = await scanKeywordRank(fetch, { keyword: 'x', depth: 300, match: MATCH });
+  assert.equal(out.status, 'ok');
+  assert.equal(out.rank, 7);
+  assert.equal(calls.length, 1, '완전 일치면 뒤 페이지를 볼 필요가 없다');
+});
+
+test('★ TITLE_MARGIN 은 페이지가 갈려 있어도 적용된다', async () => {
+  // 1페이지 0.8, 2페이지 0.79 → 전체로 보면 근소 → ambiguous
+  const fetch: RankPageFetcher = async ({ start, display }) => {
+    const items: BlogSearchResult[] = [];
+    for (let i = 0; i < display; i++) {
+      const pos = start + i;
+      if (pos === 40) items.push(item('myclinic', pos, '임플란트 건강보험 적용 기준 총정리 안내'));
+      else if (pos === 140) items.push(item('myclinic', pos, '임플란트 건강보험 적용 기준 총정리 설명'));
+      else items.push(item('other', pos));
+    }
+    return { ok: true, items };
+  };
+  const out = await scanKeywordRank(fetch, {
+    keyword: '임플란트',
+    depth: 300,
+    match: { blogId: 'myclinic', title: '임플란트 건강보험 적용 기준 총정리 정리' },
+  });
+  assert.equal(out.status, 'ambiguous');
+});
+
 test('제목이 비슷한 두 글이 근소하면 특정하지 않는다 (ambiguous)', async () => {
   const fetch: RankPageFetcher = async ({ start, display }) => {
     const items: BlogSearchResult[] = [];

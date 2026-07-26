@@ -126,9 +126,14 @@ export function parseNaverPostUrl(rawUrl: unknown): { blogId: string; logNo: str
   if (!url) return null;
 
   // 쿼리형: blogId= & logNo=
-  const qBlog = url.match(/[?&]blogid=([a-z0-9_-]+)/);
-  const qLog = url.match(/[?&]logno=(\d+)/);
-  if (qBlog?.[1] && qLog?.[1]) return { blogId: qBlog[1], logNo: qLog[1] };
+  // ★ 호스트가 네이버 블로그일 때만 인정한다. 검사하지 않으면
+  //   https://example.com/?blogId=x&logNo=1 같은 외부 URL 이 내 글로 매칭된다.
+  const isNaverHost = /^(?:https?:\/\/)?(?:m\.)?blog\.naver\.com\//.test(url);
+  if (isNaverHost) {
+    const qBlog = url.match(/[?&]blogid=([a-z0-9_-]+)/);
+    const qLog = url.match(/[?&]logno=(\d+)/);
+    if (qBlog?.[1] && qLog?.[1]) return { blogId: qBlog[1], logNo: qLog[1] };
+  }
 
   // {blogId}.blog.me/{logNo}
   const blogMe = url.match(/^(?:https?:\/\/)?([a-z0-9_-]+)\.blog\.me\/(\d+)/);
@@ -199,6 +204,12 @@ export const TITLE_MATCH_THRESHOLD = 0.6;
  * 병원 글은 제목 형식이 비슷해("○○치과 신경치료 …") 근소한 차이로 엉뚱한 글을 고를 수 있다.
  */
 export const TITLE_MARGIN = 0.05;
+
+/**
+ * 이 점수면 "같은 글"이 확정이라 더 볼 필요가 없다 (완전 일치 또는 통째 포함).
+ * 이 미만의 부분 일치는 뒤 페이지에 더 정확한 후보가 있을 수 있어 조기 확정하지 않는다.
+ */
+export const TITLE_CONFIDENT_SCORE = 1;
 
 /** 매칭 근거 — 신뢰도 순 (url > title > blog). */
 export type RankMatchKind = 'url' | 'title' | 'blog';

@@ -16,6 +16,7 @@ import {
   collectPageMatches,
   decideRank,
   hasUsableTitle,
+  TITLE_CONFIDENT_SCORE,
   type BlogCandidate,
   type BlogSearchResult,
   type RankMatch,
@@ -99,10 +100,13 @@ export const NAVER_MAX_START = 1000;
  * 키워드 1개의 순위를 depth 위까지 스캔한다.
  *
  * 판정 시점:
- *  - publishedUrl 정확 일치, 또는 제목 임계를 넘는 후보를 만나면 즉시 확정하고 멈춘다
- *    (두 근거는 그 자체로 충분히 신뢰할 수 있다).
+ *  - publishedUrl 정확 일치 또는 제목 완전 일치(score 1)를 만나면 즉시 확정하고 멈춘다.
+ *    이 둘은 그 자체로 확정적이라 뒤를 더 봐도 뒤집히지 않는다.
  *  - 그 외에는 ★ 전체 깊이의 후보를 모두 모은 뒤 한 번만 판정한다.
- *    페이지 단위로 "후보가 1건뿐이니 이 글"이라고 확정하면 뒤 페이지의 진짜 내 글을 놓친다.
+ *    페이지 단위로 판정하면 두 가지가 깨진다.
+ *      ① "후보가 1건뿐이니 이 글" → 뒤 페이지의 진짜 내 글을 놓친다
+ *      ② 부분 일치(0.6)로 확정 → 뒤 페이지의 더 정확한 후보(0.95)를 놓치고,
+ *         TITLE_MARGIN(1·2등 근소 판정)도 페이지 안에서만 적용돼 무의미해진다
  *
  * 페이지 실패 시:
  *  - 어떤 페이지든 실패하면 status='failed'. 앞 페이지를 정상 조회했더라도
@@ -171,23 +175,17 @@ export async function scanKeywordRank(
     allBlogCandidates.push(...matches.blogCandidates);
     allTitleCandidates.push(...matches.titleCandidates);
 
-    // 제목 임계를 넘은 후보를 만났으면 확정하고 멈춘다.
-    // (관련도순이라 뒤 페이지에 더 좋은 후보가 있을 가능성은 낮고, 있어도 순위는 더 낮다)
-    if (matches.titleCandidates.length > 0) {
-      const decided = decideRank(
-        { urlMatch: null, titleCandidates: allTitleCandidates, blogCandidates: allBlogCandidates },
-        { hasTitle },
-      );
-      if (decided.found) return confirmed(decided.match, scanned, pagesFetched);
-      // 1·2등이 근소해 특정 불가 — 계속 보지 않고 모호로 종료한다
-      return {
-        status: 'ambiguous',
-        rank: null,
-        matchedBy: null,
-        matchedLink: null,
-        scannedDepth: scanned,
+    // ★ 제목 "완전 일치"(score 1)만 조기 확정한다.
+    //   부분 일치(0.6~0.99)에서 멈추면 뒤 페이지에 있는 더 정확한 후보를 놓치고,
+    //   그 잘못된 link 가 published_url 로 백필돼 오매칭이 영구 고착된다.
+    //   실측상 우리 제목과 네이버 응답 제목은 그대로 일치해 대부분 여기서 끝난다(1콜).
+    const perfect = matches.titleCandidates.find((c) => c.score >= TITLE_CONFIDENT_SCORE);
+    if (perfect) {
+      return confirmed(
+        { rank: perfect.rank, matchedBy: 'title', link: perfect.link },
+        scanned,
         pagesFetched,
-      };
+      );
     }
 
     // 결과 소진 — 더 요청해도 빈 페이지다

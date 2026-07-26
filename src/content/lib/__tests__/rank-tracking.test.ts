@@ -173,6 +173,12 @@ test('parseNaverPostUrl: 형태별 (blogId, logNo) 추출', () => {
   assert.equal(parseNaverPostUrl(''), null);
 });
 
+// ★ 쿼리 형태는 호스트를 검사해야 한다. 안 그러면 외부 URL 이 내 글로 매칭된다.
+test('★ 네이버가 아닌 호스트의 blogId/logNo 쿼리는 인정하지 않는다', () => {
+  assert.equal(parseNaverPostUrl('https://example.com/?blogId=happyclinic&logNo=123'), null);
+  assert.equal(parseNaverPostUrl('https://evil.kr/x?blogId=happyclinic&logNo=123'), null);
+});
+
 test('내 글이 1건만 잡히면 그 위치 반환', () => {
   const results = [
     r('https://blog.naver.com/other/1'),

@@ -64,6 +64,14 @@ update public.post_rankings
    set scanned_depth = 0
  where scanned_depth is null;
 
+-- 재실행 안전장치 — 이 마이그레이션의 이전 버전을 이미 적용한 DB 라면
+-- status='ok' 인데 rank 가 없는 행이 남아 있을 수 있다. 아래 CHECK 가 그 행 때문에
+-- 실패해 트랜잭션 전체가 롤백되므로, 먼저 실패(측정 불가)로 정정한다.
+update public.post_rankings
+   set status = 'failed',
+       error_code = coalesce(error_code, 'legacy_ok_without_rank')
+ where status = 'ok' and rank is null;
+
 -- ─────────────────────────────────────────────────────────────
 -- 3) 제약 — 유니크 인덱스가 동작하려면 키 컬럼에 NULL 이 없어야 한다
 --    (NULL 은 서로 충돌하지 않아 UPSERT 가 조용히 중복을 만든다)

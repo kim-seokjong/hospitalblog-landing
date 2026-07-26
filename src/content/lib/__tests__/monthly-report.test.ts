@@ -96,6 +96,39 @@ function point(
   };
 }
 
+// ★ 순위는 "글 × 키워드" 단위로 기록된다. postId 로만 묶으면 시계열 첫 점이 키워드 A,
+//   마지막 점이 키워드 B 가 되어 존재하지 않는 "급상승"이 만들어진다.
+test('★ 같은 글의 서로 다른 키워드를 한 시계열로 섞지 않는다', () => {
+  const agg = aggregateRankings([
+    point('p1', '임플란트', 150, 1),   // A 키워드: 계속 150위
+    point('p1', '건강보험', 3, 28),    // B 키워드: 계속 3위
+  ]);
+  // 키워드별로 관측이 1회씩뿐이라 "상승"으로 볼 근거가 없다
+  assert.equal(agg.improved.length, 0, '키워드가 섞여 허위 상승이 생기면 안 된다');
+  assert.equal(agg.trackedKeywords, 2);
+  assert.equal(agg.top10Count, 1, '글 단위 집계 — 한 편이 10위 안');
+});
+
+test('★ 키워드별로 각각 상승했어도 글은 목록에 1번만 (화면 key=postId)', () => {
+  const agg = aggregateRankings([
+    point('p1', '임플란트', 90, 1), point('p1', '임플란트', 40, 28),   // delta 50
+    point('p1', '건강보험', 80, 1), point('p1', '건강보험', 20, 28),   // delta 60
+    point('p2', '치아교정', 70, 1), point('p2', '치아교정', 65, 28),   // delta 5
+  ]);
+  const p1Entries = agg.improved.filter((i) => i.postId === 'p1');
+  assert.equal(p1Entries.length, 1, '같은 글이 중복으로 들어가면 안 된다');
+  assert.equal(p1Entries[0].keyword, '건강보험', '상승 폭이 큰 키워드가 대표');
+  assert.equal(agg.improved[0].postId, 'p1');
+});
+
+test('같은 글의 여러 키워드가 10위 안이어도 top10 은 1편으로 센다', () => {
+  const agg = aggregateRankings([
+    point('p1', '임플란트', 3, 1),
+    point('p1', '건강보험', 5, 1),
+  ]);
+  assert.equal(agg.top10Count, 1);
+});
+
 test('aggregateRankings: 빈 입력은 전부 0', () => {
   const agg = aggregateRankings([]);
   assert.equal(agg.trackedKeywords, 0);
