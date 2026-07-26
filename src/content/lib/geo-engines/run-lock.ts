@@ -106,10 +106,40 @@ export function staleThresholdIso(nowMs: number = Date.now()): string {
   return new Date(nowMs - STALE_LOCK_MS).toISOString();
 }
 
-/** 이번 실행이 완전 성공이었는지 판정할 재료 */
+/**
+ * 이번 실행이 완전 성공이었는지 판정할 재료.
+ *
+ * ★ 응답의 truncated·skipped 계열 필드와 1:1로 대조해 빠짐이 없어야 한다.
+ *   대응표 (응답 필드 → 여기 플래그):
+ *     truncated.usersOverFetchLimit        → usersOverFetchLimit
+ *     truncated.usersOverQueryBudget       → usersOverQueryBudget
+ *     truncated.questionsDropped           → (usersOverQueryBudget 과 같은 원인)
+ *     truncated.usersDroppedPartialFailure → usersDroppedPartialFailure
+ *     truncated.unresolvedResults          → (usersDroppedPartialFailure 로 귀결)
+ *     truncated.deadlineReached            → queryDeadlineReached
+ *     truncated.queryDrainTimedOut         → queryDrainTimedOut
+ *     truncated.matchAborted               → matchAborted
+ *     truncated.usersSkippedByMatchDeadline→ (matchAborted 와 같은 원인)
+ *     truncated.insertAborted              → insertAborted
+ *     truncated.chunksSkippedByDeadline    → (insertAborted 와 같은 원인)
+ *     insertErrors                         → insertErrorCount
+ *     (준비 단계 중단)                      → preflightAborted / paidCountUnknown
+ *     (예외)                                → threw
+ *
+ *   의도적으로 실패로 보지 않는 것:
+ *     skippedNoMaterial    — 질문 재료가 없어 질의 자체가 무의미한 회원.
+ *                            재실행해도 결과가 같으므로 실패가 아니다.
+ *     skippedAlreadyChecked— 이미 이번 주에 저장된 회원. 정상 동작이다.
+ */
 export interface RunOutcomeFlags {
   readonly preflightAborted: boolean;
+  /** 유료 회원 총수를 확인하지 못함 → 누락 인원을 알 수 없으므로 실패로 본다 */
+  readonly paidCountUnknown: boolean;
+  /** MAX_USERS 를 넘겨 조회조차 되지 않은 회원 수 */
+  readonly usersOverFetchLimit: number;
   readonly queryDeadlineReached: boolean;
+  /** 취소 후 드레인 상한 안에 질의가 정리되지 않아 결과를 확정하지 못함 */
+  readonly queryDrainTimedOut: boolean;
   readonly matchAborted: boolean;
   readonly insertAborted: boolean;
   readonly insertErrorCount: number;
@@ -122,19 +152,22 @@ export interface RunOutcomeFlags {
  * 마감 상태 판정.
  *
  * 'done' 은 "이 주는 더 할 일이 없다"는 뜻이므로 **완전 성공에만** 붙인다.
- * 저장 실패·중단은 물론, 예산/데드라인으로 빠진 회원이 있어도 'failed' 로 두어
- * 수동 재실행 시 남은 회원만 이어서 처리되게 한다
+ * 저장 실패·중단은 물론, 예산/데드라인/조회 상한으로 빠진 회원이 하나라도 있으면
+ * 'failed' 로 두어 수동 재실행 시 남은 회원만 이어서 처리되게 한다
  * (이미 저장된 회원은 중복 조회에서 걸러지므로 재과금되지 않는다).
  */
 export function resolveFinalStatus(flags: RunOutcomeFlags): RunStatus {
   const clean =
     !flags.preflightAborted &&
+    !flags.paidCountUnknown &&
     !flags.queryDeadlineReached &&
+    !flags.queryDrainTimedOut &&
     !flags.matchAborted &&
     !flags.insertAborted &&
     !flags.threw &&
     flags.insertErrorCount === 0 &&
     flags.usersDroppedPartialFailure === 0 &&
-    flags.usersOverQueryBudget === 0;
+    flags.usersOverQueryBudget === 0 &&
+    flags.usersOverFetchLimit === 0;
   return clean ? 'done' : 'failed';
 }

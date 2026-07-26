@@ -366,6 +366,203 @@ test('★인용 판정 마감이 코드로 강제된다 (산술 주석이 아니
 });
 
 // ---------------------------------------------------------------------------
+// [4차-2] 드레인 상한이 실행 코드에서 실제로 강제되는가
+// ---------------------------------------------------------------------------
+
+test('★드레인 상한: abort 후에도 끝나지 않는 질의를 기다리지 않고 저장으로 넘어간다', async () => {
+  const clock = createClock();
+  const startedAt = clock.now();
+  const spy = createGateway(clock, { latencyMs: 50, profiles: [profile('u1', 'k1')] });
+
+  let releaseExecutor: (() => void) | undefined;
+  // abort 이후에도 "영원히" 끝나지 않는 실행기 — 드레인 가드가 없으면 여기서 멈춘다
+  const hangingExecutor = () =>
+    new Promise<ExecuteQueriesResult>((resolve) => {
+      releaseExecutor = () =>
+        resolve({
+          cache: createGeoQueryCache(),
+          stats: [],
+          failures: [],
+          httpAttempts: 0,
+          deadlineReached: true,
+        });
+    });
+
+  const result = await runGeoTracking({
+    gateway: spy.gateway,
+    engines: [stubEngine],
+    env: {},
+    weekStart: '2026-07-20',
+    startedAt,
+    now: clock.now,
+    executeQueries: hangingExecutor,
+    // 가상 시계를 드레인 마감으로 옮기고 즉시 깨운다
+    waitUntil: async (atMs) => {
+      if (clock.now() < atMs) clock.advance(atMs - clock.now());
+    },
+  });
+
+  // 실행기를 풀어주지 않았는데도 반환됐다 = 드레인 상한이 작동했다
+  assert.equal(typeof releaseExecutor, 'function');
+  const truncated = (result.body as { truncated?: Record<string, unknown> }).truncated;
+  assert.equal(truncated?.queryDrainTimedOut, true, '드레인 초과가 보고되지 않았다');
+  assert.equal(truncated?.deadlineReached, true);
+  // 드레인 마감(205초) 근처에서 넘어갔고 300초를 넘지 않았다
+  const elapsed = clock.now() - startedAt;
+  assert.ok(elapsed >= QUERY_DEADLINE_MS, `경과 ${elapsed}ms 가 질의 마감보다 빠르다`);
+  assert.ok(elapsed < PLATFORM_MAX_DURATION_MS);
+  // 확정되지 않은 실행은 재실행 대상이다
+  assert.equal(spy.finalized[0].status, 'failed');
+  releaseExecutor?.();
+});
+
+test('★드레인 안에 정리가 끝나면 정상 결과를 그대로 쓴다', async () => {
+  const clock = createClock();
+  const startedAt = clock.now();
+  const spy = createGateway(clock, { latencyMs: 50, profiles: [profile('u1', 'k1')] });
+
+  const result = await runGeoTracking({
+    gateway: spy.gateway,
+    engines: [stubEngine],
+    env: {},
+    weekStart: '2026-07-20',
+    startedAt,
+    now: clock.now,
+    executeQueries: createSlowExecutor(clock, { fill: false, succeed: true }),
+    // 드레인 대기는 영원히 오지 않는다 → 실행기가 이겨야 한다
+    waitUntil: () => new Promise<void>(() => {}),
+  });
+
+  const truncated = (result.body as { truncated?: Record<string, unknown> }).truncated;
+  assert.equal(truncated?.queryDrainTimedOut, false);
+  assert.equal(spy.finalized[0].status, 'done');
+});
+
+test('★드레인 초과 시에도 그때까지 수집된 응답은 저장된다 (캐시를 호출부가 소유)', async () => {
+  const clock = createClock();
+  const startedAt = clock.now();
+  const spy = createGateway(clock, { latencyMs: 50, profiles: [profile('u1', 'k1')] });
+
+  const result = await runGeoTracking({
+    gateway: spy.gateway,
+    engines: [stubEngine],
+    env: {},
+    weekStart: '2026-07-20',
+    startedAt,
+    now: clock.now,
+    // 캐시에 응답을 채워 넣고는 영원히 반환하지 않는 실행기
+    executeQueries: async (input) => {
+      for (const question of input.questions) {
+        for (const engine of input.engines) {
+          await input.cache!.resolve(engine.id, question, async () => ({
+            text: `${question} 답변 — u1병원 추천`,
+            sources: [],
+            searchQueryCount: 1,
+          }));
+        }
+      }
+      return new Promise<ExecuteQueriesResult>(() => {});
+    },
+    // 질의가 캐시를 다 채운 뒤에 드레인 마감이 오는 상황
+    waitUntil: async (atMs) => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      if (clock.now() < atMs) clock.advance(atMs - clock.now());
+    },
+  });
+
+  // 드레인으로 넘어갔지만 캐시에 담긴 응답으로 행이 만들어져 저장됐다
+  assert.equal((result.body as { truncated?: Record<string, unknown> }).truncated?.queryDrainTimedOut, true);
+  assert.ok(spy.insertedRows() > 0, '수집된 응답이 버려졌다');
+});
+
+// ---------------------------------------------------------------------------
+// [4차-1] 조회 상한 초과 회원 / count 실패도 실패 신호다
+// ---------------------------------------------------------------------------
+
+test('★MAX_USERS 를 넘긴 회원이 있으면 done 으로 확정하지 않는다', async () => {
+  const clock = createClock();
+  const startedAt = clock.now();
+  // 유료 500명인데 조회는 1명만 됐다 → 499명은 그 주에 처리되지 않는다
+  const spy = createGateway(clock, {
+    latencyMs: 50,
+    profiles: [profile('u1', 'k1')],
+    paidCount: 500,
+  });
+
+  const result = await runGeoTracking({
+    gateway: spy.gateway,
+    engines: [stubEngine],
+    env: {},
+    weekStart: '2026-07-20',
+    startedAt,
+    now: clock.now,
+    executeQueries: createSlowExecutor(clock, { fill: false, succeed: true }),
+  });
+
+  const truncated = (result.body as { truncated?: Record<string, unknown> }).truncated;
+  assert.equal(truncated?.usersOverFetchLimit, 499);
+  assert.equal(spy.finalized[0].status, 'failed', '회원 누락인데 done 으로 확정됐다');
+});
+
+test('★유료 회원 총수 조회가 실패하면 누락 인원을 알 수 없으므로 failed 로 마감한다', async () => {
+  const clock = createClock();
+  const startedAt = clock.now();
+  const base = createGateway(clock, { latencyMs: 50, profiles: [profile('u1', 'k1')] });
+  const failingCount: GeoTrackingGateway = {
+    ...base.gateway,
+    async countPaidProfiles() {
+      return { count: null, error: { code: '57014', message: 'statement timeout' } };
+    },
+  };
+
+  const result = await runGeoTracking({
+    gateway: failingCount,
+    engines: [stubEngine],
+    env: {},
+    weekStart: '2026-07-20',
+    startedAt,
+    now: clock.now,
+    executeQueries: createSlowExecutor(clock, { fill: false, succeed: true }),
+  });
+
+  const truncated = (result.body as { truncated?: Record<string, unknown> }).truncated;
+  // count 를 0 으로 퉁쳐서 "누락 0명" 으로 보이게 하면 안 된다
+  assert.equal(truncated?.paidCountUnknown, true);
+  assert.equal(base.finalized[0].status, 'failed');
+});
+
+// ---------------------------------------------------------------------------
+// [4차-3] finally 안의 예외가 결과를 덮어쓰면 안 된다
+// ---------------------------------------------------------------------------
+
+test('★잠금 정리 중 예외가 나도 원래 결과를 반환한다', async () => {
+  const clock = createClock();
+  const startedAt = clock.now();
+  const base = createGateway(clock, { latencyMs: 50, profiles: [profile('u1', 'k1')] });
+  const throwingFinalize: GeoTrackingGateway = {
+    ...base.gateway,
+    async finalizeLock() {
+      throw new Error('잠금 테이블 폭발');
+    },
+  };
+
+  const result = await runGeoTracking({
+    gateway: throwingFinalize,
+    engines: [stubEngine],
+    env: {},
+    weekStart: '2026-07-20',
+    startedAt,
+    now: clock.now,
+    executeQueries: createSlowExecutor(clock, { fill: false, succeed: true }),
+  });
+
+  // 정리 실패가 정상 응답을 폐기하면 안 된다
+  assert.equal(result.status, 200);
+  assert.equal(result.body.mode, 'live');
+  assert.ok((result.body as { inserted?: number }).inserted! > 0);
+});
+
+// ---------------------------------------------------------------------------
 // [차단 2] 잠금이 부분 저장을 영구 고정하면 안 된다
 // ---------------------------------------------------------------------------
 

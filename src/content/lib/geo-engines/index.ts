@@ -122,6 +122,12 @@ export interface ExecuteQueriesInput {
   readonly maxCallsPerEngine?: number;
   /** 재시도 포함 실제 HTTP 시도 상한 */
   readonly maxHttpAttempts?: number;
+  /**
+   * 호출부가 소유하는 시도 예산.
+   * 드레인 상한에 걸려 이 함수의 결과를 기다리지 못하고 넘어가더라도
+   * 호출부가 used() 로 실제 발생 비용을 읽을 수 있게 한다.
+   */
+  readonly attemptBudget?: AttemptBudget;
   readonly cache?: GeoQueryCache;
   readonly now?: () => number;
   readonly sleepImpl?: (ms: number) => Promise<void>;
@@ -178,9 +184,8 @@ export async function executeGeoQueries(input: ExecuteQueriesInput): Promise<Exe
 
   // 재시도를 포함한 실제 HTTP 시도 수를 엔진 공용으로 집계한다.
   // 단일 스레드라 tryConsume 의 "검사 후 증가"에 경쟁 조건이 없다.
-  const attemptBudget: AttemptBudget = createAttemptBudget(
-    input.maxHttpAttempts ?? MAX_HTTP_ATTEMPTS_PER_RUN,
-  );
+  const attemptBudget: AttemptBudget =
+    input.attemptBudget ?? createAttemptBudget(input.maxHttpAttempts ?? MAX_HTTP_ATTEMPTS_PER_RUN);
   const deadline = createDeadlineSignal(input.deadlineAt, now);
 
   try {

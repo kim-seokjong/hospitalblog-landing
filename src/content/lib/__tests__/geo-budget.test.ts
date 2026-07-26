@@ -127,6 +127,15 @@ test('저장 구간: 마지막 청크가 저장 마감을 넘지 못한다', () 
   assert.ok(latestStart + (timeout ?? 0) <= SAVE_DEADLINE_MS);
 });
 
+test('★시간 예산 불변식이 모듈 로드 시점에 강제된다 (상수만 있고 강제 없는 상태 금지)', async () => {
+  // budget.ts 는 import 시 assertTimeBudgetInvariants() 를 실행한다.
+  // 상수를 잘못 고치면 여기(=빌드/테스트 로드)에서 즉시 터진다.
+  const mod = await import('../geo-engines/budget.ts');
+  assert.equal(typeof mod.worstCaseRuntimeMs, 'function');
+  // 로드가 성공했다는 것 자체가 불변식 통과를 뜻한다
+  assert.ok(mod.worstCaseRuntimeMs() < mod.PLATFORM_MAX_DURATION_MS);
+});
+
 test('준비 구간: 마감과 1건 타임아웃이 어긋나지 않는다', () => {
   assert.equal(PREFLIGHT_OP_TIMEOUT_MS, 5_000);
   // 준비 작업은 잠금·인계·count·목록·중복확인 최대 5회 → 5 × 5초 = 25초.
@@ -238,10 +247,13 @@ test('★잠금: 상태를 알 수 없으면 진행하지 않는다 (폴백 진�
   assert.match(decision.reason ?? '', /이중 과금 방지/);
 });
 
-test('★마감 상태: 완전 성공에만 done — 나머지는 전부 failed(재실행 허용)', () => {
+test('★마감 상태: 완전 성공에만 done — 실패 신호가 하나라도 있으면 failed(재실행 허용)', () => {
   const clean = {
     preflightAborted: false,
+    paidCountUnknown: false,
+    usersOverFetchLimit: 0,
     queryDeadlineReached: false,
+    queryDrainTimedOut: false,
     matchAborted: false,
     insertAborted: false,
     insertErrorCount: 0,
@@ -251,15 +263,19 @@ test('★마감 상태: 완전 성공에만 done — 나머지는 전부 failed(
   };
   assert.equal(resolveFinalStatus(clean), 'done');
 
-  // 하나라도 어긋나면 done 이 아니다 — done 은 그 주를 영구히 잠근다
+  // ★ 응답에 보고되는 실패 신호가 빠짐없이 상태 판정에 반영되는지 전수 확인.
+  //   여기 목록은 run-lock.ts 의 대응표(응답 필드 → 플래그)와 1:1이어야 한다.
   const breakers: Array<Partial<typeof clean>> = [
     { preflightAborted: true },
-    { queryDeadlineReached: true },
-    { matchAborted: true },
-    { insertAborted: true },
-    { insertErrorCount: 1 },
-    { usersDroppedPartialFailure: 1 },
-    { usersOverQueryBudget: 1 },
+    { paidCountUnknown: true },      // truncated.paidCountUnknown
+    { usersOverFetchLimit: 1 },      // truncated.usersOverFetchLimit
+    { queryDeadlineReached: true },  // truncated.deadlineReached
+    { queryDrainTimedOut: true },    // truncated.queryDrainTimedOut
+    { matchAborted: true },          // truncated.matchAborted (+usersSkippedByMatchDeadline)
+    { insertAborted: true },         // truncated.insertAborted (+chunksSkippedByDeadline)
+    { insertErrorCount: 1 },         // insertErrors
+    { usersDroppedPartialFailure: 1 }, // truncated.usersDroppedPartialFailure (+unresolvedResults)
+    { usersOverQueryBudget: 1 },     // truncated.usersOverQueryBudget (+questionsDropped)
     { threw: true },
   ];
   for (const breaker of breakers) {
@@ -269,6 +285,22 @@ test('★마감 상태: 완전 성공에만 done — 나머지는 전부 failed(
       `${JSON.stringify(breaker)} 인데 done 으로 마감됐다`,
     );
   }
+
+  // 판정에 쓰이는 플래그 개수 = 위 목록 개수. 새 플래그를 추가하고 목록을 빠뜨리면 실패한다.
+  assert.equal(Object.keys(clean).length, breakers.length);
+});
+
+test('의도적으로 실패로 보지 않는 것: 재료 없음·이미 처리됨', () => {
+  // skippedNoMaterial: 질문 재료가 없어 재실행해도 결과가 같다
+  // skippedAlreadyChecked: 이미 이번 주에 저장된 회원 — 정상 동작이다
+  // 둘 다 RunOutcomeFlags 에 없어야 한다(있으면 매주 failed 가 된다)
+  const flagNames = [
+    'preflightAborted', 'paidCountUnknown', 'usersOverFetchLimit', 'queryDeadlineReached',
+    'queryDrainTimedOut', 'matchAborted', 'insertAborted', 'insertErrorCount',
+    'usersDroppedPartialFailure', 'usersOverQueryBudget', 'threw',
+  ];
+  assert.ok(!flagNames.includes('skippedNoMaterial'));
+  assert.ok(!flagNames.includes('skippedAlreadyChecked'));
 });
 
 test('잠금: locked/unavailable 은 정리할 잠금이 없다(needsFinalize=false)', () => {

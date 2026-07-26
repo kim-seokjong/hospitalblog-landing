@@ -16,12 +16,15 @@
  * 외부 의존 없는 순수 모듈(@/ alias import 금지) — node:test 러너로 직접 검증 가능.
  */
 
+import { createAttemptBudget } from './attempts.ts';
 import { chunkGroups } from './batching.ts';
 import {
   FINALIZE_DEADLINE_MS,
   INSERT_CHUNK_TIMEOUT_MS,
   LOCK_FINALIZE_TIMEOUT_MS,
   MATCH_DEADLINE_MS,
+  MAX_HTTP_ATTEMPTS_PER_RUN,
+  MAX_MATCH_TEXT_CHARS,
   MAX_REPORTED_FAILURES,
   MAX_USERS,
   MIN_INSERT_WINDOW_MS,
@@ -29,13 +32,16 @@ import {
   PREFLIGHT_DEADLINE_MS,
   PREFLIGHT_OP_TIMEOUT_MS,
   QUERY_DEADLINE_MS,
+  QUERY_DRAIN_ALLOWANCE_MS,
   SAVE_DEADLINE_MS,
   capQuestionPlan,
   clampTimeout,
   maxUniqueQuestionsFor,
   type UserQuestionPlan,
 } from './budget.ts';
+import { createGeoQueryCache } from './cache.ts';
 import { executeGeoQueries, type ExecuteQueriesInput, type ExecuteQueriesResult } from './index.ts';
+import { MAX_SOURCES } from './types.ts';
 import {
   interpretLockInsert,
   resolveFinalStatus,
@@ -63,8 +69,12 @@ const INSERT_CHUNK_SIZE = 200;
  * 실패 후 재실행까지 겹쳐도 3,000. 그 두 배인 6,000 을 상한으로 둔다.
  */
 export const WEEK_ROWS_LOOKUP_LIMIT = 6_000;
-/** 인용 판정 루프에서 마감을 확인하는 주기 (회원 수) */
-const MATCH_DEADLINE_CHECK_EVERY = 5;
+/**
+ * 인용 판정 루프에서 마감을 확인하는 주기 (회원 수).
+ * 1 = 매 회원마다. now() 호출 비용은 무시할 수 있고,
+ * 회원당 처리 시간이 MAX_MATCH_TEXT_CHARS 로 묶여 있어 이 주기면 마감이 엄밀해진다.
+ */
+const MATCH_DEADLINE_CHECK_EVERY = 1;
 
 export interface GeoProfileRow {
   readonly id: string;
@@ -138,6 +148,8 @@ export interface RunGeoTrackingInput {
   readonly sleepImpl?: (ms: number) => Promise<void>;
   /** 테스트 주입용 — 기본은 실제 엔진 실행기 */
   readonly executeQueries?: (input: ExecuteQueriesInput) => Promise<ExecuteQueriesResult>;
+  /** 테스트 주입용 — 드레인 마감까지의 대기(기본은 실제 타이머) */
+  readonly waitUntil?: (atMs: number) => Promise<void>;
   readonly logger?: {
     warn: (message: string) => void;
     error: (message: string) => void;
@@ -156,6 +168,33 @@ function preflightTimeout(now: number, deadlineAt: number): number | null {
   return clampTimeout(now, deadlineAt, PREFLIGHT_OP_TIMEOUT_MS, MIN_PREFLIGHT_WINDOW_MS);
 }
 
+/** 드레인 경합에서 "시간 초과" 쪽이 이겼음을 나타내는 고유 토큰 */
+const DRAIN_TIMED_OUT = Symbol('geo-query-drain-timeout');
+
+interface DrainWaiter {
+  readonly promise: Promise<typeof DRAIN_TIMED_OUT>;
+  readonly cancel: () => void;
+}
+
+/**
+ * 드레인 마감까지 기다리는 대기자.
+ * waitUntil 주입이 있으면 그것을 쓰고(테스트의 가상 시계), 없으면 실제 타이머를 쓴다.
+ */
+function createDrainWaiter(
+  atMs: number,
+  now: () => number,
+  waitUntil?: (atMs: number) => Promise<void>,
+): DrainWaiter {
+  if (waitUntil) {
+    return { promise: waitUntil(atMs).then(() => DRAIN_TIMED_OUT), cancel: () => {} };
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const promise = new Promise<typeof DRAIN_TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(DRAIN_TIMED_OUT), Math.max(0, atMs - now()));
+  });
+  return { promise, cancel: () => { if (timer) clearTimeout(timer); } };
+}
+
 export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeoTrackingResult> {
   const { gateway, engines, weekStart, startedAt, now } = input;
   const log = input.logger ?? NOOP_LOGGER;
@@ -170,7 +209,10 @@ export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeo
   let lock: RunLockDecision = { mode: 'error', reason: null, proceed: false, needsFinalize: false };
   // 마감 상태 판정 재료 — finally 에서 done/failed 를 가른다
   let preflightAborted = false;
+  let paidCountUnknown = false;
+  let usersOverFetchLimit = 0;
   let queryDeadlineReached = false;
+  let queryDrainTimedOut = false;
   let matchAborted = false;
   let insertAborted = false;
   let insertErrorCount = 0;
@@ -230,6 +272,17 @@ export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeo
       return { status: 500, body: { ok: false, mode: 'aborted', weekStart, lock: lock.mode, error: finalizeNote } };
     }
     const profiles = listRes.rows;
+
+    // count 실패를 무시하면 (count ?? 0) 때문에 초과 회원이 0명으로 보이고
+    // 누락이 있는데도 done 으로 마감된다 → 알 수 없으면 실패로 간주한다.
+    paidCountUnknown = Boolean(countRes.error) || countRes.count === null;
+    if (paidCountUnknown) {
+      log.warn(
+        `[geo-tracking] 유료 회원 총수 조회 실패 — 누락 인원을 알 수 없어 failed 로 마감합니다: ${countRes.error?.message ?? 'count 없음'}`,
+      );
+    }
+    // MAX_USERS 를 넘겨 조회조차 되지 않은 회원 — 그 주에 영영 처리되지 않으므로 실패 신호다
+    usersOverFetchLimit = Math.max(0, (countRes.count ?? 0) - profiles.length);
 
     // ── 3단계: 이번 주 중복 확인 (재실행이 이미 저장된 회원을 다시 과금하지 않게 한다)
     const dupTimeout = preflightTimeout(now(), preflightDeadlineAt);
@@ -295,22 +348,60 @@ export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeo
     usersOverQueryBudget = capped.truncatedUsers;
 
     // ── 5단계: 엔진 병렬 실행 (공통 AbortSignal 이 200초에 모든 대기를 깨운다)
-    const executed = await execute({
+    //
+    // ★ 드레인 상한 강제: 200초에 취소 신호를 쏴도 워커 정리가 끝날 때까지
+    //   무한정 기다리면 QUERY_DRAIN_ALLOWANCE_MS 는 이름뿐인 상수가 된다.
+    //   그래서 실행 완료와 드레인 마감(205초)을 경합시키고, 드레인이 이기면
+    //   결과를 기다리지 않고 저장 단계로 넘어간다.
+    //   캐시와 시도 예산은 **여기서 소유**하므로, 기다리지 않고 넘어가도
+    //   그때까지 수집된 응답과 실제 발생 비용은 그대로 남는다.
+    const cache = createGeoQueryCache();
+    const attemptBudget = createAttemptBudget(MAX_HTTP_ATTEMPTS_PER_RUN);
+    const drainDeadlineAt = queryDeadlineAt + QUERY_DRAIN_ALLOWANCE_MS;
+
+    const executePromise = execute({
       questions: capped.uniqueQuestions,
       engines,
       env: input.env,
       fetchImpl: input.fetchImpl,
       deadlineAt: queryDeadlineAt,
+      cache,
+      attemptBudget,
       now,
       sleepImpl: input.sleepImpl,
     });
-    httpAttempts = executed.httpAttempts;
-    queryDeadlineReached = executed.deadlineReached;
+    // 버려질 수 있는 Promise 이므로 미처리 거부(unhandled rejection)를 막는다
+    const settled = executePromise.then(
+      (value) => ({ ok: true as const, value }),
+      (reason: unknown) => ({ ok: false as const, reason }),
+    );
+
+    const drain = createDrainWaiter(drainDeadlineAt, now, input.waitUntil);
+    const raced = await Promise.race([settled, drain.promise]);
+    drain.cancel();
+
+    let executed: ExecuteQueriesResult;
+    if (raced === DRAIN_TIMED_OUT) {
+      queryDrainTimedOut = true;
+      queryDeadlineReached = true;
+      httpAttempts = attemptBudget.used();
+      // 수집된 캐시는 그대로 쓰고, 확정되지 않은 통계는 비운다
+      executed = { cache, stats: [], failures: [], httpAttempts, deadlineReached: true };
+      log.error(
+        `[geo-tracking] 질의 드레인 상한(${QUERY_DRAIN_ALLOWANCE_MS}ms) 초과 — 정리를 기다리지 않고 저장 단계로 넘어갑니다.`,
+      );
+    } else if (!raced.ok) {
+      throw raced.reason instanceof Error ? raced.reason : new Error(String(raced.reason));
+    } else {
+      executed = raced.value;
+      httpAttempts = executed.httpAttempts;
+      queryDeadlineReached = executed.deadlineReached;
+    }
 
     for (const failure of executed.failures.slice(0, MAX_REPORTED_FAILURES)) {
       log.error(`[geo-tracking] ${failure.engine} 질의 실패: ${failure.question} — ${failure.reason}`);
     }
-    if (queryDeadlineReached) {
+    if (queryDeadlineReached && !queryDrainTimedOut) {
       log.warn('[geo-tracking] 질의 데드라인 도달 — 미완료 질의를 취소하고 저장 단계로 넘어갑니다.');
     }
 
@@ -345,8 +436,13 @@ export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeo
             complete = false;
             continue;
           }
+          // 회원당 처리 시간을 유한하게 묶는다 — 이 상한이 없으면
+          // 판정 마감(210초)이 "엄밀한 상한"이라고 말할 수 없다.
+          const matchText = outcome.answer.text.slice(0, MAX_MATCH_TEXT_CHARS);
+          const sources = outcome.answer.sources.slice(0, MAX_SOURCES);
+
           const result = detectCitation(
-            { text: outcome.answer.text, sourceUrls: outcome.answer.sources.map((s) => s.url) },
+            { text: matchText, sourceUrls: sources.map((s) => s.url) },
             { hospitalName: target.hospitalName, naverBlogId: target.naverBlogId },
           );
           if (result.cited) cited++;
@@ -358,8 +454,8 @@ export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeo
             citation_type: result.citationType,
             evidence: result.evidence,
             raw: {
-              sources: outcome.answer.sources.map((s) => ({ url: s.url, title: s.title })),
-              excerpt: sanitizeExcerpt(outcome.answer.text, RAW_EXCERPT_LENGTH),
+              sources: sources.map((s) => ({ url: s.url, title: s.title })),
+              excerpt: sanitizeExcerpt(matchText, RAW_EXCERPT_LENGTH),
             },
           });
         }
@@ -401,7 +497,12 @@ export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeo
 
     const plannedApiCalls =
       capped.kept.reduce((sum, p) => sum + p.questions.length, 0) * engines.length;
-    const actualApiCalls = executed.stats.reduce((sum, s) => sum + s.calls, 0);
+    // 드레인으로 넘어간 경우 엔진 통계가 확정되지 않았다.
+    // 0 으로 보고하면 "중복 제거 100%" 같은 거짓 수치가 나오므로 null 로 둔다.
+    const actualApiCalls = queryDrainTimedOut
+      ? null
+      : executed.stats.reduce((sum, s) => sum + s.calls, 0);
+    const dedupedApiCalls = actualApiCalls === null ? null : Math.max(0, plannedApiCalls - actualApiCalls);
 
     return {
       status: 200,
@@ -415,12 +516,15 @@ export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeo
         inserted,
         cited: citedCount,
         truncated: {
-          usersOverFetchLimit: Math.max(0, (countRes.count ?? 0) - profiles.length),
+          usersOverFetchLimit,
+          // 유료 회원 총수 조회 실패 → 누락 인원을 알 수 없다(이 경우 failed 로 마감)
+          paidCountUnknown,
           usersOverQueryBudget,
           questionsDropped: capped.droppedQuestions,
           usersDroppedPartialFailure,
           unresolvedResults,
           deadlineReached: queryDeadlineReached,
+          queryDrainTimedOut,
           matchAborted,
           usersSkippedByMatchDeadline,
           insertAborted,
@@ -432,7 +536,7 @@ export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeo
           uniqueQuestions: capped.uniqueQuestions.length,
           plannedApiCalls,
           actualApiCalls,
-          dedupedApiCalls: Math.max(0, plannedApiCalls - actualApiCalls),
+          dedupedApiCalls,
           httpAttempts,
         },
         engineStats: executed.stats,
@@ -453,27 +557,37 @@ export async function runGeoTracking(input: RunGeoTrackingInput): Promise<RunGeo
     //   여기서 빠지면 레코드가 running 으로 남아 정상 재실행까지 10분간 거부된다.
     //   그리고 완전 성공이 아니면 'failed' 로 마감해 그 주 재실행을 허용한다
     //   (done 으로 찍으면 부분 저장이 그 주의 최종 결과로 영구 고정된다).
-    if (lock.needsFinalize) {
-      const status: RunStatus = resolveFinalStatus({
-        preflightAborted,
-        queryDeadlineReached,
-        matchAborted,
-        insertAborted,
-        insertErrorCount,
-        usersDroppedPartialFailure,
-        usersOverQueryBudget,
-        threw,
-      });
-      const timeoutMs = clampTimeout(now(), finalizeDeadlineAt, LOCK_FINALIZE_TIMEOUT_MS, 1);
-      if (timeoutMs === null) {
-        log.error('[geo-tracking] 마무리 마감 초과 — 잠금을 정리하지 못했습니다(10분 뒤 stale 인계 대상).');
-      } else {
-        const { error: finErr } = await gateway.finalizeLock(
-          { weekStart, status, users: savedUsers, inserted, httpAttempts, note: finalizeNote },
-          timeoutMs,
-        );
-        if (finErr) log.error(`[geo-tracking] 실행 잠금 마무리 실패: ${finErr.message ?? ''}`);
+    // ★ finally 안에서 던지면 try/catch 가 만든 응답이 통째로 폐기되고
+    //   라우트가 500 으로 끝난다. 정리 실패는 로그만 남기고 원래 결과를 돌려준다.
+    try {
+      if (lock.needsFinalize) {
+        const status: RunStatus = resolveFinalStatus({
+          preflightAborted,
+          paidCountUnknown,
+          usersOverFetchLimit,
+          queryDeadlineReached,
+          queryDrainTimedOut,
+          matchAborted,
+          insertAborted,
+          insertErrorCount,
+          usersDroppedPartialFailure,
+          usersOverQueryBudget,
+          threw,
+        });
+        const timeoutMs = clampTimeout(now(), finalizeDeadlineAt, LOCK_FINALIZE_TIMEOUT_MS, 1);
+        if (timeoutMs === null) {
+          log.error('[geo-tracking] 마무리 마감 초과 — 잠금을 정리하지 못했습니다(10분 뒤 stale 인계 대상).');
+        } else {
+          const { error: finErr } = await gateway.finalizeLock(
+            { weekStart, status, users: savedUsers, inserted, httpAttempts, note: finalizeNote },
+            timeoutMs,
+          );
+          if (finErr) log.error(`[geo-tracking] 실행 잠금 마무리 실패: ${finErr.message ?? ''}`);
+        }
       }
+    } catch (finalizeError) {
+      const message = finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
+      log.error(`[geo-tracking] 실행 잠금 마무리 중 예외(무시하고 결과 반환): ${message}`);
     }
   }
 }

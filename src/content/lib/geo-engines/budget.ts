@@ -113,6 +113,17 @@ export const RESPONSE_ALLOWANCE_MS = 2_000;
 export const MAX_REPORTED_FAILURES = 50;
 
 /**
+ * 인용 판정에 쓰는 응답 텍스트 길이 상한.
+ *
+ * detectCitation 은 전체 텍스트에 정규식을 돌린다. 엔진 응답 길이가 무한하면
+ * "회원당 판정 시간"이 유한하다고 말할 수 없어 판정 마감(210초)이 엄밀한 상한이 아니게 된다.
+ * max_output_tokens 1200(≈3~4천 자) 기준으로 20,000자는 실제로는 절대 걸리지 않는
+ * 방어선이며, 걸리더라도 인용은 보통 답변 앞부분에 나오므로 실질 손실이 없다.
+ * 출처 배열은 어댑터가 이미 MAX_SOURCES(5)로 자른다.
+ */
+export const MAX_MATCH_TEXT_CHARS = 20_000;
+
+/**
  * 최악 실행 시간 = 마지막으로 강제되는 절대 마감 + 응답 직렬화 여유.
  * 앞 구간이 아무리 지연돼도 각 단계가 자기 절대 마감에서 잘리므로
  * 총합은 이 값을 넘지 않는다(구간별 강제 지점은 위 표 참조).
@@ -120,6 +131,44 @@ export const MAX_REPORTED_FAILURES = 50;
 export function worstCaseRuntimeMs(): number {
   return FINALIZE_DEADLINE_MS + RESPONSE_ALLOWANCE_MS;
 }
+
+/**
+ * 구간 마감 불변식. 상수를 잘못 고치면 **모듈 로드(=빌드) 시점에 즉시 실패**한다.
+ *
+ * 상수만 있고 강제가 없는 상태를 만들지 않기 위한 장치다.
+ * 실행 중에는 절대 던질 수 없다(전부 컴파일 타임 상수).
+ */
+function assertTimeBudgetInvariants(): void {
+  const violations: string[] = [];
+  if (PREFLIGHT_OP_TIMEOUT_MS >= PREFLIGHT_DEADLINE_MS) {
+    violations.push('준비 1건 타임아웃이 준비 마감보다 크거나 같다');
+  }
+  if (PREFLIGHT_DEADLINE_MS >= QUERY_DEADLINE_MS) {
+    violations.push('준비 마감이 질의 마감보다 늦다 — 질의 시간이 남지 않는다');
+  }
+  if (QUERY_DEADLINE_MS + QUERY_DRAIN_ALLOWANCE_MS > MATCH_DEADLINE_MS) {
+    violations.push('질의 마감 + 드레인 여유가 판정 마감을 넘는다');
+  }
+  if (MATCH_DEADLINE_MS >= SAVE_DEADLINE_MS) {
+    violations.push('판정 마감이 저장 마감보다 늦다 — 저장 시간이 남지 않는다');
+  }
+  if (SAVE_DEADLINE_MS + LOCK_FINALIZE_TIMEOUT_MS > FINALIZE_DEADLINE_MS) {
+    violations.push('저장 마감 + 마무리 타임아웃이 마무리 마감을 넘는다');
+  }
+  if (MIN_INSERT_WINDOW_MS > INSERT_CHUNK_TIMEOUT_MS) {
+    violations.push('최소 저장 창이 청크 타임아웃보다 크다');
+  }
+  if (worstCaseRuntimeMs() >= PLATFORM_MAX_DURATION_MS) {
+    violations.push(
+      `최악 실행 시간(${worstCaseRuntimeMs()}ms)이 플랫폼 한도(${PLATFORM_MAX_DURATION_MS}ms) 이상이다`,
+    );
+  }
+  if (violations.length > 0) {
+    throw new Error(`[geo-tracking] 시간 예산 상수 설정 오류: ${violations.join(' / ')}`);
+  }
+}
+
+assertTimeBudgetInvariants();
 
 /**
  * 절대 마감까지 남은 시간에 맞춰 좁힌 작업 타임아웃.
