@@ -8,6 +8,7 @@ import { getClinicTheme } from '@/content/lib/clinic-site/theme-data';
 import { buildMedicalClinicSchema, buildMetaDescription, serializeJsonLd } from '@/content/lib/geo-schema';
 import ClinicSiteFooter, { formatClinicDate } from './site-chrome';
 import AiReferralBeacon from './ai-referral-beacon';
+import { issueBeaconToken } from '@/dev/lib/ai-referral-crypto';
 
 /**
  * 병원 서브도메인 블로그 — 홈 (공개, 인증 없음).
@@ -85,10 +86,18 @@ export default async function ClinicSiteHomePage({ params }: PageProps) {
     ? ' group-hover:text-[color:var(--clinic-accent)]'
     : '';
 
+  // AI 유입 비콘 서명 — 이 병원의 이 페이지를 서버가 실제로 렌더했다는 증거.
+  // 시크릿 미설정이면 null 이고 비콘은 아무 요청도 보내지 않는다(기능만 비활성).
+  const beacon = issueBeaconToken(validated.slug, null);
+
   return (
     <div className="min-h-screen bg-white text-[#202020]" style={accentStyle}>
       {/* AI 검색 유입 집계 — 렌더 경로 밖(브라우저 백그라운드 전송). 화면에 아무것도 그리지 않는다. */}
-      <AiReferralBeacon slug={validated.slug} />
+      <AiReferralBeacon
+        slug={validated.slug}
+        token={beacon?.token ?? null}
+        exp={beacon?.exp ?? null}
+      />
 
       {clinicSchema && (
         <script

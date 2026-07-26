@@ -178,22 +178,33 @@ function AiReferralSection({
             </div>
           </div>
 
-          {/* 글별 */}
-          {summary.topPosts.length > 0 && (
+          {/* 글별 — 최소 집계치 미만은 개별 표시하지 않고 묶어서 보여준다 */}
+          {(summary.topPosts.length > 0 || summary.hiddenPostCount > 0) && (
             <div className="border-t border-[#eef2f6] pt-3 mb-3">
               <p className="text-xs font-semibold text-[#202020] mb-2">방문이 많은 글</p>
-              <ul className="space-y-1.5">
-                {summary.topPosts.map((p) => (
-                  <li key={p.postId} className="flex items-baseline justify-between gap-3">
-                    <span className="text-xs text-[#3d4551] leading-relaxed break-keep line-clamp-1">
-                      {p.title || '(제목 없음)'}
-                    </span>
-                    <span className="text-xs font-semibold text-[#202020] flex-shrink-0">
-                      {p.visits}회
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              {summary.topPosts.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {summary.topPosts.map((p) => (
+                    <li key={p.postId} className="flex items-baseline justify-between gap-3">
+                      <span className="text-xs text-[#3d4551] leading-relaxed break-keep line-clamp-1">
+                        {p.title || '(제목 없음)'}
+                      </span>
+                      <span className="text-xs font-semibold text-[#202020] flex-shrink-0">
+                        {p.visits}회
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-[#5b6573] leading-relaxed">
+                  아직 글별로 나눠 보여줄 만큼 쌓이지 않았습니다.
+                </p>
+              )}
+              {summary.hiddenPostCount > 0 && (
+                <p className="text-xs text-[#5b6573] mt-2">
+                  그 외 {summary.hiddenPostCount}편 합계 {summary.hiddenPostVisits}회
+                </p>
+              )}
             </div>
           )}
 
@@ -207,8 +218,10 @@ function AiReferralSection({
 
       <p className="text-[11px] text-[#5b6573] leading-relaxed border-t border-[#eef2f6] pt-3">
         ※ 브라우저나 AI 서비스가 유입 경로를 전달하지 않으면 집계되지 않아, 실제보다 적게
-        나올 수 있습니다. 집계는 병원 블로그({'{'}주소{'}'}.hospitalblog.kr)에서만 이뤄지며
-        방문자의 IP·기기 정보 등 개인을 식별할 수 있는 값은 저장하지 않습니다.
+        나올 수 있습니다. 집계는 병원 블로그({'{'}주소{'}'}.hospitalblog.kr)에서만 이뤄지며,
+        방문자의 IP·기기 정보·방문 시각 등 개인을 식별할 수 있는 값은{' '}
+        <strong className="font-semibold">데이터베이스에 저장하지 않습니다</strong>. 날짜별
+        방문 수만 남습니다. 방문 수가 적은 글은 개별로 표시하지 않고 묶어서 보여줍니다.
       </p>
     </div>
   );
