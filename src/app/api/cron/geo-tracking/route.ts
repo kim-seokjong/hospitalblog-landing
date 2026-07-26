@@ -1,42 +1,143 @@
-// 매주 월요일 1회 실행 — AI 검색(GEO) 인용 추적 샘플링.
-// 유료 플랜 회원별로 프로필(지역·진료과·키워드) 기반 질문 최대 3개를 생성해
-// OpenAI 웹검색으로 실제 AI 답변을 받아, 병원명/블로그 URL 인용 여부를 geo_citations에 기록한다.
+// 매주 월요일 1회 실행 — AI 검색(GEO) 인용 추적 샘플링. (주기는 주 1회 유지)
+// 유료 플랜 회원별로 프로필(지역·진료과·키워드) 기반 질문 최대 5개를 생성해
+// 설정된 AI 검색 엔진(OpenAI · Perplexity)에 각각 질의하고,
+// 병원명/블로그 URL 인용 여부를 geo_citations 에 기록한다(engine 컬럼에 엔진 식별자).
 // 샘플링 결과이며 실제 사용자 노출과 다를 수 있다(UI에 동일 면책 표기).
 // 인증: Authorization: Bearer ${CRON_SECRET} (기존 cron 패턴 동일). service role로 insert(RLS 우회).
-// GEO_LIVE_QUERY=off 면 라이브 질의 전체 비활성 → 즉시 mode:'disabled' 반환(준비도 점수 모드만 운영).
+//
+// ⚠️ Gemini 는 구글 약관(Grounded Results 의 analyze/cache 금지)으로 기본 비활성이다.
+//    상세 근거는 src/content/lib/geo-engines/gemini.ts 상단 참조.
+//
+// 이 파일은 **얇은 어댑터**다. 실행 로직·시간 마감은 전부
+// src/content/lib/geo-engines/run-tracking.ts 의 runGeoTracking 에 있고,
+// 여기서는 Supabase 호출을 게이트웨이 인터페이스에 맞춰 넘기기만 한다.
+// (그렇게 해야 "최악의 경우에도 300초 이내"를 가상 시계로 실제 제어 흐름에서 검증할 수 있다)
+//
+// 안전장치 요약:
+//  · 키 없는 엔진은 조용히 skip, 전부 없으면 mode:'disabled'
+//  · 외부 API 호출 전에 geo_tracking_runs(week_start PK) 로 동시 실행 원자적 차단(마이그 048)
+//  · 구간별 절대 마감: 준비 20s → 질의 200s → 판정 210s → 저장 285s → 마무리 288s
+//  · 회원 단위 "전부 아니면 전무", 완전 성공이 아니면 status='failed' 로 재실행 허용
 
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthorizedCron } from '@/dev/lib/cron-auth';
 import { createAdminClient } from '@/dev/lib/supabase/server';
 import { PAID_PLAN_IDS } from '@/payment/lib/plans';
-import { extractNaverBlogId } from '@/content/lib/rank-tracking';
-import { isGeoLiveQueryEnabled, runGeoLiveQuery, GEO_QUERY_ENGINE } from '@/content/lib/geo-live-query';
-import {
-  buildGeoQuestions,
-  detectCitation,
-  sanitizeExcerpt,
-} from '@/content/lib/geo-tracking';
+import { getEnabledEngines } from '@/content/lib/geo-engines';
+import { runGeoTracking } from '@/content/lib/geo-engines/run-tracking';
+import type {
+  FinalizeLockInput,
+  GeoCitationInsertRow,
+  GeoProfileRow,
+  GeoTrackingGateway,
+} from '@/content/lib/geo-engines/run-tracking';
+import type { DbErrorLike } from '@/content/lib/geo-engines/run-lock';
+import { mondayOfWeek } from '@/content/lib/geo-tracking';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-// 비용/부하 방어 상한
-const MAX_USERS = 100;          // 1회 실행 사용자 상한 (사용자당 최대 3질의)
-const MAX_TOTAL_QUERIES = 200;  // 1회 실행 전체 질의 상한
-const THROTTLE_MS = 500;        // 질의 사이 지연 (OpenAI RPM 방어)
-const RAW_EXCERPT_LENGTH = 300; // raw 에 보관하는 응답 발췌 길이 (전체 원문 저장 금지)
+type AdminClient = ReturnType<typeof createAdminClient>;
 
-interface ProfileRow {
-  id: string;
-  hospital_name: string | null;
-  region: string | null;
-  specialty: string | null;
-  hospital_keywords: string[] | null;
-  naver_blog_url: string | null;
+/** 게이트웨이 계약: 모든 호출은 timeoutMs 안에 끝나야 한다 → AbortSignal.timeout 부착 */
+function timeoutSignal(timeoutMs: number): AbortSignal {
+  return AbortSignal.timeout(Math.max(1, timeoutMs));
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function toDbError(error: { code?: string; message?: string } | null): DbErrorLike | null {
+  if (!error) return null;
+  return { code: error.code, message: error.message };
+}
+
+/**
+ * Supabase 게이트웨이. 로직은 없고 쿼리만 있다 —
+ * 시간 마감·상태 판정은 전부 runGeoTracking 이 담당한다.
+ */
+function createSupabaseGateway(admin: AdminClient): GeoTrackingGateway {
+  return {
+    async acquireLock(weekStart, timeoutMs) {
+      const { error } = await admin
+        .from('geo_tracking_runs')
+        .insert({ week_start: weekStart, status: 'running' })
+        .abortSignal(timeoutSignal(timeoutMs));
+      return { error: toDbError(error) };
+    },
+
+    async takeoverLock(weekStart, staleBeforeIso, timeoutMs) {
+      // 인계 대상: 비정상 종료로 남은 running, 또는 재실행이 허용된 failed.
+      // 조건부 update 가 행을 돌려주는 순간이 소유권 획득이라 경쟁이 없다.
+      const { data, error } = await admin
+        .from('geo_tracking_runs')
+        .update({ started_at: new Date().toISOString(), status: 'running' })
+        .eq('week_start', weekStart)
+        .or(`status.eq.failed,and(status.eq.running,started_at.lt.${staleBeforeIso})`)
+        .select('week_start')
+        .abortSignal(timeoutSignal(timeoutMs));
+      return { takenOver: (data ?? []).length > 0, error: toDbError(error) };
+    },
+
+    async finalizeLock(input: FinalizeLockInput, timeoutMs) {
+      const { error } = await admin
+        .from('geo_tracking_runs')
+        .update({
+          finished_at: new Date().toISOString(),
+          status: input.status,
+          users: input.users,
+          inserted: input.inserted,
+          http_attempts: input.httpAttempts,
+          note: input.note,
+        })
+        .eq('week_start', input.weekStart)
+        .abortSignal(timeoutSignal(timeoutMs));
+      return { error: toDbError(error) };
+    },
+
+    async countPaidProfiles(timeoutMs) {
+      const { count, error } = await admin
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .in('plan', PAID_PLAN_IDS)
+        .abortSignal(timeoutSignal(timeoutMs));
+      return { count: count ?? null, error: toDbError(error) };
+    },
+
+    async listPaidProfiles(limit, timeoutMs) {
+      const { data, error } = await admin
+        .from('profiles')
+        .select('id, hospital_name, region, specialty, hospital_keywords, naver_blog_url')
+        .in('plan', PAID_PLAN_IDS)
+        .order('id', { ascending: true })
+        .limit(limit)
+        .abortSignal(timeoutSignal(timeoutMs));
+      return { rows: (data ?? []) as GeoProfileRow[], error: toDbError(error) };
+    },
+
+    async listWeekCitationUserIds(weekStartIso, candidateIds, limit, timeoutMs) {
+      if (candidateIds.length === 0) return { userIds: [], error: null };
+      const { data, error } = await admin
+        .from('geo_citations')
+        .select('user_id')
+        .in('user_id', candidateIds as string[])
+        .gte('checked_at', weekStartIso)
+        .limit(limit)
+        .abortSignal(timeoutSignal(timeoutMs));
+      // 마이그 037 미적용이면 중복도 있을 수 없다 → 빈 목록으로 진행
+      if (error?.code === '42P01') return { userIds: [], error: null };
+      const rows = (data ?? []) as Array<{ user_id: string | null }>;
+      return {
+        userIds: rows.map((r) => r.user_id).filter((id): id is string => Boolean(id)),
+        error: toDbError(error),
+      };
+    },
+
+    async insertCitations(rows: readonly GeoCitationInsertRow[], timeoutMs) {
+      const { error } = await admin
+        .from('geo_citations')
+        .insert(rows as GeoCitationInsertRow[])
+        .abortSignal(timeoutSignal(timeoutMs));
+      return { error: toDbError(error) };
+    },
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -44,108 +145,36 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!isGeoLiveQueryEnabled()) {
+  // 요청 진입 시각을 고정한다 — 모든 절대 마감의 기준점
+  const startedAt = Date.now();
+  const engines = getEnabledEngines(process.env);
+
+  if (engines.length === 0) {
     return NextResponse.json({
       ok: true,
       mode: 'disabled',
-      message: 'GEO 라이브 질의가 비활성 상태입니다 (GEO_LIVE_QUERY=off 또는 OPENAI_API_KEY 미설정). 준비도 점수 모드만 운영됩니다.',
+      message:
+        'GEO 라이브 질의가 비활성 상태입니다 (GEO_LIVE_QUERY=off 또는 엔진 API 키 미설정). 준비도 점수 모드만 운영됩니다.',
     });
   }
 
-  const admin = createAdminClient();
-  let users = 0;
-  let queries = 0;
-  let inserted = 0;
-  let citedCount = 0;
-  const failures: Array<{ userId: string; question: string; reason: string }> = [];
-
-  try {
-    // 유료 플랜 회원만 대상 (질문 재료가 있는 사용자만 실제 질의)
-    const { data, error } = await admin
-      .from('profiles')
-      .select('id, hospital_name, region, specialty, hospital_keywords, naver_blog_url')
-      .in('plan', PAID_PLAN_IDS)
-      .order('id', { ascending: true })
-      .limit(MAX_USERS);
-
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    }
-
-    const profiles = (data ?? []) as ProfileRow[];
-
-    for (const profile of profiles) {
-      if (queries >= MAX_TOTAL_QUERIES) break;
-
-      const questions = buildGeoQuestions({
-        region: profile.region,
-        specialty: profile.specialty,
-        hospitalKeywords: profile.hospital_keywords,
-      });
-      if (questions.length === 0) continue; // 질문 재료 부족 → 스킵
-
-      const target = {
-        hospitalName: profile.hospital_name,
-        naverBlogId: extractNaverBlogId(profile.naver_blog_url),
-      };
-      // 인용 판정 대상(병원명·블로그) 자체가 없으면 질의해도 의미 없음 → 스킵
-      if (!target.hospitalName && !target.naverBlogId) continue;
-
-      users++;
-
-      for (const question of questions) {
-        if (queries >= MAX_TOTAL_QUERIES) break;
-        try {
-          if (queries > 0) await sleep(THROTTLE_MS);
-          queries++;
-
-          const answer = await runGeoLiveQuery(question);
-          const result = detectCitation(
-            { text: answer.text, sourceUrls: answer.sources.map((s) => s.url) },
-            target,
-          );
-
-          // 저장 최소화: 응답 원문 전체가 아니라 발췌+출처 목록만 raw 에 보관
-          const { error: insErr } = await admin.from('geo_citations').insert({
-            user_id: profile.id,
-            question,
-            engine: GEO_QUERY_ENGINE,
-            cited: result.cited,
-            citation_type: result.citationType,
-            evidence: result.evidence,
-            raw: {
-              sources: answer.sources,
-              excerpt: sanitizeExcerpt(answer.text, RAW_EXCERPT_LENGTH),
-            },
-          });
-          if (insErr) {
-            failures.push({ userId: profile.id, question, reason: insErr.message });
-            continue;
-          }
-          inserted++;
-          if (result.cited) citedCount++;
-        } catch (e) {
-          // 개별 질의 실패는 기록만 하고 계속 진행 (전체 실패 금지)
-          const reason = e instanceof Error ? e.message : 'unknown';
-          failures.push({ userId: profile.id, question, reason });
-        }
-      }
-    }
-
-    return NextResponse.json({
-      ok: true,
-      mode: 'live',
-      users,
-      queries,
-      inserted,
-      cited: citedCount,
-      failures,
-    });
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'cron failed';
-    return NextResponse.json(
-      { ok: false, error: message, users, queries, inserted, cited: citedCount, failures },
-      { status: 500 },
-    );
+  const weekStart = mondayOfWeek(new Date(startedAt).toISOString());
+  if (!weekStart) {
+    return NextResponse.json({ ok: false, error: '주차 계산에 실패했습니다.' }, { status: 500 });
   }
+
+  const result = await runGeoTracking({
+    gateway: createSupabaseGateway(createAdminClient()),
+    engines,
+    env: process.env,
+    weekStart,
+    startedAt,
+    now: Date.now,
+    logger: {
+      warn: (message) => console.warn(message),
+      error: (message) => console.error(message),
+    },
+  });
+
+  return NextResponse.json(result.body, { status: result.status });
 }
