@@ -273,8 +273,16 @@ test('★공개되는 병원 소개문도 의료광고법 게이트를 지난다
   assert.match(profileRouteSource, /v\.severity === 'HIGH' \|\| v\.severity === 'CRITICAL'/);
   // 값이 바뀔 때만 검사한다 — 기존 문구를 그대로 되보내는 저장(자동발행 끄기 등)을
   // 막으면 안전한 조치까지 차단된다(마이페이지는 프로필 전체를 매번 전송한다).
-  assert.match(profileRouteSource, /const unchanged =/);
-  assert.match(profileRouteSource, /unchanged \? \{ violations: \[\] \} : checkCompliance/);
+  assert.match(profileRouteSource, /const skipCheck =/);
+  assert.match(profileRouteSource, /skipCheck \? \{ violations: \[\] \} : checkCompliance/);
+  // 변경 여부 조회가 실패해도 안전한 저장(자동발행 끄기 등)을 막지 않는다.
+  assert.match(profileRouteSource, /Boolean\(currentErr\)/);
+});
+
+test('부분 저장 상태를 정확히 알린다(전환 실패 응답이 버려진 항목을 가리지 않는다)', () => {
+  assert.match(profileRouteSource, /const savedRestNotice = \(\) =>/);
+  assert.match(profileRouteSource, /savedRestNotice\(\)/);
+  assert.match(profileRouteSource, /droppedRequestedCols\.length > 0/);
 });
 
 test('★결제 훅의 늦은 쓰기가 고객의 자동발행 해제를 되살리지 못한다', () => {

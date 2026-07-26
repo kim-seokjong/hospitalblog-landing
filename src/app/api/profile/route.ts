@@ -211,16 +211,24 @@ export async function PUT(req: NextRequest) {
     //    전송하므로, 기존에 저장돼 있던 문구를 그대로 되보내는 것만으로 400 이 나면
     //    자동발행 끄기 같은 안전한 조치까지 막혀 버린다(값을 고칠 때 교정하면 된다).
     if (typeof updates.hospital_desc === 'string' && updates.hospital_desc.trim() !== '') {
-      const { data: currentRow } = await supabase
+      const { data: currentRow, error: currentErr } = await supabase
         .from('profiles')
         .select('hospital_desc')
         .eq('id', user.id)
         .maybeSingle<{ hospital_desc: string | null }>()
 
-      const unchanged =
+      // 조회가 실패하면 "바뀌었는지"를 알 수 없다. 이때 검사를 강행하면 기존 문구를
+      // 그대로 되보낸 저장(자동발행 끄기 등 안전한 조치 포함)이 일시적 DB 장애만으로
+      // 거부된다. 이 게이트는 "새로 쓰는 문구"를 잡는 장치이고 값은 이미 저장돼 있던
+      // 것이므로, 판단이 불가능하면 검사를 건너뛰고 다음 정상 저장에서 잡는다.
+      const skipCheck =
+        Boolean(currentErr) ||
         (currentRow?.hospital_desc ?? '').trim() === updates.hospital_desc.trim()
+      if (currentErr) {
+        console.error('[profile] 병원 소개 변경 여부 확인 실패 — 검사 생략:', currentErr.message)
+      }
 
-      const { violations } = unchanged ? { violations: [] } : checkCompliance(updates.hospital_desc)
+      const { violations } = skipCheck ? { violations: [] } : checkCompliance(updates.hospital_desc)
       const blocking = violations.filter(
         (v) => v.severity === 'HIGH' || v.severity === 'CRITICAL',
       )
@@ -267,6 +275,22 @@ export async function PUT(req: NextRequest) {
     // 사용자가 실제로 값을 넣어 보낸 신규 공개 컬럼 — 마이그 미적용으로 이 값이
     // 조용히 버려지면 "저장했는데 다시 보니 사라졌다"가 된다(원인을 알 수 없는 실패).
     const droppedRequestedCols: string[] = []
+
+    const DROPPED_LABELS: Record<string, string> = {
+      hospital_phone: '병원 대표번호',
+      hospital_hours: '진료시간',
+      site_publish_cadence: '자동발행 주기',
+      site_slug: '블로그 주소',
+    }
+    const droppedNames = () =>
+      droppedRequestedCols.map((col) => DROPPED_LABELS[col] ?? col).join(' · ')
+
+    // 부분 저장 상태를 정확히 알린다 — 마이그 미적용으로 버려진 항목이 있으면
+    // "나머지는 저장되었습니다"가 거짓이 되므로 그 사실을 함께 밝힌다.
+    const savedRestNotice = () =>
+      droppedRequestedCols.length > 0
+        ? ` ${droppedNames()} 항목도 아직 저장할 수 없습니다(기능 준비 중). 그 외 정보는 저장되었습니다.`
+        : ' 나머지 정보는 저장되었습니다.'
 
     let payload = updates
     let { error } = await runUpdate(payload)
@@ -320,33 +344,23 @@ export async function PUT(req: NextRequest) {
       // (이 UPDATE 의 컬럼은 둘뿐이라 42703 의 원인이 모호하지 않다.)
       if (isMissingColumnError(autoError) || autoError?.code === '23514') {
         return NextResponse.json(
-          { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 나머지 정보는 저장되었습니다.' },
+          { error: `바로 발행 옵션이 아직 활성화되지 않았습니다.${savedRestNotice()}` },
           { status: 503 }
         )
       }
       if (autoError) {
         console.error('[profile] 자동발행 전환 실패:', autoError.message)
         return NextResponse.json(
-          { error: '바로 발행 설정을 저장하지 못했습니다. 나머지 정보는 저장되었습니다.' },
+          { error: `바로 발행 설정을 저장하지 못했습니다.${savedRestNotice()}` },
           { status: 500 }
         )
       }
     }
 
-    // 나머지 필드는 저장됐지만 신규 공개 컬럼이 마이그 미적용으로 버려졌다면
-    // 성공이라고만 답하지 않는다 — 화면이 "저장됨"을 띄우면 사용자는 값이 사라진
-    // 이유를 영원히 알 수 없다. 저장된 것은 저장된 대로 두고 사실을 함께 알린다.
     if (droppedRequestedCols.length > 0) {
-      const LABELS: Record<string, string> = {
-        hospital_phone: '병원 대표번호',
-        hospital_hours: '진료시간',
-        site_publish_cadence: '자동발행 주기',
-        site_slug: '블로그 주소',
-      }
-      const names = droppedRequestedCols.map((col) => LABELS[col] ?? col).join(' · ')
       return NextResponse.json({
         success: true,
-        warning: `${names} 항목은 아직 저장할 수 없습니다(기능 준비 중). 나머지 정보는 저장되었습니다.`,
+        warning: `${droppedNames()} 항목은 아직 저장할 수 없습니다(기능 준비 중). 나머지 정보는 저장되었습니다.`,
       })
     }
 
