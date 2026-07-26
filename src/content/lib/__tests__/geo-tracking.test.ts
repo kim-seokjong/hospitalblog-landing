@@ -284,6 +284,60 @@ test('직답: 소제목이 평서형이면(질문형 아님) → 미통과', () 
   assert.equal(hasAnswerFirstSection(`여드름 흉터 관리 원칙\n\n${ANSWER_PARAGRAPH}`), false);
 });
 
+test('직답: "방법"·"이유"가 든 평서형 소제목은 질문형으로 보지 않는다', () => {
+  // 물음표도 의문 어미도 없는 명사구 — 질문 의도가 없으므로 직답 점수 대상이 아님
+  assert.equal(hasAnswerFirstSection(`여드름 흉터 치료 방법과 주의사항\n\n${ANSWER_PARAGRAPH}`), false);
+  assert.equal(hasAnswerFirstSection(`여드름 흉터가 남는 이유 세 가지\n\n${ANSWER_PARAGRAPH}`), false);
+  // 같은 낱말이라도 의문 어미가 붙으면 질문형
+  assert.equal(hasAnswerFirstSection(`어떤 방법으로 치료하나요\n\n${ANSWER_PARAGRAPH}`), true);
+});
+
+test('직답: 물음표 뒤에 부연이 붙은 소제목도 질문형으로 인정', () => {
+  assert.equal(
+    hasAnswerFirstSection(`치료는 얼마나 걸리나요? (평균 기간)\n\n${ANSWER_PARAGRAPH}`),
+    true,
+  );
+});
+
+test('직답: 40자를 넘는 긴 질문형 소제목도 인정 (지역·시술명 결합)', () => {
+  const longHeading = '강남 여드름 흉터 프락셀 레이저 치료는 보통 얼마나 걸리고 몇 번쯤 받아야 하나요';
+  assert.ok(longHeading.length > 40, '전제: 40자 초과 소제목');
+  assert.ok(longHeading.length <= 60, '전제: 소제목 상한 60자 이내');
+  assert.equal(hasAnswerFirstSection(`${longHeading}\n\n${ANSWER_PARAGRAPH}`), true);
+});
+
+test('직답: 소제목 상한(60자)을 넘는 줄은 본문으로 보고 소제목 취급하지 않음', () => {
+  const tooLong = `${'가'.repeat(61)}는 왜 생기나요`;
+  assert.equal(hasAnswerFirstSection(`${tooLong}\n\n${ANSWER_PARAGRAPH}`), false);
+});
+
+test('직답: 문장마다 줄을 바꿔도 한 단락으로 합산 (45자 + 45자 = 90자)', () => {
+  const line1 = `${'가'.repeat(44)}.`;
+  const line2 = `${'나'.repeat(44)}.`;
+  assert.equal(line1.length, 45);
+  assert.equal(line2.length, 45);
+  assert.equal(hasAnswerFirstSection(`치료는 얼마나 걸리나요\n${line1}\n${line2}`), true);
+
+  // 합산해도 기준 미달이면 여전히 미통과 (35 + 35 = 70자)
+  const short1 = `${'가'.repeat(34)}.`;
+  const short2 = `${'나'.repeat(34)}.`;
+  assert.equal(hasAnswerFirstSection(`치료는 얼마나 걸리나요\n${short1}\n${short2}`), false);
+});
+
+test('직답: 단락이 끝난 뒤(빈 줄 이후) 문장은 합산하지 않는다', () => {
+  const first = `${'가'.repeat(34)}.`;   // 35자 — 기준 미달
+  const later = `${'나'.repeat(99)}.`;   // 다른 단락이라 합산 대상 아님
+  assert.equal(hasAnswerFirstSection(`치료는 얼마나 걸리나요\n${first}\n\n${later}`), false);
+});
+
+test('직답: 전각 종결부호(。！？)도 문장 종결로 인식', () => {
+  const fullWidth = `${'가'.repeat(79)}。`;
+  assert.equal(fullWidth.length, 80);
+  assert.equal(hasAnswerFirstSection(`치료는 얼마나 걸리나요\n\n${fullWidth}`), true);
+  // 전각 물음표로 끝나는 소제목도 질문형
+  assert.equal(hasAnswerFirstSection(`치료는 얼마나 걸리나요？\n\n${ANSWER_PARAGRAPH}`), true);
+});
+
 test('직답: FAQ 블록의 Q/A 는 직답으로 인정하지 않음 (항목 중복 방지)', () => {
   const faqOnly = [
     '[자주 묻는 질문]',
@@ -296,6 +350,26 @@ test('직답: FAQ 블록의 Q/A 는 직답으로 인정하지 않음 (항목 중
   // 네이버 발행 변환본(닫는 마커 없음)도 동일하게 제외
   const naverFaqOnly = ['■ 자주 묻는 질문', 'Q1. 흉터는 왜 생기나요?', `A1. ${ANSWER_PARAGRAPH}`].join('\n');
   assert.equal(hasAnswerFirstSection(naverFaqOnly), false);
+
+  // 닫는 마커가 유실된 원본 마커도 열림-only 폴백으로 제외 ([/자주 묻는 질문] 없음)
+  const unclosedFaq = ['[자주 묻는 질문]', 'Q1. 흉터는 왜 생기나요?', `A1. ${ANSWER_PARAGRAPH}`].join('\n');
+  assert.equal(hasAnswerFirstSection(unclosedFaq), false);
+});
+
+test('직답: 닫는 마커가 유실돼도 본문의 직답은 그대로 인정 (FAQ 앞 구간은 보존)', () => {
+  const content = [
+    '[핵심 요약]',
+    '요약 한 줄입니다.',
+    '', // [/핵심 요약] 유실
+    '여드름 흉터는 왜 생기나요',
+    '',
+    ANSWER_PARAGRAPH,
+    '',
+    '[자주 묻는 질문]', // [/자주 묻는 질문] 유실
+    'Q1. 질문',
+    'A1. 답',
+  ].join('\n');
+  assert.equal(hasAnswerFirstSection(content), true);
 });
 
 test('직답: ▶ 세부 소제목(H3)이 질문형이어도 인정', () => {

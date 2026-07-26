@@ -265,25 +265,46 @@ const SUBHEADING_PATTERN = /▶/;
 // 실제 생성물은 편차가 있어, 지시치(100자)보다 낮은 80자를 충족선으로 둔다
 // (있는 글을 놓치는 오탐(false negative)이 없는 글을 통과시키는 것보다 해롭다는 판단).
 const ANSWER_FIRST_MIN_CHARS = 80;
-/** 소제목으로 볼 수 있는 줄의 최대 길이 — 본문 단락과 구분하는 기준 */
-const HEADING_MAX_CHARS = 40;
+/**
+ * 소제목으로 볼 수 있는 줄의 최대 길이 — 본문 단락과 구분하는 기준.
+ * "강남 여드름 흉터 프락셀 레이저 치료는 얼마나 걸리나요"처럼 지역·시술명이 붙으면
+ * 실제 H2 도 40자를 넘기므로 60자까지 인정한다(질문형 판정 자체가 엄격해 오탐 위험 낮음).
+ */
+const HEADING_MAX_CHARS = 60;
 const HEADING_MIN_CHARS = 4;
-/** 질문형 소제목 판정 — 물음표로 끝나거나 한국어 의문 어미·의문사를 포함 */
-const QUESTION_HEADING_PATTERN = /[?？]\s*$|나요|까요|은가요|인가요|을까|ㄹ까|어떻게|무엇|왜|어디|언제|얼마|방법|이유/;
+/**
+ * 질문형 소제목 판정 — 물음표를 포함하거나 한국어 의문 어미·의문사를 포함.
+ * ⚠️ "방법"·"이유"는 넣지 않는다 — "여드름 흉터 치료 방법과 주의사항" 같은 평서형
+ *    소제목까지 질문형으로 오인해 직답 점수를 잘못 주기 때문(질문 의도가 없는 명사구).
+ *    제목(QUESTION_TITLE_PATTERN)은 검색 질의 매칭이 기준이라 별도로 유지한다.
+ */
+const QUESTION_HEADING_PATTERN = /[?？]|나요|까요|은가요|인가요|을까|ㄹ까|어떻게|무엇|왜|어디|언제|얼마/;
 /** 구조 마커 줄([핵심 요약]·■ 자주 묻는 질문·Q1./A1.·[이미지 N: …]) — 소제목/직답 후보에서 제외 */
 const STRUCTURE_LINE_PATTERN = /^(\[|■|▷|Q\d+[.)]|A\d+[.)])/;
 const IMAGE_LINE_PATTERN = /^\[이미지\s*\d+\s*:[^\]]*\]$/;
-/** 마침표류로 끝나는 줄은 본문 문장 — 소제목에서 제외(물음표 제외) */
-const SENTENCE_END_PATTERN = /[.!。]\s*$/;
-/** 문장 단위 분해 — 종결 부호(. ! ? …)까지를 한 문장으로 본다 */
-const SENTENCE_SPLIT_PATTERN = /[^.!?…]+[.!?…]+/g;
+/** 마침표류로 끝나는 줄은 본문 문장 — 소제목에서 제외(물음표만 예외: 질문형 소제목) */
+const SENTENCE_END_PATTERN = /[.!。！…]\s*$/;
+/** 문장 단위 분해 — 종결 부호(반각·전각)까지를 한 문장으로 본다 */
+const SENTENCE_SPLIT_PATTERN = /[^.!?。！？…]+[.!?。！？…]+/g;
 
-/** 요약·FAQ 블록을 제거한 본문 — FAQ 의 Q/A 가 직답으로 오인되는 것을 막는다. */
+/**
+ * 요약·FAQ 블록을 제거한 본문 — FAQ 의 Q/A 가 직답으로 오인되는 것을 막는다.
+ *
+ * 닫는 마커가 유실된 글(생성 중단·수동 편집)도 있어, FAQ 는 열림 마커만 있어도
+ * 그 지점부터 끝까지 제거한다(FAQ 는 본문 최하단 섹션이라 안전). 원본 마커
+ * `[자주 묻는 질문]` 과 네이버 변환본 `■ 자주 묻는 질문` 을 동일하게 처리한다.
+ *
+ * 반면 [핵심 요약] 은 본문 앞이라 "끝까지 제거"가 불가능하고, 열림-only 폴백을
+ * 빈 줄까지로 잡으면 빈 줄이 없는 글에서 바로 뒤 소제목·본문까지 삼켜 오히려
+ * 직답을 놓친다. 요약 줄은 종결 문장(…입니다.)이라 소제목 판정에서 이미 걸러지고
+ * 마커 줄은 STRUCTURE_LINE_PATTERN 으로 제외되므로 폴백 없이도 오탐이 없다.
+ */
 function stripStructuredBlocks(content: string): string {
   return content
     .replace(/\[핵심 요약\][\s\S]*?\[\/핵심 요약\]/g, '')
     .replace(/\[자주 묻는 질문\][\s\S]*?\[\/자주 묻는 질문\]/g, '')
-    // 네이버 발행 변환본은 닫는 마커가 없다 — FAQ 헤더 이후는 전부 제외
+    // 닫는 마커 유실 폴백 — FAQ 는 본문 끝 섹션이므로 이후 전부 제외
+    .replace(/\[자주 묻는 질문\][\s\S]*$/, '')
     .replace(/■\s*자주 묻는 질문[\s\S]*$/, '');
 }
 
@@ -306,6 +327,11 @@ function isBodyLine(line: string): boolean {
   return true;
 }
 
+/** 종결된 문장의 개수 — 종결 부호가 없는 꼬리는 세지 않는다 */
+function countSentences(paragraph: string): number {
+  return paragraph.trim().match(SENTENCE_SPLIT_PATTERN)?.length ?? 0;
+}
+
 /** 단락의 앞 1~2문장 길이 — 종결 부호가 하나도 없으면 미완결로 보고 0 */
 function leadingSentenceLength(paragraph: string): number {
   const sentences = paragraph.trim().match(SENTENCE_SPLIT_PATTERN);
@@ -316,8 +342,10 @@ function leadingSentenceLength(paragraph: string): number {
 /**
  * 질문형 소제목 바로 아래에 자족 직답(answer-first)이 있는지 검사한다.
  *
- * 판정: 질문형 소제목 줄을 찾고 → 그 아래 첫 본문 단락(빈 줄·[이미지 N] 마커는 건너뜀)의
- * 앞 1~2문장이 종결된 문장이면서 합계 80자 이상이면 직답으로 인정한다.
+ * 판정: 질문형 소제목 줄을 찾고 → 그 아래 첫 단락(빈 줄·[이미지 N] 마커는 건너뜀)을
+ * 모아, 앞 1~2문장이 종결된 문장이면서 합계 80자 이상이면 직답으로 인정한다.
+ * 원장이 문장마다 줄을 바꿔도(네이버 편집기에서 흔함) 한 단락으로 합산한다 —
+ * 줄 이어붙이기는 join('') 이어야 경계 길이가 줄 수만큼 부풀지 않는다.
  * FAQ·핵심 요약 블록은 별도 항목이라 검사 대상에서 제외한다.
  */
 export function hasAnswerFirstSection(content: string): boolean {
@@ -326,13 +354,19 @@ export function hasAnswerFirstSection(content: string): boolean {
   for (let i = 0; i < lines.length; i++) {
     if (!isQuestionHeadingLine(lines[i])) continue;
 
+    const paragraph: string[] = [];
     for (let j = i + 1; j < lines.length; j++) {
       const candidate = lines[j].trim();
-      if (!candidate || IMAGE_LINE_PATTERN.test(candidate)) continue; // 빈 줄·이미지 마커는 통과
-      if (!isBodyLine(candidate)) break;                              // 마커·다른 소제목이면 이 소제목은 실패
-      if (leadingSentenceLength(candidate) >= ANSWER_FIRST_MIN_CHARS) return true;
-      break; // 첫 본문 단락이 기준 미달이면 이 소제목은 직답 없음
+      if (!candidate || IMAGE_LINE_PATTERN.test(candidate)) {
+        if (paragraph.length > 0) break; // 단락이 시작된 뒤의 빈 줄·이미지 = 단락 종료
+        continue;                        // 소제목과 단락 사이의 빈 줄·이미지는 건너뜀
+      }
+      if (!isBodyLine(candidate)) break; // 마커·다른 소제목이면 단락 종료
+      paragraph.push(candidate);
+      if (countSentences(paragraph.join('')) >= 2) break; // 직답 판정에 2문장이면 충분
     }
+
+    if (leadingSentenceLength(paragraph.join('')) >= ANSWER_FIRST_MIN_CHARS) return true;
   }
 
   return false;
