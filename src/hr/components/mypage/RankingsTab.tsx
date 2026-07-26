@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { ctrForRank } from '@/content/lib/roi-estimate';
+import { rankDisplay } from '@/content/lib/rank-display';
 import MonthlyReportsSection from '@/hr/components/mypage/MonthlyReportsSection';
 import type {
   PostRankingItem,
   KeywordRankItem,
   RankPoint,
-  RankStatus,
 } from '@/app/api/mypage/rankings/route';
 
 type FetchState = 'loading' | 'ready' | 'error';
@@ -19,53 +19,8 @@ function formatDate(dateStr: string | null): string {
   return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-/** 기본 스캔 깊이 — scanned_depth 가 없는 구 데이터의 표시 기준. */
-const DEFAULT_SCAN_DEPTH = 100;
-
-interface RankDisplay {
-  text: string;
-  /** 순위가 확정된 경우만 강조 */
-  tone: 'rank' | 'muted' | 'warn';
-  hint: string;
-}
-
-/**
- * ★ "측정 실패" 와 "N위 밖" 을 절대 같게 보여주지 않는다.
- *   예전에는 둘 다 rank=null → "100위 밖" 으로 표시돼, 측정이 두 달간 죽어 있는데도
- *   화면은 "순위권 밖"이라고 말하고 있었다.
- */
-function rankDisplay(
-  status: RankStatus | null,
-  rank: number | null,
-  scannedDepth: number | null,
-): RankDisplay {
-  const depth = scannedDepth && scannedDepth > 0 ? scannedDepth : DEFAULT_SCAN_DEPTH;
-  if (status === 'failed') {
-    return {
-      text: '측정 실패',
-      tone: 'warn',
-      hint: '네이버 검색 조회에 실패해 이번 회차 순위를 확인하지 못했습니다. 다음 자동 추적에서 다시 시도합니다.',
-    };
-  }
-  if (status === 'ambiguous') {
-    return {
-      text: '확인 필요',
-      tone: 'warn',
-      hint: '이 키워드에서 같은 블로그의 글이 여러 편 검색돼 어느 글인지 특정하지 못했습니다.',
-    };
-  }
-  if (status === 'not_found') {
-    return {
-      text: `${depth.toLocaleString('ko-KR')}위 밖`,
-      tone: 'muted',
-      hint: `${depth.toLocaleString('ko-KR')}위까지 확인했으나 이 글이 검색되지 않았습니다.`,
-    };
-  }
-  if (rank !== null) {
-    return { text: `${rank}위`, tone: 'rank', hint: '네이버 검색 API 기준 추정 순위입니다.' };
-  }
-  return { text: '집계 전', tone: 'muted', hint: '아직 유효한 측정 기록이 없습니다.' };
-}
+// ★ "측정 실패" 와 "N위 밖" 을 절대 같게 보여주지 않는다 — 이 규칙은 순수 모듈로
+//   떼어내 단위 테스트로 고정했다 (rank-display.ts).
 
 /** 최신 대비 직전 순위 증감 (낮을수록 좋음). 데이터 부족 시 null. */
 function rankTrend(history: readonly RankPoint[]): 'up' | 'down' | 'same' | null {
