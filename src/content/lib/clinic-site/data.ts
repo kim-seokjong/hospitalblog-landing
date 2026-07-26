@@ -36,6 +36,11 @@ export interface ClinicSitePost {
   tags: string[];
   /** 주제 기반 관련 글 랭킹용 (saved_posts.keyword) — 없으면 null */
   keyword: string | null;
+  /**
+   * 본문 이미지 URL (saved_posts.image_urls) — 없거나 컬럼 미존재면 빈 배열.
+   * 렌더 화이트리스트 판정은 clinic-site/post-images.ts 가 담당한다(원문 그대로 전달).
+   */
+  imageUrls: string[];
 }
 
 interface ProfileRow {
@@ -58,6 +63,24 @@ interface PostRow {
   created_at: string | null;
   tags: string[] | null;
   keyword: string | null;
+  image_urls?: string[] | null;
+}
+
+/**
+ * 글 본문 페이지가 읽는 컬럼.
+ *
+ * image_urls 는 구 스키마(마이그 미적용) DB 에 없을 수 있다 — 컬럼 없음(42703)이면
+ * 이 컬럼을 뺀 목록으로 한 번 재조회한다(기존 폴백 패턴: api/credentials·api/profile).
+ * 이미지가 안 나올 뿐 글 자체는 그대로 보인다.
+ */
+const POST_COLUMNS =
+  'id, title, content, site_published_at, published_at, created_at, tags, keyword, image_urls';
+const POST_COLUMNS_LEGACY =
+  'id, title, content, site_published_at, published_at, created_at, tags, keyword';
+
+/** Postgres "column does not exist" — 마이그 미적용 환경 신호. */
+function isMissingColumn(error: { code?: string } | null): boolean {
+  return error?.code === '42703';
 }
 
 /** 목록 페이지(사람이 보는 홈) 글 수 상한. */
@@ -117,6 +140,9 @@ function toPost(row: PostRow): ClinicSitePost {
     publishedAt: row.site_published_at ?? row.published_at ?? row.created_at,
     tags: Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === 'string') : [],
     keyword: typeof row.keyword === 'string' ? row.keyword : null,
+    imageUrls: Array.isArray(row.image_urls)
+      ? row.image_urls.filter((u): u is string => typeof u === 'string')
+      : [],
   };
 }
 
@@ -124,16 +150,22 @@ function toPost(row: PostRow): ClinicSitePost {
 export async function getPublishedPosts(userId: string): Promise<ClinicSitePost[]> {
   try {
     const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('saved_posts')
-      .select('id, title, content, site_published_at, published_at, created_at, tags, keyword')
-      .eq('user_id', userId)
-      .eq('published_to_site', true)
-      .order('site_published_at', { ascending: false, nullsFirst: false })
-      .limit(CLINIC_SITE_POST_LIMIT);
+    const query = (columns: string) =>
+      admin
+        .from('saved_posts')
+        .select(columns)
+        .eq('user_id', userId)
+        .eq('published_to_site', true)
+        .order('site_published_at', { ascending: false, nullsFirst: false })
+        .limit(CLINIC_SITE_POST_LIMIT);
+
+    let { data, error } = await query(POST_COLUMNS);
+    if (isMissingColumn(error)) {
+      ({ data, error } = await query(POST_COLUMNS_LEGACY));
+    }
 
     if (error || !data) return [];
-    return (data as PostRow[]).map(toPost);
+    return (data as unknown as PostRow[]).map(toPost);
   } catch (err) {
     console.error('[clinic-site] 글 목록 조회 오류:', err instanceof Error ? err.message : err);
     return [];
@@ -235,13 +267,19 @@ export async function getPublishedPost(
   if (!isUuid(postId)) return null;
   try {
     const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('saved_posts')
-      .select('id, title, content, site_published_at, published_at, created_at, tags, keyword')
-      .eq('id', postId)
-      .eq('user_id', userId)
-      .eq('published_to_site', true)
-      .single<PostRow>();
+    const query = (columns: string) =>
+      admin
+        .from('saved_posts')
+        .select(columns)
+        .eq('id', postId)
+        .eq('user_id', userId)
+        .eq('published_to_site', true)
+        .single<PostRow>();
+
+    let { data, error } = await query(POST_COLUMNS);
+    if (isMissingColumn(error)) {
+      ({ data, error } = await query(POST_COLUMNS_LEGACY));
+    }
 
     if (error || !data) return null;
     return toPost(data);
