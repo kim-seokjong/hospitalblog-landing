@@ -1,4 +1,4 @@
--- 052 — post_rankings 무결성 복구
+-- 054 — post_rankings 무결성 복구
 -- 적용 방법: Supabase SQL Editor 에서 수동 실행 (idempotent)
 -- DB 적용은 사용자가 직접 수행한다 (코드/배포와 분리).
 --
