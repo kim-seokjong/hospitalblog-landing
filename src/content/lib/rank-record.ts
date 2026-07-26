@@ -25,6 +25,7 @@ export interface RankingRowInput {
   scannedDepth: number;
   errorCode?: string;
   checkedOn?: string;
+  checkedAt?: string;
 }
 
 /** 마이그 052 적용 후 스키마용 행 (UPSERT 대상). */
@@ -38,12 +39,17 @@ export interface RankingRowFull {
   scanned_depth: number;
   error_code: string | null;
   checked_on: string;
+  /**
+   * ★ UPSERT 갱신 시에도 측정 시각이 최신이 되도록 명시적으로 넣는다.
+   *   DB default(now())는 INSERT 에만 걸려, 같은 날 재실행하면 최초 시각이 그대로 남는다.
+   */
+  checked_at: string;
 }
 
 /** 마이그 052 미적용 환경용 행 (구 스키마 컬럼만). */
 export type RankingRowLegacy = Pick<
   RankingRowFull,
-  'user_id' | 'post_id' | 'keyword' | 'target_site' | 'rank'
+  'user_id' | 'post_id' | 'keyword' | 'target_site' | 'rank' | 'checked_at'
 >;
 
 /**
@@ -62,6 +68,7 @@ export function buildRankingRow(input: RankingRowInput): RankingRowFull {
     scanned_depth: Math.max(0, Math.floor(input.scannedDepth)),
     error_code: input.errorCode ?? null,
     checked_on: input.checkedOn ?? kstDateString(),
+    checked_at: input.checkedAt ?? new Date().toISOString(),
   };
 }
 
@@ -75,6 +82,7 @@ export function toLegacyRow(row: RankingRowFull): RankingRowLegacy {
     keyword: row.keyword,
     target_site: row.target_site,
     rank: row.rank,
+    checked_at: row.checked_at,
   };
 }
 

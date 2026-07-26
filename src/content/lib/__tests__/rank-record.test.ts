@@ -88,8 +88,17 @@ test('폴백 행에는 신규 컬럼이 없다 (구 스키마로 insert 가능)'
   const row = buildRankingRow({ ...BASE, status: 'not_found', rank: null });
   const legacy = toLegacyRow(row);
   assert.deepEqual(Object.keys(legacy).sort(), [
-    'keyword', 'post_id', 'rank', 'target_site', 'user_id',
+    'checked_at', 'keyword', 'post_id', 'rank', 'target_site', 'user_id',
   ]);
   assert.equal('status' in legacy, false);
   assert.equal('checked_on' in legacy, false);
+  assert.equal('scanned_depth' in legacy, false);
+});
+
+test('★ checked_at 을 명시적으로 넣는다 — 같은 날 재실행(UPSERT)에도 시각이 갱신되도록', () => {
+  const row = buildRankingRow({ ...BASE, status: 'ok', rank: 1, checkedAt: '2026-07-26T01:02:03.000Z' });
+  assert.equal(row.checked_at, '2026-07-26T01:02:03.000Z');
+  // 미지정이면 현재 시각
+  const now = buildRankingRow({ ...BASE, status: 'ok', rank: 1 });
+  assert.ok(Math.abs(Date.parse(now.checked_at) - Date.now()) < 5000);
 });
