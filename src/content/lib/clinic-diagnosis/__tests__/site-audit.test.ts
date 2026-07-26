@@ -166,6 +166,26 @@ test('auditSite: TLS 실패는 https=fail 로 잡고 원인 문구를 남긴다'
   assert.equal(axis.viewport, 'pass');
 });
 
+test('auditSite: HTTP 로만 뜨는 사이트는 robots·sitemap 도 http 로 확인한다 (실측 회귀 방지)', async () => {
+  // raonsmile.co.kr 실측: https 핸드셰이크 실패 · http 정상.
+  // 이때 robots 를 https 로 물으면 "확인 못 함"이 되어 실제로 있는 설정을 놓친다.
+  const urls: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    urls.push(url);
+    if (url.startsWith('https://')) throw new Error('SSL routines: certificate verify failed');
+    if (url.endsWith('/robots.txt')) return new Response('User-agent: GPTBot\nDisallow: /\n', { status: 200 });
+    if (url.endsWith('/sitemap.xml')) return new Response('<urlset></urlset>', { status: 200 });
+    return jsonRes(FULL_HTML);
+  }) as unknown as typeof fetch;
+
+  const axis = await auditSite('httponly.example.co.kr', { fetchImpl, source: 'manual' });
+  assert.equal(axis.https, 'fail');
+  assert.equal(axis.robotsTxt, 'pass');
+  assert.equal(axis.sitemapXml, 'pass');
+  assert.deepEqual(axis.blockedAiBots, ['GPTBot']);
+  assert.ok(urls.some((u) => u === 'http://httponly.example.co.kr/robots.txt'));
+});
+
 test('auditSite: https·http 둘 다 실패하면 항목을 fail 이 아니라 unknown 으로 남긴다', async () => {
   const fetchImpl = (async () => { throw new Error('ENOTFOUND'); }) as unknown as typeof fetch;
   const axis = await auditSite('gone.example.co.kr', { fetchImpl, source: 'manual' });

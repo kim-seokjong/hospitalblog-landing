@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import Logo from '@/components/landing/Logo';
 import DiagnosisReportView from './DiagnosisReportView';
 import ClinicCandidatePicker from './ClinicCandidatePicker';
+import BlogGuessPicker from './BlogGuessPicker';
 import DetailDiagnosisForm, { type DetailInput } from './DetailDiagnosisForm';
 import type { ClinicCandidate, ClinicLookupOutcome, DiagnosisReport } from '@/content/lib/clinic-diagnosis/types';
 
@@ -236,6 +237,15 @@ export default function ClinicCheckClient() {
         {report && !busyMngNo && (
           <div ref={resultRef} className="mt-10">
             <DiagnosisReportView report={report} />
+
+            {/* 블로그 특정 실패 시 — 후보를 직접 고르게 한다 (결과 카드의 안내와 짝) */}
+            {report.blog.resolution.kind === 'uncertain' && (
+              <BlogGuessPicker
+                guesses={report.blog.resolution.guesses}
+                busy={busyMngNo !== null}
+                onPick={(blogId) => void runDiagnosis(report.clinic, { blogId, siteUrl: '', body: '' })}
+              />
+            )}
 
             {shareUrl && (
               <div className="mt-6 bg-[#f7f9fb] border border-[#dbe2ea] rounded-2xl px-4 py-4">

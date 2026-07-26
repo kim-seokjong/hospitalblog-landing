@@ -50,6 +50,18 @@ export type ClinicLookupOutcome =
   | { readonly kind: 'needs_region'; readonly candidates: readonly ClinicCandidate[]; readonly totalCount: number }
   /** 영업중 후보는 없고 폐업 등록만 있다. */
   | { readonly kind: 'closed_only'; readonly candidates: readonly ClinicCandidate[] }
+  /**
+   * 입력한 지역에서는 못 찾았고, **다른 지역**에 같은 이름이 있다.
+   * 지역 필터를 조용히 무시하고 타 지역 병원을 보여주면 사용자가 그것을 자기
+   * 병원으로 오인한다 — 그래서 별도 종류로 분리해 화면에서 명시한다.
+   */
+  | {
+      readonly kind: 'region_miss';
+      /** 사용자가 입력했던 지역. */
+      readonly region: string;
+      readonly candidates: readonly ClinicCandidate[];
+      readonly truncated: boolean;
+    }
   /** 행안부 API 를 호출하지 못했다(키 미설정·장애). */
   | { readonly kind: 'unavailable'; readonly reason: 'not_configured' | 'fetch_failed' };
 

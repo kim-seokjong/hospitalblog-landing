@@ -59,13 +59,21 @@ export interface OwnedAssets {
   readonly siteHost: string | null;
 }
 
-/** 이 출처가 병원 자기 자산인가. */
+/**
+ * 이 출처가 병원 자기 자산인가.
+ *
+ * ⚠️ 양쪽 모두 `www.` 를 떼고 비교해야 한다. 실측에서 병원 홈페이지가
+ * `https://www.florps.com` 으로 확인됐는데 AI 출처는 `florps.com` 으로 와서,
+ * 자기 홈페이지가 인용됐는데도 "디렉터리 경유"로 잘못 분류됐다. 이 진단의
+ * 핵심 논지가 인용 경로이므로 여기서 틀리면 결과 전체의 신뢰가 무너진다.
+ */
 export function isOwnedSource(url: string, owned: OwnedAssets): boolean {
   const lower = (url ?? '').toLowerCase();
   if (owned.blogId && lower.includes(`blog.naver.com/${owned.blogId.toLowerCase()}`)) return true;
   if (owned.siteHost) {
-    const host = hostOf(url);
-    if (host === owned.siteHost || host.endsWith(`.${owned.siteHost}`)) return true;
+    const site = owned.siteHost.toLowerCase().replace(/^www\./, '');
+    const host = hostOf(url); // hostOf 가 이미 www. 를 뗀다
+    if (site && (host === site || host.endsWith(`.${site}`))) return true;
   }
   return false;
 }

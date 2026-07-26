@@ -270,6 +270,49 @@ test('lookupClinics: 호출 수는 상한을 넘지 않는다 (외부 API 비용
   assert.ok(calls <= 4, `최대 4콜이어야 하는데 ${calls}콜 발생`);
 });
 
+test('lookupClinics: 입력 지역에 없으면 타 지역 결과를 자동 확정하지 않고 region_miss 로 알린다', async () => {
+  // 실측 재현: "연세바로치과의원 + 대구광역시" → 대구 0건, 전국에는 대전·서울·경기 등 다수.
+  // 지역 필터를 조용히 무시하고 대전 병원을 보여주면 사용자가 자기 병원으로 오인한다.
+  const fetchImpl = (async (url: string) => {
+    const params = new URL(url).searchParams;
+    const hasRegion = params.has('cond[ROAD_NM_ADDR::LIKE]');
+    const items = hasRegion
+      ? []
+      : [
+          { ...ROW_VB, MNG_NO: 'DJ', BPLC_NM: '연세바로치과의원', ROAD_NM_ADDR: '대전광역시 서구 대덕대로 203, 5층' },
+          { ...ROW_VB, MNG_NO: 'SE', BPLC_NM: '연세바로치과의원', ROAD_NM_ADDR: '서울특별시 강남구 논현로 873' },
+        ];
+    return new Response(JSON.stringify(envelope(items)), { headers: { 'content-type': 'application/json' } });
+  }) as unknown as typeof fetch;
+
+  const outcome = await lookupClinics('연세바로치과의원', {
+    env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl, region: '대구광역시',
+  });
+  assert.equal(outcome.kind, 'region_miss');
+  assert.equal(outcome.kind === 'region_miss' && outcome.region, '대구광역시');
+  assert.equal(outcome.kind === 'region_miss' && outcome.candidates.length, 2);
+});
+
+test('lookupClinics: 타 지역 후보가 1건뿐이어도 자동 확정하지 않는다', async () => {
+  const fetchImpl = (async (url: string) => {
+    const hasRegion = new URL(url).searchParams.has('cond[ROAD_NM_ADDR::LIKE]');
+    const items = hasRegion ? [] : [{ ...ROW_VB, MNG_NO: 'SE', BPLC_NM: '연세바로치과의원', ROAD_NM_ADDR: '서울특별시 강남구 논현로 873' }];
+    return new Response(JSON.stringify(envelope(items)), { headers: { 'content-type': 'application/json' } });
+  }) as unknown as typeof fetch;
+
+  const outcome = await lookupClinics('연세바로치과의원', {
+    env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl, region: '대구광역시',
+  });
+  assert.equal(outcome.kind, 'region_miss', '지역이 안 맞으면 1건이어도 resolved 로 넘기면 안 된다');
+});
+
+test('lookupClinics: 지역을 안 넣었으면 region_miss 로 강등하지 않는다', async () => {
+  const fetchImpl = (async () =>
+    new Response(JSON.stringify(envelope([{ ...ROW_VB }])), { headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch;
+  const outcome = await lookupClinics('브이비성형외과의원', { env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl });
+  assert.equal(outcome.kind, 'resolved');
+});
+
 test('lookupClinics: 이름이 2자 미만이면 호출 없이 not_found', async () => {
   let called = 0;
   const fetchImpl = (async () => { called += 1; return new Response('{}'); }) as unknown as typeof fetch;

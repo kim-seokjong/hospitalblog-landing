@@ -67,13 +67,32 @@ export interface RunDiagnosisOptions {
   readonly includeAi?: boolean;
 }
 
+/** 시·도 축약형 ('대구광역시' → '대구'). */
+export function shortProvinceOf(province: string): string {
+  return (province ?? '').replace(/(특별자치도|특별자치시|특별시|광역시|도)$/u, '');
+}
+
+/**
+ * 환자가 실제로 말하는 지역 표기.
+ *
+ * 구·군 이름만 쓰면 안 된다 — "중구 성형외과"는 전국 어느 중구인지 알 수 없어
+ * AI 답변이 엉뚱한 지역 병원으로 채워진다(실측에서 그렇게 나왔다).
+ * "대구 중구" 처럼 시·도를 앞에 붙인다.
+ */
+export function displayRegion(clinic: Pick<ClinicCandidate, 'region' | 'province'>): string {
+  const short = shortProvinceOf(clinic.province);
+  const region = (clinic.region ?? '').trim();
+  if (short && region && region !== short) return `${short} ${region}`;
+  return region || short;
+}
+
 /** 진단 대상 키워드 — 지역·진료과 조합 + 블로그 제목에서 뽑은 실제 타깃. */
 export function buildDiagnosisKeywords(
   clinic: Pick<ClinicCandidate, 'region' | 'province' | 'specialty'>,
   titles: readonly string[],
 ): readonly string[] {
   const out: string[] = [];
-  const shortProvince = clinic.province.replace(/(특별자치도|특별자치시|특별시|광역시|도)$/u, '');
+  const shortProvince = shortProvinceOf(clinic.province);
   const specialty = clinic.specialty.trim();
 
   if (specialty) {
@@ -261,7 +280,13 @@ export async function runClinicDiagnosis(
     options.includeAi === false
       ? EMPTY_AI_AXIS
       : await runAiCitation(
-          { clinicName: clinic.name, region: clinic.region, specialty: clinic.specialty, owned },
+          {
+            clinicName: clinic.name,
+            // 구·군만 쓰면 전국 동명 지역과 섞인다 → "대구 중구" 형태로.
+            region: displayRegion(clinic),
+            specialty: clinic.specialty,
+            owned,
+          },
           { env, fetchImpl, deadlineMs: AI_DEADLINE_MS },
         );
 

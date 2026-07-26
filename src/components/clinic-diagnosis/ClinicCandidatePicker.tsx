@@ -88,6 +88,25 @@ export default function ClinicCandidatePicker({ outcome, onPick, onNeedRegion, b
     );
   }
 
+  if (outcome.kind === 'region_miss') {
+    return (
+      <div className="mt-6 bg-[#f7f9fb] border border-[#dbe2ea] rounded-2xl px-4 py-4">
+        <p className="text-[14px] font-bold">
+          “{outcome.region}”에서는 그 이름의 병원을 찾지 못했어요.
+        </p>
+        <p className="text-[12.5px] text-[#4a4f55] mt-1.5 leading-relaxed">
+          대신 <b>다른 지역</b>에 같은 이름의 병원이 있어요. 아래는 입력하신 지역의 병원이 <b>아닙니다</b> — 주소를
+          확인하시고 맞는 곳이 있으면 골라 주세요.
+        </p>
+        <ul className="space-y-2 mt-3">
+          {outcome.candidates.map((c) => (
+            <CandidateRow key={c.mngNo} clinic={c} onPick={onPick} busy={busyMngNo !== null} />
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   if (outcome.kind === 'needs_region') {
     return (
       <div className="mt-6 bg-[#f7f9fb] border border-[#dbe2ea] rounded-2xl px-4 py-4">

@@ -121,6 +121,14 @@ export async function searchLocalPlaces(
 
 /**
  * 병원 홈페이지 주소를 찾는다. 확신이 없으면 null — 남의 홈페이지를 붙이지 않는다.
+ *
+ * 질의 순서가 중요하다(실측):
+ *   "중구 브이비성형외과의원" → 결과 0건
+ *   "브이비성형외과의원"      → 1건 (vb.vbeauty.co.kr)
+ * 지역을 앞에 붙이면 오히려 안 잡히는 경우가 있어 **상호 단독 질의를 먼저** 한다.
+ * 그래도 못 찾으면 지역을 붙여 한 번 더 본다(동명 병원이 많아 상호 단독으로는
+ * 다른 지역 병원만 올라오는 경우 대비). 지역 일치 검증은 두 경로 모두에 적용되므로
+ * 순서를 바꿔도 "다른 지역 병원의 홈페이지를 붙이는" 일은 생기지 않는다.
  */
 export async function findClinicSiteUrl(
   clinicName: string,
@@ -129,9 +137,13 @@ export async function findClinicSiteUrl(
 ): Promise<string | null> {
   const env = options.env ?? (process.env as NaverSearchEnv);
   const fetchImpl = options.fetchImpl ?? fetch;
-  const query = regionHint ? `${regionHint} ${clinicName}` : clinicName;
-  const places = await searchLocalPlaces(query.slice(0, 60), { env, fetchImpl, timeoutMs: options.timeoutMs });
-  if (!places) return null;
-  const matched = pickMatchingPlace(places, clinicName, regionHint);
-  return matched && matched.link ? matched.link : null;
+
+  const queries = regionHint ? [clinicName, `${regionHint} ${clinicName}`] : [clinicName];
+  for (const query of queries) {
+    const places = await searchLocalPlaces(query.slice(0, 60), { env, fetchImpl, timeoutMs: options.timeoutMs });
+    if (!places || places.length === 0) continue;
+    const matched = pickMatchingPlace(places, clinicName, regionHint);
+    if (matched?.link) return matched.link;
+  }
+  return null;
 }

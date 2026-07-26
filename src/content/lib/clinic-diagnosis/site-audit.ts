@@ -372,6 +372,13 @@ export async function auditSite(rawUrl: string, options: AuditSiteOptions): Prom
   let https: SiteCheckState = secure.ok ? 'pass' : 'fail';
   let httpsNote: string | null = null;
   let page = secure;
+  /**
+   * robots.txt·sitemap.xml 을 요청할 오리진.
+   * HTTPS 가 안 되고 HTTP 로만 응답하는 사이트(실측: raonsmile.co.kr)에서
+   * https 오리진으로 물으면 둘 다 실패해 "확인 못 함"이 된다 — 실제로는 있는데도.
+   * 홈 페이지가 실제로 응답한 스킴을 그대로 따라간다.
+   */
+  let probeOrigin = normalized.origin;
 
   if (!secure.ok) {
     httpsNote = secure.errorKind
@@ -381,6 +388,7 @@ export async function auditSite(rawUrl: string, options: AuditSiteOptions): Prom
     const plain = await fetchSiteText(normalized.httpUrl, { fetchImpl, timeoutMs, maxBytes: BODY_MAX_BYTES });
     if (plain.ok) {
       page = plain;
+      probeOrigin = `http://${normalized.hostname}`;
       httpsNote = `${httpsNote} (http:// 로는 정상 응답했어요 — HTTPS 설정만 손보면 됩니다.)`;
     } else {
       https = 'unknown';
@@ -400,8 +408,8 @@ export async function auditSite(rawUrl: string, options: AuditSiteOptions): Prom
 
   if (reachable) {
     const [robots, sitemap] = await Promise.all([
-      fetchSiteText(`${normalized.origin}/robots.txt`, { fetchImpl, timeoutMs, maxBytes: ROBOTS_MAX_BYTES }),
-      fetchSiteText(`${normalized.origin}/sitemap.xml`, { fetchImpl, timeoutMs, maxBytes: ROBOTS_MAX_BYTES }),
+      fetchSiteText(`${probeOrigin}/robots.txt`, { fetchImpl, timeoutMs, maxBytes: ROBOTS_MAX_BYTES }),
+      fetchSiteText(`${probeOrigin}/sitemap.xml`, { fetchImpl, timeoutMs, maxBytes: ROBOTS_MAX_BYTES }),
     ]);
 
     if (robots.status !== null) {

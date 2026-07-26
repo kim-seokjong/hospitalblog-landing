@@ -27,6 +27,20 @@ test('isOwnedSource 는 병원 블로그·홈페이지(서브도메인 포함)�
   assert.equal(isOwnedSource('https://goodoc.co.kr/clinic/1', OWNED), false);
 });
 
+test('www 유무가 달라도 자기 홈페이지로 인식한다 (실측 오분류 회귀 방지)', () => {
+  // 홈페이지는 www.florps.com 으로 확인됐는데 AI 출처는 florps.com 으로 온다.
+  // 이걸 놓치면 자기 사이트 인용이 "디렉터리 경유"로 뒤집혀 결론이 정반대가 된다.
+  const withWww = { blogId: null, siteHost: 'www.florps.com' };
+  assert.equal(isOwnedSource('https://florps.com/intro', withWww), true);
+  assert.equal(isOwnedSource('https://www.florps.com/intro', withWww), true);
+  assert.equal(classifyCitationPath(true, ['https://florps.com/intro'], withWww), 'owned');
+
+  const bare = { blogId: null, siteHost: 'florps.com' };
+  assert.equal(isOwnedSource('https://www.florps.com/intro', bare), true);
+  // 다른 도메인은 여전히 남의 것
+  assert.equal(isOwnedSource('https://notflorps.com/intro', bare), false);
+});
+
 test('자기 자산 정보가 없으면 owned 로 잘못 분류하지 않는다', () => {
   const none = { blogId: null, siteHost: null };
   assert.equal(isOwnedSource('https://blog.naver.com/vbps_official/1', none), false);

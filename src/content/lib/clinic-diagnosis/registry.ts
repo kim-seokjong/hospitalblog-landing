@@ -414,15 +414,39 @@ export async function lookupClinics(
     if (page === null) continue;
     anyCallSucceeded = true;
     if (page.items.length === 0) continue;
-    return decideLookup(page.items, parsed.name, {
+
+    const outcome = decideLookup(page.items, parsed.name, {
       truncated: page.totalCount > page.items.length,
       totalCount: page.totalCount,
       hasRegion: attempt.region !== '',
     });
+
+    // 사용자가 지역을 넣었는데 지역 필터를 뺀 폴백에서 결과가 나왔다면,
+    // 그건 **입력한 지역의 병원이 아니다.** 자동 확정하지 않고 그 사실을 명시한다.
+    if (parsed.region && attempt.region === '') {
+      return relaxToRegionMiss(outcome, parsed.region, page.totalCount > page.items.length);
+    }
+    return outcome;
   }
 
   if (!anyCallSucceeded) return { kind: 'unavailable', reason: 'fetch_failed' };
   return { kind: 'not_found' };
+}
+
+/** 지역 필터를 뺀 폴백 결과를 region_miss 로 강등한다 (자동 확정 금지). */
+function relaxToRegionMiss(
+  outcome: ClinicLookupOutcome,
+  region: string,
+  truncated: boolean,
+): ClinicLookupOutcome {
+  const candidates: readonly ClinicCandidate[] =
+    outcome.kind === 'resolved'
+      ? [outcome.clinic]
+      : outcome.kind === 'ambiguous' || outcome.kind === 'needs_region' || outcome.kind === 'closed_only'
+        ? outcome.candidates
+        : [];
+  if (candidates.length === 0) return outcome;
+  return { kind: 'region_miss', region, candidates: candidates.slice(0, MAX_CANDIDATES), truncated };
 }
 
 /** 관리번호로 후보 1건을 다시 확정한다 (2단계 진입 전 서버 재검증용). */
@@ -435,7 +459,10 @@ export async function findClinicByMngNo(
   const pool: readonly ClinicCandidate[] =
     outcome.kind === 'resolved'
       ? [outcome.clinic]
-      : outcome.kind === 'ambiguous' || outcome.kind === 'needs_region' || outcome.kind === 'closed_only'
+      : outcome.kind === 'ambiguous' ||
+          outcome.kind === 'needs_region' ||
+          outcome.kind === 'closed_only' ||
+          outcome.kind === 'region_miss'
         ? outcome.candidates
         : [];
   return pool.find((c) => c.mngNo === mngNo) ?? null;
