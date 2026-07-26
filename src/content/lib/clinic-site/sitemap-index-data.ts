@@ -41,6 +41,20 @@ const FALLBACK_MAX_PAGES_PER_CHUNK = 20;
 /** robots.txt 가 기다리는 count 조회의 상한 (초과 시 1페이지로 폴백). */
 const COUNT_TIMEOUT_MS = 1_500;
 
+/**
+ * 폴백 전체 시간 예산. 뷰(마이그 049)가 없을 때만 타는 경로이고, 회원이 많으면
+ * 청크를 수백 번 순차 요청하게 되어 응답 시간 제한을 넘긴다. 예산을 넘기면
+ * 일부만 담긴 사이트맵을 200 으로 주는 대신 503 으로 명확히 실패한다.
+ */
+const FALLBACK_BUDGET_MS = 10_000;
+
+/**
+ * ⚠️ 부하 참고: 인덱스 1페이지는 최대 50,000개 항목을 담을 수 있고, 그 XML 은
+ *    대략 6~8MB 수준이 된다(항목당 ~130바이트). 현재 규모에서는 문제가 없지만
+ *    수만 병원에 도달하기 전에 실제 부하 시험이 필요하다 — 필요해지면 스트리밍
+ *    응답이나 페이지 크기 축소(+robots.txt 페이지 노출)로 전환할 것.
+ */
+
 export type SitemapSourcesResult =
   | { ok: true; sources: ClinicSitemapSource[] }
   | { ok: false; reason: string };
@@ -103,16 +117,15 @@ async function fetchFromView(from: number, to: number): Promise<SitemapSourcesRe
   };
 }
 
-/** 한 청크(user_id 목록)의 발행글을 range 로 끝까지 훑는다. 잘리면 실패. */
+/** 한 청크(user_id 목록)의 발행글을 range 로 끝까지 훑는다. 진짜로 잘렸을 때만 실패. */
 async function fetchPostsForChunk(
   admin: ReturnType<typeof createAdminClient>,
   chunk: readonly string[],
 ): Promise<{ ok: true; rows: PostRow[] } | { ok: false; reason: string }> {
   const rows: PostRow[] = [];
 
-  for (let page = 0; page < FALLBACK_MAX_PAGES_PER_CHUNK; page++) {
-    const from = page * FALLBACK_POST_PAGE;
-    const { data, error } = await admin
+  const pageQuery = (from: number, to: number) =>
+    admin
       .from('saved_posts')
       .select('user_id, site_published_at, published_at, created_at')
       .eq('published_to_site', true)
@@ -120,7 +133,11 @@ async function fetchPostsForChunk(
       // 결정적 순서 — 페이지 경계에서 행이 중복·누락되지 않게 한다.
       .order('user_id', { ascending: true })
       .order('id', { ascending: true })
-      .range(from, from + FALLBACK_POST_PAGE - 1);
+      .range(from, to);
+
+  for (let page = 0; page < FALLBACK_MAX_PAGES_PER_CHUNK; page++) {
+    const from = page * FALLBACK_POST_PAGE;
+    const { data, error } = await pageQuery(from, from + FALLBACK_POST_PAGE - 1);
 
     if (error) {
       console.error('[clinic-sitemap-index] 발행글 조회 오류:', error.message);
@@ -133,7 +150,17 @@ async function fetchPostsForChunk(
     if (pageRows.length < FALLBACK_POST_PAGE) return { ok: true, rows };
   }
 
-  // 페이지 한도를 다 쓰고도 끝이 안 났다 = 데이터가 잘렸다 → 누락 대신 실패로 알린다.
+  // 마지막 페이지까지 정확히 가득 찼다 — "딱 맞게 끝난 것"과 "잘린 것"을 구분해야 한다.
+  // 다음 1행을 탐침해 존재하지 않으면 정상 데이터다(20,000편 정확히인 경우 오탐 방지).
+  const probeFrom = FALLBACK_MAX_PAGES_PER_CHUNK * FALLBACK_POST_PAGE;
+  const probe = await pageQuery(probeFrom, probeFrom);
+  if (probe.error) {
+    console.error('[clinic-sitemap-index] 탐침 조회 오류:', probe.error.message);
+    return { ok: false, reason: `probe query failed: ${probe.error.code ?? 'unknown'}` };
+  }
+  if ((probe.data ?? []).length === 0) return { ok: true, rows };
+
+  // 진짜로 더 남아 있다 = 데이터가 잘렸다 → 누락 대신 실패로 알린다.
   return { ok: false, reason: 'fallback scan truncated' };
 }
 
@@ -162,8 +189,15 @@ async function fetchFromTables(from: number, to: number): Promise<SitemapSources
   const slugByUserId = new Map(profiles.map((row) => [row.id, row.site_slug]));
   const userIds = [...slugByUserId.keys()];
 
+  // 폴백은 청크를 순차 요청하므로 회원이 많으면 요청 시간 제한을 넘길 수 있다.
+  // 시간 예산을 넘기면 "일부만 담긴 사이트맵"을 200 으로 주지 않고 명확히 실패한다.
+  const startedAt = Date.now();
   const postRows: PostRow[] = [];
   for (let i = 0; i < userIds.length; i += FALLBACK_IN_CHUNK) {
+    if (Date.now() - startedAt > FALLBACK_BUDGET_MS) {
+      console.error('[clinic-sitemap-index] 폴백 시간 예산 초과 — 마이그 049(뷰) 적용 필요');
+      return { ok: false, reason: 'fallback budget exceeded' };
+    }
     const result = await fetchPostsForChunk(admin, userIds.slice(i, i + FALLBACK_IN_CHUNK));
     if (!result.ok) return result;
     postRows.push(...result.rows);

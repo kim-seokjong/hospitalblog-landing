@@ -12,6 +12,9 @@ import {
   rotationOffset,
   kstDayIndex,
   kstDayStartIso,
+  orderByCursor,
+  mergeCursorWindow,
+  dueThresholdIso,
 } from '../auto-publish.ts';
 
 const NOW = new Date('2026-07-12T02:00:00.000Z');
@@ -262,4 +265,113 @@ test('★ 일일 DB 집계 강제는 auto 에만 적용된다 (weekly/biweekly �
   assert.equal(needsDailyQuotaCheck('weekly'), false);
   assert.equal(needsDailyQuotaCheck('biweekly'), false);
   assert.equal(needsDailyQuotaCheck('off'), false);
+});
+
+// ---------------------------------------------------------------------------
+// [차단 1 회귀] 앞쪽 회원이 발행 상한을 독식해도 뒤쪽이 결국 처리된다
+// ---------------------------------------------------------------------------
+
+const profileList = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({ id: `p${String(i).padStart(4, '0')}` }));
+
+test('★ 앞쪽 회원이 상한을 다 먹어도 뒤쪽 회원이 결국 검사된다 (커서 순회)', () => {
+  const all = profileList(200);
+  const WINDOW = 200;
+  // 한 실행에서 앞쪽 34명만 검사하고 전체 발행 상한(100편)에 걸려 끊기는 상황.
+  const EXAMINED_PER_RUN = 34;
+
+  let cursor: string | null = null;
+  const examined = new Set<string>();
+
+  for (let run = 0; run < 10; run++) {
+    const window = orderByCursor(all, cursor, WINDOW);
+    const seen = window.slice(0, EXAMINED_PER_RUN);
+    for (const p of seen) examined.add(p.id);
+    cursor = seen[seen.length - 1].id; // 마지막으로 검사한 회원
+    if (examined.size === all.length) break;
+  }
+
+  assert.equal(examined.size, all.length, '10회 실행 안에 200명 전원이 검사돼야 한다');
+  assert.ok(examined.has('p0199'), '맨 뒤 회원이 반드시 포함돼야 한다');
+});
+
+test('★ 창(200)보다 대상이 많아도 커서가 이어달려 전원 검사된다', () => {
+  const all = profileList(1000);
+  const WINDOW = 200;
+  const EXAMINED_PER_RUN = 34; // 상한에 걸려 매번 앞쪽 34명만
+
+  let cursor: string | null = null;
+  const examined = new Set<string>();
+  const maxRuns = all.length; // 최악이라도 total 회 안에 끝나야 한다
+
+  let runs = 0;
+  while (examined.size < all.length && runs < maxRuns) {
+    const window = orderByCursor(all, cursor, WINDOW);
+    const seen = window.slice(0, EXAMINED_PER_RUN);
+    for (const p of seen) examined.add(p.id);
+    cursor = seen[seen.length - 1].id;
+    runs++;
+  }
+
+  assert.equal(examined.size, all.length, `전원 검사 실패 (runs=${runs})`);
+  assert.ok(runs <= Math.ceil(all.length / EXAMINED_PER_RUN) + 1, `너무 오래 걸림: ${runs}회`);
+});
+
+test('★ 최악(실행당 1명만 검사)에도 유한 시간 안에 전원 검사된다', () => {
+  const all = profileList(50);
+  let cursor: string | null = null;
+  const examined = new Set<string>();
+
+  for (let run = 0; run < all.length; run++) {
+    const window = orderByCursor(all, cursor, 200);
+    const seen = window.slice(0, 1); // 첫 회원이 상한을 통째로 먹는 최악 케이스
+    examined.add(seen[0].id);
+    cursor = seen[0].id;
+  }
+
+  assert.equal(examined.size, all.length, 'total 회 실행이면 전원 검사돼야 한다');
+});
+
+test('orderByCursor: 커서 다음부터 시작하고 끝에서 앞으로 돌아온다', () => {
+  const all = profileList(5); // p0000..p0004
+  assert.deepEqual(orderByCursor(all, null, 3).map(p => p.id), ['p0000', 'p0001', 'p0002']);
+  assert.deepEqual(orderByCursor(all, 'p0002', 3).map(p => p.id), ['p0003', 'p0004', 'p0000']);
+  // 커서가 마지막이면 처음으로 돌아온다
+  assert.deepEqual(orderByCursor(all, 'p0004', 2).map(p => p.id), ['p0000', 'p0001']);
+  // 삭제된(존재하지 않는) 커서여도 그 다음 위치를 찾는다
+  assert.deepEqual(orderByCursor(all, 'p0002x', 2).map(p => p.id), ['p0003', 'p0004']);
+});
+
+test('orderByCursor: 창이 전체보다 크면 중복 없이 전원만 담는다', () => {
+  const all = profileList(3);
+  const window = orderByCursor(all, 'p0001', 100);
+  assert.equal(window.length, 3);
+  assert.equal(new Set(window.map(p => p.id)).size, 3);
+});
+
+test('mergeCursorWindow: 중복 제거 + 상한 적용 (라우트의 두 keyset 쿼리 병합)', () => {
+  const after = [{ id: 'b' }, { id: 'c' }];
+  const wrapped = [{ id: 'a' }, { id: 'b' }]; // b 는 겹칠 수 있다
+  assert.deepEqual(mergeCursorWindow(after, wrapped, 10).map(p => p.id), ['b', 'c', 'a']);
+  assert.deepEqual(mergeCursorWindow(after, wrapped, 2).map(p => p.id), ['b', 'c']);
+  assert.deepEqual(mergeCursorWindow(after, wrapped, 0), []);
+});
+
+test('dueThresholdIso: weekly=7일 전, biweekly=14일 전, auto/off 는 null', () => {
+  const now = new Date('2026-07-26T00:00:00.000Z');
+  assert.equal(dueThresholdIso('weekly', now), '2026-07-19T00:00:00.000Z');
+  assert.equal(dueThresholdIso('biweekly', now), '2026-07-12T00:00:00.000Z');
+  assert.equal(dueThresholdIso('auto', now), null);
+  assert.equal(dueThresholdIso('off', now), null);
+});
+
+test('dueThresholdIso 는 isDue 와 같은 경계를 쓴다 (조건부 update 로 옮겨도 동작 동일)', () => {
+  const now = new Date('2026-07-26T00:00:00.000Z');
+  const threshold = dueThresholdIso('weekly', now);
+  assert.ok(threshold);
+  // 임계값과 정확히 같은 시각 = 7일 경과 = 발행 가능
+  assert.equal(isDue('weekly', threshold, now), true);
+  // 임계값보다 1ms 뒤 = 아직 7일 미만 = 발행 불가
+  const justAfter = new Date(Date.parse(threshold) + 1).toISOString();
+  assert.equal(isDue('weekly', justAfter, now), false);
 });

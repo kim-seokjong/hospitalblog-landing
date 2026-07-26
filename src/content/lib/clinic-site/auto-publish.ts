@@ -95,6 +95,69 @@ export function rotationOffset(total: number, windowSize: number, dayIndex: numb
 }
 
 /**
+ * 주기 실행권 선점에 쓸 "이 시각 이하면 실행 가능" 임계값.
+ * weekly=7일 전, biweekly=14일 전. auto/off 는 임계값 개념이 없어 null.
+ *
+ * isDue 와 같은 기준을 DB 조건부 update 로 옮기기 위한 값이다 — 앱에서만
+ * 판정하면 두 실행이 같은 오래된 last_run 을 읽고 각각 1편씩 발행한다.
+ */
+export function dueThresholdIso(cadence: SitePublishCadence, now: Date): string | null {
+  if (cadence === 'off' || cadence === 'auto') return null;
+  return new Date(now.getTime() - CADENCE_DAYS[cadence] * DAY_MS).toISOString();
+}
+
+/**
+ * 커서 기반 순회 순서 — 커서 다음부터 시작해 끝에 닿으면 앞으로 돌아온다.
+ *
+ * 왜 필요한가: 창 안에서 항상 id 오름차순으로 처리하면, 전체 발행 상한을 앞쪽
+ * 회원들이 소진할 때 뒤쪽 회원은 "검사조차" 되지 않는다. 다음 실행이 마지막으로
+ * 검사한 회원 다음부터 이어받으면, 커서가 매 실행 최소 1칸씩 전진하므로
+ * 모든 회원이 최대 total 회 실행 안에 반드시 검사된다.
+ *
+ * 입력 배열은 id 오름차순으로 정렬돼 있다고 가정한다(호출부가 DB 정렬로 보장).
+ * 입력을 변형하지 않는다.
+ */
+export function orderByCursor<T extends { id: string }>(
+  all: ReadonlyArray<T>,
+  cursor: string | null | undefined,
+  windowSize: number,
+): T[] {
+  if (all.length === 0) return [];
+
+  // 커서보다 큰 첫 위치 (커서가 삭제된 id 여도 그 다음 위치를 찾는다)
+  const startIndex = !cursor ? 0 : all.findIndex((item) => item.id > cursor);
+  const start = startIndex === -1 ? 0 : startIndex;
+
+  // 라우트가 실제로 던지는 두 개의 keyset 쿼리와 같은 모양이다:
+  //  ① id > cursor 페이지  ② 부족분을 처음부터 채우는 페이지
+  return mergeCursorWindow(all.slice(start), all.slice(0, start), windowSize);
+}
+
+/**
+ * 커서 순회의 두 페이지를 합친다 — ① 커서 이후 ② 부족분을 앞에서 채운 wrap-around.
+ * 중복 id 를 제거하고 windowSize 개까지만 남긴다.
+ *
+ * ★ 라우트(cron)와 테스트 모델(orderByCursor)이 이 함수를 공유해 로직이 갈라지지 않게 한다.
+ */
+export function mergeCursorWindow<T extends { id: string }>(
+  afterCursor: ReadonlyArray<T>,
+  wrapped: ReadonlyArray<T>,
+  windowSize: number,
+): T[] {
+  if (windowSize <= 0) return [];
+
+  const seen = new Set<string>();
+  const merged: T[] = [];
+  for (const item of [...afterCursor, ...wrapped]) {
+    if (merged.length >= windowSize) break;
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    merged.push(item);
+  }
+  return merged;
+}
+
+/**
  * DB 일일 집계로 상한을 강제해야 하는 주기인지.
  *
  * weekly/biweekly 는 site_publish_last_run 간격(isDue)이 이미 DB 상태로 재발행을
