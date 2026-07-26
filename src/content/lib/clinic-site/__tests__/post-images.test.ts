@@ -18,7 +18,8 @@ import {
   MAX_ALT_LENGTH,
   MAX_BODY_IMAGES,
   pickLeadImageUrl,
-  sanitizeClinicImageUrls,
+  toClinicImageSlots,
+  toImageUrlList,
 } from '../post-images.ts';
 import { isAllowedClinicAssetUrl } from '../theme.ts';
 import { renderBodyHtml } from '../../geo-export.ts';
@@ -63,9 +64,15 @@ const BODY_NO_MARKERS = [
 // URL 화이트리스트
 // ---------------------------------------------------------------------------
 
-describe('sanitizeClinicImageUrls', () => {
+describe('toClinicImageSlots', () => {
+  it('탈락한 URL 은 빼지 않고 null 로 남겨 위치를 보존한다', () => {
+    // ★ 회귀 방지 핵심: 압축하면 IMG2 가 [이미지 1] 자리로 당겨져 설명과 어긋난다.
+    const out = toClinicImageSlots(['https://evil.example.com/x.png', IMG2, IMG3], SUPABASE);
+    assert.deepEqual(out, [null, IMG2, IMG3]);
+  });
+
   it('clinic-assets public 경로만 통과시킨다', () => {
-    const out = sanitizeClinicImageUrls(
+    const out = toClinicImageSlots(
       [
         IMG1,
         'https://evil.example.com/x.png',
@@ -76,30 +83,34 @@ describe('sanitizeClinicImageUrls', () => {
       ],
       SUPABASE,
     );
-    assert.deepEqual(out, [IMG1, IMG2]);
+    assert.deepEqual(out, [IMG1, null, null, null, null, IMG2]);
   });
 
-  it('중복을 제거하고 순서를 보존한다', () => {
-    assert.deepEqual(sanitizeClinicImageUrls([IMG2, IMG1, IMG2], SUPABASE), [IMG2, IMG1]);
+  it('끝쪽 빈 자리는 잘라낸다', () => {
+    assert.deepEqual(toClinicImageSlots([IMG1, null, 'https://evil/x'], SUPABASE), [IMG1]);
+  });
+
+  it('중복 URL 도 위치를 유지한다 (같은 사진을 두 자리에 쓸 수 있다)', () => {
+    assert.deepEqual(toClinicImageSlots([IMG1, IMG1], SUPABASE), [IMG1, IMG1]);
   });
 
   it('배열이 아니거나 supabaseUrl 이 없으면 빈 배열', () => {
-    assert.deepEqual(sanitizeClinicImageUrls(null, SUPABASE), []);
-    assert.deepEqual(sanitizeClinicImageUrls('nope', SUPABASE), []);
-    assert.deepEqual(sanitizeClinicImageUrls([IMG1], null), []);
-    assert.deepEqual(sanitizeClinicImageUrls([IMG1], ''), []);
+    assert.deepEqual(toClinicImageSlots(null, SUPABASE), []);
+    assert.deepEqual(toClinicImageSlots('nope', SUPABASE), []);
+    assert.deepEqual(toClinicImageSlots([IMG1], null), []);
+    assert.deepEqual(toClinicImageSlots([IMG1], ''), []);
   });
 
   it('버킷 루트(파일명 없음)는 거부한다', () => {
     assert.deepEqual(
-      sanitizeClinicImageUrls([`${SUPABASE}/storage/v1/object/public/clinic-assets/`], SUPABASE),
+      toClinicImageSlots([`${SUPABASE}/storage/v1/object/public/clinic-assets/`], SUPABASE),
       [],
     );
   });
 
   it('개수 상한을 넘지 않는다', () => {
     const many = Array.from({ length: MAX_BODY_IMAGES + 5 }, (_, i) => asset(`m${i}.png`));
-    assert.equal(sanitizeClinicImageUrls(many, SUPABASE).length, MAX_BODY_IMAGES);
+    assert.equal(toClinicImageSlots(many, SUPABASE).length, MAX_BODY_IMAGES);
   });
 
   it('theme.ts isAllowedClinicAssetUrl 과 판정이 동치다', () => {
@@ -116,13 +127,13 @@ describe('sanitizeClinicImageUrls', () => {
     ];
     for (const url of candidates) {
       const allowed = isAllowedClinicAssetUrl(url, SUPABASE);
-      const rendered = sanitizeClinicImageUrls([url], SUPABASE).length > 0;
+      const rendered = toClinicImageSlots([url], SUPABASE).length > 0;
       assert.equal(rendered, allowed, `동치 위반: ${url}`);
     }
     // supabaseUrl 이 비었을 때도 동일하게 전부 거부
     for (const base of [null, '', 'ftp://x']) {
       assert.equal(isAllowedClinicAssetUrl(IMG1, base), false);
-      assert.equal(sanitizeClinicImageUrls([IMG1], base).length, 0);
+      assert.equal(toClinicImageSlots([IMG1], base).length, 0);
     }
   });
 });
@@ -215,6 +226,44 @@ describe('renderBodyHtml + 이미지', () => {
     assert.equal(html, renderBodyHtml(stripStructureBlocks(BODY_WITH_MARKERS)));
   });
 
+  it('1번이 비어 있어도 2번 이미지는 2번 마커 자리에 남는다 (당겨오기 금지)', () => {
+    const images = buildClinicPostImages(
+      BODY_WITH_MARKERS,
+      ['https://evil.example.com/x.png', IMG2],
+      SUPABASE,
+      '보톡스 상담',
+    );
+    assert.deepEqual(images[0], null);
+    const html = renderBodyHtml(stripSummaryAndFaqBlocks(BODY_WITH_MARKERS), images);
+    assert.equal(html.split('<figure').length - 1, 1);
+    // 2번 마커 위치 = "근육 상태를…" 단락 뒤, "기록을…" 단락 앞
+    assert.ok(html.indexOf('근육 상태를') < html.indexOf(IMG2));
+    assert.ok(html.indexOf(IMG2) < html.indexOf('기록을 남겨두면'));
+    // alt 도 2번 마커 설명이어야 한다 (1번 설명이 끌려오면 안 된다)
+    assert.ok(html.includes('alt="상담 테이블 위 차트와 펜 클로즈업"'));
+  });
+
+  it('같은 번호 마커가 여러 번 나오면 첫 마커에만 렌더한다', () => {
+    const body = '도입 문장입니다.\n\n[이미지 1: 설명]\n\n중간 문장입니다.\n\n[이미지 1: 설명]';
+    const html = renderBodyHtml(body, buildClinicPostImages(body, [IMG1], SUPABASE, '제목'));
+    assert.equal(html.split('<figure').length - 1, 1);
+  });
+
+  it('소제목 줄에 마커가 섞여도 마커 문자열이 화면에 노출되지 않는다', () => {
+    const body = '앞 단락 문장입니다.\n\n상담 전 확인할 것 [이미지 1: 진료실]\n\n뒤 단락 문장입니다.';
+    const images = buildClinicPostImages(body, [IMG1], SUPABASE, '제목');
+    const html = renderBodyHtml(body, images);
+    assert.ok(!html.includes('[이미지'));
+    // 마커를 먼저 제거하므로 소제목 판정이 정상 동작한다
+    assert.ok(html.includes('<h2>상담 전 확인할 것</h2>'));
+  });
+
+  it('마커 없는 줄의 공백은 손대지 않는다 (기존 렌더 회귀 방지)', () => {
+    const body = '앞  뒤 사이에 공백이  두 개인 문장입니다.';
+    assert.equal(renderBodyHtml(body, []), renderBodyHtml(body));
+    assert.ok(renderBodyHtml(body).includes('앞  뒤'));
+  });
+
   it('마커가 하나도 없으면 블록 사이에 균등 배치한다', () => {
     const images = buildClinicPostImages(BODY_NO_MARKERS, [IMG1, IMG2], SUPABASE, '제목입니다');
     const html = renderBodyHtml(BODY_NO_MARKERS, images);
@@ -271,7 +320,7 @@ describe('pickLeadImageUrl', () => {
     assert.equal(pickLeadImageUrl([]), null);
   });
 
-  it('허용되지 않은 URL 이 앞에 있어도 대표 이미지는 허용된 첫 장이다', () => {
+  it('1번 자리가 비어 있으면 그다음 번호를 대표로 쓴다', () => {
     const images = buildClinicPostImages(
       BODY_WITH_MARKERS,
       ['https://evil.example.com/x.png', IMG2],
@@ -279,6 +328,16 @@ describe('pickLeadImageUrl', () => {
       '제목',
     );
     assert.equal(pickLeadImageUrl(images), IMG2);
+  });
+
+  it('toImageUrlList 는 빈 자리를 건너뛰고 URL 만 순서대로 준다', () => {
+    const images = buildClinicPostImages(
+      BODY_WITH_MARKERS,
+      ['https://evil.example.com/x.png', IMG2, IMG3],
+      SUPABASE,
+      '제목',
+    );
+    assert.deepEqual(toImageUrlList(images), [IMG2, IMG3]);
   });
 });
 
@@ -296,7 +355,7 @@ describe('Article JSON-LD image', () => {
         title: '제목',
         content: BODY_WITH_MARKERS,
         publishedAt: '2026-07-25T00:00:00.000Z',
-        imageUrls: images.map((i) => i.url),
+        imageUrls: toImageUrlList(images),
       },
       profile,
     );

@@ -80,22 +80,34 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 }
 const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
-// ── 파일 수집 (파일명 앞 숫자 = 본문 [이미지 N] 의 N) ──────────────
-const files = fs
-  .readdirSync(dir)
-  .filter((name) => EXT_MIME[path.extname(name).toLowerCase()])
-  .map((name) => {
-    const m = /^(\d+)/.exec(name)
-    return { name, order: m ? Number.parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER }
-  })
-  .sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name))
-
-if (files.length === 0) {
-  console.error(`이미지 파일이 없습니다(png/jpg/jpeg/webp): ${dir}`)
-  process.exit(1)
+// ── 파일 수집 ───────────────────────────────────────────────────────
+// ★ 파일명 앞 숫자 N = 본문 [이미지 N] 의 N (순서가 아니라 **위치**다).
+//   1.png, 3.png 만 있으면 2번 자리는 비운 채로 저장한다 — 당겨 채우면
+//   3.png 가 본문의 [이미지 2] 설명에 붙어 엉뚱한 사진이 나간다.
+const named = []
+for (const name of fs.readdirSync(dir)) {
+  if (!EXT_MIME[path.extname(name).toLowerCase()]) continue
+  const m = /^(\d+)/.exec(name)
+  if (!m) {
+    console.error(`파일명이 숫자로 시작하지 않습니다: ${name}`)
+    console.error('본문 [이미지 N] 의 N 을 파일명 앞에 붙이세요. 예: 1.png, 2.jpg')
+    process.exit(1)
+  }
+  const n = Number.parseInt(m[1], 10)
+  if (!Number.isFinite(n) || n < 1 || n > MAX_IMAGES) {
+    console.error(`이미지 번호가 범위를 벗어났습니다(1~${MAX_IMAGES}): ${name}`)
+    process.exit(1)
+  }
+  if (named.some((f) => f.n === n)) {
+    console.error(`이미지 번호 ${n} 이 중복됩니다: ${name}`)
+    process.exit(1)
+  }
+  named.push({ name, n })
 }
-if (files.length > MAX_IMAGES) {
-  console.error(`이미지가 너무 많습니다 (${files.length}장 / 최대 ${MAX_IMAGES}장).`)
+named.sort((a, b) => a.n - b.n)
+
+if (named.length === 0) {
+  console.error(`이미지 파일이 없습니다(png/jpg/jpeg/webp): ${dir}`)
   process.exit(1)
 }
 
@@ -124,10 +136,14 @@ console.log(`현재 image_urls : ${Array.isArray(post.image_urls) ? `${post.imag
 console.log(`본문 이미지 마커 : ${markers.length}개`)
 markers.forEach((m, i) => console.log(`  [${i + 1}] ${m}`))
 console.log('── 업로드할 파일 ─────────────────────────')
-files.forEach((f, i) => console.log(`  → [이미지 ${i + 1}] ${f.name}`))
+const slotCount = named[named.length - 1].n
+for (let n = 1; n <= slotCount; n++) {
+  const f = named.find((x) => x.n === n)
+  console.log(f ? `  → [이미지 ${n}] ${f.name}` : `  → [이미지 ${n}] (비움 — 해당 마커는 렌더되지 않음)`)
+}
 
-if (markers.length > 0 && markers.length !== files.length) {
-  console.warn(`\n⚠️ 마커 ${markers.length}개 / 파일 ${files.length}장 — 개수가 다릅니다.`)
+if (markers.length > 0 && markers.length !== slotCount) {
+  console.warn(`\n⚠️ 본문 마커 ${markers.length}개 / 이미지 자리 ${slotCount}개 — 개수가 다릅니다.`)
   console.warn('   짝이 없는 마커는 렌더되지 않고, 남는 이미지는 본문 끝에 붙습니다.')
 }
 if (Array.isArray(post.image_urls) && post.image_urls.length > 0 && !force) {
@@ -140,13 +156,26 @@ if (!apply) {
 }
 
 // ── 업로드 ──────────────────────────────────────────────────────────
-const urls = []
-for (const file of files) {
-  const full = path.join(dir, file.name)
-  const buffer = fs.readFileSync(full)
+// 슬롯 배열 — index i 가 [이미지 i+1]. 비는 자리는 null 로 남긴다.
+const urls = new Array(slotCount).fill(null)
+const uploaded = [] // 실패 시 되돌리기용 objectPath 목록
+
+const rollback = async () => {
+  if (uploaded.length === 0) return
+  const { error } = await admin.storage.from(BUCKET).remove(uploaded)
+  console.error(
+    error
+      ? `⚠️ 업로드 파일 정리 실패(${uploaded.length}개 수동 삭제 필요): ${error.message}`
+      : `업로드했던 파일 ${uploaded.length}개를 정리했습니다.`,
+  )
+}
+
+for (const file of named) {
+  const buffer = fs.readFileSync(path.join(dir, file.name))
   if (buffer.length === 0 || buffer.length > MAX_BYTES) {
-    console.error(`건너뜀(크기 이상): ${file.name} (${buffer.length} bytes)`)
-    continue
+    console.error(`크기 이상으로 중단: ${file.name} (${buffer.length} bytes)`)
+    await rollback()
+    process.exit(1)
   }
   const ext = path.extname(file.name).toLowerCase()
   const objectPath = `${post.user_id}/post-images/${crypto.randomUUID()}${ext === '.jpeg' ? '.jpg' : ext}`
@@ -157,20 +186,19 @@ for (const file of files) {
   })
   if (upErr) {
     console.error(`업로드 실패: ${file.name} — ${upErr.message}`)
+    await rollback()
     process.exit(1)
   }
   const { data } = admin.storage.from(BUCKET).getPublicUrl(objectPath)
   if (!data?.publicUrl) {
     console.error(`public URL 생성 실패: ${file.name}`)
+    uploaded.push(objectPath)
+    await rollback()
     process.exit(1)
   }
-  urls.push(data.publicUrl)
-  console.log(`업로드 완료: ${file.name} → ${data.publicUrl}`)
-}
-
-if (urls.length === 0) {
-  console.error('업로드된 이미지가 없습니다. image_urls 를 변경하지 않았습니다.')
-  process.exit(1)
+  uploaded.push(objectPath)
+  urls[file.n - 1] = data.publicUrl
+  console.log(`업로드 완료: [이미지 ${file.n}] ${file.name} → ${data.publicUrl}`)
 }
 
 const { error: updErr } = await admin
@@ -180,9 +208,9 @@ const { error: updErr } = await admin
 
 if (updErr) {
   console.error(`image_urls 저장 실패: ${updErr.code} ${updErr.message}`)
-  console.error('업로드된 파일은 Storage 에 남아 있습니다(수동 정리 필요).')
+  await rollback()
   process.exit(1)
 }
 
-console.log(`\n완료 — image_urls ${urls.length}장 저장.`)
+console.log(`\n완료 — image_urls ${named.length}장(자리 ${slotCount}개) 저장.`)
 console.log('자체 블로그는 ISR 1시간이라 최대 1시간 뒤 반영됩니다(즉시 확인하려면 재배포).')

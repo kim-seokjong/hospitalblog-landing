@@ -38,9 +38,12 @@ export interface ClinicSitePost {
   keyword: string | null;
   /**
    * 본문 이미지 URL (saved_posts.image_urls) — 없거나 컬럼 미존재면 빈 배열.
-   * 렌더 화이트리스트 판정은 clinic-site/post-images.ts 가 담당한다(원문 그대로 전달).
+   *
+   * ★ **index 가 본문 마커 번호(i+1)를 뜻하므로 압축하지 않는다.** 문자열이 아닌
+   *   항목은 빼는 대신 null 로 남긴다 — 빼면 뒤 이미지가 앞 번호로 당겨져 본문
+   *   설명과 다른 사진이 붙는다. 화이트리스트 판정은 post-images.ts 가 담당한다.
    */
-  imageUrls: string[];
+  imageUrls: (string | null)[];
 }
 
 interface ProfileRow {
@@ -63,7 +66,8 @@ interface PostRow {
   created_at: string | null;
   tags: string[] | null;
   keyword: string | null;
-  image_urls?: string[] | null;
+  /** text[] — 원소가 NULL 일 수 있다(마커 번호 자리 비움). */
+  image_urls?: (string | null)[] | null;
 }
 
 /**
@@ -141,7 +145,7 @@ function toPost(row: PostRow): ClinicSitePost {
     tags: Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === 'string') : [],
     keyword: typeof row.keyword === 'string' ? row.keyword : null,
     imageUrls: Array.isArray(row.image_urls)
-      ? row.image_urls.filter((u): u is string => typeof u === 'string')
+      ? row.image_urls.map((u) => (typeof u === 'string' ? u : null))
       : [],
   };
 }

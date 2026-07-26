@@ -14,7 +14,11 @@ import {
   stripSummaryAndFaqBlocks,
 } from '@/content/lib/geo-schema';
 import { renderBodyHtml } from '@/content/lib/geo-export';
-import { buildClinicPostImages, pickLeadImageUrl } from '@/content/lib/clinic-site/post-images';
+import {
+  buildClinicPostImages,
+  pickLeadImageUrl,
+  toImageUrlList,
+} from '@/content/lib/clinic-site/post-images';
 import { formatBylineText, resolveAuthorAttribution } from '@/content/lib/clinic-site/byline';
 import { rankRelatedPosts, RELATED_POSTS_LIMIT } from '@/content/lib/clinic-site/related-posts';
 import ClinicSiteFooter, { formatClinicDate } from '../../site-chrome';
@@ -116,7 +120,7 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
       title: post.title,
       content: post.content,
       publishedAt: post.publishedAt,
-      imageUrls: bodyImages.map((image) => image.url),
+      imageUrls: toImageUrlList(bodyImages),
     },
     {
       hospitalName: clinic.hospitalName,

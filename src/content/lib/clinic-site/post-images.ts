@@ -24,7 +24,7 @@
  */
 
 import { isAllowedClinicAssetUrl } from './theme.ts';
-import type { BodyImage } from '../geo-export.ts';
+import type { BodyImage, BodyImageSlots } from '../geo-export.ts';
 
 /** 한 글에 렌더할 이미지 수 상한 — saved-post-fields.MAX_IMAGE_URLS 와 동일. */
 export const MAX_BODY_IMAGES = 12;
@@ -60,28 +60,32 @@ export function extractImageDescriptions(bodyText: string): Map<number, string> 
 }
 
 /**
- * 렌더 가능한 이미지 URL 만 남긴다 — 화이트리스트 통과분, 중복 제거, 개수 캡.
+ * image_urls 를 **위치를 보존한 슬롯 배열**로 바꾼다 — index i ↔ 마커 번호 i+1.
+ *
+ * ★ 탈락한 URL 을 배열에서 빼지 않고 null 로 남기는 것이 핵심이다.
+ *   압축하면 뒤 이미지가 앞 번호로 당겨져 본문 설명(`[이미지 2: …]`)과 전혀 다른
+ *   사진이 붙는다. "3번이 비었으니 3번 자리는 비운다"가 올바른 동작이다.
  *
  * 판정은 theme.ts 의 `isAllowedClinicAssetUrl` 그대로다(자체 Supabase
- * clinic-assets public 경로만). 외부 CDN·data URL 은 전부 탈락한다.
+ * clinic-assets public 경로만). 외부 CDN·data URL 은 전부 null 이 된다.
+ * 끝쪽 null 은 의미가 없으므로 잘라낸다.
  */
-export function sanitizeClinicImageUrls(
+export function toClinicImageSlots(
   raw: unknown,
   supabaseUrl: string | null | undefined,
-): string[] {
+): (string | null)[] {
   if (!Array.isArray(raw)) return [];
   const items: readonly unknown[] = raw;
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const item of items) {
-    if (typeof item !== 'string') continue;
-    if (!isAllowedClinicAssetUrl(item, supabaseUrl)) continue;
-    if (seen.has(item)) continue;
-    seen.add(item);
-    out.push(item);
-    if (out.length >= MAX_BODY_IMAGES) break;
+  const slots: (string | null)[] = [];
+  for (const item of items.slice(0, MAX_BODY_IMAGES)) {
+    if (typeof item !== 'string' || !isAllowedClinicAssetUrl(item, supabaseUrl)) {
+      slots.push(null);
+      continue;
+    }
+    slots.push(item);
   }
-  return out;
+  while (slots.length > 0 && slots[slots.length - 1] === null) slots.pop();
+  return slots;
 }
 
 /**
@@ -104,33 +108,49 @@ export function buildImageAlt(
 }
 
 /**
- * 본문 + 저장된 image_urls → 렌더용 이미지 목록.
- * 배열 index i 는 마커 번호 i+1 에 대응한다(renderBodyHtml 계약).
- * 렌더 가능한 URL 이 없으면 빈 배열 → 이미지 없는 글과 완전히 동일하게 렌더된다.
+ * 본문 + 저장된 image_urls → 렌더용 이미지 슬롯.
+ * index i 는 마커 번호 i+1 에 대응하고, 그 번호에 쓸 이미지가 없으면 null 이다
+ * (renderBodyHtml 계약). 렌더 가능한 URL 이 하나도 없으면 빈 배열 →
+ * 이미지 없는 글과 완전히 동일하게 렌더된다.
  */
 export function buildClinicPostImages(
   bodyText: string,
   rawImageUrls: unknown,
   supabaseUrl: string | null | undefined,
   title: string,
-): BodyImage[] {
-  const urls = sanitizeClinicImageUrls(rawImageUrls, supabaseUrl);
-  if (urls.length === 0) return [];
+): (BodyImage | null)[] {
+  const slots = toClinicImageSlots(rawImageUrls, supabaseUrl);
+  if (slots.every((url) => url === null)) return [];
 
   const descriptions = extractImageDescriptions(bodyText);
-  return urls.map((url, i) => ({
-    url,
-    alt: buildImageAlt(descriptions.get(i + 1) ?? null, title, i, urls.length),
-  }));
+  const total = slots.filter((url) => url !== null).length;
+  return slots.map((url, i) =>
+    url === null
+      ? null
+      : { url, alt: buildImageAlt(descriptions.get(i + 1) ?? null, title, i, total) },
+  );
 }
 
 /**
- * 대표 이미지(OG·JSON-LD Article.image) — 첫 번째 렌더 가능 이미지.
+ * 대표 이미지(OG·JSON-LD Article.image) — 가장 앞 번호의 이미지(= `[이미지 1]`,
+ * 비어 있으면 그다음 번호).
  *
  * 본문 위에 히어로로 한 번 더 그리지는 않는다: 그 이미지는 이미 마커 위치에
  * 본문 안에서 렌더되므로 중복 노출이 된다. 대표 이미지는 **공유 카드·검색·AI 인용
  * 메타데이터 용도로만** 쓴다.
  */
-export function pickLeadImageUrl(images: ReadonlyArray<BodyImage>): string | null {
-  return images.length > 0 ? images[0].url : null;
+export function pickLeadImageUrl(images: BodyImageSlots): string | null {
+  for (const image of images) {
+    if (image) return image.url;
+  }
+  return null;
+}
+
+/** JSON-LD Article.image 용 — 슬롯에서 실제 이미지 URL 만 순서대로 뽑는다. */
+export function toImageUrlList(images: BodyImageSlots): string[] {
+  const out: string[] = [];
+  for (const image of images) {
+    if (image) out.push(image.url);
+  }
+  return out;
 }
