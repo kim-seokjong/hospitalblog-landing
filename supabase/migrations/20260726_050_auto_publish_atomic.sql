@@ -117,22 +117,28 @@ grant execute on function public.claim_auto_publish_posts(uuid, integer, timesta
 -- isDue 는 앱 판정이라 두 실행이 같은 오래된 last_run 을 읽으면 각각 1편씩 발행된다.
 -- 조건부 update 로 last_run 을 "먼저" 갱신하고, 실제로 1행이 바뀐 실행만 진행한다.
 --
--- 반환: 선점 성공 시 이전 last_run 값(실패 시 0행).
---       발행에 결국 실패하면 앱이 이 값으로 되돌려 주기를 낭비하지 않는다.
+-- 반환: 선점 성공 시 (이전 last_run, 이번에 찍은 last_run) 1행. 실패 시 0행.
+--  - previous_last_run: 발행에 결국 실패하면 이 값으로 되돌려 주기를 낭비하지 않는다.
+--  - claimed_at: ★ 되돌릴 때 compare-and-set 조건으로 쓴다. 내가 찍은 값일 때만
+--    되돌려야, 그 사이 다른 실행이 갱신한 더 최신 값을 과거로 밀어버리지 않는다.
+--
+-- UPDATE ... RETURNING 은 "갱신 후" 값을 돌려주므로, 이전 값은 행을 잠근 뒤 미리 읽는다.
 
--- UPDATE ... RETURNING 은 "갱신 후" 값을 돌려주므로, 되돌리기에 필요한 이전 값은
--- 행을 잠근 뒤 미리 읽어서 반환한다.
+-- 반환 타입이 바뀌었으므로 create or replace 로는 교체되지 않는다(먼저 제거).
+drop function if exists public.claim_auto_publish_cycle(uuid, timestamptz);
+
 create or replace function public.claim_auto_publish_cycle(
   p_user_id   uuid,
   p_threshold timestamptz
 )
-returns table (previous_last_run timestamptz)
+returns table (previous_last_run timestamptz, claimed_at timestamptz)
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
   v_prev timestamptz;
+  v_now  timestamptz := now();
   v_hit  integer;
 begin
   perform pg_advisory_xact_lock(hashtextextended(p_user_id::text, 1));
@@ -152,7 +158,7 @@ begin
   end if;
 
   update public.profiles
-     set site_publish_last_run = now()
+     set site_publish_last_run = v_now
    where id = p_user_id;
 
   get diagnostics v_hit = row_count;
@@ -160,7 +166,7 @@ begin
     return;
   end if;
 
-  return query select v_prev;
+  return query select v_prev, v_now;
 end;
 $$;
 

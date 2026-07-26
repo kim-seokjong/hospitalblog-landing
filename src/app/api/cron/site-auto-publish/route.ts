@@ -41,7 +41,7 @@ import {
   type AutoPublishCandidate,
 } from '@/content/lib/clinic-site/auto-publish';
 import {
-  claimAutoPublishPosts,
+  claimPostsForPublish,
   claimAutoPublishCycle,
   restoreAutoPublishCycle,
   readAutoPublishCursor,
@@ -233,20 +233,23 @@ export async function GET(req: NextRequest) {
           if (!cycle.claimed) continue; // 다른 실행이 이번 주기를 이미 가져갔다
         }
 
-        // ★ 일일 상한 강제 + 글 선점을 한 번에 (마이그 050 RPC = advisory lock + 단일 트랜잭션).
-        const claim = await claimAutoPublishPosts(admin, {
+        // 글 선점. 주기별로 경로가 갈린다(claimPostsForPublish 내부 분기):
+        //  · auto            → 일일 상한 강제 RPC (advisory lock + 단일 트랜잭션)
+        //  · weekly/biweekly → 일일 집계 없이 조건부 UPDATE 로 글만 원자 선점
+        //    (간격은 위의 주기 선점이 이미 보장한다. 여기서 일일 집계를 하면
+        //     그날 수동 발행한 회원의 cron 이 밀려 기존 동작이 깨진다.)
+        const claim = await claimPostsForPublish(admin, {
           userId: profile.id,
           cadence,
           dayStartIso,
           candidateIds: picked.map((post) => post.id),
           limit: runLimit,
-          dailyCap: maxPostsPerRun(cadence),
         });
 
         if (!claim.ok) {
           failures.push({ userId: profile.id, reason: claim.reason });
           if (cycle?.ok && cycle.claimed && cycle.atomic) {
-            await restoreAutoPublishCycle(admin, profile.id, cycle.previousLastRun);
+            await restoreAutoPublishCycle(admin, profile.id, cycle.previousLastRun, cycle.claimedAt);
           }
           continue;
         }
@@ -257,7 +260,7 @@ export async function GET(req: NextRequest) {
         if (publishedIds.length === 0) {
           // 한 편도 못 가져갔다(상한 소진·다른 실행이 선점) → 주기를 낭비시키지 않는다.
           if (cycle?.ok && cycle.claimed && cycle.atomic) {
-            await restoreAutoPublishCycle(admin, profile.id, cycle.previousLastRun);
+            await restoreAutoPublishCycle(admin, profile.id, cycle.previousLastRun, cycle.claimedAt);
           }
           continue;
         }
@@ -303,8 +306,15 @@ export async function GET(req: NextRequest) {
     }
 
     // 다음 실행이 이어받을 위치 — 발행 상한에 걸려 끊겼어도 여기까지는 검사했다.
+    // ★ 저장 실패를 조용히 넘기면 매 실행이 같은 지점에서 시작해 뒤쪽 회원이
+    //   다시 영구 기아에 빠지므로, 실패를 응답과 failures 양쪽에 남긴다.
+    let cursorWrite: 'ok' | 'failed' | 'skipped' = 'skipped';
     if (useCursor && lastExaminedId) {
-      await writeAutoPublishCursor(admin, lastExaminedId);
+      const written = await writeAutoPublishCursor(admin, lastExaminedId);
+      cursorWrite = written.ok ? 'ok' : 'failed';
+      if (!written.ok) {
+        failures.push({ userId: lastExaminedId, reason: `커서 저장 실패: ${written.reason}` });
+      }
     }
 
     return NextResponse.json({
@@ -312,6 +322,7 @@ export async function GET(req: NextRequest) {
       mode: 'live',
       total,
       cursor: useCursor ? 'persisted' : 'day-rotation',
+      cursorWrite,
       scanned,
       published,
       atomicFallbacks,

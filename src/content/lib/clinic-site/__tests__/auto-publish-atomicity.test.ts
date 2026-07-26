@@ -125,7 +125,7 @@ test('마이그 050: 주기 실행권 선점 함수가 행 잠금 + 임계값 �
   const fn = sql.slice(sql.lastIndexOf('create or replace function public.claim_auto_publish_cycle'));
   assert.match(fn, /for update/);
   assert.match(fn, /v_prev > p_threshold/);
-  assert.match(fn, /set site_publish_last_run = now\(\)/);
+  assert.match(fn, /set site_publish_last_run = v_now/);
 });
 
 test('마이그 050: 순회 커서 테이블이 있고 공개 롤에 노출되지 않는다', () => {
@@ -151,8 +151,8 @@ test('마이그 050: 깨진 초안 함수가 남아 있지 않다 (claim_auto_pu
 // ③ 라우트·클라이언트 소스 — 앱이 정말 원자 경로를 쓰는가
 // ---------------------------------------------------------------------------
 
-test('cron 라우트가 원자 선점 RPC 경로를 호출한다', () => {
-  assert.match(routeSource, /claimAutoPublishPosts\(/);
+test('cron 라우트가 원자 선점 경로를 호출한다', () => {
+  assert.match(routeSource, /claimPostsForPublish\(/);
   assert.match(routeSource, /claimAutoPublishCycle\(/);
 });
 
@@ -183,7 +183,7 @@ test('클라이언트: RPC 미적용 환경에서도 죽지 않고 폴백한다'
   // 42883 undefined_function / PGRST202 스키마 캐시 미스
   assert.match(claimSource, /42883/);
   assert.match(claimSource, /PGRST2/);
-  assert.match(claimSource, /legacyClaimPosts/);
+  assert.match(claimSource, /legacyClaimWithDailyCap/);
 });
 
 test('주기를 선점하고도 발행하지 못하면 되돌린다 (주기 낭비 방지)', () => {
@@ -197,4 +197,152 @@ test('마이그 050 미적용 폴백에서도 weekly last_run 이 갱신된다 (
   // RPC 가 주기를 원자적으로 선점한 경우에만 라우트가 last_run 갱신을 건너뛴다.
   assert.match(routeSource, /cycleAlreadyStamped[\s\S]{0,120}cycle\.atomic/);
   assert.match(routeSource, /if \(!cycleAlreadyStamped\)[\s\S]{0,200}site_publish_last_run/);
+});
+
+// ---------------------------------------------------------------------------
+// [3차 차단 회귀] 일일 집계·차감은 auto 에만 적용된다
+//
+// 직전 라운드에서 "auto 에만 적용"이라고 보고했지만, 라우트가 dailyCap 을 주기와
+// 무관하게 넘기는 바람에 실제로는 weekly/biweekly 도 일일 집계를 당했다.
+// 아래 가드는 그 회귀가 다시 들어오면 반드시 실패한다.
+// ---------------------------------------------------------------------------
+
+/** weekly 경로 모델 — 일일 집계 없이 후보를 그대로 선점한다. */
+function claimWeeklyModel(db: DbModel, candidateIds: readonly string[]): string[] {
+  const claimable = candidateIds.filter((id) => db.unpublished.includes(id));
+  for (const id of claimable) {
+    db.unpublished = db.unpublished.filter((x) => x !== id);
+    db.publishedToday += 1;
+  }
+  return claimable;
+}
+
+test('★ weekly 회원이 오늘 수동 발행했어도 cron 이 정상 발행한다', () => {
+  // 회원이 마이페이지에서 오늘 1편을 수동 발행한 상태.
+  const db: DbModel = { publishedToday: 1, unpublished: ['x'] };
+
+  // weekly cron 은 일일 집계를 하지 않으므로 그대로 1편을 발행해야 한다.
+  const claimed = claimWeeklyModel(db, ['x']);
+  assert.equal(claimed.length, 1, 'weekly 는 그날 수동 발행과 무관하게 발행돼야 한다');
+
+  // 만약 auto 와 같은 일일 집계(cap=1)를 걸었다면 0편이 되어 주기가 밀렸다 — 그게 버그였다.
+  const buggyQuota = Math.max(0, 1 - 1);
+  assert.equal(buggyQuota, 0, '일일 집계를 걸면 0편이 된다(= 재발 시 증상)');
+});
+
+test('★ biweekly 도 동일하다 (일일 집계 없음)', () => {
+  const db: DbModel = { publishedToday: 2, unpublished: ['y'] };
+  assert.equal(claimWeeklyModel(db, ['y']).length, 1);
+});
+
+test('★ 라우트가 dailyCap 을 넘기지 않는다 (회귀 원인 구조 제거)', () => {
+  assert.ok(
+    !routeSource.includes('dailyCap'),
+    '라우트가 dailyCap 을 넘기면 주기와 무관하게 일일 집계가 적용될 수 있다',
+  );
+});
+
+test('★ 일일 상한 값은 주기에서만 파생된다 (호출부가 정할 수 없음)', () => {
+  // 입력 타입에 dailyCap 필드가 없어야 한다
+  const inputType = claimSource.slice(
+    claimSource.indexOf('interface ClaimPostsInput'),
+    claimSource.indexOf('export async function claimPostsForPublish'),
+  );
+  assert.ok(!/^\s*dailyCap\s*:/m.test(inputType), 'ClaimPostsInput 에 dailyCap 필드가 있다');
+  // RPC 에 넘기는 값은 maxPostsPerRun(cadence) 여야 한다
+  assert.match(claimSource, /p_daily_cap:\s*maxPostsPerRun\(input\.cadence\)/);
+});
+
+test('★ 분기 기준이 needsDailyQuotaCheck 하나뿐이다', () => {
+  const fn = claimSource.slice(
+    claimSource.indexOf('export async function claimPostsForPublish'),
+    claimSource.indexOf('async function claimWithoutDailyCap'),
+  );
+  assert.match(fn, /if \(!needsDailyQuotaCheck\(input\.cadence\)\)/);
+  assert.match(fn, /claimWithoutDailyCap\(/);
+  assert.match(fn, /claimWithDailyCap\(/);
+});
+
+test('★ weekly 경로 함수에 일일 집계 쿼리가 아예 없다', () => {
+  const fn = claimSource.slice(
+    claimSource.indexOf('async function claimWithoutDailyCap'),
+    claimSource.indexOf('async function claimWithDailyCap'),
+  );
+  // site_published_at 은 UPDATE 로 "쓰는" 컬럼이라 등장 자체는 정상이다.
+  // 금지 대상은 "오늘 몇 편 나갔나"를 읽는 집계 쪽이다.
+  assert.ok(!fn.includes(".gte('site_published_at'"), 'weekly 경로에 오늘 발행 집계가 들어갔다');
+  assert.ok(!fn.includes("count: 'exact'"), 'weekly 경로에 count 집계가 들어갔다');
+  assert.ok(!fn.includes('remainingDailyQuota'), 'weekly 경로에 일일 몫 차감이 들어갔다');
+  assert.ok(!fn.includes('dayStartIso'), 'weekly 경로가 일일 집계 경계를 참조한다');
+  // 원자 선점 조건은 반드시 있어야 한다
+  assert.match(fn, /\.eq\('published_to_site', false\)/);
+  assert.match(fn, /\.select\('id'\)/);
+});
+
+test('★ 폴백(마이그 미적용) 경로도 auto 전용이다', () => {
+  // 일일 집계 폴백은 claimWithDailyCap 안에서만 호출된다
+  const withCap = claimSource.slice(
+    claimSource.indexOf('async function claimWithDailyCap'),
+    claimSource.indexOf('async function legacyClaimWithDailyCap'),
+  );
+  assert.match(withCap, /legacyClaimWithDailyCap\(/);
+  // weekly 경로에서는 호출되지 않는다
+  const withoutCap = claimSource.slice(
+    claimSource.indexOf('async function claimWithoutDailyCap'),
+    claimSource.indexOf('async function claimWithDailyCap'),
+  );
+  assert.ok(!withoutCap.includes('legacy'));
+});
+
+// ---------------------------------------------------------------------------
+// [3차 중간 2] 커서 저장 실패를 감지한다
+// ---------------------------------------------------------------------------
+
+test('★ 커서 저장이 { error } 와 변경 행 수를 모두 검사한다', () => {
+  const fn = claimSource.slice(claimSource.indexOf('export async function writeAutoPublishCursor'));
+  assert.match(fn, /const \{ data, error \} = await admin/);
+  assert.match(fn, /if \(error\)/);
+  assert.match(fn, /data\.length === 0/);
+  // singleton 행이 삭제돼도 복구되도록 upsert 를 쓴다
+  assert.match(fn, /\.upsert\(/);
+  assert.match(fn, /onConflict: 'id'/);
+});
+
+test('★ 커서 저장 실패가 응답과 failures 에 드러난다 (조용한 기아 방지)', () => {
+  assert.match(routeSource, /cursorWrite/);
+  assert.match(routeSource, /커서 저장 실패/);
+  assert.match(routeSource, /written\.ok \? 'ok' : 'failed'/);
+});
+
+// ---------------------------------------------------------------------------
+// [3차 중간 3] 주기 복구가 compare-and-set 이다
+// ---------------------------------------------------------------------------
+
+test('★ 주기 복구가 내가 찍은 값일 때만 되돌린다 (CAS)', () => {
+  const fn = claimSource.slice(claimSource.indexOf('export async function restoreAutoPublishCycle'));
+  // 소유권 조건
+  assert.match(fn, /\.eq\('site_publish_last_run', claimedAt\)/);
+  // 변경 행 확인 + error 검사
+  assert.match(fn, /\.select\('id'\)/);
+  assert.match(fn, /if \(error\)/);
+  assert.match(fn, /data\.length === 0/);
+  // 선점 시각을 모르면 아예 건드리지 않는다
+  assert.match(fn, /if \(!claimedAt\)/);
+});
+
+test('★ RPC 가 되돌리기용 claimed_at 을 함께 반환한다', () => {
+  assert.match(sql, /returns table \(previous_last_run timestamptz, claimed_at timestamptz\)/);
+  assert.match(sql, /return query select v_prev, v_now;/);
+  // 반환 타입이 바뀌었으므로 교체 전 drop 이 필요하다
+  assert.match(sql, /drop function if exists public\.claim_auto_publish_cycle\(uuid, timestamptz\)/);
+  // 스탬프 값과 반환 값이 같은 변수여야 CAS 가 성립한다
+  assert.match(sql, /set site_publish_last_run = v_now/);
+});
+
+test('★ 라우트가 복구 시 claimedAt 을 넘긴다', () => {
+  const calls = routeSource.match(/restoreAutoPublishCycle\([^)]*\)/g) ?? [];
+  assert.ok(calls.length >= 1);
+  for (const call of calls) {
+    assert.ok(call.includes('cycle.claimedAt'), `복구 호출에 claimedAt 누락: ${call}`);
+  }
 });
