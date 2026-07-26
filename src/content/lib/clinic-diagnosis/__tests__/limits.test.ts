@@ -158,5 +158,5 @@ test('다른 병원은 서로 막지 않는다', () => {
 
 test('limitMessage 는 사유별로 다른 안내를 준다', () => {
   assert.match(limitMessage('global_limit'), /오늘 무료 진단 사용량/);
-  assert.match(limitMessage('ip_limit'), /하루 3회/);
+  assert.match(limitMessage('ip_limit'), /무료 진단 횟수/);
 });

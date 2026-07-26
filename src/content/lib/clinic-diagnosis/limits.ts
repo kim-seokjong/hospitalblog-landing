@@ -20,8 +20,14 @@ import {
  * 외부 의존 없는 순수 모듈(@/ alias import 금지) — node:test 러너로 직접 검증 가능.
  */
 
-/** 진단 실행 IP당 일일 기본 캡. env: CLINIC_DIAGNOSIS_IP_DAILY_LIMIT */
-export const DEFAULT_DIAGNOSIS_IP_LIMIT = 3;
+/**
+ * 진단 실행 IP당 일일 기본 캡. env: CLINIC_DIAGNOSIS_IP_DAILY_LIMIT
+ *
+ * ★3회는 너무 낮았다 — 영업 담당자가 병원 몇 곳만 확인해도 바로 막혀서
+ *   정작 우리가 못 쓰는 도구가 됐다. 실제 비용 방어선은 전체 캡(아래)이므로
+ *   IP 캡은 "한 사람이 종일 돌리는 것"만 막으면 된다.
+ */
+export const DEFAULT_DIAGNOSIS_IP_LIMIT = 20;
 /** 진단 실행 전체 일일 기본 캡. env: CLINIC_DIAGNOSIS_GLOBAL_DAILY_LIMIT */
 export const DEFAULT_DIAGNOSIS_GLOBAL_LIMIT = 100;
 /** 후보 검색 IP당 일일 기본 캡 (행안부 조회만이라 싸다). env: CLINIC_LOOKUP_IP_DAILY_LIMIT */
@@ -125,5 +131,6 @@ export function limitMessage(reason: 'ip_limit' | 'global_limit' | 'user_limit')
   if (reason === 'global_limit') {
     return '오늘 무료 진단 사용량이 모두 소진됐어요. 내일 다시 시도해 주세요.';
   }
-  return '무료 진단은 하루 3회까지 이용할 수 있어요. 내일 다시 시도하거나 상담으로 문의해 주세요.';
+  // 캡 숫자를 문구에 박아두면 캡을 바꿀 때마다 어긋난다 → 숫자 없이 안내한다.
+  return '오늘 이용 가능한 무료 진단 횟수를 다 쓰셨어요. 내일 다시 시도하거나 상담으로 문의해 주세요.';
 }
