@@ -131,7 +131,7 @@ export function kstDateKey(now: number = Date.now()): string {
 
 /**
  * record_clinic_ai_referral RPC 인자. **이 4개가 저장되는 전부다.**
- * 필드를 늘릴 때는 개인정보 판단을 반드시 다시 한다(마이그 048 주석 참조).
+ * 필드를 늘릴 때는 개인정보 판단을 반드시 다시 한다(마이그 051 주석 참조).
  */
 export interface AiReferralRecordArgs {
   p_slug: string;
@@ -167,7 +167,7 @@ export function buildAiReferralRecord(
 
 /**
  * "스키마가 아직 없다"를 뜻하는 Postgres/PostgREST 오류 코드.
- * 마이그 048 은 사람이 수동 적용하므로, 미적용 상태에서도 코드가 죽지 않고
+ * 마이그 051 은 사람이 수동 적용하므로, 미적용 상태에서도 코드가 죽지 않고
  * 조용히 no-op 해야 한다(기존 42P01 폴백 관행과 동일).
  *   42P01   — undefined_table (테이블 없음)
  *   42883   — undefined_function (RPC 없음)

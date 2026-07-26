@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
- * ★ 개인정보 최소화 고정 테스트 — 마이그 048 스키마가 "그 넷"에서 벗어나지 못하게 한다.
+ * ★ 개인정보 최소화 고정 테스트 — 마이그 051 스키마가 "그 넷"에서 벗어나지 못하게 한다.
  *
  * 이 기능의 제1 제약은 "개인을 식별할 수 있는 어떤 값도 남기지 않는다"이다.
  * 나중에 누군가 "디버깅용으로 IP만 잠깐"·"UA도 같이" 같은 컬럼을 추가하면 이 테스트가
@@ -17,7 +17,7 @@ const MIGRATION_PATH = path.join(
   process.cwd(),
   'supabase',
   'migrations',
-  '20260726_048_clinic_ai_referrals.sql',
+  '20260726_051_clinic_ai_referrals.sql',
 );
 
 const sql = readFileSync(MIGRATION_PATH, 'utf8');
@@ -81,14 +81,14 @@ test('record_clinic_ai_referral: insert 하는 컬럼도 허용 집합 안이다
   assert.deepEqual(inserted, ['post_id', 'source', 'user_id', 'visit_date', 'visits']);
 });
 
-test('마이그 048: RLS 가 켜져 있고 본인 조회 정책만 존재한다', () => {
+test('마이그 051: RLS 가 켜져 있고 본인 조회 정책만 존재한다', () => {
   assert.match(sql, /alter table public\.clinic_ai_referrals enable row level security/);
   assert.match(sql, /for select\s*\n?\s*using \(auth\.uid\(\) = user_id\)/);
   // 클라이언트가 직접 쓰지 못하도록 insert/update/delete 정책은 만들지 않는다
   assert.equal(/create policy[\s\S]*?for (insert|update|delete)/.test(sql), false);
 });
 
-test('마이그 048: RPC 실행 권한이 service_role 로 제한된다', () => {
+test('마이그 051: RPC 실행 권한이 service_role 로 제한된다', () => {
   assert.match(sql, /revoke all on function public\.record_clinic_ai_referral\([^)]*\) from public/);
   assert.match(sql, /grant execute on function public\.record_clinic_ai_referral\([^)]*\) to service_role/);
 });

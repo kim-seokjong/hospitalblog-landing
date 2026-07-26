@@ -61,7 +61,7 @@ export interface GeoTabResponse {
   /**
    * AI 검색에서 병원 블로그로 실제 넘어온 방문의 최근 30일 집계.
    * 인용(latest/weekly)은 "언급됐는가", 이쪽은 "사람이 왔는가" — 서로 다른 지표다.
-   * 데이터 0건·마이그 048 미적용에서도 빈 요약이 들어와 화면이 깨지지 않는다.
+   * 데이터 0건·마이그 051 미적용에서도 빈 요약이 들어와 화면이 깨지지 않는다.
    */
   aiReferral: AiReferralSummary;
   /** 병원 블로그(서브도메인) 개설 여부. 미개설이면 유입 집계 대상 자체가 없다. */
@@ -149,7 +149,7 @@ export async function GET() {
       .order('visit_date', { ascending: false })
       .limit(MAX_AI_REFERRAL_ROWS);
 
-    // 마이그 048 미적용 DB 폴백 — 테이블 없음(42P01)이면 빈 요약으로 계속 진행한다
+    // 마이그 051 미적용 DB 폴백 — 테이블 없음(42P01)이면 빈 요약으로 계속 진행한다
     // (탭 전체를 500 으로 막지 않는다). 그 외 오류도 계측이므로 승격하지 않는다.
     let aiReferral: AiReferralSummary = emptyAiReferralSummary(endDate, AI_REFERRAL_WINDOW_DAYS);
     if (!refErr && refData) {

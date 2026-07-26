@@ -24,7 +24,7 @@ test('출처 목록: id 가 중복되지 않고 형식 제약(DB check)과 일�
   for (const source of AI_REFERRAL_SOURCES) {
     assert.equal(ids.has(source.id), false, `중복 id: ${source.id}`);
     ids.add(source.id);
-    // 마이그 048 의 check (source ~ '^[a-z0-9_]{1,32}$') 와 동일 제약
+    // 마이그 051 의 check (source ~ '^[a-z0-9_]{1,32}$') 와 동일 제약
     assert.match(source.id, /^[a-z0-9_]{1,32}$/);
     assert.ok(source.label.length > 0);
     assert.ok(source.hosts.length > 0, `${source.id} 는 호스트가 최소 1개 필요`);
