@@ -5,7 +5,7 @@
  *  1) 프로필(지역·진료과·키워드) 기반 샘플 질문 생성 (규칙 기반, LLM 호출 없음)
  *  2) AI 응답 텍스트/출처 URL에서 병원명·블로그 인용 판정 (공백 변형 포함 매칭)
  *  3) 표시용 발췌 새니타이즈 (프롬프트 인젝션 방어: 태그 이스케이프 + 길이 제한)
- *  4) 발행 글의 GEO 준비도 점수 (요약·FAQ·질문형 제목·소제목 구조 — 규칙 기반)
+ *  4) 발행 글의 GEO 준비도 점수 (요약·FAQ·질문형 제목·소제목 구조·직답 — 규칙 기반)
  *
  * 외부 의존 없는 순수 모듈(@/ alias import 금지) — node:test 러너로 직접 검증 가능.
  */
@@ -235,7 +235,7 @@ export interface GeoReadinessPost {
 
 export interface GeoReadinessCheck {
   /** 검사 항목 id */
-  id: 'summary' | 'faq' | 'questionTitle' | 'subheading';
+  id: 'summary' | 'faq' | 'questionTitle' | 'subheading' | 'answerFirst';
   label: string;
   /** 해당 항목을 충족한 글 수 */
   passed: number;
@@ -260,6 +260,220 @@ const FAQ_PATTERN = /\[자주 묻는 질문\]|■\s*자주 묻는 질문|(^|\n)\
 const QUESTION_TITLE_PATTERN = /[?？]|까요|나요|인가요|할까|어떻게|방법|이유/;
 const SUBHEADING_PATTERN = /▶/;
 
+// --- 직답(answer-first) 검사용 상수 --------------------------------------
+// GEO 프롬프트는 "질문형 소제목 바로 아래 첫 1~2문장 = 100~200자 자족 직답"을 지시한다.
+// 실제 생성물은 편차가 있어, 지시치(100자)보다 낮은 80자를 충족선으로 둔다
+// (있는 글을 놓치는 오탐(false negative)이 없는 글을 통과시키는 것보다 해롭다는 판단).
+const ANSWER_FIRST_MIN_CHARS = 80;
+/**
+ * 소제목으로 볼 수 있는 줄의 최대 길이 — 본문 단락과 구분하는 기준.
+ * "강남 여드름 흉터 프락셀 레이저 치료는 얼마나 걸리나요"처럼 지역·시술명이 붙으면
+ * 실제 H2 도 40자를 넘기므로 60자까지 인정한다(질문형 판정 자체가 엄격해 오탐 위험 낮음).
+ */
+const HEADING_MAX_CHARS = 60;
+const HEADING_MIN_CHARS = 4;
+/**
+ * 질문형 소제목 판정 — 물음표를 포함하거나 한국어 의문 어미·의문사를 포함.
+ * ⚠️ "방법"·"이유"는 넣지 않는다 — "여드름 흉터 치료 방법과 주의사항" 같은 평서형
+ *    소제목까지 질문형으로 오인해 직답 점수를 잘못 주기 때문(질문 의도가 없는 명사구).
+ *    제목(QUESTION_TITLE_PATTERN)은 검색 질의 매칭이 기준이라 별도로 유지한다.
+ */
+const QUESTION_HEADING_PATTERN = /[?？]|나요|까요|은가요|인가요|을까|ㄹ까|어떻게|무엇|왜|어디|언제|얼마/;
+/**
+ * 구조 마커 줄([핵심 요약]·■ 자주 묻는 질문·Q1./A1.·[이미지 N: …]) — 소제목/직답 후보에서 제외.
+ * 번호 없는 "Q. …"/"A. …" 표기(수동 편집본)도 포함해야 FAQ 문답이 직답으로 새지 않는다.
+ */
+const STRUCTURE_LINE_PATTERN = /^(\[|■|▷|Q\d*[.)]|A\d*[.)])/;
+const IMAGE_LINE_PATTERN = /^\[이미지\s*\d+\s*:[^\]]*\]$/;
+/** 마침표류로 끝나는 줄은 본문 문장 — 소제목에서 제외(물음표만 예외: 질문형 소제목) */
+const SENTENCE_END_PATTERN = /[.!。！…]\s*$/;
+/** 문장 단위 분해 — 종결 부호(반각·전각)까지를 한 문장으로 본다 */
+const SENTENCE_SPLIT_PATTERN = /[^.!?。！？…]+[.!?。！？…]+/g;
+
+/** 요약 블록 시작 줄 — 생성 원본 마커와 네이버 발행 변환본 둘 다 */
+const SUMMARY_OPEN_PATTERN = /^(\[핵심 요약\]|■\s*핵심 요약)/;
+/** 종결부호로 끝나는 줄(= 완결 문장) — 요약 줄과 소제목을 가르는 기준 */
+const ANY_SENTENCE_END_PATTERN = /[.!?。！？…]\s*$/;
+
+/**
+ * 요약·FAQ 블록을 제거한 본문 — 두 블록의 문장이 직답으로 오인되는 것을 막는다.
+ *
+ * FAQ: 닫는 마커가 유실된 글(생성 중단·수동 편집)이 있어 열림 마커만 있어도
+ * 그 지점부터 끝까지 제거한다(FAQ 는 본문 최하단 섹션이라 안전). 원본 마커
+ * `[자주 묻는 질문]` 과 네이버 변환본 `■ 자주 묻는 질문` 을 동일하게 처리한다.
+ */
+function stripFaqBlocks(content: string): string {
+  return content
+    .replace(/\[핵심 요약\][\s\S]*?\[\/핵심 요약\]/g, '')
+    .replace(/\[자주 묻는 질문\][\s\S]*?\[\/자주 묻는 질문\]/g, '')
+    // 닫는 마커 유실 폴백 — FAQ 는 본문 끝 섹션이므로 이후 전부 제외
+    .replace(/\[자주 묻는 질문\][\s\S]*$/, '')
+    .replace(/■\s*자주 묻는 질문[\s\S]*$/, '');
+}
+
+/**
+ * 닫는 마커가 없는 요약 영역을 줄 단위로 제거한다.
+ *
+ * 요약은 본문 앞에 있어 "마커부터 끝까지" 제거할 수 없다. 대신 요약 박스의
+ * 실제 경계를 쓴다 — 요약 다음에 오는 첫 소제목(H2)은 **종결부호가 없고 뒤에
+ * 빈 줄이 따라온다**(소제목은 앞뒤 빈 줄로 구분되는 독립 줄). 그 두 조건을 함께
+ * 만족하는 줄에서 멈추고, 그 전까지는 전부 요약으로 보고 제거한다.
+ *
+ * 이 경계가 필요한 이유(전부 실측):
+ *  1) 요약 줄이 물음표로 끝나거나("치료는 얼마나 걸리나요?") 종결부호 없이
+ *     끝나면("치료는 얼마나 걸리나요") 소제목으로 오인돼, 다음 요약 문장이
+ *     직답으로 집계된다. 종결부호 유무만으로는 요약 줄과 H2 를 못 가른다.
+ *  2) toNaverFormat 은 `[/핵심 요약]` 과 **뒤따르는 빈 줄까지** 제거하므로, 네이버
+ *     발행본에서는 첫 H2 가 마지막 요약 줄에 바로 붙는다. 빈 줄만으로 경계를 잡으면
+ *     첫 H2 를 요약으로 삼켜 그 섹션의 직답을 놓친다. "뒤에 빈 줄"이라는 H2 자신의
+ *     서식 규칙을 쓰면 요약 줄 수(2줄·3줄)가 흔들려도 경계가 맞는다.
+ *
+ * 한계(false negative 방향): 요약 직후 H2 뒤의 빈 줄까지 유실된 글은 그 H2 가
+ * 요약으로 흡수돼 해당 섹션만 미집계된다. 없는 직답을 인정하는 것보다 안전하다.
+ */
+function stripSummaryRegions(lines: readonly string[]): string[] {
+  const kept: string[] = [];
+  let inSummary = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i].trim();
+
+    if (SUMMARY_OPEN_PATTERN.test(text)) {
+      inSummary = true;
+      continue; // 마커 줄 제거
+    }
+
+    if (inSummary) {
+      if (text.length === 0) {
+        inSummary = false; // 빈 줄 = 요약 박스 종료
+      } else {
+        const nextText = i + 1 < lines.length ? lines[i + 1].trim() : '';
+        // 종결부호가 없고 뒤가 빈 줄 = 요약 다음 첫 소제목 → 여기서 요약 종료
+        const isFollowingHeading =
+          !ANY_SENTENCE_END_PATTERN.test(text) && nextText.length === 0;
+        if (!isFollowingHeading) continue; // 그 외에는 전부 요약 줄로 보고 제거
+        inSummary = false;
+      }
+    }
+
+    kept.push(lines[i]);
+  }
+
+  return kept;
+}
+
+/** 직답 검사 대상 줄 — 요약·FAQ 블록을 걷어낸 본문만 남긴다. */
+function analyzableLines(content: string): string[] {
+  return stripSummaryRegions(stripFaqBlocks(content).split('\n'));
+}
+
+/**
+ * 질문형 소제목 "형태"인 줄인가 (H2 = 기호 없는 짧은 줄, H3 = ▶ 로 시작).
+ * 형태만 본다 — 실제 소제목 인정은 isQuestionHeadingAt 이 위치까지 확인한다.
+ */
+function isQuestionHeadingShape(line: string): boolean {
+  const text = line.trim().replace(/^▶\s*/, '').trim();
+  if (text.length < HEADING_MIN_CHARS || text.length > HEADING_MAX_CHARS) return false;
+  if (STRUCTURE_LINE_PATTERN.test(text)) return false;
+  // 소제목은 번호로 시작하지 않는다("1. 흉터는 왜 생기나요?" 류 목록·수동 FAQ 배제)
+  if (/^\d+\s*[.)]/.test(text)) return false;
+  if (SENTENCE_END_PATTERN.test(text)) return false;
+  return QUESTION_HEADING_PATTERN.test(text);
+}
+
+/**
+ * lines[i] 를 질문형 소제목으로 인정할 것인가 — 형태 + 위치.
+ *
+ * 소제목은 앞뒤 빈 줄로 구분된 독립 줄이라는 것이 생성 프롬프트의 서식 규칙이다.
+ * 위치 조건(글 첫 줄이거나 앞이 빈 줄·이미지 마커)을 함께 보면, 줄바꿈 편집으로
+ * 끊긴 본문 중간 줄이 의문 표현을 담았다는 이유만으로 소제목이 되는 것을 막는다.
+ * (HEADING_MAX_CHARS 를 60 으로 완화하면서 넓어진 오탐 범위를 이 조건이 닫는다.)
+ */
+function isQuestionHeadingAt(lines: readonly string[], i: number): boolean {
+  if (!isQuestionHeadingShape(lines[i])) return false;
+  if (i === 0) return true;
+  const previous = lines[i - 1].trim();
+  return previous.length === 0 || IMAGE_LINE_PATTERN.test(previous);
+}
+
+/** 직답 후보(본문 단락) 줄인가 — 빈 줄·마커·이미지·H3 소제목은 아니다 */
+function isBodyLine(line: string): boolean {
+  const text = line.trim();
+  if (!text) return false;
+  if (IMAGE_LINE_PATTERN.test(text)) return false;
+  if (STRUCTURE_LINE_PATTERN.test(text)) return false;
+  if (text.startsWith('▶')) return false;
+  return true;
+}
+
+/**
+ * 기호 없는 소제목(H2) 형태의 줄인가 — 짧고 종결부호로 끝나지 않는 줄.
+ *
+ * ⚠️ 이 형태는 "문장 중간에서 줄바꿈된 답변의 첫 줄"과 원리적으로 구분되지 않는다
+ * (둘 다 짧고 종결부호가 없다). 그래서 단락의 **첫 줄**에서 이 형태를 만나면
+ * 소제목으로 보고 수집을 멈춘다 — 없는 직답을 인정하는 오탐보다, 줄바꿈 편집된
+ * 직답을 놓치는 쪽(false negative)이 낫다는 판단이다.
+ * 정상 생성물의 직답 단락은 한 줄에 완결 문장으로 출력돼 이 경로를 타지 않는다.
+ */
+function isHeadingShapedLine(text: string): boolean {
+  if (text.length > HEADING_MAX_CHARS) return false;
+  return !SENTENCE_END_PATTERN.test(text) && !/[?？]\s*$/.test(text);
+}
+
+/** 종결된 문장의 개수 — 종결 부호가 없는 꼬리는 세지 않는다 */
+function countSentences(paragraph: string): number {
+  return paragraph.trim().match(SENTENCE_SPLIT_PATTERN)?.length ?? 0;
+}
+
+/** 단락의 앞 1~2문장 길이 — 종결 부호가 하나도 없으면 미완결로 보고 0 */
+function leadingSentenceLength(paragraph: string): number {
+  const sentences = paragraph.trim().match(SENTENCE_SPLIT_PATTERN);
+  if (!sentences || sentences.length === 0) return 0;
+  return sentences.slice(0, 2).join('').trim().length;
+}
+
+/**
+ * 질문형 소제목 바로 아래에 자족 직답(answer-first)이 있는지 검사한다.
+ *
+ * 판정: 질문형 소제목 줄을 찾고 → 그 아래 첫 단락(빈 줄·[이미지 N] 마커는 건너뜀)을
+ * 모아, 앞 1~2문장이 종결된 문장이면서 합계 80자 이상이면 직답으로 인정한다.
+ * 원장이 문장마다 줄을 바꿔도(네이버 편집기에서 흔함) 한 단락으로 합산한다 —
+ * 줄 이어붙이기는 join(' ') 로, 한 줄로 폈을 때 존재했을 어절 사이 공백을 복원한다.
+ *
+ * 소제목 흡수 방지: 수집 중 질문형 소제목 줄을 만나면 즉시 종료하고, 단락의 첫 줄이
+ * 소제목 형태(짧고 종결부호 없음)여도 종료한다 — 빈 줄이 유실된 글에서 다음 H2 가
+ * 직답의 첫 문장으로 흡수되는 것을 막는다(비질문형 H2 포함).
+ * FAQ·핵심 요약 블록은 별도 항목이라 검사 대상에서 제외한다.
+ */
+export function hasAnswerFirstSection(content: string): boolean {
+  const lines = analyzableLines(content ?? '');
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!isQuestionHeadingAt(lines, i)) continue;
+
+    const paragraph: string[] = [];
+
+    for (let j = i + 1; j < lines.length; j++) {
+      const candidate = lines[j].trim();
+      if (!candidate || IMAGE_LINE_PATTERN.test(candidate)) {
+        if (paragraph.length > 0) break; // 단락이 시작된 뒤의 빈 줄·이미지 = 단락 종료
+        continue;                        // 소제목과 단락 사이의 빈 줄·이미지는 건너뜀
+      }
+      if (isQuestionHeadingShape(candidate)) break; // 다음 질문형 소제목 = 단락 종료
+      if (paragraph.length === 0 && isHeadingShapedLine(candidate)) {
+        break; // 단락 첫 줄이 소제목 형태 = 다음 H2 로 간주 (빈 줄 유무와 무관)
+      }
+      if (!isBodyLine(candidate)) break; // 마커·H3 소제목이면 단락 종료
+      paragraph.push(candidate);
+      if (countSentences(paragraph.join(' ')) >= 2) break; // 직답 판정에 2문장이면 충분
+    }
+
+    if (leadingSentenceLength(paragraph.join(' ')) >= ANSWER_FIRST_MIN_CHARS) return true;
+  }
+
+  return false;
+}
+
 const CHECK_DEFS: Array<{
   id: GeoReadinessCheck['id'];
   label: string;
@@ -270,28 +484,35 @@ const CHECK_DEFS: Array<{
   {
     id: 'summary',
     label: '핵심 요약(TL;DR) 포함',
-    weight: 30,
+    weight: 25,
     test: (p) => SUMMARY_PATTERN.test(p.content),
     tip: 'AI는 글 첫머리의 3줄 요약을 우선 발췌합니다. 구글 GEO 모드로 생성하면 [핵심 요약] 블록이 자동 포함됩니다.',
   },
   {
     id: 'faq',
     label: 'FAQ(자주 묻는 질문) 포함',
-    weight: 30,
+    weight: 25,
     test: (p) => FAQ_PATTERN.test(p.content),
     tip: 'Q&A 형식은 AI 답변에 그대로 인용되기 가장 좋은 구조입니다. FAQ 섹션이 있는 글을 늘려보세요.',
   },
   {
+    id: 'answerFirst',
+    label: '질문형 소제목 직답',
+    weight: 20,
+    test: (p) => hasAnswerFirstSection(p.content),
+    tip: '질문형 소제목 바로 아래 첫 1~2문장을 그 질문에 완결적으로 답하는 직답(100~200자)으로 쓰면 AI 답변·추천 스니펫에 그대로 인용될 확률이 높아집니다. GEO 모드로 생성하면 자동 적용됩니다.',
+  },
+  {
     id: 'questionTitle',
     label: '질문형 제목',
-    weight: 20,
+    weight: 15,
     test: (p) => QUESTION_TITLE_PATTERN.test(p.title),
     tip: '"~어떻게 하나요?", "~방법" 같은 질문형 제목이 AI 검색 질의와 더 잘 매칭됩니다.',
   },
   {
     id: 'subheading',
     label: '소제목 구조화',
-    weight: 20,
+    weight: 15,
     test: (p) => SUBHEADING_PATTERN.test(p.content),
     tip: '소제목(▶)으로 섹션을 나누면 AI가 필요한 부분만 정확히 발췌할 수 있습니다.',
   },
