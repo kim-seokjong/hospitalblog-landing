@@ -41,7 +41,6 @@ export function isPersistedImageUrl(
   supabaseUrl: string | null | undefined,
 ): url is string {
   if (typeof url !== 'string' || !supabaseUrl) return false;
-  if (url.length > MAX_URL_LENGTH) return false;
   const base = supabaseUrl.trim().replace(/\/+$/, '');
   if (!base.startsWith('https://')) return false;
   const prefix = `${base}/storage/v1/object/public/clinic-assets/`;
@@ -61,6 +60,9 @@ export function sanitizeImageUrls(
   const out: string[] = [];
   for (const item of raw) {
     if (!isPersistedImageUrl(item, supabaseUrl)) continue;
+    // 길이 캡은 저장 단계에서만 적용한다 — 판정 함수에 넣으면 theme.ts 렌더
+    // 화이트리스트와 동치가 깨져 "저장은 됐는데 블로그에 안 뜨는" 상태가 생긴다.
+    if (item.length > MAX_URL_LENGTH) continue;
     if (seen.has(item)) continue;
     seen.add(item);
     out.push(item);

@@ -593,10 +593,13 @@ ${formatGuide}
     const charCount = bodyForCount.length;
     // A층 2차 검사 — 발행될 최종 본문의 **잔존** 위반(등급 산정 기준).
     const residualCompliance = checkCompliance(body);
-    // 자동치환으로 사라진 위반 = 1차에는 있고 2차에는 없는 것. 증빙으로 보존한다.
+    // 자동치환 효과는 autoFix 직후(cleanedBody)와 비교해야 정확하다.
+    // 최종 body 와 비교하면 교정 LLM(proofread)이 지운 표현이나 저자 블록 추가분까지
+    // "자동치환됨"으로 잘못 기록된다(예: autoFix 대상이 아닌 '전후 사진'·'후기').
+    const postFixCompliance = checkCompliance(cleanedBody);
     const autoFixedViolations = diffAutoFixedViolations(
       preFixCompliance.violations,
-      residualCompliance.violations,
+      postFixCompliance.violations,
     );
     // 경고는 자동치환 대상이 아니지만, 치환이 문장을 바꾸며 패턴이 어긋날 수 있으므로
     // 1·2차 합집합으로 둔다(recall 우선 — 놓치느니 남긴다).
@@ -628,13 +631,10 @@ ${formatGuide}
     const hasKeywordHigh = keywordCompliance.violations.some(
       (v) => v.severity === 'HIGH' || v.severity === 'CRITICAL',
     );
-    // 자동치환된 HIGH·CRITICAL 도 검수 권고 대상 — 문맥을 보지 않는 문자열 치환이라
-    // 치환 후에도 위험한 주장이 남을 수 있다(예: "부작용 없음"→"부작용이 적은").
-    const hasAutoFixedHigh = autoFixedViolations.some(
-      (v) => v.severity === 'HIGH' || v.severity === 'CRITICAL',
-    );
+    // autoFixedViolations 는 게이트에 넣지 않는다 — 현재 본문에 없는 표현으로 발행을
+    // 잠그면 사용자가 본문을 고쳐도 해제할 수 없다(buildComplianceReport 주석 참조).
     const hasAiHigh = aiReview.findings.some((f) => f.severity === 'HIGH');
-    const needsManualReview = hasKeywordHigh || hasAutoFixedHigh || hasAiHigh;
+    const needsManualReview = hasKeywordHigh || hasAiHigh;
 
     // SEO 분석은 본문 영역만 (TL;DR, FAQ 블록 제외)
     const bodyForSeo = body

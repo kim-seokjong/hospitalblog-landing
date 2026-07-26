@@ -54,14 +54,29 @@ function decodeDataUrl(url: string): DecodedImage | null {
   }
 }
 
-/** 허용 호스트(fal.media·supabase)에서 내려받는다. SSRF 방지 화이트리스트 통과 필수. */
+/** 다운로드 제한 시간(ms) — 응답이 오지 않는 호스트로 함수 시간이 고갈되는 것을 막는다. */
+const DOWNLOAD_TIMEOUT_MS = 20_000;
+
+/**
+ * 허용 호스트(fal.media·supabase)에서 내려받는다. SSRF 방지 화이트리스트 통과 필수.
+ *
+ * `redirect: 'error'` — 최초 URL 의 호스트만 검사하고 리다이렉트를 따라가면,
+ * 허용 호스트가 30x 로 내부 IP·메타데이터 서버를 가리킬 때 그대로 요청하게 된다
+ * (리다이렉트 기반 SSRF). 목적지 재검증 대신 리다이렉트 자체를 거부한다.
+ */
 async function downloadImage(url: string): Promise<DecodedImage | null> {
   if (!isAllowedClinicflixAssetUrl(url)) return null;
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    redirect: 'error',
+    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+  });
   if (!res.ok) return null;
   const contentType = res.headers.get('content-type') ?? 'image/png';
   const ext = extFromMime(contentType);
   if (!ext) return null;
+  // 선언된 길이가 이미 상한을 넘으면 본문을 읽지 않고 중단(메모리 고갈 방어).
+  const declared = Number(res.headers.get('content-length') ?? NaN);
+  if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) return null;
   const buffer = Buffer.from(await res.arrayBuffer());
   if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) return null;
   return { buffer, contentType, ext };

@@ -49,8 +49,12 @@ test('isPersistedImageUrl: 접두사만 있고 파일명이 없으면 거부', (
   assert.equal(isPersistedImageUrl(asset(''), SUPABASE), false);
 });
 
-test('isPersistedImageUrl: 과도하게 긴 URL 은 거부', () => {
-  assert.equal(isPersistedImageUrl(asset('a'.repeat(600)), SUPABASE), false);
+// 길이 캡은 저장 단계(sanitizeImageUrls)에서만 적용한다 — 판정 함수에 넣으면
+// theme.ts 렌더 화이트리스트와 동치가 깨져 "저장은 됐는데 블로그에 안 뜨는" 상태가 된다.
+test('sanitizeImageUrls: 과도하게 긴 URL 은 저장에서 제외한다', () => {
+  const long = asset('a'.repeat(600));
+  assert.equal(isPersistedImageUrl(long, SUPABASE), true, '판정 자체는 theme.ts 와 동일해야 한다');
+  assert.equal(sanitizeImageUrls([long], SUPABASE), null, '저장 단계에서 걸러진다');
 });
 
 test('isPersistedImageUrl: supabaseUrl 미설정이면 전부 거부(설정 누락 시 오염 방지)', () => {

@@ -187,7 +187,10 @@ test('파이프라인: diffAutoFixedViolations 가 자동교정된 위반을 증
   );
 });
 
-test('리포트: 자동교정 CRITICAL 이 있으면 검수 권고(needsManualReview)가 켜진다', () => {
+test('리포트: 자동교정 이력은 보존하되 발행 게이트를 잠그지 않는다', () => {
+  // 회귀 방지: autoFixed 를 needsManualReview 에 반영하면, 사용자가 본문을 안전하게
+  // 고쳐도 과거 이력 때문에 게이트가 영구히 잠긴다(재검사 API 도 기존 스냅샷을
+  // 그대로 반환하므로 해제 수단이 없다).
   const raw = '이 시술은 부작용 없음이 확인된 방법입니다.';
   const before = checkCompliance(raw);
   const { fixed } = autoFix(raw);
@@ -203,8 +206,8 @@ test('리포트: 자동교정 CRITICAL 이 있으면 검수 권고(needsManualRe
   assert.equal(report.keyword.autoFixed.length, autoFixed.length, 'autoFixed 가 스냅샷에 보존돼야 한다');
   assert.equal(
     report.needsManualReview,
-    true,
-    '자동치환은 문맥을 보지 않으므로 CRITICAL 교정분은 사람이 확인해야 한다',
+    false,
+    '현재 본문이 깨끗하면 과거 자동교정 이력만으로 검수 권고를 켜지 않는다',
   );
 });
 
@@ -223,6 +226,28 @@ test('리포트: 등급은 발행본(잔존) 기준 — 자동교정분이 등�
 
   assert.notEqual(report.grade, 'CRITICAL', '본문에 없는 표현으로 등급을 올리지 않는다');
   assert.ok(report.keyword.autoFixed.length > 0, '대신 교정 기록은 남는다');
+});
+
+/* ────────────────────────────────────────────────────────────
+ * 3-b. 오탐 상한 — 승격 패턴이 적법 표현을 차단하지 않는가
+ * ──────────────────────────────────────────────────────────── */
+
+test('전문병원: 복지부 지정 사실을 기술한 적법 표현은 걸리지 않는다', () => {
+  for (const text of [
+    '보건복지부 지정 척추 전문병원입니다.',
+    '보건복지부가 지정한 관절 전문병원으로 운영됩니다.',
+  ]) {
+    assert.equal(gradeOf(text), 'PASS', `적법한 지정 기술이 차단됐다: ${text}`);
+  }
+});
+
+test('전문병원: 지정 언급 없는 표방은 여전히 HIGH 로 잡힌다', () => {
+  const r = checkCompliance('저희는 척추 전문병원입니다.');
+  assert.ok(r.violations.some((v) => v.severity === 'HIGH'));
+});
+
+test('전문의 권장 문구는 전문병원 패턴에 걸리지 않는다', () => {
+  assert.equal(gradeOf('전문의와 상담 후 결정하시길 권해드립니다.'), 'PASS');
 });
 
 /* ────────────────────────────────────────────────────────────

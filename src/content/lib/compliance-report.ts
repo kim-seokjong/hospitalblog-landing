@@ -133,15 +133,22 @@ export interface BuildReportInput {
     violations: ReadonlyArray<ComplianceViolation>;
     warnings: ReadonlyArray<string>;
   };
-  aiReview?: Pick<AiComplianceReview, 'reviewed' | 'findings'> | null;
+  /**
+   * B층 결과. 생성 경로는 AiComplianceReview, 재저장 경로는 저장된 스냅샷
+   * (ReportAiFinding — severity 가 string)을 그대로 넘기므로 둘 다 받는다.
+   */
+  aiReview?: {
+    reviewed: boolean;
+    findings: ReadonlyArray<AiComplianceFinding | ReportAiFinding>;
+  } | null;
   /** 자동치환으로 최종 본문에서 사라진 A층 위반(증빙 보존용). 없으면 빈 배열 취급. */
-  autoFixed?: ReadonlyArray<ComplianceViolation>;
+  autoFixed?: ReadonlyArray<ReportViolation>;
   /** 검사 시각(기본: 호출 시각). 재검사 경로에서 명시 전달. */
   checkedAt?: string;
 }
 
 /** ComplianceViolation → ReportViolation 정규화(불변). */
-function toReportViolation(v: ComplianceViolation): ReportViolation {
+function toReportViolation(v: ComplianceViolation | ReportViolation): ReportViolation {
   return {
     word: v.word,
     index: v.index,
@@ -175,15 +182,20 @@ export function buildComplianceReport(input: BuildReportInput): ComplianceReport
   const { compliance } = input;
   const aiReview = input.aiReview ?? null;
   const reviewed = aiReview?.reviewed === true;
-  const findings: AiComplianceFinding[] = reviewed && Array.isArray(aiReview?.findings)
-    ? aiReview.findings
-    : [];
+  const findings: ReadonlyArray<AiComplianceFinding | ReportAiFinding> =
+    reviewed && Array.isArray(aiReview?.findings) ? aiReview.findings : [];
 
   const keywordWarnings = compliance.warnings.filter((w) => !w.startsWith(AI_WARNING_PREFIX));
   const autoFixed = input.autoFixed ?? [];
 
-  // 등급은 **발행될 최종 본문** 기준(잔존 위반)으로 산정한다 — 자동치환된 표현은
-  // 본문에 없으므로 등급을 밀어올리지 않는다. 다만 아래 needsManualReview 로 표면화한다.
+  // 등급·검수 권고는 **발행될 현재 본문** 기준으로만 산정한다.
+  //
+  // ⚠️ autoFixed(생성 시점의 자동교정 이력)는 여기에 반영하지 않는다. 반영하면
+  //    사용자가 본문을 안전하게 고쳐도 과거 이력 때문에 needsManualReview 가 영구히
+  //    켜져 site-publish·GEO export·auto-publish 가 해제 불가능하게 잠긴다
+  //    (compliance-recheck 는 기존 스냅샷을 그대로 반환하므로 되돌릴 수단도 없다).
+  //    자동치환 후 남은 위험(예: "부작용 없음"→"부작용이 적은")은 최종 본문을 보는
+  //    B층 LLM 심의가 잡는 것이 옳은 층위다. autoFixed 는 증빙 표시 전용으로 남긴다.
   const grade = computeComplianceGrade({
     violations: compliance.violations,
     warnings: keywordWarnings,
@@ -192,8 +204,6 @@ export function buildComplianceReport(input: BuildReportInput): ComplianceReport
 
   const needsManualReview =
     compliance.violations.some((v) => v.severity === 'HIGH' || v.severity === 'CRITICAL') ||
-    // 자동치환은 문맥을 보지 않는 문자열 치환이라 위험이 남을 수 있다 → 사람이 확인(recall 우선).
-    autoFixed.some((v) => v.severity === 'HIGH' || v.severity === 'CRITICAL') ||
     findings.some((f) => f.severity === 'HIGH');
 
   return {
