@@ -2,13 +2,21 @@
 //
 // 설계 대원칙(자동 "생성" 아님, 발행만 스케줄):
 //  - site_publish_cadence != 'off' 이고 site_slug 가 설정된 회원만 대상(opt-in).
-//  - isDue(주기 경과) 판정 통과 시에만, 그 회원의 "검수 통과·미발행" 글 중
-//    가장 오래된 1편을 서브도메인 블로그에 발행한다(주기당 1편, 과다발행 방지).
+//  - 그 회원의 "검수 통과·미발행" 글 중 오래된 순으로 주기별 상한만큼 발행한다.
+//      · weekly/biweekly → 회당 1편. 주기 실행권을 profiles 행에서 원자적으로
+//        선점(claim_auto_publish_cycle)해 동시 실행이 각각 1편씩 내보내지 못하게 한다.
+//      · auto → 하루 최대 3편. 집계와 선점을 한 트랜잭션(claim_auto_publish_posts,
+//        advisory lock)에서 처리해 중복 전달·재시도·수동 재실행이 겹쳐도 상한을 넘지 않는다.
+//  - ★ 순회는 영속 커서(clinic_auto_publish_state)로 이어달린다. 전체 발행 상한(100편)에
+//    걸려 중간에 끊겨도 다음 실행이 "마지막으로 검사한 회원 다음"부터 이어받으므로
+//    앞쪽 회원이 상한을 독식해도 뒤쪽 회원이 영구 기아되지 않는다.
+//    커서 테이블이 없으면(마이그 050 미적용) 날짜 기반 회전으로 폴백한다.
 //  - 검수 게이트는 수동 발행(/api/mypage/site-publish)과 "동일 기준"을 재사용한다
 //    (compliance_report 없음 / needsManualReview / HIGH·CRITICAL → 제외).
 //  - 발행 대상이 없으면 아무것도 하지 않는다(last_run 도 갱신하지 않음 → 대상이
 //    생기는 즉시 다음 실행에서 발행). 실제 주기 간격은 isDue 가 제어하므로 매일 돌아도
 //    weekly/biweekly 회원은 주1회/격주만 실제 발행된다.
+//  - 발행 후 IndexNow 로 색인 요청을 보낸다(실패해도 발행은 성공 — 그레이스풀).
 //
 // 인증: Authorization: Bearer ${CRON_SECRET} (기존 cron 패턴 동일). service role 로
 //       update(RLS 우회). 개별 회원 실패는 기록만 하고 전체는 계속 진행한다.
@@ -19,7 +27,28 @@ import { isAuthorizedCron } from '@/dev/lib/cron-auth';
 import { createAdminClient } from '@/dev/lib/supabase/server';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
 import { publishBlockReason } from '@/content/lib/clinic-site/publish-gate';
-import { isDue, pickNextPost, isValidCadence, type AutoPublishCandidate } from '@/content/lib/clinic-site/auto-publish';
+import {
+  isDue,
+  pickNextPosts,
+  isValidCadence,
+  maxPostsPerRun,
+  needsDailyQuotaCheck,
+  dueThresholdIso,
+  mergeCursorWindow,
+  rotationOffset,
+  kstDayIndex,
+  kstDayStartIso,
+  type AutoPublishCandidate,
+} from '@/content/lib/clinic-site/auto-publish';
+import {
+  claimPostsForPublish,
+  claimAutoPublishCycle,
+  restoreAutoPublishCycle,
+  readAutoPublishCursor,
+  writeAutoPublishCursor,
+} from '@/content/lib/clinic-site/auto-publish-claim';
+import { clinicSiteHost, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
+import { notifyIndexNow } from '@/content/lib/clinic-site/indexnow-submit';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -27,6 +56,14 @@ export const maxDuration = 120;
 // 부하 방어 상한
 const MAX_PROFILES = 200;      // 1회 실행 순회 회원 상한
 const CANDIDATE_LIMIT = 50;    // 회원당 조회할 미발행 후보 상한(가장 오래된 것 우선 정렬 후 상한)
+// 1회 실행 전체 발행 편수 상한. maxDuration(120초) 안에 끝나도록 하는 안전장치이며,
+// 'auto' 회원이 늘어도 한 번에 색인 요청이 폭주하지 않게 한다.
+const MAX_PUBLISH_PER_RUN = 100;
+// IndexNow 색인 요청에 쓸 수 있는 총 시간 예산(ms). 호스트마다 1회 호출이 필요한데
+// (서브도메인 = 별개 호스트라 묶을 수 없다) 회원 수가 많으면 maxDuration(120초)을
+// 잠식할 수 있다 → 예산을 넘기면 색인 요청만 건너뛴다(발행은 계속 진행).
+const INDEXNOW_BUDGET_MS = 30_000;
+const INDEXNOW_CALL_TIMEOUT_MS = 3_000;
 
 interface ScheduleProfileRow {
   id: string;
@@ -52,6 +89,18 @@ function revalidateClinicPages(slug: string, postId: string): void {
   }
 }
 
+/** 스케줄 조회 오류 → 마이그 미적용이면 비활성 안내, 그 외는 500. */
+function scheduleQueryError(error: { code?: string; message?: string }): NextResponse {
+  if (error.code === '42703') {
+    return NextResponse.json({
+      ok: true,
+      mode: 'disabled',
+      message: '자동발행 스케줄 컬럼이 아직 적용되지 않았습니다(마이그 044 미적용).',
+    });
+  }
+  return NextResponse.json({ ok: false, error: error.message ?? 'schedule query failed' }, { status: 500 });
+}
+
 export async function GET(req: NextRequest) {
   if (!isAuthorizedCron(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -59,36 +108,81 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminClient();
   const now = new Date();
+  const startedAt = Date.now();
+  const dayStartIso = kstDayStartIso(now);
 
-  let scanned = 0;      // isDue 통과해 후보를 조회한 회원 수
-  let published = 0;    // 실제 발행된 글 수(= 발행된 회원 수, 주기당 1편)
+  let scanned = 0;           // isDue 통과해 후보를 조회한 회원 수
+  let published = 0;         // 실제 발행된 글 수
+  let indexNowFailures = 0;  // 색인 요청 실패 수(발행 성공과 무관 — 모니터링용)
+  let indexNowSkipped = 0;   // 시간 예산 초과로 색인 요청을 건너뛴 회원 수
+  let atomicFallbacks = 0;   // 마이그 050 미적용으로 비원자 경로를 탄 회원 수(모니터링)
   const failures: Array<{ userId: string; reason: string }> = [];
 
   try {
-    // 자동발행을 켠 회원만 (site_slug 설정 + cadence != off).
+    // 자동발행을 켠 회원 총수 — 회전 창 계산용.
     // 컬럼 미적용(42703) 환경에서는 기능 비활성 상태로 graceful 반환.
-    const { data, error } = await admin
+    const { count: totalProfiles, error: countError } = await admin
       .from('profiles')
-      .select('id, site_slug, site_publish_cadence, site_publish_last_run')
+      .select('id', { count: 'exact', head: true })
       .neq('site_publish_cadence', 'off')
-      .not('site_slug', 'is', null)
-      .order('id', { ascending: true })
-      .limit(MAX_PROFILES);
+      .not('site_slug', 'is', null);
 
-    if (error) {
-      if (error.code === '42703') {
-        return NextResponse.json({
-          ok: true,
-          mode: 'disabled',
-          message: '자동발행 스케줄 컬럼이 아직 적용되지 않았습니다(마이그 044 미적용).',
-        });
+    if (countError) return scheduleQueryError(countError);
+
+    const total = totalProfiles ?? 0;
+
+    // ★ 순회 위치 결정.
+    //   1순위: 영속 커서 — 마지막으로 "검사한" 회원 다음부터 이어받는다.
+    //          전체 발행 상한에 걸려 끊겨도 커서가 최소 1칸 전진하므로
+    //          모든 회원이 최대 total 회 실행 안에 반드시 검사된다.
+    //   폴백: 커서 테이블이 없으면(마이그 050 미적용) 날짜 기반 회전 창.
+    const cursor = await readAutoPublishCursor(admin);
+    const useCursor = cursor !== undefined;
+
+    const baseQuery = () =>
+      admin
+        .from('profiles')
+        .select('id, site_slug, site_publish_cadence, site_publish_last_run')
+        .neq('site_publish_cadence', 'off')
+        .not('site_slug', 'is', null)
+        .order('id', { ascending: true });
+
+    let profiles: ScheduleProfileRow[] = [];
+
+    if (useCursor) {
+      // ① 커서 이후 페이지
+      const after = cursor
+        ? await baseQuery().gt('id', cursor).limit(MAX_PROFILES)
+        : await baseQuery().limit(MAX_PROFILES);
+      if (after.error) return scheduleQueryError(after.error);
+
+      const afterRows = (after.data ?? []) as ScheduleProfileRow[];
+
+      // ② 부족분은 처음부터 채운다(wrap-around) — 커서가 끝에 닿아도 멈추지 않는다.
+      let wrappedRows: ScheduleProfileRow[] = [];
+      if (afterRows.length < MAX_PROFILES) {
+        const wrapped = await baseQuery().limit(MAX_PROFILES - afterRows.length);
+        if (wrapped.error) return scheduleQueryError(wrapped.error);
+        wrappedRows = (wrapped.data ?? []) as ScheduleProfileRow[];
       }
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+      profiles = mergeCursorWindow(afterRows, wrappedRows, MAX_PROFILES);
+    } else {
+      const offset = rotationOffset(total, MAX_PROFILES, kstDayIndex(now));
+      const res = await baseQuery().range(offset, offset + MAX_PROFILES - 1);
+      if (res.error) return scheduleQueryError(res.error);
+      profiles = (res.data ?? []) as ScheduleProfileRow[];
     }
 
-    const profiles = (data ?? []) as ScheduleProfileRow[];
+    // 커서는 "마지막으로 검사한 회원"을 가리킨다(발행 여부와 무관).
+    let lastExaminedId: string | null = null;
 
     for (const profile of profiles) {
+      if (published >= MAX_PUBLISH_PER_RUN) break;
+
+      // 이 회원을 "검사했다"는 사실을 먼저 기록한다 — 다음 실행이 여기 다음부터 이어받는다.
+      lastExaminedId = profile.id;
+
       const slug = profile.site_slug;
       const cadence = profile.site_publish_cadence;
       if (!slug || !isValidCadence(cadence)) continue;
@@ -120,47 +214,126 @@ export async function GET(req: NextRequest) {
           })
           .map((row) => ({ id: row.id, createdAt: row.created_at }));
 
-        const picked = pickNextPost(candidates);
-        if (!picked) continue; // 발행 대상 없음 → last_run 갱신 없이 다음 회원 (대상 생기면 즉시 발행)
+        // 이번 실행에서 이 회원에게 허용할 편수 (주기 상한 ∩ 전체 실행 잔여).
+        const runLimit = Math.min(maxPostsPerRun(cadence), MAX_PUBLISH_PER_RUN - published);
+        const picked = pickNextPosts(candidates, runLimit);
+        if (picked.length === 0) continue; // 발행 대상 없음 → last_run 갱신 없이 다음 회원
 
-        const publishedAt = new Date().toISOString();
+        // ★ weekly/biweekly: 주기 실행권을 먼저 원자적으로 선점한다.
+        //   isDue 는 앱 판정이라 두 실행이 같은 오래된 last_run 을 읽으면 각각 1편씩 나간다.
+        //   후보가 있는 것을 확인한 "뒤"에 선점해야 발행 없이 주기만 소진되지 않는다.
+        const threshold = dueThresholdIso(cadence, now);
+        let cycle: Awaited<ReturnType<typeof claimAutoPublishCycle>> | null = null;
+        if (!needsDailyQuotaCheck(cadence) && threshold) {
+          cycle = await claimAutoPublishCycle(admin, profile.id, threshold);
+          if (!cycle.ok) {
+            failures.push({ userId: profile.id, reason: `주기 선점 실패: ${cycle.reason}` });
+            continue;
+          }
+          if (!cycle.claimed) continue; // 다른 실행이 이번 주기를 이미 가져갔다
+        }
 
-        const { error: updatePostErr } = await admin
-          .from('saved_posts')
-          .update({ published_to_site: true, site_published_at: publishedAt })
-          .eq('id', picked.id)
-          .eq('user_id', profile.id);
+        // 글 선점. 주기별로 경로가 갈린다(claimPostsForPublish 내부 분기):
+        //  · auto            → 일일 상한 강제 RPC (advisory lock + 단일 트랜잭션)
+        //  · weekly/biweekly → 일일 집계 없이 조건부 UPDATE 로 글만 원자 선점
+        //    (간격은 위의 주기 선점이 이미 보장한다. 여기서 일일 집계를 하면
+        //     그날 수동 발행한 회원의 cron 이 밀려 기존 동작이 깨진다.)
+        const claim = await claimPostsForPublish(admin, {
+          userId: profile.id,
+          cadence,
+          dayStartIso,
+          candidateIds: picked.map((post) => post.id),
+          limit: runLimit,
+        });
 
-        if (updatePostErr) {
-          failures.push({ userId: profile.id, reason: updatePostErr.message });
+        if (!claim.ok) {
+          failures.push({ userId: profile.id, reason: claim.reason });
+          if (cycle?.ok && cycle.claimed && cycle.atomic) {
+            await restoreAutoPublishCycle(admin, profile.id, cycle.previousLastRun, cycle.claimedAt);
+          }
           continue;
         }
 
-        // 실제 발행에 성공했을 때만 last_run 갱신(주기 간격은 여기서부터 다시 카운트).
-        const { error: updateProfileErr } = await admin
-          .from('profiles')
-          .update({ site_publish_last_run: publishedAt })
-          .eq('id', profile.id);
+        const publishedIds = claim.claimedIds;
+        if (!claim.atomic) atomicFallbacks++;
 
-        if (updateProfileErr) {
-          // 글은 이미 발행됨. last_run 갱신 실패만 기록(다음 실행에서 재시도되나
-          // 미발행 글이 없으면 자연히 멈춘다 → 무한 발행 위험 낮음).
-          failures.push({ userId: profile.id, reason: `last_run 갱신 실패: ${updateProfileErr.message}` });
+        if (publishedIds.length === 0) {
+          // 한 편도 못 가져갔다(상한 소진·다른 실행이 선점) → 주기를 낭비시키지 않는다.
+          if (cycle?.ok && cycle.claimed && cycle.atomic) {
+            await restoreAutoPublishCycle(admin, profile.id, cycle.previousLastRun, cycle.claimedAt);
+          }
+          continue;
         }
 
-        published++;
-        revalidateClinicPages(slug, picked.id);
+        published += publishedIds.length;
+        for (const postId of publishedIds) revalidateClinicPages(slug, postId);
+
+        // last_run 갱신.
+        //  - 주기를 "원자적으로" 선점한 경우: RPC 가 이미 now() 로 갱신했다 → 건너뛴다.
+        //  - auto: 주기 선점을 쓰지 않으므로 여기서 남긴다(관측용).
+        //  - ⚠️ 마이그 050 미적용 폴백(cycle.atomic === false): 여기서 갱신하지 않으면
+        //    weekly/biweekly 의 last_run 이 영영 안 바뀌어 매일 발행된다.
+        const cycleAlreadyStamped = cycle?.ok === true && cycle.claimed && cycle.atomic;
+        if (!cycleAlreadyStamped) {
+          const { error: updateProfileErr } = await admin
+            .from('profiles')
+            .update({ site_publish_last_run: new Date().toISOString() })
+            .eq('id', profile.id);
+          if (updateProfileErr) {
+            failures.push({ userId: profile.id, reason: `last_run 갱신 실패: ${updateProfileErr.message}` });
+          }
+        }
+
+        // IndexNow — 발행된 글 + 목록이 바뀐 홈. 실패해도 발행은 이미 성공 상태다.
+        // 남은 예산이 호출 타임아웃보다 작으면 아예 시작하지 않는다
+        // (예산 직전에 시작하면 타임아웃만큼 초과되므로 엄격하게 판정).
+        if (Date.now() - startedAt + INDEXNOW_CALL_TIMEOUT_MS <= INDEXNOW_BUDGET_MS) {
+          const outcome = await notifyIndexNow(
+            clinicSiteHost(slug),
+            [clinicSiteUrl(slug), ...publishedIds.map((id) => clinicSiteUrl(slug, `/posts/${id}`))],
+            { timeoutMs: INDEXNOW_CALL_TIMEOUT_MS },
+          );
+          if (outcome.status === 'failed') {
+            indexNowFailures++;
+          }
+        } else {
+          indexNowSkipped++;
+        }
       } catch (e) {
         // 한 회원 실패가 전체를 중단시키지 않는다.
         failures.push({ userId: profile.id, reason: e instanceof Error ? e.message : 'unknown' });
       }
     }
 
-    return NextResponse.json({ ok: true, mode: 'live', scanned, published, failures });
+    // 다음 실행이 이어받을 위치 — 발행 상한에 걸려 끊겼어도 여기까지는 검사했다.
+    // ★ 저장 실패를 조용히 넘기면 매 실행이 같은 지점에서 시작해 뒤쪽 회원이
+    //   다시 영구 기아에 빠지므로, 실패를 응답과 failures 양쪽에 남긴다.
+    let cursorWrite: 'ok' | 'failed' | 'skipped' = 'skipped';
+    if (useCursor && lastExaminedId) {
+      const written = await writeAutoPublishCursor(admin, lastExaminedId);
+      cursorWrite = written.ok ? 'ok' : 'failed';
+      if (!written.ok) {
+        failures.push({ userId: lastExaminedId, reason: `커서 저장 실패: ${written.reason}` });
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      mode: 'live',
+      total,
+      cursor: useCursor ? 'persisted' : 'day-rotation',
+      cursorWrite,
+      scanned,
+      published,
+      atomicFallbacks,
+      indexNowFailures,
+      indexNowSkipped,
+      failures,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : 'cron failed';
     return NextResponse.json(
-      { ok: false, error: message, scanned, published, failures },
+      { ok: false, error: message, scanned, published, atomicFallbacks, indexNowFailures, indexNowSkipped, failures },
       { status: 500 },
     );
   }

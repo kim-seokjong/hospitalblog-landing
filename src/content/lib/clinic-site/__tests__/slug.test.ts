@@ -5,9 +5,13 @@ import {
   RESERVED_SLUGS,
   validateSlug,
   clinicSiteUrl,
+  clinicSiteHost,
   extractClinicSlugFromHost,
   buildClinicSitePath,
   resolveClinicSiteRewrite,
+  isClinicSitePathname,
+  CLINIC_SITE_PATH_PREFIX,
+  CLINIC_SITE_REQUEST_HEADER,
 } from '../slug.ts';
 
 // ---------------------------------------------------------------------------
@@ -161,4 +165,66 @@ test('resolveClinicSiteRewrite: 호스트+경로 통합 판정', () => {
   assert.equal(resolveClinicSiteRewrite('hospitalblog.kr', '/pricing'), null);
   // 서브도메인이라도 내부 경로는 그대로
   assert.equal(resolveClinicSiteRewrite('myclinic.hospitalblog.kr', '/_next/data/x.json'), null);
+});
+
+// ---------------------------------------------------------------------------
+// IndexNow 키 파일 라우팅 (서브도메인은 각각 별개 호스트 → 자기 루트에 키 파일 필요)
+// ---------------------------------------------------------------------------
+
+test('buildClinicSitePath: /{key}.txt 는 IndexNow 키 파일 라우트로 rewrite 한다', () => {
+  assert.equal(
+    buildClinicSitePath('myclinic', '/fa8c0a469da44e9b8f6a769f291829f5.txt'),
+    '/clinic-site/myclinic/indexnow/fa8c0a469da44e9b8f6a769f291829f5',
+  );
+  // 하이픈·대문자 포함 키도 스펙상 유효
+  assert.equal(
+    buildClinicSitePath('myclinic', '/I-love-IndexNow-3000.txt'),
+    '/clinic-site/myclinic/indexnow/I-love-IndexNow-3000',
+  );
+});
+
+test('buildClinicSitePath: robots.txt 는 기존대로 robots 라우트로 간다 (키 파일과 충돌 없음)', () => {
+  assert.equal(buildClinicSitePath('myclinic', '/robots.txt'), '/clinic-site/myclinic/robots.txt');
+});
+
+test('buildClinicSitePath: 키 형식이 아닌 .txt 는 rewrite 하지 않는다', () => {
+  assert.equal(buildClinicSitePath('myclinic', '/short.txt'), null);       // 8자 미만
+  assert.equal(buildClinicSitePath('myclinic', '/has_underscore.txt'), null);
+  assert.equal(buildClinicSitePath('myclinic', '/sub/dir/keyfile12345.txt'), null); // 루트만 허용
+});
+
+test('resolveClinicSiteRewrite: 서브도메인의 키 파일 요청도 통합 판정된다', () => {
+  assert.equal(
+    resolveClinicSiteRewrite('myclinic.hospitalblog.kr', '/fa8c0a469da44e9b8f6a769f291829f5.txt'),
+    '/clinic-site/myclinic/indexnow/fa8c0a469da44e9b8f6a769f291829f5',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 병원 블로그 경로 판정 (루트 레이아웃 JSON-LD 분기)
+// ---------------------------------------------------------------------------
+
+test('clinicSiteHost: 스킴 없는 호스트명 (IndexNow host 필드용)', () => {
+  assert.equal(clinicSiteHost('myclinic'), 'myclinic.hospitalblog.kr');
+  assert.equal(clinicSiteUrl('myclinic'), 'https://myclinic.hospitalblog.kr');
+});
+
+test('isClinicSitePathname: /clinic-site 경로만 true (SaaS JSON-LD 제외 대상)', () => {
+  assert.equal(isClinicSitePathname('/clinic-site'), true);
+  assert.equal(isClinicSitePathname('/clinic-site/myclinic'), true);
+  assert.equal(isClinicSitePathname('/clinic-site/myclinic/posts/abc'), true);
+  assert.equal(isClinicSitePathname('/clinic-site/myclinic/sitemap.xml'), true);
+
+  // 메인 사이트 경로는 기존 동작 유지 (JSON-LD 그대로 출력)
+  assert.equal(isClinicSitePathname('/'), false);
+  assert.equal(isClinicSitePathname('/pricing'), false);
+  assert.equal(isClinicSitePathname('/app'), false);
+  // 접두사만 같은 다른 경로에 오탐하지 않는다
+  assert.equal(isClinicSitePathname('/clinic-sites'), false);
+  assert.equal(isClinicSitePathname('/clinic-site-demo'), false);
+});
+
+test('JSON-LD 분기용 상수가 고정되어 있다 (미들웨어 ↔ 루트 레이아웃 계약)', () => {
+  assert.equal(CLINIC_SITE_PATH_PREFIX, '/clinic-site');
+  assert.equal(CLINIC_SITE_REQUEST_HEADER, 'x-clinic-site');
 });

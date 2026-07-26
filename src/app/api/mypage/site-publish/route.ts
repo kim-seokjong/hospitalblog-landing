@@ -3,7 +3,9 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
 import { publishBlockReason } from '@/content/lib/clinic-site/publish-gate';
-import { clinicSiteUrl } from '@/content/lib/clinic-site/slug';
+import { clinicSiteHost, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
+import { notifyIndexNow } from '@/content/lib/clinic-site/indexnow-submit';
+import { INDEXNOW_INTERACTIVE_TIMEOUT_MS } from '@/content/lib/clinic-site/indexnow';
 
 export const dynamic = 'force-dynamic';
 
@@ -143,6 +145,19 @@ export async function POST(req: NextRequest) {
 
     if (siteSlug) {
       revalidateClinicPages(siteSlug, postId);
+
+      // IndexNow — 발행/발행취소 모두 알린다. 공식 스펙상 삭제된(404/410) URL 도
+      // 제출 대상이다: "You should submit redirected URLs and pages that return
+      // HTTP 404 or HTTP 410 status codes." 색인 요청이 실패해도 발행은 성공이다
+      // (notifyIndexNow 는 절대 throw 하지 않으며 키 미설정이면 조용히 건너뛴다).
+      //
+      // ⚠️ 사용자가 발행 버튼을 누르고 기다리는 경로다 — 1.5초 안에 응답이 없으면
+      //    포기하고 발행 성공을 반환한다. 놓쳐도 사이트맵 인덱스로 결국 수집된다.
+      await notifyIndexNow(
+        clinicSiteHost(siteSlug),
+        [clinicSiteUrl(siteSlug), clinicSiteUrl(siteSlug, `/posts/${postId}`)],
+        { timeoutMs: INDEXNOW_INTERACTIVE_TIMEOUT_MS },
+      );
     }
 
     return NextResponse.json<ApiResponse<PublishResult>>({

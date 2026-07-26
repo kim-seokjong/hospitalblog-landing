@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { validateSlug, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
-import { getClinicBySlug, getPublishedPosts } from '@/content/lib/clinic-site/data';
+import { getClinicBySlug, getPublishedPostRefs } from '@/content/lib/clinic-site/data';
 
 /**
  * 병원 서브도메인 블로그 — sitemap.xml (공개, 인증 없음).
@@ -37,7 +37,15 @@ export async function GET(_req: Request, { params }: RouteContext) {
       return new NextResponse('Not Found', { status: 404 });
     }
 
-    const posts = await getPublishedPosts(clinic.userId);
+    // 발행 글 전체(50편 상한 없음 — 잘린 글은 검색엔진이 영영 찾지 못한다).
+    // 조회 실패 시 null → 빈 sitemap 을 200 으로 주지 않고 503 으로 알린다.
+    const posts = await getPublishedPostRefs(clinic.userId);
+    if (posts === null) {
+      return new NextResponse('Sitemap temporarily unavailable', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '600' },
+      });
+    }
 
     const urls: string[] = [
       `  <url>\n    <loc>${escapeXml(clinicSiteUrl(validated.slug))}</loc>\n  </url>`,
