@@ -19,6 +19,7 @@ import {
   pickLeadImageUrl,
   toImageUrlList,
 } from '@/content/lib/clinic-site/post-images';
+import { buildOpeningHoursSpecification } from '@/content/lib/clinic-site/hours';
 import { formatBylineText, resolveAuthorAttribution } from '@/content/lib/clinic-site/byline';
 import { rankRelatedPosts, RELATED_POSTS_LIMIT } from '@/content/lib/clinic-site/related-posts';
 import ClinicSiteFooter, { formatClinicDate } from '../../site-chrome';
@@ -127,6 +128,8 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
       specialty: clinic.hospitalType,
       region: clinic.region,
       address: clinic.address,
+      telephone: clinic.phone,
+      openingHours: buildOpeningHoursSpecification(clinic.hours),
       logoUrl: theme.logoUrl,
       authorFullName: clinic.authorFullName,
       authorPosition: clinic.authorPosition,

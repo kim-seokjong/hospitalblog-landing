@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { createAdminClient, createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { buildServerComplianceReport } from '@/content/lib/compliance-report-server';
+import { validateComplianceReport } from '@/content/lib/compliance-report';
 import { sanitizeImageUrls, sanitizeTags, sanitizeSeoScore } from '@/content/lib/saved-post-fields';
+import { autoPublishSavedPost } from '@/content/lib/clinic-site/auto-publish-on-save';
 
 export async function GET(req: NextRequest) {
   try {
@@ -132,6 +134,19 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // 내 블로그 자동 발행 — 유료 + 주소 설정 + 자동발행 'auto' + 검수 통과일 때만.
+    // ★ 지금 저장된 이 글 한 편만 대상이다(과거 글 소급 발행 없음).
+    // 실패해도 글 저장은 이미 성공이므로 응답에 영향을 주지 않는다.
+    const savedId = (data as { id?: unknown } | null)?.id;
+    if (typeof savedId === 'string') {
+      await autoPublishSavedPost(createAdminClient(), {
+        userId: user.id,
+        postId: savedId,
+        content: content.trim(),
+        complianceReport: validComplianceReport,
+      });
     }
 
     return NextResponse.json({ post: data }, { status: 201 });

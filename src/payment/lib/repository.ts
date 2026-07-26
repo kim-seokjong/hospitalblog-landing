@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import { provisionClinicSite } from '@/content/lib/clinic-site/provision'
+import type { ProvisionOutcome } from '@/content/lib/clinic-site/provision'
 import type { Payment, PaymentStatus, Profile, BillingKey } from './types'
 import type { PlanId } from './plans'
 
@@ -108,12 +110,43 @@ export async function cancelActiveBillingKeys(userId: string): Promise<void> {
     .eq('status', 'ACTIVE')
 }
 
+/** 블로그 자동 개설이 결제 응답을 붙잡을 수 있는 최대 시간. */
+const PROVISION_BUDGET_MS = 5000
+
+/**
+ * 개설 작업에 시간 상한을 둔다. 넘기면 기다리지 않고 'failed' 로 넘어간다.
+ *
+ * ★ 예산 초과 시 진행 중인 요청을 **실제로 끊는다**(AbortController).
+ *   Promise.race 만 걸면 응답을 돌려준 뒤에도 UPDATE 가 살아 있어, 그 사이 고객이
+ *   마이페이지에서 바꾼 설정을 뒤늦게 덮어쓸 수 있다. compare-and-set 은 값이
+ *   달라진 경합만 막고 "같은 값으로 다시 저장한" 의도는 볼 수 없으므로 취소가 필요하다.
+ *   개설은 멱등이라 끊겨도 다음 결제·갱신에서 다시 시도된다.
+ */
+async function withProvisionBudget(
+  run: (signal: AbortSignal) => Promise<ProvisionOutcome>,
+): Promise<ProvisionOutcome> {
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const budget = new Promise<ProvisionOutcome>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort()
+      resolve({ status: 'failed', reason: '개설 시간 예산 초과' })
+    }, PROVISION_BUDGET_MS)
+  })
+  try {
+    return await Promise.race([run(controller.signal), budget])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export async function activateUserPlan(params: {
   userId: string
   plan: PlanId
   expiresAt: string
 }): Promise<void> {
-  const { error } = await getAdmin()
+  const admin = getAdmin()
+  const { error } = await admin
     .from('profiles')
     .upsert({
       id: params.userId,
@@ -125,6 +158,26 @@ export async function activateUserPlan(params: {
       updated_at: new Date().toISOString(),
     })
   if (error) throw new Error(`플랜 활성화 실패: ${error.message}`)
+
+  // ★ 유료 활성화 = 병원 블로그 자동 개설 시점.
+  //   여기(플랜 활성화 단일 관문)에 거는 이유: 최초 빌링 확인(payment/billing/confirm),
+  //   일반 결제 확인(verify.verifyAndActivate → payment/confirm · webhook), 정기결제
+  //   cron(billing-charge / billing-retry) 이 모두 이 함수를 지나므로 어떤 결제 경로도
+  //   빠지지 않는다. 모두 service role 서버 경로라 남의 슬러그 중복 확인이 가능하다.
+  //   provisionClinicSite 는 멱등이며(회원당 1회) 절대 throw 하지 않는다 —
+  //   개설 실패가 결제 성공을 되돌리면 안 된다.
+  //
+  //   ★ 시간 예산(PROVISION_BUDGET_MS): 개설은 DB 왕복이 여러 번(프로필 조회 +
+  //   슬러그 후보별 조건부 update)이라 최악의 경우 결제 확인 응답을 붙잡을 수 있다.
+  //   결제 확인은 사용자가 기다리는 경로이고, 정기결제 cron 은 회원 수만큼 이 함수를
+  //   반복 호출한다(maxDuration 300s). 예산을 넘기면 결과를 기다리지 않고 넘어간다 —
+  //   개설은 멱등이라 다음 결제·갱신에서 다시 시도된다.
+  const outcome = await withProvisionBudget((signal) =>
+    provisionClinicSite(admin, params.userId, signal),
+  )
+  if (outcome.status === 'failed') {
+    console.error('[activateUserPlan] 병원 블로그 자동 개설 실패:', params.userId, outcome.reason)
+  }
 }
 
 /**

@@ -6,7 +6,9 @@ import { validateSlug, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
 import { getClinicBySlug, getPublishedPosts } from '@/content/lib/clinic-site/data';
 import { getClinicTheme } from '@/content/lib/clinic-site/theme-data';
 import { buildMedicalClinicSchema, buildMetaDescription, serializeJsonLd } from '@/content/lib/geo-schema';
-import ClinicSiteFooter, { formatClinicDate } from './site-chrome';
+import { buildOpeningHoursSpecification, isEmptyClinicHours } from '@/content/lib/clinic-site/hours';
+import { hasClinicAboutContent } from '@/content/lib/clinic-site/about';
+import ClinicSiteFooter, { ClinicInfoList, formatClinicDate } from './site-chrome';
 import AiReferralBeacon from './ai-referral-beacon';
 
 /**
@@ -70,12 +72,23 @@ export default async function ClinicSiteHomePage({ params }: PageProps) {
     specialty: clinic.hospitalType,
     region: clinic.region,
     address: clinic.address,
+    telephone: clinic.phone,
+    openingHours: buildOpeningHoursSpecification(clinic.hours),
     logoUrl: theme.logoUrl,
   });
 
   const facts = [clinic.hospitalType, clinic.region].filter(
     (v): v is string => Boolean(v && v.trim()),
   );
+
+  // 병원 소개 페이지는 보여줄 내용이 있을 때만 만든다(빈 페이지를 색인시키지 않는다).
+  const hasAboutPage = hasClinicAboutContent({
+    description: theme.description,
+    hasHours: !isEmptyClinicHours(clinic.hours),
+    address: clinic.address,
+    phone: clinic.phone,
+    galleryCount: theme.galleryUrls.length,
+  });
 
   // 브랜드 컬러 — 검증 통과(hasBrandColor)시에만 적용. CSS 변수는 hex 검증 완료값만 주입.
   const accentStyle: CSSProperties | undefined = theme.hasBrandColor
@@ -123,6 +136,22 @@ export default async function ClinicSiteHomePage({ params }: PageProps) {
           <p className="mt-3 text-sm text-[#5b6573] leading-relaxed">
             {clinic.hospitalName}의 공식 건강정보 블로그입니다.
           </p>
+
+          {/* 병원 정보 — 주소·대표번호(등록된 것만). 값이 없으면 블록 자체가 사라진다. */}
+          <ClinicInfoList address={clinic.address} phone={clinic.phone} />
+
+          {/* 병원 소개 페이지 — 소개문·진료시간 등 보여줄 게 있을 때만 링크한다. */}
+          {hasAboutPage && (
+            <p className="mt-4">
+              <Link
+                href="/about"
+                className="inline-flex items-center gap-1 text-sm font-medium text-[#3d4551] underline underline-offset-4 hover:text-[#202020]"
+              >
+                병원 소개 · 진료시간 보기
+                <span aria-hidden="true">→</span>
+              </Link>
+            </p>
+          )}
         </header>
 
         {/* 히어로 — 시설/대표 사진 (동의·URL 검증 통과분만, LCP 후보라 lazy 미적용) */}

@@ -26,7 +26,7 @@ import { revalidatePath } from 'next/cache';
 import { isAuthorizedCron } from '@/dev/lib/cron-auth';
 import { createAdminClient } from '@/dev/lib/supabase/server';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
-import { publishBlockReason } from '@/content/lib/clinic-site/publish-gate';
+import { serverPublishBlockReason } from '@/content/lib/clinic-site/server-publish-gate';
 import {
   isDue,
   pickNextPosts,
@@ -49,6 +49,7 @@ import {
 } from '@/content/lib/clinic-site/auto-publish-claim';
 import { clinicSiteHost, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
 import { notifyIndexNow } from '@/content/lib/clinic-site/indexnow-submit';
+import { isActivePlan } from '@/payment/lib/plans';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -70,7 +71,19 @@ interface ScheduleProfileRow {
   site_slug: string | null;
   site_publish_cadence: string | null;
   site_publish_last_run: string | null;
+  plan: string | null;
+  plan_expires_at: string | null;
+  /** 마이그 052 미적용 환경에서는 조회 자체를 하지 않는다(undefined). */
+  site_auto_publish_since?: string | null;
 }
+
+/**
+ * 조회 컬럼 — site_auto_publish_since(마이그 052)는 미적용 환경에서 빼고 조회한다.
+ * plan / plan_expires_at 는 코어 컬럼(마이그 001)이라 항상 존재한다.
+ */
+const SCHEDULE_COLS_BASE =
+  'id, site_slug, site_publish_cadence, site_publish_last_run, plan, plan_expires_at';
+const SCHEDULE_COLS_WITH_SINCE = `${SCHEDULE_COLS_BASE}, site_auto_publish_since`;
 
 interface CandidatePostRow {
   id: string;
@@ -87,6 +100,41 @@ function revalidateClinicPages(slug: string, postId: string): void {
   } catch (err) {
     console.error('[site-auto-publish] 재검증 실패:', err instanceof Error ? err.message : err);
   }
+}
+
+/**
+ * 'auto' 회원의 소급 발행 차단 기준 시각을 확정한다.
+ *
+ * 반환값이 null 이면 필터를 걸지 않는다(= 기존 동작):
+ *  - weekly/biweekly — 회원이 명시적으로 고른 주기이고 회당 1편이라 기존 동작을 바꾸지 않는다.
+ *  - 마이그 052 미적용 — 저장할 컬럼이 없다.
+ *
+ * 값이 비어 있는 'auto' 회원은 "지금"으로 확정해 기록한다(경합 안전: 아직 null 일 때만 기록).
+ */
+async function resolveAutoPublishSince(
+  admin: ReturnType<typeof createAdminClient>,
+  profile: ScheduleProfileRow,
+  cadence: string,
+  sinceAvailable: boolean,
+): Promise<string | null> {
+  if (cadence !== 'auto' || !sinceAvailable) return null;
+
+  const existing = profile.site_auto_publish_since ?? null;
+  if (existing) return existing;
+
+  const stamped = new Date().toISOString();
+  const { error } = await admin
+    .from('profiles')
+    .update({ site_auto_publish_since: stamped })
+    .eq('id', profile.id)
+    .is('site_auto_publish_since', null);
+
+  if (error) {
+    // 기록에 실패하면 이번 실행은 보수적으로 건너뛴다(과거 글 대량 공개 방지).
+    console.error('[site-auto-publish] 자동발행 시작시각 기록 실패:', profile.id, error.message);
+    return stamped;
+  }
+  return stamped;
 }
 
 /** 스케줄 조회 오류 → 마이그 미적용이면 비활성 안내, 그 외는 500. */
@@ -113,6 +161,7 @@ export async function GET(req: NextRequest) {
 
   let scanned = 0;           // isDue 통과해 후보를 조회한 회원 수
   let published = 0;         // 실제 발행된 글 수
+  let inactiveSkipped = 0;   // 구독 해지·만료로 건너뛴 회원 수(기존 글은 그대로 유지)
   let indexNowFailures = 0;  // 색인 요청 실패 수(발행 성공과 무관 — 모니터링용)
   let indexNowSkipped = 0;   // 시간 예산 초과로 색인 요청을 건너뛴 회원 수
   let atomicFallbacks = 0;   // 마이그 050 미적용으로 비원자 경로를 탄 회원 수(모니터링)
@@ -139,10 +188,19 @@ export async function GET(req: NextRequest) {
     const cursor = await readAutoPublishCursor(admin);
     const useCursor = cursor !== undefined;
 
+    // 마이그 052(site_auto_publish_since) 적용 여부를 한 번만 확인한다.
+    // 미적용이면 소급 방지 필터 없이 기존 동작을 유지한다(배포가 깨지지 않게).
+    const sinceProbe = await admin.from('profiles').select('site_auto_publish_since').limit(1);
+    const sinceAvailable = sinceProbe.error?.code !== '42703';
+
+    // 제네릭으로 행 타입을 고정한다 — 조회 컬럼이 실행 시점에 갈리므로
+    // (마이그 052 적용 여부) PostgREST 의 문자열 파싱 타입을 쓸 수 없다.
     const baseQuery = () =>
       admin
         .from('profiles')
-        .select('id, site_slug, site_publish_cadence, site_publish_last_run')
+        .select<string, ScheduleProfileRow>(
+          sinceAvailable ? SCHEDULE_COLS_WITH_SINCE : SCHEDULE_COLS_BASE,
+        )
         .neq('site_publish_cadence', 'off')
         .not('site_slug', 'is', null)
         .order('id', { ascending: true });
@@ -186,17 +244,34 @@ export async function GET(req: NextRequest) {
       const slug = profile.site_slug;
       const cadence = profile.site_publish_cadence;
       if (!slug || !isValidCadence(cadence)) continue;
+
+      // 구독 해지·만료 회원: 새 글 자동 발행만 멈춘다.
+      // (이미 발행된 글은 내리지 않는다 — 색인 자산 보존 + 재구독 유인)
+      if (!isActivePlan(profile.plan, profile.plan_expires_at)) {
+        inactiveSkipped++;
+        continue;
+      }
+
       if (!isDue(cadence, profile.site_publish_last_run, now)) continue;
 
       scanned++;
 
       try {
+        // ★ 소급 발행 차단 — 'auto' 는 "자동발행을 켠 시점 이후에 만들어진 글"만 대상이다.
+        //   이 기준이 없으면 자동발행을 켜는 순간 보관함의 과거 글이 한꺼번에 공개된다.
+        //   값이 없으면(기존 auto 회원) 지금 시각으로 확정한다 — 과거 글은 영구 제외되고
+        //   앞으로 쓰는 글만 나간다. 마이그 미적용(sinceAvailable=false)이면 기존 동작 유지.
+        const autoSince = await resolveAutoPublishSince(admin, profile, cadence, sinceAvailable);
+
         // 그 회원의 미발행 글 후보(가장 오래된 순). 검수 게이트는 아래에서 재검증한다.
-        const { data: postRows, error: postErr } = await admin
+        let candidateQuery = admin
           .from('saved_posts')
           .select('id, created_at, content, compliance_report')
           .eq('user_id', profile.id)
-          .eq('published_to_site', false)
+          .eq('published_to_site', false);
+        if (autoSince) candidateQuery = candidateQuery.gte('created_at', autoSince);
+
+        const { data: postRows, error: postErr } = await candidateQuery
           .order('created_at', { ascending: true })
           .limit(CANDIDATE_LIMIT);
 
@@ -206,11 +281,16 @@ export async function GET(req: NextRequest) {
         }
 
         // 검수 게이트 통과 + 본문 비어있지 않은 글만 후보로 남긴다(수동 발행과 동일 기준).
+        // ★ 무인 경로라 저장 스냅샷만 믿지 않고 서버가 본문을 직접 A층 재검사한다
+        //   (server-publish-gate.ts — 스냅샷은 클라이언트가 보낸 값이라 위조 가능).
         const candidates: AutoPublishCandidate[] = ((postRows ?? []) as CandidatePostRow[])
           .filter((row) => {
             const content = typeof row.content === 'string' ? row.content : '';
             if (content.trim() === '') return false;
-            return publishBlockReason(validateComplianceReport(row.compliance_report)) === null;
+            return serverPublishBlockReason(
+              validateComplianceReport(row.compliance_report),
+              content,
+            ) === null;
           })
           .map((row) => ({ id: row.id, createdAt: row.created_at }));
 
@@ -325,6 +405,7 @@ export async function GET(req: NextRequest) {
       cursorWrite,
       scanned,
       published,
+      inactiveSkipped,
       atomicFallbacks,
       indexNowFailures,
       indexNowSkipped,
@@ -333,7 +414,7 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     const message = e instanceof Error ? e.message : 'cron failed';
     return NextResponse.json(
-      { ok: false, error: message, scanned, published, atomicFallbacks, indexNowFailures, indexNowSkipped, failures },
+      { ok: false, error: message, scanned, published, inactiveSkipped, atomicFallbacks, indexNowFailures, indexNowSkipped, failures },
       { status: 500 },
     );
   }

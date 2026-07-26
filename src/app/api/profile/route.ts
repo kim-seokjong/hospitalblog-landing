@@ -2,12 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server'
 import { validateSlug } from '@/content/lib/clinic-site/slug'
 import { isValidCadence } from '@/content/lib/clinic-site/auto-publish'
+import { validateClinicHoursInput } from '@/content/lib/clinic-site/hours'
+import { checkCompliance } from '@/content/lib/medical-compliance'
 
 interface ProfileUpdateBody {
   full_name?: string
   phone?: string
   hospital_name?: string
   hospital_address?: string
+  /** 병원 대표번호(공개) — 담당자 개인 연락처(phone)와 다른 컬럼이다. */
+  hospital_phone?: string
+  /** 진료과 — 서브도메인 블로그·JSON-LD 가 표시하는 값(가입 후 수정 가능해야 한다). */
+  hospital_type?: string
+  /** 진료시간(공개) — 검증·정규화는 clinic-site/hours.ts 가 담당한다. */
+  hospital_hours?: unknown
   position?: string
   specialty?: string
   specialty_detail?: string
@@ -27,20 +35,25 @@ interface ProfileUpdateBody {
 }
 
 // 마이그레이션이 아직 적용 안 된 환경에서도 안 깨지게 컬럼 셋을 단계적으로 축소한다.
+//  - +PHONE: +SCHED + hospital_phone(052)
 //  - +SCHED: base + naver(028) + 자사 채널(042) + site_slug(043) + site_publish_cadence(044)
 //  - +SITE : base + naver(028) + 자사 채널(042) + site_slug(043)
 //  - FULL : base + naver_blog_url(028) + 자사 채널(042)
 //  - +NAVER: base + naver_blog_url (042 미적용)
 //  - BASE : 코어 컬럼만 (028·042 모두 미적용)
 const PROFILE_COLS_BASE =
-  'full_name, phone, hospital_name, hospital_address, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage'
+  'full_name, phone, hospital_name, hospital_address, hospital_type, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage'
 const PROFILE_COLS_WITH_NAVER = `${PROFILE_COLS_BASE}, naver_blog_url`
 const PROFILE_COLS_FULL = `${PROFILE_COLS_WITH_NAVER}, instagram_handle, threads_handle, youtube_channel_id`
 const PROFILE_COLS_WITH_SITE = `${PROFILE_COLS_FULL}, site_slug`
 const PROFILE_COLS_WITH_SCHEDULE = `${PROFILE_COLS_WITH_SITE}, site_publish_cadence`
+const PROFILE_COLS_WITH_PHONE = `${PROFILE_COLS_WITH_SCHEDULE}, hospital_phone`
+const PROFILE_COLS_WITH_HOURS = `${PROFILE_COLS_WITH_PHONE}, hospital_hours`
 
 // 넓은 것 → 좁은 것 순. 42703(컬럼 없음)이면 다음 후보로 재시도한다.
 const SELECT_CANDIDATES: readonly string[] = [
+  PROFILE_COLS_WITH_HOURS,
+  PROFILE_COLS_WITH_PHONE,
   PROFILE_COLS_WITH_SCHEDULE,
   PROFILE_COLS_WITH_SITE,
   PROFILE_COLS_FULL,
@@ -49,13 +62,31 @@ const SELECT_CANDIDATES: readonly string[] = [
 ]
 
 // 저장 시 빈 문자열 → null 로 정규화하는 선택 입력 컬럼.
+// ⚠️ hospital_type 은 NOT NULL DEFAULT ''(마이그 014/015)이라 여기에 넣으면 안 된다.
 const NULLABLE_TEXT_COLS: readonly (keyof ProfileUpdateBody)[] = [
   'naver_blog_url',
   'instagram_handle',
   'threads_handle',
   'youtube_channel_id',
   'site_slug',
+  'hospital_phone',
 ]
+
+/**
+ * 병원 대표번호 형식 — 숫자·하이픈·공백·괄호·+ 만 허용, 숫자 6~15자리.
+ * 공개 페이지의 tel: 링크와 JSON-LD telephone 으로 나가는 값이라
+ * 임의 문자열이 들어가지 않게 경계에서 막는다.
+ */
+const HOSPITAL_PHONE_RE = /^[0-9+\-()\s]{6,25}$/
+
+function isValidHospitalPhone(value: string): boolean {
+  if (!HOSPITAL_PHONE_RE.test(value)) return false
+  const digits = value.replace(/\D/g, '')
+  return digits.length >= 6 && digits.length <= 15
+}
+
+/** 진료과 표시값 상한 — 화면·스키마에 그대로 나가므로 길이를 제한한다. */
+const HOSPITAL_TYPE_MAX_LENGTH = 30
 
 // 042(자사 채널) 컬럼 — 미적용 환경에서 제거 후 재시도할 대상.
 const CHANNEL_COLS: readonly string[] = [
@@ -112,11 +143,12 @@ export async function PUT(req: NextRequest) {
     const body = await req.json() as ProfileUpdateBody
 
     const allowed: (keyof ProfileUpdateBody)[] = [
-      'full_name', 'phone', 'hospital_name', 'hospital_address', 'position',
+      'full_name', 'phone', 'hospital_name', 'hospital_address', 'hospital_phone',
+      'hospital_type', 'position',
       'specialty', 'specialty_detail', 'hospital_desc', 'hospital_keywords',
       'region', 'sms_enabled', 'sms_phone', 'notify_expiry', 'notify_usage',
       'naver_blog_url', 'instagram_handle', 'threads_handle', 'youtube_channel_id',
-      'site_slug', 'site_publish_cadence',
+      'site_slug', 'site_publish_cadence', 'hospital_hours',
     ]
 
     const nullableSet = new Set<string>(NULLABLE_TEXT_COLS as readonly string[])
@@ -143,6 +175,83 @@ export async function PUT(req: NextRequest) {
       updates.site_slug = validated.slug
     }
 
+    // hospital_phone — 공개 페이지 tel: 링크·JSON-LD telephone 으로 나가므로 형식 검증.
+    if (typeof updates.hospital_phone === 'string' && !isValidHospitalPhone(updates.hospital_phone)) {
+      return NextResponse.json(
+        { error: '병원 대표번호 형식이 올바르지 않습니다. 예: 02-123-4567' },
+        { status: 400 },
+      )
+    }
+
+    // hospital_type — NOT NULL DEFAULT ''(마이그 014/015). 빈 값은 ''(미설정)으로 저장한다.
+    if ('hospital_type' in updates) {
+      const raw = updates.hospital_type
+      const value = typeof raw === 'string' ? raw.trim() : ''
+      if (value.length > HOSPITAL_TYPE_MAX_LENGTH) {
+        return NextResponse.json({ error: '진료과는 30자 이하로 입력해주세요.' }, { status: 400 })
+      }
+      updates.hospital_type = value
+    }
+
+    // hospital_hours — 공개 페이지·JSON-LD 로 나가므로 검증된 형태만 저장한다.
+    // 형식이 깨진 값은 조용히 버리지 않고 400 으로 돌려준다("저장했는데 사라졌다" 방지).
+    if ('hospital_hours' in updates) {
+      const validated = validateClinicHoursInput(updates.hospital_hours)
+      if (!validated.ok) {
+        return NextResponse.json({ error: validated.reason }, { status: 400 })
+      }
+      updates.hospital_hours = validated.hours
+    }
+
+    // hospital_desc — 공개 블로그(홈 · 병원 소개 페이지)에 그대로 나가는 자유 입력이다.
+    // 글은 3층 검수를 거치는데 이 문구만 무검수로 공개되면 의료광고법 우회 통로가 된다.
+    // 발행 게이트와 같은 선(HIGH/CRITICAL)에서 저장 자체를 막고 사유를 돌려준다.
+    //
+    // ⚠️ "값이 실제로 바뀔 때만" 검사한다. 마이페이지는 저장할 때마다 프로필 전체를
+    //    전송하므로, 기존에 저장돼 있던 문구를 그대로 되보내는 것만으로 400 이 나면
+    //    자동발행 끄기 같은 안전한 조치까지 막혀 버린다(값을 고칠 때 교정하면 된다).
+
+    /** 병원 소개를 이번 저장에서 제외했는가(변경 여부를 확인할 수 없었던 경우). */
+    let descDeferred = false
+
+    const submittedDesc = typeof updates.hospital_desc === 'string' ? updates.hospital_desc : null
+    if (submittedDesc !== null && submittedDesc.trim() !== '') {
+      const { data: currentRow, error: currentErr } = await supabase
+        .from('profiles')
+        .select('hospital_desc')
+        .eq('id', user.id)
+        .maybeSingle<{ hospital_desc: string | null }>()
+
+      // 조회가 실패하면 "바뀌었는지"를 알 수 없다.
+      //  · 검사를 강행하면 기존 문구를 그대로 되보낸 저장(자동발행 끄기 등 안전한
+      //    조치 포함)이 일시적 DB 장애만으로 거부된다.
+      //  · 그렇다고 검사만 건너뛰고 저장하면 미검수 문구가 그대로 공개되고,
+      //    다음 저장에서는 "변경 없음"으로 판정돼 영영 검사되지 않는다(fail-open).
+      // → 소개문만 이번 저장에서 빼고 나머지는 저장한다. 사용자에게는 사실을 알린다.
+      if (currentErr) {
+        console.error('[profile] 병원 소개 변경 여부 확인 실패 — 이번 저장에서 제외:', currentErr.message)
+        delete updates.hospital_desc
+        descDeferred = true
+      }
+
+      const skipCheck =
+        descDeferred || (currentRow?.hospital_desc ?? '').trim() === submittedDesc.trim()
+
+      const { violations } = skipCheck ? { violations: [] } : checkCompliance(submittedDesc)
+      const blocking = violations.filter(
+        (v) => v.severity === 'HIGH' || v.severity === 'CRITICAL',
+      )
+      if (blocking.length > 0) {
+        const words = [...new Set(blocking.map((v) => v.word))].slice(0, 5).join(', ')
+        return NextResponse.json(
+          {
+            error: `병원 소개에 의료광고법 위반 소지 표현이 있습니다: ${words}. 표현을 수정한 뒤 저장해주세요.`,
+          },
+          { status: 400 },
+        )
+      }
+    }
+
     // site_publish_cadence — 허용값(off/auto/weekly/biweekly)만. NOT NULL 컬럼이라 빈 값/미허용값은 거부.
     if ('site_publish_cadence' in updates) {
       if (!isValidCadence(updates.site_publish_cadence)) {
@@ -150,24 +259,72 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    // 자동발행 'auto' 전환은 메인 update 와 분리해 **아래에서** 처리한다.
+    //  · 여기서 페이로드에서 빼 두는 이유: 메인 update 가 cadence 를 쓰면
+    //    그 사이 다른 요청이 off 로 바꿔 둔 것을 기준 시각 없이 되살린다.
+    //  · 메인 update 뒤로 미루는 이유: 먼저 켜 놓고 메인 update 가 실패하면
+    //    "저장 실패"라고 답했는데 자동발행만 켜져 있는 상태가 남는다.
+    const turningOnAuto = updates.site_publish_cadence === 'auto'
+    if (turningOnAuto) delete updates.site_publish_cadence
+
     // 넓은 update → 컬럼 없음(42703)이면 최신 마이그 컬럼부터 제거하며 재시도한다.
     // 순서: 044(site_publish_cadence) → 043(site_slug) → 042(채널 3종) → 028(naver)
     const runUpdate = (payload: Record<string, unknown>) =>
       supabase.from('profiles').update(payload).eq('id', user.id)
 
     const PEEL_GROUPS_NEWEST_FIRST: readonly (readonly string[])[] = [
+      ['hospital_hours'],
+      ['hospital_phone'],
       ['site_publish_cadence'],
       ['site_slug'],
       CHANNEL_COLS,
       ['naver_blog_url'],
     ]
 
+    // 사용자가 실제로 값을 넣어 보낸 신규 공개 컬럼 — 마이그 미적용으로 이 값이
+    // 조용히 버려지면 "저장했는데 다시 보니 사라졌다"가 된다(원인을 알 수 없는 실패).
+    const droppedRequestedCols: string[] = []
+
+    const DROPPED_LABELS: Record<string, string> = {
+      hospital_phone: '병원 대표번호',
+      hospital_hours: '진료시간',
+      site_publish_cadence: '자동발행 주기',
+      site_slug: '블로그 주소',
+    }
+    const droppedNames = () =>
+      droppedRequestedCols.map((col) => DROPPED_LABELS[col] ?? col).join(' · ')
+
+    // 부분 저장 상태를 정확히 알린다 — 저장되지 않은 항목이 있으면
+    // "나머지는 저장되었습니다"가 거짓이 되므로 그 사실을 함께 밝힌다.
+    const partialNotices = (): string[] => {
+      const notes: string[] = []
+      if (droppedRequestedCols.length > 0) {
+        notes.push(`${droppedNames()} 항목은 아직 저장할 수 없습니다(기능 준비 중).`)
+      }
+      if (descDeferred) {
+        notes.push('병원 소개는 일시적인 오류로 저장하지 못했습니다. 잠시 후 다시 저장해주세요.')
+      }
+      return notes
+    }
+
+    const savedRestNotice = () => {
+      const notes = partialNotices()
+      return notes.length > 0
+        ? ` ${notes.join(' ')} 그 외 정보는 저장되었습니다.`
+        : ' 나머지 정보는 저장되었습니다.'
+    }
+
     let payload = updates
     let { error } = await runUpdate(payload)
     for (const group of PEEL_GROUPS_NEWEST_FIRST) {
       if (!isMissingColumnError(error)) break
       payload = { ...payload }
-      for (const col of group) delete payload[col]
+      for (const col of group) {
+        if (col in payload && payload[col] !== null && payload[col] !== '') {
+          droppedRequestedCols.push(col)
+        }
+        delete payload[col]
+      }
       ;({ error } = await runUpdate(payload))
     }
 
@@ -176,15 +333,58 @@ export async function PUT(req: NextRequest) {
       if (error.code === '23505') {
         return NextResponse.json({ error: '이미 사용 중인 주소입니다. 다른 주소를 입력해주세요.' }, { status: 409 })
       }
-      // 23514 = check 제약 위반. 마이그 048(cadence 'auto' 허용) 미적용 환경에서
-      // 'auto' 를 저장하면 여기로 온다 — 배포가 깨지지 않게 안내 메시지로 폴백한다.
-      if (error.code === '23514' && updates.site_publish_cadence === 'auto') {
+      // 'auto' 전환의 23514(마이그 048 미적용)는 아래 전용 UPDATE 가 따로 처리한다 —
+      // 이 페이로드에는 cadence 'auto' 가 들어오지 않는다(위에서 제거).
+      return NextResponse.json({ error: '프로필 저장 실패' }, { status: 500 })
+    }
+
+
+    // ★ 자동발행 'auto' 전환 — 기준 시각과 **한 UPDATE 로** 함께 쓴다.
+    //
+    //   자동발행은 site_auto_publish_since 이후에 만들어진 글만 대상으로 한다
+    //   (보관함의 과거 글이 한꺼번에 공개되는 것을 막는 유일한 기준).
+    //   두 값을 따로 쓰면 그 사이 다른 요청이 끼어들어 "cadence 는 auto 인데
+    //   기준 시각은 예전 값"인 상태가 만들어진다 — 껐던 기간에 쌓인 글이 전부 공개된다.
+    //
+    //   조건 `현재 cadence != 'auto'` 가 "새로 켜는 전환"만 골라낸다:
+    //    · 전환이면 두 값이 원자적으로 함께 기록된다.
+    //    · 이미 auto 면 0행 — 기준 시각을 앞으로 밀지 않는다(그 사이 쓴 글이
+    //      제외되면 안 된다. 마이페이지 저장 때마다 전체 프로필이 전송된다).
+    if (turningOnAuto) {
+      const { error: autoError } = await supabase
+        .from('profiles')
+        .update({
+          site_publish_cadence: 'auto',
+          site_auto_publish_since: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+        .neq('site_publish_cadence', 'auto')
+
+      // 가드 컬럼이 없거나(42703 · 마이그 052 미적용) 'auto' 가 아직 허용되지
+      // 않으면(23514 · 마이그 048 미적용) 자동발행을 켜지 않는다 —
+      // 기준 시각 없이 켜면 cron 의 소급 차단 필터가 통째로 꺼져 과거 글이 공개된다.
+      // (이 UPDATE 의 컬럼은 둘뿐이라 42703 의 원인이 모호하지 않다.)
+      if (isMissingColumnError(autoError) || autoError?.code === '23514') {
         return NextResponse.json(
-          { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 잠시 후 다시 시도해주세요.' },
+          { error: `바로 발행 옵션이 아직 활성화되지 않았습니다.${savedRestNotice()}` },
           { status: 503 }
         )
       }
-      return NextResponse.json({ error: '프로필 저장 실패' }, { status: 500 })
+      if (autoError) {
+        console.error('[profile] 자동발행 전환 실패:', autoError.message)
+        return NextResponse.json(
+          { error: `바로 발행 설정을 저장하지 못했습니다.${savedRestNotice()}` },
+          { status: 500 }
+        )
+      }
+    }
+
+    const notices = partialNotices()
+    if (notices.length > 0) {
+      return NextResponse.json({
+        success: true,
+        warning: `${notices.join(' ')} 그 외 정보는 저장되었습니다.`,
+      })
     }
 
     return NextResponse.json({ success: true })

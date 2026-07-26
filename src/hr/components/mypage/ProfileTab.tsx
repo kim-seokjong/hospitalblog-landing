@@ -6,6 +6,18 @@ import { extractNaverBlogId } from '@/content/lib/rank-tracking';
 import { sanitizeHandle } from '@/content/lib/scoreboard/social';
 import { isValidChannelId } from '@/content/lib/scoreboard/youtube';
 import { validateSlug, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
+import {
+  CLINIC_HOURS_DAY_KEYS,
+  CLINIC_HOURS_NOTE_MAX_LENGTH,
+  EMPTY_CLINIC_HOURS,
+  parseClinicHours,
+} from '@/content/lib/clinic-site/hours';
+import type {
+  ClinicHours,
+  ClinicHoursDayKey,
+  ClinicHoursRange,
+  ClinicHoursValue,
+} from '@/content/lib/clinic-site/hours';
 
 interface NaverLocalResult {
   name: string;
@@ -22,6 +34,12 @@ interface ProfileData {
   phone: string;
   hospital_name: string;
   hospital_address: string;
+  /** 병원 대표번호(공개) — 공개 블로그에 표시된다. 담당자 개인 연락처(phone)와 다르다. */
+  hospital_phone: string;
+  /** 진료과 — 공개 블로그·검색엔진 구조화 데이터에 표시되는 값 */
+  hospital_type: string;
+  /** 진료시간(공개) — 미설정이면 null */
+  hospital_hours: ClinicHours | null;
   position: string;
   specialty: string;
   specialty_detail: string;
@@ -45,6 +63,9 @@ const DEFAULT_PROFILE: ProfileData = {
   phone: '',
   hospital_name: '',
   hospital_address: '',
+  hospital_phone: '',
+  hospital_type: '',
+  hospital_hours: null,
   position: '',
   specialty: '',
   specialty_detail: '',
@@ -64,6 +85,56 @@ const DEFAULT_PROFILE: ProfileData = {
 };
 
 const POSITIONS = ['원장', '부원장', '간호사', '원무', '마케터', '기타'];
+
+/**
+ * 진료과(profiles.hospital_type) 선택지 — 가입 폼(AuthModal)과 같은 목록.
+ * 가입 후에는 이 값을 바꿀 방법이 없었는데, 공개 블로그·JSON-LD 가 표시하는 값이라
+ * 마이페이지에서 수정 가능해야 한다.
+ */
+const HOSPITAL_TYPES = [
+  '내과', '외과', '피부과', '성형외과', '정형외과', '안과',
+  '이비인후과', '치과', '한의원', '산부인과', '소아과', '신경과',
+  '정신건강의학과', '재활의학과', '가정의학과', '비뇨기과', '기타',
+];
+
+/** 병원 대표번호 형식 — 서버(/api/profile)와 같은 기준. */
+function isValidHospitalPhone(value: string): boolean {
+  if (!/^[0-9+\-()\s]{6,25}$/.test(value)) return false;
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 6 && digits.length <= 15;
+}
+
+// ── 진료시간 입력 ────────────────────────────────────────────────
+// 요일 구간마다 상태가 셋이다: 미설정(줄이 안 보임) / 진료(시간 입력) / 휴진.
+
+const HOURS_DAY_LABELS: Record<ClinicHoursDayKey, string> = {
+  weekday: '평일 (월~금)',
+  saturday: '토요일',
+  sunday: '일요일',
+  holiday: '공휴일',
+};
+
+type DayMode = 'unset' | 'open' | 'closed';
+
+const DAY_MODE_OPTIONS = [
+  { value: 'unset', label: '표시 안 함' },
+  { value: 'open', label: '진료' },
+  { value: 'closed', label: '휴진' },
+];
+
+/** 기본 진료시간 — '진료'로 바꾼 순간 빈 입력이 되지 않게 흔한 값을 채운다. */
+const DEFAULT_DAY_RANGE: ClinicHoursRange = { open: '09:00', close: '18:00' };
+const DEFAULT_LUNCH_RANGE: ClinicHoursRange = { open: '13:00', close: '14:00' };
+
+function dayModeOf(value: ClinicHoursValue): DayMode {
+  if (value === null) return 'unset';
+  if (value === 'closed') return 'closed';
+  return 'open';
+}
+
+function rangeOf(value: ClinicHoursValue): ClinicHoursRange {
+  return value === null || value === 'closed' ? DEFAULT_DAY_RANGE : value;
+}
 
 const SPECIALTIES = [
   '내과', '외과', '정형외과', '신경외과', '피부과', '성형외과',
@@ -131,7 +202,13 @@ export default function ProfileTab() {
       const incoming = Object.fromEntries(
         Object.entries(json.profile ?? {}).filter(([, v]) => v !== null && v !== undefined)
       ) as Partial<ProfileData>;
-      const next = { ...DEFAULT_PROFILE, ...incoming };
+      // 진료시간은 DB jsonb 원본이라 화면 상태로 쓰기 전에 검증·정규화한다.
+      const rawHours = (json.profile as { hospital_hours?: unknown } | undefined)?.hospital_hours;
+      const next = {
+        ...DEFAULT_PROFILE,
+        ...incoming,
+        hospital_hours: parseClinicHours(rawHours),
+      };
       setProfile(next);
       setLookupQuery(next.hospital_name);
     } catch {
@@ -154,16 +231,22 @@ export default function ProfileTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profile),
       });
+      const json = await res.json().catch(() => ({})) as { error?: string; warning?: string };
       if (!res.ok) {
-        const json = await res.json() as { error?: string };
         throw new Error(json.error ?? '저장 실패');
       }
-      setSaveMsg({ type: 'success', text: '프로필이 저장되었습니다.' });
+      // 일부 항목이 아직 저장될 수 없는 경우(기능 준비 중) 서버가 사실을 알려준다 —
+      // "저장됨"만 띄우면 사용자는 값이 사라진 이유를 알 수 없다.
+      if (json.warning) {
+        setSaveMsg({ type: 'error', text: json.warning });
+      } else {
+        setSaveMsg({ type: 'success', text: '프로필이 저장되었습니다.' });
+      }
     } catch (e) {
       setSaveMsg({ type: 'error', text: e instanceof Error ? e.message : '저장 실패' });
     } finally {
       setSaving(false);
-      setTimeout(() => setSaveMsg(null), 3000);
+      setTimeout(() => setSaveMsg(null), 6000);
     }
   };
 
@@ -197,6 +280,8 @@ export default function ProfileTab() {
       ...prev,
       hospital_name: c.name || prev.hospital_name,
       specialty: c.specialty || prev.specialty,
+      // 진료과(공개 표시값)는 선택지에 있는 값일 때만 자동 반영한다(임의 문자열 방지).
+      hospital_type: HOSPITAL_TYPES.includes(c.specialty) ? c.specialty : prev.hospital_type,
       hospital_address: c.roadAddress || c.address || prev.hospital_address,
       region: matchedRegion || prev.region,
     }));
@@ -270,6 +355,15 @@ export default function ProfileTab() {
       e.preventDefault();
       addKeyword();
     }
+  };
+
+  // 진료시간 — 미설정이면 빈 값으로 다루고, 갱신은 항상 새 객체를 만든다(불변).
+  const hours: ClinicHours = profile.hospital_hours ?? EMPTY_CLINIC_HOURS;
+  const updateHours = (patch: Partial<ClinicHours>) => {
+    setProfile(p => ({
+      ...p,
+      hospital_hours: { ...(p.hospital_hours ?? EMPTY_CLINIC_HOURS), ...patch },
+    }));
   };
 
   if (loading) {
@@ -425,6 +519,42 @@ export default function ProfileTab() {
               placeholder="서울시 강남구 테헤란로 123"
             />
           </Field>
+
+          {/* 공개 블로그에 그대로 표시되는 항목 — 대표번호·진료과 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="병원 대표번호">
+              <Input
+                value={profile.hospital_phone}
+                onChange={v => setProfile(p => ({ ...p, hospital_phone: v }))}
+                placeholder="02-123-4567"
+                type="tel"
+              />
+            </Field>
+            <Field label="진료과">
+              <Select
+                value={profile.hospital_type}
+                onChange={v => setProfile(p => ({ ...p, hospital_type: v }))}
+                options={[{ value: '', label: '진료과 선택' }, ...HOSPITAL_TYPES.map(t => ({ value: t, label: t }))]}
+              />
+            </Field>
+          </div>
+          {(() => {
+            const v = profile.hospital_phone.trim();
+            if (v !== '' && !isValidHospitalPhone(v)) {
+              return (
+                <p className="-mt-1 mb-2 text-xs text-red-600">
+                  전화번호 형식이 아닙니다. 숫자와 하이픈(-)만 사용해 입력해주세요. 예: 02-123-4567
+                </p>
+              );
+            }
+            return (
+              <p className="-mt-1 mb-2 text-xs text-[#5b6573] leading-relaxed">
+                대표번호와 진료과는 <strong className="text-[#202020]">내 블로그 공개 페이지</strong>에
+                병원명·주소와 함께 표시됩니다. (담당자 개인 전화번호는 공개되지 않습니다)
+              </p>
+            );
+          })()}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="진료과목">
               <Select
@@ -457,6 +587,119 @@ export default function ProfileTab() {
               className="w-full bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#5b6573] resize-none focus:outline-none focus:border-[#ff4628] transition-colors"
             />
           </Field>
+        </Section>
+
+        {/* 3.2 진료시간 — 내 블로그 "병원 소개" 페이지에 표시된다 */}
+        <Section title="진료시간">
+          <p className="text-xs text-[#5b6573] mb-3 leading-relaxed">
+            입력하면 내 블로그에 <strong className="text-[#202020]">병원 소개</strong> 페이지가 열리고,
+            검색엔진·AI 검색이 읽는 진료시간 정보로도 함께 제공됩니다. 모두 선택 입력이며,
+            &lsquo;표시 안 함&rsquo;으로 둔 항목은 화면에 나오지 않습니다.
+          </p>
+
+          <div className="space-y-2">
+            {CLINIC_HOURS_DAY_KEYS.map(key => {
+              const value = hours[key];
+              const mode = dayModeOf(value);
+              const range = rangeOf(value);
+              return (
+                <div key={key} className="rounded-lg border border-[#e5e9ef] bg-white px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-[#202020]">{HOURS_DAY_LABELS[key]}</span>
+                    <select
+                      value={mode}
+                      onChange={e => {
+                        const nextMode = e.target.value as DayMode;
+                        updateHours({
+                          [key]:
+                            nextMode === 'unset' ? null : nextMode === 'closed' ? 'closed' : range,
+                        } as Partial<ClinicHours>);
+                      }}
+                      aria-label={`${HOURS_DAY_LABELS[key]} 진료 여부`}
+                      className="shrink-0 bg-white border border-[#b4bfce] rounded-lg px-2 py-1.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors"
+                    >
+                      {DAY_MODE_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {mode === 'open' && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        type="time"
+                        value={range.open}
+                        onChange={e => updateHours({ [key]: { ...range, open: e.target.value } } as Partial<ClinicHours>)}
+                        aria-label={`${HOURS_DAY_LABELS[key]} 진료 시작`}
+                        className="min-w-0 flex-1 bg-white border border-[#b4bfce] rounded-lg px-2.5 py-2 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors"
+                      />
+                      <span className="shrink-0 text-sm text-[#5b6573]">~</span>
+                      <input
+                        type="time"
+                        value={range.close}
+                        onChange={e => updateHours({ [key]: { ...range, close: e.target.value } } as Partial<ClinicHours>)}
+                        aria-label={`${HOURS_DAY_LABELS[key]} 진료 종료`}
+                        className="min-w-0 flex-1 bg-white border border-[#b4bfce] rounded-lg px-2.5 py-2 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors"
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* 점심시간 — 휴진 개념이 없어 사용/미사용 두 상태만 둔다 */}
+            <div className="rounded-lg border border-[#e5e9ef] bg-white px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-[#202020]">점심시간</span>
+                <select
+                  value={hours.lunch ? 'open' : 'unset'}
+                  onChange={e =>
+                    updateHours({ lunch: e.target.value === 'open' ? (hours.lunch ?? DEFAULT_LUNCH_RANGE) : null })
+                  }
+                  aria-label="점심시간 표시 여부"
+                  className="shrink-0 bg-white border border-[#b4bfce] rounded-lg px-2 py-1.5 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors"
+                >
+                  <option value="unset">표시 안 함</option>
+                  <option value="open">표시</option>
+                </select>
+              </div>
+              {hours.lunch && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={hours.lunch.open}
+                    onChange={e => updateHours({ lunch: { ...(hours.lunch ?? DEFAULT_LUNCH_RANGE), open: e.target.value } })}
+                    aria-label="점심시간 시작"
+                    className="min-w-0 flex-1 bg-white border border-[#b4bfce] rounded-lg px-2.5 py-2 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors"
+                  />
+                  <span className="shrink-0 text-sm text-[#5b6573]">~</span>
+                  <input
+                    type="time"
+                    value={hours.lunch.close}
+                    onChange={e => updateHours({ lunch: { ...(hours.lunch ?? DEFAULT_LUNCH_RANGE), close: e.target.value } })}
+                    aria-label="점심시간 종료"
+                    className="min-w-0 flex-1 bg-white border border-[#b4bfce] rounded-lg px-2.5 py-2 text-[#202020] text-sm focus:outline-none focus:border-[#ff4628] transition-colors"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <Field label="안내 문구 (선택)">
+              <textarea
+                value={hours.note}
+                onChange={e => updateHours({ note: e.target.value.slice(0, CLINIC_HOURS_NOTE_MAX_LENGTH) })}
+                placeholder="예: 토요일은 예약 진료만 가능합니다."
+                rows={2}
+                maxLength={CLINIC_HOURS_NOTE_MAX_LENGTH}
+                className="w-full bg-white border border-[#b4bfce] rounded-lg px-3 py-2.5 text-[#202020] text-sm placeholder-[#5b6573] resize-none focus:outline-none focus:border-[#ff4628] transition-colors"
+              />
+            </Field>
+            <p className="mt-1 text-xs text-[#5b6573]">
+              효과·가격·이벤트 문구는 의료광고법 위반 소지가 있어 넣지 마세요. 진료 안내만 적어주세요.
+            </p>
+          </div>
         </Section>
 
         {/* 3.5 순위 추적용 블로그 주소 */}
