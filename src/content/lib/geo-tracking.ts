@@ -315,27 +315,28 @@ function stripFaqBlocks(content: string): string {
  * 닫는 마커가 없는 요약 영역을 줄 단위로 제거한다.
  *
  * 요약은 본문 앞에 있어 "마커부터 끝까지" 제거할 수 없다. 대신 요약 박스의
- * 실제 경계를 쓴다 — 요약 줄은 전부 종결부호로 끝나는 완결 문장이고, 뒤이어
- * 나오는 첫 소제목(H2)은 종결부호가 없다. 그래서 **빈 줄이 나오거나 종결부호
- * 없는 줄(= 소제목)이 나올 때까지**를 요약으로 보고 제거한다.
+ * 실제 경계를 쓴다 — 요약 다음에 오는 첫 소제목(H2)은 **종결부호가 없고 뒤에
+ * 빈 줄이 따라온다**(소제목은 앞뒤 빈 줄로 구분되는 독립 줄). 그 두 조건을 함께
+ * 만족하는 줄에서 멈추고, 그 전까지는 전부 요약으로 보고 제거한다.
  *
- * 이 경계가 필요한 이유(둘 다 실측):
- *  1) 요약 줄에 물음표 문장이 섞이면("치료는 얼마나 걸리나요?") 소제목으로 오인돼
- *     다음 요약 줄이 직답으로 집계된다 — "요약 줄은 종결부호로 걸러진다"는 가정은
- *     물음표 문장에 성립하지 않는다.
+ * 이 경계가 필요한 이유(전부 실측):
+ *  1) 요약 줄이 물음표로 끝나거나("치료는 얼마나 걸리나요?") 종결부호 없이
+ *     끝나면("치료는 얼마나 걸리나요") 소제목으로 오인돼, 다음 요약 문장이
+ *     직답으로 집계된다. 종결부호 유무만으로는 요약 줄과 H2 를 못 가른다.
  *  2) toNaverFormat 은 `[/핵심 요약]` 과 **뒤따르는 빈 줄까지** 제거하므로, 네이버
  *     발행본에서는 첫 H2 가 마지막 요약 줄에 바로 붙는다. 빈 줄만으로 경계를 잡으면
- *     첫 H2 를 요약으로 삼켜 그 섹션의 직답을 놓친다.
+ *     첫 H2 를 요약으로 삼켜 그 섹션의 직답을 놓친다. "뒤에 빈 줄"이라는 H2 자신의
+ *     서식 규칙을 쓰면 요약 줄 수(2줄·3줄)가 흔들려도 경계가 맞는다.
  *
- * 물음표로 끝나는 H2 가 요약 직후에 오면 요약으로 흡수될 수 있으나(그 섹션만 미집계),
- * 없는 직답을 인정하는 오탐보다 안전한 방향이라 감수한다.
+ * 한계(false negative 방향): 요약 직후 H2 뒤의 빈 줄까지 유실된 글은 그 H2 가
+ * 요약으로 흡수돼 해당 섹션만 미집계된다. 없는 직답을 인정하는 것보다 안전하다.
  */
 function stripSummaryRegions(lines: readonly string[]): string[] {
   const kept: string[] = [];
   let inSummary = false;
 
-  for (const line of lines) {
-    const text = line.trim();
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i].trim();
 
     if (SUMMARY_OPEN_PATTERN.test(text)) {
       inSummary = true;
@@ -343,13 +344,19 @@ function stripSummaryRegions(lines: readonly string[]): string[] {
     }
 
     if (inSummary) {
-      if (text.length > 0 && ANY_SENTENCE_END_PATTERN.test(text)) {
-        continue; // 완결 문장 = 요약 줄이므로 제거
+      if (text.length === 0) {
+        inSummary = false; // 빈 줄 = 요약 박스 종료
+      } else {
+        const nextText = i + 1 < lines.length ? lines[i + 1].trim() : '';
+        // 종결부호가 없고 뒤가 빈 줄 = 요약 다음 첫 소제목 → 여기서 요약 종료
+        const isFollowingHeading =
+          !ANY_SENTENCE_END_PATTERN.test(text) && nextText.length === 0;
+        if (!isFollowingHeading) continue; // 그 외에는 전부 요약 줄로 보고 제거
+        inSummary = false;
       }
-      inSummary = false; // 빈 줄 또는 종결부호 없는 줄(소제목) = 요약 박스 종료
     }
 
-    kept.push(line);
+    kept.push(lines[i]);
   }
 
   return kept;
@@ -401,9 +408,12 @@ function isBodyLine(line: string): boolean {
 
 /**
  * 기호 없는 소제목(H2) 형태의 줄인가 — 짧고 종결부호로 끝나지 않는 줄.
- * 본문 단락 첫 줄과 형태가 같아(줄바꿈 편집 시 이어지는 줄도 종결부호가 없다)
- * 이 판정만으로 본문을 배제하면 안 된다 — 호출부에서 "소제목 직후, 빈 줄 없이
- * 붙어 있는 첫 줄"에만 적용한다.
+ *
+ * ⚠️ 이 형태는 "문장 중간에서 줄바꿈된 답변의 첫 줄"과 원리적으로 구분되지 않는다
+ * (둘 다 짧고 종결부호가 없다). 그래서 단락의 **첫 줄**에서 이 형태를 만나면
+ * 소제목으로 보고 수집을 멈춘다 — 없는 직답을 인정하는 오탐보다, 줄바꿈 편집된
+ * 직답을 놓치는 쪽(false negative)이 낫다는 판단이다.
+ * 정상 생성물의 직답 단락은 한 줄에 완결 문장으로 출력돼 이 경로를 타지 않는다.
  */
 function isHeadingShapedLine(text: string): boolean {
   if (text.length > HEADING_MAX_CHARS) return false;
@@ -430,9 +440,9 @@ function leadingSentenceLength(paragraph: string): number {
  * 원장이 문장마다 줄을 바꿔도(네이버 편집기에서 흔함) 한 단락으로 합산한다 —
  * 줄 이어붙이기는 join(' ') 로, 한 줄로 폈을 때 존재했을 어절 사이 공백을 복원한다.
  *
- * 소제목 흡수 방지: 수집 중 질문형 소제목 줄을 만나면 즉시 종료하고, 빈 줄 없이
- * 소제목에 바로 붙은 첫 줄이 소제목 형태(짧고 종결부호 없음)여도 종료한다 —
- * 빈 줄이 유실된 글에서 다음 H2 가 직답의 첫 문장으로 흡수되는 것을 막는다.
+ * 소제목 흡수 방지: 수집 중 질문형 소제목 줄을 만나면 즉시 종료하고, 단락의 첫 줄이
+ * 소제목 형태(짧고 종결부호 없음)여도 종료한다 — 빈 줄이 유실된 글에서 다음 H2 가
+ * 직답의 첫 문장으로 흡수되는 것을 막는다(비질문형 H2 포함).
  * FAQ·핵심 요약 블록은 별도 항목이라 검사 대상에서 제외한다.
  */
 export function hasAnswerFirstSection(content: string): boolean {
@@ -442,18 +452,16 @@ export function hasAnswerFirstSection(content: string): boolean {
     if (!isQuestionHeadingAt(lines, i)) continue;
 
     const paragraph: string[] = [];
-    let separatedByBlank = false; // 소제목과 단락 사이에 빈 줄·이미지가 있었나
 
     for (let j = i + 1; j < lines.length; j++) {
       const candidate = lines[j].trim();
       if (!candidate || IMAGE_LINE_PATTERN.test(candidate)) {
         if (paragraph.length > 0) break; // 단락이 시작된 뒤의 빈 줄·이미지 = 단락 종료
-        separatedByBlank = true;
         continue;                        // 소제목과 단락 사이의 빈 줄·이미지는 건너뜀
       }
       if (isQuestionHeadingShape(candidate)) break; // 다음 질문형 소제목 = 단락 종료
-      if (paragraph.length === 0 && !separatedByBlank && isHeadingShapedLine(candidate)) {
-        break; // 빈 줄 없이 붙은 소제목 형태의 줄 = 다음 H2 로 간주
+      if (paragraph.length === 0 && isHeadingShapedLine(candidate)) {
+        break; // 단락 첫 줄이 소제목 형태 = 다음 H2 로 간주 (빈 줄 유무와 무관)
       }
       if (!isBodyLine(candidate)) break; // 마커·H3 소제목이면 단락 종료
       paragraph.push(candidate);

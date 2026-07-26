@@ -423,6 +423,40 @@ test('직답: 닫는 마커가 유실된 [핵심 요약] 안의 물음표 문장
   assert.equal(hasAnswerFirstSection(manyLines), false);
 });
 
+test('직답: 종결부호 없는 요약 줄도 소제목으로 새지 않는다 (뒤에 빈 줄이 없으면 요약)', () => {
+  // 물음표 없이 "…나요"로 끝나는 요약 줄 — 종결부호 유무만으로는 H2 와 구분되지 않는다
+  const noPunctuation = ['■ 핵심 요약', '치료는 얼마나 걸리나요', ANSWER_PARAGRAPH].join('\n');
+  assert.equal(hasAnswerFirstSection(noPunctuation), false);
+
+  const bracketed = ['[핵심 요약]', '치료는 얼마나 걸리나요', ANSWER_PARAGRAPH].join('\n');
+  assert.equal(hasAnswerFirstSection(bracketed), false);
+
+  // 요약 줄이 여러 개이고 그중 하나가 종결부호 없는 질문형이어도 동일
+  const mixed = [
+    '■ 핵심 요약',
+    '요약 한 줄입니다.',
+    '치료는 얼마나 걸리나요',
+    ANSWER_PARAGRAPH,
+  ].join('\n');
+  assert.equal(hasAnswerFirstSection(mixed), false);
+});
+
+test('직답: 빈 줄 뒤의 비질문형 H2 도 직답에 흡수하지 않는다', () => {
+  // 소제목 → 빈 줄 → 비질문형 H2 → (빈 줄 유실) → 본문.
+  // H2 와 본문이 합쳐져 앞 질문의 직답으로 계산되면 안 된다.
+  const content = [
+    '치료는 얼마나 걸리나요',
+    '',
+    '치료 과정과 주의사항', // 비질문형 H2 (질문형 차단에 안 걸림)
+    ANSWER_PARAGRAPH,
+  ].join('\n');
+  assert.equal(hasAnswerFirstSection(content), false);
+
+  // 대조군: 같은 자리에 실제 직답이 오면 정상 인정
+  const withAnswer = ['치료는 얼마나 걸리나요', '', ANSWER_PARAGRAPH].join('\n');
+  assert.equal(hasAnswerFirstSection(withAnswer), true);
+});
+
 test('직답: 요약 직후 소제목(종결부호 없음)은 요약으로 흡수하지 않는다', () => {
   // toNaverFormat 이 [/핵심 요약] 과 뒤따르는 빈 줄까지 제거해 첫 H2 가 요약 줄에 바로 붙는다
   const content = [
@@ -461,6 +495,25 @@ test('직답: 네이버 발행 변환(toNaverFormat) 왕복 후에도 판정이 
   const weak = body.replace(ANSWER_PARAGRAPH, '네, 맞습니다.');
   assert.equal(hasAnswerFirstSection(weak), false);
   assert.equal(hasAnswerFirstSection(toNaverFormat(weak)), false);
+
+  // 요약 줄 수가 흔들려도(2줄·4줄) 첫 H2 를 요약으로 삼키지 않는다
+  const withSummaryLines = (lines: string[]) =>
+    toNaverFormat(
+      [
+        '[핵심 요약]',
+        ...lines,
+        '[/핵심 요약]',
+        '',
+        '여드름 흉터는 왜 생기나요',
+        '',
+        ANSWER_PARAGRAPH,
+      ].join('\n'),
+    );
+  assert.equal(hasAnswerFirstSection(withSummaryLines(['한 줄입니다.', '두 줄입니다.'])), true);
+  assert.equal(
+    hasAnswerFirstSection(withSummaryLines(['한 줄.', '두 줄.', '세 줄.', '네 줄.'])),
+    true,
+  );
 });
 
 // --- 소제목 오인 방지 (다음 H2 흡수·위치 조건) -----------------------------
@@ -496,20 +549,38 @@ test('직답: 번호로 시작하는 줄(수동 편집 FAQ·목록)은 소제목
 });
 
 test('직답: 줄바꿈 합산은 한 줄로 폈을 때와 같은 길이로 계산한다 (공백 복원)', () => {
-  const part1 = '치료 방향은 환자의 상태와 흉터 깊이, 그리고 치료 범위에 따라 달라지기 때문에';
-  const part2 = '보통 4주 간격으로 서너 번에 나눠 진행하면서 회복 속도를 함께 확인합니다.';
-  const oneLine = `${part1} ${part2}`;
   const heading = '치료는 얼마나 걸리나요';
-  assert.ok(oneLine.length >= 80, '전제: 한 줄로 폈을 때 기준 충족');
-  assert.ok(part1.length < 80 && part2.length < 80, '전제: 각 줄만으로는 미달');
-  // 두 줄로 나눈 글과 한 줄로 쓴 글의 판정이 같아야 한다 (둘 다 통과)
-  assert.equal(hasAnswerFirstSection(`${heading}\n\n${part1}\n${part2}`), true);
-  assert.equal(hasAnswerFirstSection(`${heading}\n\n${oneLine}`), true);
+  // 첫 줄은 완결 문장(= 소제목 형태가 아님), 둘째 문장만 줄바꿈으로 끊긴 단락
+  const line1 = `${'가'.repeat(29)}.`;  // 30자
+  const line2 = '나'.repeat(25);        // 25자 (문장 중간)
+  const line3 = `${'다'.repeat(22)}.`;  // 23자
+  const contentLength = line1.length + line2.length + line3.length;
+  assert.equal(contentLength, 78, '전제: 글자만 더하면 78자로 기준 미달');
+  assert.equal([line1, line2, line3].join(' ').length, 80, '전제: 공백 복원 시 80자');
 
-  // 문장 중간 줄바꿈이 공백 없이 붙어 길이가 줄어드는 일이 없어야 한다 (join('') 회귀 방지)
-  const justUnder = `${'가'.repeat(39)} ${'나'.repeat(38)}.`; // 한 줄 기준 79자
-  assert.equal(justUnder.length, 79);
-  assert.equal(hasAnswerFirstSection(`${heading}\n\n${'가'.repeat(39)}\n${'나'.repeat(38)}.`), false);
+  // join('') 이면 78자로 미달 처리된다 — 한 줄로 폈을 때의 공백까지 세야 통과
+  assert.equal(hasAnswerFirstSection(`${heading}\n\n${line1}\n${line2}\n${line3}`), true);
+  assert.equal(
+    hasAnswerFirstSection(`${heading}\n\n${[line1, line2, line3].join(' ')}`),
+    true,
+  );
+});
+
+test('직답: 단락 첫 줄이 문장 중간에서 끊기면 인정하지 않는다 (오탐 방지 대가)', () => {
+  // 첫 줄이 짧고 종결부호가 없으면 "다음 H2"와 줄 모양이 같아 구분이 불가능하다.
+  // 없는 직답을 인정하는 오탐보다 안전한 false negative 쪽으로 기울인 결과다.
+  const wrappedFirst = '치료 방향은 환자의 상태와 흉터 깊이, 그리고 치료 범위에 따라 달라지기 때문에';
+  const wrappedRest = '보통 4주 간격으로 서너 번에 나눠 진행하면서 회복 속도를 함께 확인합니다.';
+  assert.ok(`${wrappedFirst} ${wrappedRest}`.length >= 80, '전제: 한 줄이면 기준 충족');
+  assert.equal(
+    hasAnswerFirstSection(`치료는 얼마나 걸리나요\n\n${wrappedFirst}\n${wrappedRest}`),
+    false,
+  );
+  // 같은 내용을 한 줄로 쓰면(정상 생성물의 형태) 그대로 인정된다
+  assert.equal(
+    hasAnswerFirstSection(`치료는 얼마나 걸리나요\n\n${wrappedFirst} ${wrappedRest}`),
+    true,
+  );
 });
 
 test('준비도: answerFirst 항목이 점수에 반영됨 (직답 있음 20점 차)', () => {
