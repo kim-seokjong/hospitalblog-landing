@@ -12,6 +12,7 @@ import {
   EVIDENCE_MAX_LENGTH,
   MAX_QUESTIONS_PER_USER,
 } from '../geo-tracking.ts';
+import { toNaverFormat } from '../naver-format.ts';
 
 // ---------------------------------------------------------------------------
 // 질문 생성
@@ -397,6 +398,118 @@ test('직답: 종결 부호 없는 미완결 문장은 미통과', () => {
 test('직답: 소제목 직후가 다른 소제목이면 미통과', () => {
   const content = `치료는 얼마나 걸리나요\n\n▶ 세부 소제목\n\n${ANSWER_PARAGRAPH}`;
   assert.equal(hasAnswerFirstSection(content), false);
+});
+
+// --- 요약 블록 경계 (닫는 마커 유실·네이버 변환본) -------------------------
+
+test('직답: 닫는 마커가 유실된 [핵심 요약] 안의 물음표 문장은 소제목이 아니다', () => {
+  // 요약 줄에 물음표 문장이 섞이면 소제목으로 오인돼 다음 요약 줄이 직답으로 집계된다
+  const unclosedSummary = ['[핵심 요약]', '치료는 얼마나 걸리나요?', ANSWER_PARAGRAPH].join('\n');
+  assert.equal(hasAnswerFirstSection(unclosedSummary), false);
+
+  // 네이버 변환본(■ 핵심 요약)은 애초에 닫는 마커가 없어 상시 이 경로를 탄다
+  const naverSummary = ['■ 핵심 요약', '치료는 얼마나 걸리나요?', ANSWER_PARAGRAPH].join('\n');
+  assert.equal(hasAnswerFirstSection(naverSummary), false);
+
+  // 요약 줄이 여러 개여도 동일 (빈 줄이 없어도 종결부호 있는 줄은 전부 요약)
+  const manyLines = [
+    '■ 핵심 요약',
+    '요약 한 줄입니다.',
+    '요약 두 줄입니다.',
+    '요약 세 줄입니다.',
+    '치료는 얼마나 걸리나요?',
+    ANSWER_PARAGRAPH,
+  ].join('\n');
+  assert.equal(hasAnswerFirstSection(manyLines), false);
+});
+
+test('직답: 요약 직후 소제목(종결부호 없음)은 요약으로 흡수하지 않는다', () => {
+  // toNaverFormat 이 [/핵심 요약] 과 뒤따르는 빈 줄까지 제거해 첫 H2 가 요약 줄에 바로 붙는다
+  const content = [
+    '■ 핵심 요약',
+    '요약 한 줄입니다.',
+    '요약 두 줄입니다.',
+    '여드름 흉터는 왜 생기나요', // 빈 줄 없이 바로 붙은 첫 H2
+    '',
+    ANSWER_PARAGRAPH,
+  ].join('\n');
+  assert.equal(hasAnswerFirstSection(content), true);
+});
+
+test('직답: 네이버 발행 변환(toNaverFormat) 왕복 후에도 판정이 같다', () => {
+  const body = [
+    '도입 단락입니다.',
+    '',
+    '[핵심 요약]',
+    '요약 첫 줄입니다.',
+    '요약 둘째 줄입니다.',
+    '[/핵심 요약]',
+    '',
+    '여드름 흉터는 왜 생기나요',
+    '',
+    ANSWER_PARAGRAPH,
+    '',
+    '[자주 묻는 질문]',
+    'Q1. 질문',
+    'A1. 답',
+    '[/자주 묻는 질문]',
+  ].join('\n');
+  assert.equal(hasAnswerFirstSection(body), true);
+  assert.equal(hasAnswerFirstSection(toNaverFormat(body)), true);
+
+  // 직답만 짧게 바꾸면 원본·변환본 모두 미통과 (변환이 판정을 뒤집지 않는다)
+  const weak = body.replace(ANSWER_PARAGRAPH, '네, 맞습니다.');
+  assert.equal(hasAnswerFirstSection(weak), false);
+  assert.equal(hasAnswerFirstSection(toNaverFormat(weak)), false);
+});
+
+// --- 소제목 오인 방지 (다음 H2 흡수·위치 조건) -----------------------------
+
+test('직답: 빈 줄이 유실돼도 다음 H2 를 직답의 첫 문장으로 흡수하지 않는다', () => {
+  // 소제목 + 다음 소제목(59자, 물음표 종결) + 짧은 답 = 합치면 80자를 넘지만 직답은 없다
+  const nextHeading = `${'가'.repeat(50)}는 어떻게 하나요?`;
+  const shortAnswer = `${'나'.repeat(29)}.`;
+  assert.ok(nextHeading.length <= 60, '전제: 소제목 상한 이내');
+  assert.ok(nextHeading.length + shortAnswer.length >= 80, '전제: 흡수하면 기준을 넘김');
+  assert.equal(
+    hasAnswerFirstSection(['첫 치료는 어떻게 진행하나요', nextHeading, shortAnswer].join('\n')),
+    false,
+  );
+});
+
+test('직답: 본문 중간의 의문 표현 줄은 소제목이 아니다 (앞이 빈 줄이어야 소제목)', () => {
+  // 줄바꿈으로 끊긴 본문 줄이 의문 표현을 담았다는 이유만으로 소제목이 되면 안 된다
+  const midProse = ['앞 단락 문장입니다.', '그럼 언제 병원에 가야 할까요?', ANSWER_PARAGRAPH].join('\n');
+  assert.equal(hasAnswerFirstSection(midProse), false);
+
+  const wrappedLong = ['앞 단락 문장입니다.', `${'가'.repeat(45)} 왜 그런가 하면`, '', ANSWER_PARAGRAPH].join('\n');
+  assert.equal(hasAnswerFirstSection(wrappedLong), false);
+
+  // 같은 줄이라도 빈 줄 뒤 독립 줄이면 소제목으로 인정
+  const standalone = ['앞 단락 문장입니다.', '', '그럼 언제 병원에 가야 할까요?', '', ANSWER_PARAGRAPH].join('\n');
+  assert.equal(hasAnswerFirstSection(standalone), true);
+});
+
+test('직답: 번호로 시작하는 줄(수동 편집 FAQ·목록)은 소제목이 아니다', () => {
+  assert.equal(hasAnswerFirstSection(`1. 흉터는 왜 생기나요?\n${ANSWER_PARAGRAPH}`), false);
+  assert.equal(hasAnswerFirstSection(`Q. 흉터는 왜 생기나요?\nA. ${ANSWER_PARAGRAPH}`), false);
+});
+
+test('직답: 줄바꿈 합산은 한 줄로 폈을 때와 같은 길이로 계산한다 (공백 복원)', () => {
+  const part1 = '치료 방향은 환자의 상태와 흉터 깊이, 그리고 치료 범위에 따라 달라지기 때문에';
+  const part2 = '보통 4주 간격으로 서너 번에 나눠 진행하면서 회복 속도를 함께 확인합니다.';
+  const oneLine = `${part1} ${part2}`;
+  const heading = '치료는 얼마나 걸리나요';
+  assert.ok(oneLine.length >= 80, '전제: 한 줄로 폈을 때 기준 충족');
+  assert.ok(part1.length < 80 && part2.length < 80, '전제: 각 줄만으로는 미달');
+  // 두 줄로 나눈 글과 한 줄로 쓴 글의 판정이 같아야 한다 (둘 다 통과)
+  assert.equal(hasAnswerFirstSection(`${heading}\n\n${part1}\n${part2}`), true);
+  assert.equal(hasAnswerFirstSection(`${heading}\n\n${oneLine}`), true);
+
+  // 문장 중간 줄바꿈이 공백 없이 붙어 길이가 줄어드는 일이 없어야 한다 (join('') 회귀 방지)
+  const justUnder = `${'가'.repeat(39)} ${'나'.repeat(38)}.`; // 한 줄 기준 79자
+  assert.equal(justUnder.length, 79);
+  assert.equal(hasAnswerFirstSection(`${heading}\n\n${'가'.repeat(39)}\n${'나'.repeat(38)}.`), false);
 });
 
 test('준비도: answerFirst 항목이 점수에 반영됨 (직답 있음 20점 차)', () => {
