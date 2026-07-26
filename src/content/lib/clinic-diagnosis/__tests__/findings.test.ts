@@ -4,8 +4,10 @@ import {
   FINDING_WEIGHT,
   RANK_CAVEAT,
   buildAiFindings,
+  buildBlogFindings,
   buildComplianceFindings,
   buildFindings,
+  buildPostSeoFindings,
   buildSiteFindings,
   collectUnchecked,
   groupFindings,
@@ -14,6 +16,7 @@ import {
 import { EMPTY_SITE_AXIS } from '../site-audit.ts';
 import { EMPTY_AI_AXIS } from '../ai-citation.ts';
 import { EMPTY_COMPLIANCE_AXIS } from '../compliance-scan.ts';
+import type { PostSeoResult } from '../post-seo.ts';
 import type { AiAxis, BlogAxis, ComplianceAxis, Finding, SiteAxis } from '../types.ts';
 
 const BLOG_OK: BlogAxis = {
@@ -31,7 +34,31 @@ const BLOG_OK: BlogAxis = {
   postsPerWeek: 2.1,
   keywords: [{ keyword: '대구 성형외과', apiRank: 4, docCount: 120_000 }],
   rankChecked: true,
+  postSeo: null,
 };
+
+/** 최근 글 SEO 점검 결과 — ok 값만 바꿔 가며 카드 문구를 검증한다. */
+function postSeo(over: Partial<PostSeoResult> = {}): PostSeoResult {
+  const check = (id: string, ok: boolean | null): PostSeoResult['checks'][number] => ({
+    id: id as PostSeoResult['checks'][number]['id'],
+    label: id,
+    hint: '설명',
+    ok,
+    detail: '최근 5편 중 3편 충족',
+  });
+  const checks = [check('titleLength', true), check('bodyLength', false), check('image', true)];
+  return {
+    checked: true,
+    postsAnalyzed: 5,
+    fullBodies: 2,
+    summaryOnly: 3,
+    checks,
+    readyCount: checks.filter((c) => c.ok === true).length,
+    missingCount: checks.filter((c) => c.ok === false).length,
+    unknownCount: checks.filter((c) => c.ok === null).length,
+    ...over,
+  };
+}
 
 const SITE_OK: SiteAxis = {
   ...EMPTY_SITE_AXIS,
@@ -331,7 +358,25 @@ test('의료광고법 카드는 위반·처분으로 단정하지 않는다', ()
 test('검출이 없으면 칭찬하되 검사 범위의 한계를 함께 밝힌다', () => {
   const findings = buildComplianceFindings(complianceAxis({ hits: [], postsWithHits: 0 }));
   assert.equal(findings[0].tone, 'good');
-  assert.match(findings[0].action, /본문 전체를 다 본 것은 아니니/);
+  // 전문까지 못 본 글이 남아 있으면 그 편수를 정확히 밝힌다
+  assert.match(findings[0].action, /28편은 글 뒤쪽까지 열어보지 못했으니/);
+});
+
+test('검사 범위는 본문 전문·글 앞부분·제목만을 나눠 표시한다', () => {
+  const findings = buildComplianceFindings(
+    complianceAxis({ postsScanned: 10, bodiesScanned: 5, summariesScanned: 4, hits: [], postsWithHits: 0 }),
+  );
+  assert.match(findings[0].state, /본문 전문 5편/);
+  assert.match(findings[0].state, /글 앞부분 4편/);
+  assert.match(findings[0].state, /제목만 1편/);
+});
+
+test('모든 글의 본문 전문을 봤으면 "다 본 것은 아니다" 단서를 붙이지 않는다', () => {
+  const findings = buildComplianceFindings(
+    complianceAxis({ postsScanned: 3, bodiesScanned: 3, summariesScanned: 0, hits: [], postsWithHits: 0 }),
+  );
+  assert.equal(findings[0].tone, 'good');
+  assert.ok(!/열어보지 못했/.test(findings[0].action), '전문을 다 본 경우엔 단서가 없어야 한다');
 });
 
 /* ── 홈페이지 축 ────────────────────────────────────────── */
@@ -421,4 +466,67 @@ test('summarizeFindings 는 좋음·주의·미확인을 따로 센다 (점수 �
   assert.ok(summary.good > 0);
   assert.ok(summary.unknown > 0);
   assert.equal(typeof summary.warn, 'number');
+});
+
+/* ── 최근 글 SEO 카드 ───────────────────────────────────── */
+
+test('최근 글 SEO 는 카드 한 장으로만 나가고 항목은 접어두기로 내린다', () => {
+  const findings = buildPostSeoFindings(postSeo());
+  assert.equal(findings.length, 1, '카드를 쪼개면 화면이 더 복잡해진다');
+  assert.equal(findings[0].id, 'blog.postSeo');
+  assert.equal(findings[0].axis, 'blog');
+  assert.equal(findings[0].details?.length, 3);
+});
+
+test('빠진 항목이 있으면 살펴봐야 할 항목으로, 어디까지 봤는지 함께 밝힌다', () => {
+  const card = buildPostSeoFindings(postSeo())[0];
+  assert.equal(card.tone, 'warn');
+  assert.match(card.state, /최근 글 5편/);
+  assert.match(card.state, /본문 전문 2편/);
+  assert.match(card.state, /앞부분까지 기준|글 앞부분까지/);
+  assert.ok(card.why && card.why.length > 0);
+});
+
+test('다 갖춰져 있으면 그대로 칭찬한다 (전부 빨간불로 만들지 않는다)', () => {
+  const checks = [
+    { id: 'titleLength' as const, label: 'a', hint: 'h', ok: true, detail: 'd' },
+    { id: 'image' as const, label: 'b', hint: 'h', ok: true, detail: 'd' },
+  ];
+  const card = buildPostSeoFindings(
+    postSeo({ checks, readyCount: 2, missingCount: 0, unknownCount: 0, summaryOnly: 0, fullBodies: 5 }),
+  )[0];
+  assert.equal(card.tone, 'good');
+  assert.equal(card.why, null);
+  assert.equal(card.ourScope, false);
+});
+
+test('전부 판정 못 했으면 "확인하지 못했다"로 남긴다 (부족으로 몰지 않는다)', () => {
+  const checks = [
+    { id: 'bodyLength' as const, label: 'a', hint: 'h', ok: null, detail: 'd' },
+    { id: 'subheading' as const, label: 'b', hint: 'h', ok: null, detail: 'd' },
+  ];
+  const card = buildPostSeoFindings(
+    postSeo({ checks, readyCount: 0, missingCount: 0, unknownCount: 2, fullBodies: 0, summaryOnly: 5 }),
+  )[0];
+  assert.equal(card.tone, 'unknown');
+});
+
+test('점검 결과가 없으면 카드를 만들지 않는다 (빈 카드 금지)', () => {
+  assert.deepEqual(buildPostSeoFindings(null), []);
+  assert.deepEqual(buildPostSeoFindings(postSeo({ checked: false })), []);
+  assert.deepEqual(buildPostSeoFindings(postSeo({ checks: [] })), []);
+});
+
+test('최근 글 SEO 는 블로그 축 카드에 편입된다', () => {
+  const findings = buildBlogFindings({ ...BLOG_OK, postSeo: postSeo() });
+  assert.ok(ids(findings).includes('blog.postSeo'));
+});
+
+test('최근 글 SEO 는 검색 노출 대역의 "개선할 점"으로 분류된다', () => {
+  const weight = FINDING_WEIGHT['blog.postSeo'];
+  assert.equal(weight.severity, 'improving');
+  assert.ok(weight.rank >= 20 && weight.rank < 40, '검색 노출 대역(20~39)에 있어야 한다');
+
+  const grouped = groupFindings(buildBlogFindings({ ...BLOG_OK, postSeo: postSeo() }));
+  assert.ok(grouped.improve.some((f) => f.id === 'blog.postSeo'));
 });

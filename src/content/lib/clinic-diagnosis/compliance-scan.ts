@@ -1,3 +1,4 @@
+import type { PostBodyKind } from './post-seo.ts';
 import type { ComplianceAxis, ComplianceHit } from './types.ts';
 
 /**
@@ -14,9 +15,10 @@ import type { ComplianceAxis, ComplianceHit } from './types.ts';
  *   임계값을 낮추거나 항목을 제외하지 않는다.
  *
  * 데이터 한계:
- *   네이버 검색 API 가 주는 description 은 짧아 본문 전문이 아니다. RSS 로 제목
- *   전체 + 최신 본문 일부만 확보되므로, 검사 범위를 postsScanned/bodiesScanned 로
- *   그대로 노출한다. 본문 전문 점검은 상세 진단에서 사용자가 붙여넣게 한다.
+ *   확보 수준이 글마다 다르다 — 최신 글은 본문 전문, 나머지는 RSS 가 준 앞부분
+ *   요약, 그마저 없으면 제목뿐이다. 셋을 postsScanned/bodiesScanned/summariesScanned
+ *   로 나눠 그대로 노출한다(어디까지 봤는지 뭉개지 않는다).
+ *   본문 전문 점검은 상세 진단에서 사용자가 붙여넣게 한다.
  *
  * 크롤링 금지 — 공식 RSS·모바일 본문 1회 GET(blog-check-rss 재사용)만 쓴다.
  */
@@ -43,8 +45,10 @@ export interface ComplianceSource {
   readonly link: string;
   /** 검사 대상 텍스트 (제목 또는 제목+본문). */
   readonly text: string;
-  /** 본문까지 확보했는가. */
+  /** 본문 전문까지 확보했는가. */
   readonly hasBody: boolean;
+  /** 확보 수준 — 미지정이면 hasBody 로 유추한다(기존 호출부 호환). */
+  readonly bodyKind?: PostBodyKind;
 }
 
 /** medical-compliance.checkCompliance 의 반환 형태 중 이 모듈이 쓰는 부분. */
@@ -96,10 +100,14 @@ export function buildComplianceAxis(
   // review 를 먼저 보여준다 — 다만 정렬만 바꿀 뿐 항목을 버리지 않는다(상한 제외).
   const sorted = [...hits].sort((a, b) => (a.level === b.level ? 0 : a.level === 'review' ? -1 : 1));
 
+  const kindOf = (source: ComplianceSource): PostBodyKind =>
+    source.bodyKind ?? (source.hasBody ? 'full' : 'none');
+
   return {
     checked: sources.length > 0,
     postsScanned: sources.length,
-    bodiesScanned: sources.filter((s) => s.hasBody).length,
+    bodiesScanned: sources.filter((s) => kindOf(s) === 'full').length,
+    summariesScanned: sources.filter((s) => kindOf(s) === 'summary').length,
     hits: sorted.slice(0, MAX_HITS),
     postsWithHits: postsWithHits.size,
   };
@@ -109,6 +117,7 @@ export const EMPTY_COMPLIANCE_AXIS: ComplianceAxis = {
   checked: false,
   postsScanned: 0,
   bodiesScanned: 0,
+  summariesScanned: 0,
   hits: [],
   postsWithHits: 0,
 };

@@ -25,6 +25,12 @@ export const BLOG_CHECK_POST_LIMIT = 50;
 export const BLOG_CHECK_BODY_LIMIT = 2;
 /** 본문 1편당 수집 길이 상한(자) — 컴플라이언스 검사·문체 프리뷰용. */
 export const BLOG_CHECK_BODY_MAX_CHARS = 6000;
+/**
+ * RSS <description> 에서 가져올 텍스트 상한(자).
+ * 블로그 RSS 설정이 '부분'이면 400자쯤에서 잘려 오고, '전체'면 본문이 통째로 온다 —
+ * 둘 다 그대로 담고 어느 쪽인지는 소비자가 길이로 판단한다.
+ */
+export const BLOG_CHECK_SUMMARY_MAX_CHARS = 6000;
 
 /** 모바일 본문 수집용 UA — m.blog.naver.com 은 모바일 UA 에서 본문을 내려준다. */
 const MOBILE_USER_AGENT =
@@ -39,6 +45,13 @@ export interface BlogCheckRssItem {
   /** 발행일 ISO 문자열. 파싱 실패 시 null. */
   publishedAt: string | null;
   category: string;
+  /**
+   * RSS 가 준 글 내용(태그 제거 텍스트). 블로그 설정에 따라 앞부분 요약일 수도,
+   * 본문 전문일 수도 있다 — 여기서 구분하지 않고 그대로 담는다.
+   */
+  summary: string;
+  /** 글에 사진이 들어 있는가 (RSS 내용에 이미지가 딸려 오는지 기준). */
+  hasImage: boolean;
 }
 
 export interface BlogCheckFeed {
@@ -93,12 +106,15 @@ export function parseBlogCheckFeed(xml: string, limit: number = BLOG_CHECK_POST_
   for (const block of blocks.slice(0, Math.max(0, limit))) {
     const title = pickTag(block, 'title');
     const link = pickTag(block, 'link');
+    const description = pickTag(block, 'description');
     items.push({
       title,
       link,
       logNo: extractLogNo(link),
       publishedAt: parsePubDate(pickTag(block, 'pubDate')),
       category: pickTag(block, 'category'),
+      summary: htmlToText(description).slice(0, BLOG_CHECK_SUMMARY_MAX_CHARS).trim(),
+      hasImage: /<img\b/i.test(description),
     });
   }
   return { blogTitle, items };
@@ -184,38 +200,73 @@ export interface BlogCheckBody {
   body: string;
 }
 
+/**
+ * 본문 영역(se-main-container)을 **여는 div 와 짝이 맞는 닫는 div 까지** 잘라낸다.
+ *
+ * ⚠️ 이전에는 정규식으로 `...</div></div>` 를 최소 매칭했는데, 스마트에디터 ONE
+ *    본문은 문단마다 div 가 중첩돼 있어 **첫 문단 하나(20자쯤)에서 잘렸다.**
+ *    그 결과 본문 길이 검사(60자)에 걸려 모든 글이 버려졌고, 의료광고법 본문
+ *    검사가 사실상 제목만 보고 있었다(실측: 브이성형외과 본문 수집 0편).
+ *    div 깊이를 세는 방식으로 바꿔야 실제 본문 전체가 나온다.
+ *
+ * 닫는 태그를 못 찾으면 null — 호출부가 원본 HTML 로 폴백한다.
+ */
+export function sliceMainContainer(html: string): string | null {
+  const open = html.search(/<div[^>]*class="[^"]*se-main-container[^"]*"[^>]*>/i);
+  if (open === -1) return null;
+
+  const tagPattern = /<\/?div\b[^>]*>/gi;
+  tagPattern.lastIndex = open;
+  let depth = 0;
+  let match: RegExpExecArray | null;
+  while ((match = tagPattern.exec(html)) !== null) {
+    if (match[0].startsWith('</')) {
+      depth -= 1;
+      if (depth <= 0) return html.slice(open, match.index + match[0].length);
+    } else {
+      depth += 1;
+    }
+  }
+  return null;
+}
+
 /** 모바일 본문 HTML 에서 se-main-container 영역 텍스트를 추출 (순수 함수). */
 export function extractMobileBody(html: string, maxChars: number = BLOG_CHECK_BODY_MAX_CHARS): string {
   if (typeof html !== 'string' || html === '') return '';
-  const container = html.match(
-    /<div[^>]*class="[^"]*se-main-container[^"]*"[\s\S]*?<\/div>\s*<\/div>/i,
-  );
-  return htmlToText(container ? container[0] : html).slice(0, Math.max(0, maxChars)).trim();
+  const container = sliceMainContainer(html);
+  return htmlToText(container ?? html).slice(0, Math.max(0, maxChars)).trim();
 }
 
 /**
  * 최신 글 본문을 모바일 UA 로 수집한다(기본 2편). 전부 실패해도 빈 배열(그레이스풀)
  * — 본문 없이도 제목 기반 진단은 계속 진행한다.
+ *
+ * deadline(절대 시각, epoch ms)을 주면 **수집 전체**가 그 시각을 넘지 않는다.
+ * 편수를 늘려도 최악 소요가 (편수 × timeoutMs) 로 늘지 않게 하려는 장치다 —
+ * 예산이 끝나면 그때까지 모은 것만 돌려준다(부분 성공 허용).
  */
 export async function fetchLatestBodies(
   blogId: string,
   items: readonly BlogCheckRssItem[],
-  options: { fetchImpl?: typeof fetch; limit?: number; timeoutMs?: number } = {},
+  options: { fetchImpl?: typeof fetch; limit?: number; timeoutMs?: number; deadline?: number } = {},
 ): Promise<BlogCheckBody[]> {
   if (!BLOG_CHECK_ID_PATTERN.test(blogId)) return [];
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? BLOG_CHECK_FETCH_TIMEOUT_MS;
   const limit = Math.max(0, Math.min(options.limit ?? BLOG_CHECK_BODY_LIMIT, 5));
+  const deadline = options.deadline ?? null;
 
   const out: BlogCheckBody[] = [];
   for (const item of items) {
     if (out.length >= limit) break;
     if (!item.logNo) continue;
+    const remaining = deadline === null ? timeoutMs : Math.min(timeoutMs, deadline - Date.now());
+    if (remaining <= 0) break; // 예산 소진 — 남은 글은 포기한다
     const html = await safeFetchText(
       fetchImpl,
       `https://m.blog.naver.com/${blogId}/${item.logNo}`,
       { 'User-Agent': MOBILE_USER_AGENT, Accept: 'text/html,*/*' },
-      timeoutMs,
+      remaining,
     );
     if (!html) continue;
     const body = extractMobileBody(html);

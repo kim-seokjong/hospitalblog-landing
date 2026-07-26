@@ -12,6 +12,12 @@ import {
   type ComplianceSource,
 } from './compliance-scan.ts';
 import { buildFindings, collectUnchecked } from './findings.ts';
+import {
+  analyzePostSeo,
+  classifyBodyKind,
+  SEO_POST_LIMIT,
+  type SeoPostInput,
+} from './post-seo.ts';
 import { normalizeSiteUrl } from './site-audit.ts';
 import type {
   BlogAxis,
@@ -38,9 +44,14 @@ import type {
 
 /** 블로그 RSS 타임아웃(ms). */
 export const RSS_TIMEOUT_MS = 8_000;
-/** 본문 수집 편수·타임아웃 — 컴플라이언스 검사 표본. */
-export const BODY_LIMIT = 2;
-export const BODY_TIMEOUT_MS = 8_000;
+/**
+ * 본문 수집 편수 — 최근 글 SEO 점검 표본(5편)과 같은 수로 맞춘다.
+ * 편수를 늘리는 대신 **전체 예산(BODY_BUDGET_MS)** 을 걸어 최악 소요를 줄였다:
+ *   기존 2편 × 8초 = 최악 16초  →  현재 5편 · 총 14초 상한.
+ */
+export const BODY_LIMIT = SEO_POST_LIMIT;
+export const BODY_TIMEOUT_MS = 6_000;
+export const BODY_BUDGET_MS = 14_000;
 /** 키워드 실측 상한과 예산. */
 export const MAX_KEYWORDS = 4;
 export const KEYWORD_BUDGET_MS = 12_000;
@@ -148,7 +159,32 @@ const EMPTY_BLOG_AXIS: BlogAxis = {
   postsPerWeek: null,
   keywords: [],
   rankChecked: false,
+  postSeo: null,
 };
+
+/**
+ * 최근 글 SEO 점검 입력 만들기 (순수 함수).
+ *
+ * 새 호출을 만들지 않는다 — 이미 받아 둔 RSS 항목과 본문 수집분만 합친다.
+ * 본문 전문이 있으면 그것을, 없으면 RSS 가 준 내용을 쓰고 확보 수준을 표시한다.
+ */
+export function buildSeoPosts(
+  items: readonly { title: string; link: string; summary: string; hasImage: boolean }[],
+  bodyByLink: ReadonlyMap<string, string>,
+  limit: number = SEO_POST_LIMIT,
+): readonly SeoPostInput[] {
+  return items.slice(0, Math.max(0, limit)).map((item) => {
+    const full = bodyByLink.get(item.link) ?? '';
+    const text = full || item.summary || '';
+    return {
+      title: item.title,
+      link: item.link,
+      body: text,
+      bodyKind: classifyBodyKind(text, full.length > 0),
+      hasImage: item.hasImage,
+    };
+  });
+}
 
 /** 블로그 축 측정 — 탐색 결과가 확정일 때만 RSS 이후 단계로 간다. */
 async function measureBlog(
@@ -191,6 +227,7 @@ async function measureBlog(
     fetchImpl,
     limit: BODY_LIMIT,
     timeoutMs: BODY_TIMEOUT_MS,
+    deadline: Date.now() + BODY_BUDGET_MS,
   });
 
   const keywordTexts = buildDiagnosisKeywords(clinic, titles);
@@ -206,15 +243,34 @@ async function measureBlog(
   }));
 
   const bodyByLink = new Map(bodies.map((b) => [b.link, b.body]));
+
+  /**
+   * 의료광고법 검사 표본 — 제목만 보던 것을 확보한 만큼 넓힌다.
+   * 본문 전문이 있으면 전문을, 없으면 RSS 가 준 글 앞부분까지 검사한다.
+   * 검출 규칙(medical-compliance)은 그대로 두고 **보는 범위만** 넓힌다.
+   */
   const sources: ComplianceSource[] = feed.items.map((item) => {
-    const body = bodyByLink.get(item.link);
+    const full = bodyByLink.get(item.link) ?? '';
+    const text = full || item.summary || '';
+    const bodyKind = classifyBodyKind(text, full.length > 0);
     return {
       title: item.title,
       link: item.link,
-      text: body ? `${item.title}\n${body}` : item.title,
-      hasBody: Boolean(body),
+      text: bodyKind === 'none' ? item.title : `${item.title}\n${text}`,
+      hasBody: bodyKind === 'full',
+      bodyKind,
     };
   });
+
+  const postSeo = analyzePostSeo(
+    buildSeoPosts(feed.items, bodyByLink),
+    {
+      region: clinic.region,
+      shortProvince: shortProvinceOf(clinic.province),
+      specialty: clinic.specialty,
+    },
+    titles,
+  );
 
   return {
     axis: {
@@ -226,6 +282,7 @@ async function measureBlog(
       postsPerWeek: rhythm.postsPerWeek,
       keywords,
       rankChecked: keywords.some((k) => k.docCount !== null || k.apiRank !== null),
+      postSeo: postSeo.checked ? postSeo : null,
     },
     sources,
   };
@@ -295,7 +352,13 @@ export async function runClinicDiagnosis(
   const sources: readonly ComplianceSource[] = pasted
     ? [
         ...blogResult.sources,
-        { title: '직접 입력한 글', link: 'manual:pasted', text: pasted.slice(0, 20_000), hasBody: true },
+        {
+          title: '직접 입력한 글',
+          link: 'manual:pasted',
+          text: pasted.slice(0, 20_000),
+          hasBody: true,
+          bodyKind: 'full' as const,
+        },
       ]
     : blogResult.sources;
   const compliance = sources.length > 0 ? buildComplianceAxis(sources, checkCompliance) : EMPTY_COMPLIANCE_AXIS;

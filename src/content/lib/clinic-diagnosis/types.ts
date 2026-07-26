@@ -8,6 +8,10 @@
  * 외부 의존 없는 순수 모듈(@/ alias import 금지) — node:test 러너로 직접 검증 가능.
  */
 
+import type { PostSeoResult } from './post-seo.ts';
+
+export type { PostSeoResult };
+
 /* ── 1단계: 병원 특정 ─────────────────────────────────────── */
 
 /** 행안부 '건강_의원 조회서비스' 1건을 우리 도메인 형태로 정규화한 값. */
@@ -125,6 +129,12 @@ export interface BlogAxis {
   readonly keywords: readonly KeywordRank[];
   /** 노출 실측을 실제로 수행했는가 (네이버 오픈API 가용 여부). */
   readonly rankChecked: boolean;
+  /**
+   * 최근 글 검색 최적화 점검 결과 (post-seo.ts).
+   * 수집한 글이 없거나 점검을 못 했으면 null.
+   * ⚠️ 이 필드가 생기기 전에 저장된 리포트에는 없을 수 있어 항상 null 체크한다.
+   */
+  readonly postSeo: PostSeoResult | null;
 }
 
 export interface KeywordRank {
@@ -242,8 +252,10 @@ export interface ComplianceAxis {
   readonly checked: boolean;
   /** 검사한 글 편수 (제목 전체 + 본문 수집분). */
   readonly postsScanned: number;
-  /** 본문까지 확보한 편수 — 나머지는 제목만 봤다. */
+  /** 본문 전문까지 확보한 편수. */
   readonly bodiesScanned: number;
+  /** 본문 앞부분(RSS 요약)까지만 확보한 편수 — 나머지는 제목만 봤다. */
+  readonly summariesScanned: number;
   readonly hits: readonly ComplianceHit[];
   /** 검출된 글 수. */
   readonly postsWithHits: number;

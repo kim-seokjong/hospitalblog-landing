@@ -1,3 +1,4 @@
+import type { PostSeoResult } from './post-seo.ts';
 import type {
   AiAxis,
   BlogAxis,
@@ -211,7 +212,86 @@ export function buildBlogFindings(blog: BlogAxis): readonly Finding[] {
     }
   }
 
+  // 5) 최근 글이 검색에 잡히는 형태인가 — 항목별 ✓/✕ 는 접어두기로 내린다
+  out.push(...buildPostSeoFindings(blog.postSeo ?? null));
+
   return out;
+}
+
+/**
+ * 최근 글 SEO 점검 결과 → 결과 카드 1장.
+ *
+ * ★ 카드를 쪼개지 않는다. 화면에는 이미 카드가 열 장 가까이 있고, 원장이 볼 것은
+ *   "몇 가지가 갖춰졌고 몇 가지가 빠졌나"까지다. 항목별 판정은 전부 details 로 접는다.
+ *
+ * ★ 어디까지 봤는지 반드시 함께 말한다 — 블로그 RSS 설정이 '부분'이면 본문 앞부분만
+ *   오고, 그 글에서는 분량·구조를 판정하지 않았다(확인 못 함으로 남는다).
+ */
+export function buildPostSeoFindings(postSeo: PostSeoResult | null): readonly Finding[] {
+  if (!postSeo || !postSeo.checked || postSeo.checks.length === 0) return [];
+
+  const details: readonly FindingDetail[] = postSeo.checks.map((check) => ({
+    label: check.label,
+    ok: check.ok,
+    hint: `${check.detail} · ${check.hint}`,
+  }));
+
+  const scope =
+    postSeo.fullBodies > 0 && postSeo.summaryOnly > 0
+      ? `(본문 전문 ${postSeo.fullBodies}편 · 나머지 ${postSeo.summaryOnly}편은 블로그가 공개한 글 앞부분까지 기준)`
+      : postSeo.fullBodies > 0
+        ? '(본문 전문 기준)'
+        : '(블로그가 글 앞부분만 공개하고 있어 제목과 앞부분까지만 봤어요)';
+
+  const head = `최근 글 ${postSeo.postsAnalyzed}편을 열어 검색에 잡히는 형태인지 ${postSeo.checks.length}가지를 확인했습니다 ${scope}.`;
+  const tail = postSeo.unknownCount > 0 ? ` (${postSeo.unknownCount}가지는 확인하지 못했어요)` : '';
+
+  if (postSeo.missingCount === 0 && postSeo.readyCount === 0) {
+    return [
+      {
+        id: 'blog.postSeo',
+        axis: 'blog',
+        label: '최근 글 검색 최적화',
+        tone: 'unknown',
+        state: '최근 글의 내용을 열어보지 못해 글의 형태까지는 확인하지 못했습니다.',
+        why: null,
+        action: '블로그 RSS 공개 설정을 켜 두시면 다음 진단에서 글 형태까지 봐 드릴 수 있어요.',
+        ourScope: false,
+        details,
+      },
+    ];
+  }
+
+  if (postSeo.missingCount === 0) {
+    return [
+      {
+        id: 'blog.postSeo',
+        axis: 'blog',
+        label: '최근 글 검색 최적화',
+        tone: 'good',
+        state: `${head} 확인한 ${postSeo.readyCount}가지가 모두 갖춰져 있습니다.${tail}`,
+        why: null,
+        action: '글 쓰는 방식은 지금 그대로 유지하시면 됩니다. 이 항목은 손댈 게 없어요.',
+        ourScope: false,
+        details,
+      },
+    ];
+  }
+
+  return [
+    {
+      id: 'blog.postSeo',
+      axis: 'blog',
+      label: '최근 글 검색 최적화',
+      tone: 'warn',
+      state: `${head} ${postSeo.readyCount}가지는 갖춰져 있고 ${postSeo.missingCount}가지가 빠져 있습니다.${tail}`,
+      why: '검색은 글을 몇 편 썼는지가 아니라 글 하나하나의 형태를 봅니다. 형태가 어긋나 있으면 아무리 써도 상위로 올라오지 않아요.',
+      action:
+        '아래 목록에서 ✕ 표시된 것부터 다음 글에 적용해 보세요. 이미 올린 글도 제목과 소제목만 손보면 대부분 회복됩니다.',
+      ourScope: true,
+      details,
+    },
+  ];
 }
 
 /* ── ② 홈페이지 ─────────────────────────────────────────── */
@@ -525,9 +605,29 @@ export function buildComplianceFindings(compliance: ComplianceAxis): readonly Fi
     ];
   }
 
-  const scope = `제목 ${compliance.postsScanned}편${
-    compliance.bodiesScanned > 0 ? ` · 본문 ${compliance.bodiesScanned}편` : ''
-  }을 확인했어요.`;
+  /**
+   * 어디까지 봤는지 정확히 적는다.
+   * 본문 전문 / 글 앞부분 / 제목만 — 셋을 뭉개면 "다 봤다"로 읽히고,
+   * 반대로 매번 "본문을 다 본 것은 아니다"만 붙이면 실제로 다 본 경우까지 깎아내린다.
+   */
+  const titleOnly = Math.max(
+    0,
+    compliance.postsScanned - compliance.bodiesScanned - compliance.summariesScanned,
+  );
+  const scope = `글 ${compliance.postsScanned}편을 확인했어요 (${[
+    compliance.bodiesScanned > 0 ? `본문 전문 ${compliance.bodiesScanned}편` : '',
+    compliance.summariesScanned > 0 ? `글 앞부분 ${compliance.summariesScanned}편` : '',
+    titleOnly > 0 ? `제목만 ${titleOnly}편` : '',
+  ]
+    .filter((part) => part.length > 0)
+    .join(' · ')}).`;
+
+  /** 전문까지 못 본 글이 남아 있을 때만 그 사실을 덧붙인다. */
+  const partial = compliance.summariesScanned + titleOnly;
+  const caveat =
+    partial > 0
+      ? ` 다만 ${partial}편은 글 뒤쪽까지 열어보지 못했으니, 이벤트·가격 안내가 글 아래에 붙는 편이라면 그 부분은 따로 확인해 보세요.`
+      : '';
 
   if (compliance.hits.length === 0) {
     return [
@@ -538,8 +638,7 @@ export function buildComplianceFindings(compliance: ComplianceAxis): readonly Fi
         tone: 'good',
         state: `${scope} 심의에서 자주 지적되는 표현은 발견되지 않았습니다.`,
         why: null,
-        action:
-          '지금 톤을 유지하시면 됩니다. 다만 본문 전체를 다 본 것은 아니니, 이벤트·가격 안내 글은 따로 한 번 확인해 보세요.',
+        action: `지금 톤을 유지하시면 됩니다.${caveat}`,
         ourScope: false,
       },
     ];
@@ -556,8 +655,7 @@ export function buildComplianceFindings(compliance: ComplianceAxis): readonly Fi
         review > 0 ? ` (그중 ${review}건은 우선 확인이 필요한 유형)` : ''
       }.`,
       why: '지적 사례가 많은 표현들이라 민원이나 심의가 들어왔을 때 다시 설명해야 할 소지가 있습니다. 지금 위반이라는 판단은 아닙니다.',
-      action:
-        '아래 문구들을 한 번 읽어보시고, 단정적인 표현만 완곡하게 바꾸면 대부분 정리됩니다. 앞으로 쓰는 글은 발행 전 점검을 습관으로 두시는 것이 안전해요.',
+      action: `아래 문구들을 한 번 읽어보시고, 단정적인 표현만 완곡하게 바꾸면 대부분 정리됩니다. 앞으로 쓰는 글은 발행 전 점검을 습관으로 두시는 것이 안전해요.${caveat}`,
       ourScope: true,
     },
   ];
@@ -612,6 +710,9 @@ export const FINDING_WEIGHT: Readonly<
   'blog.exists': { severity: 'losing', rank: 20 },
   // 글은 쓰는데 검색에서 안 보인다 — 노력이 성과로 안 이어지는 상태
   'blog.rank': { severity: 'losing', rank: 24 },
+  // 글은 쓰는데 글의 형태가 검색에 안 맞는다 — 원인 쪽이라 '개선할 점',
+  // 다만 성과로 이어지는 경로라 검색 노출 대역(20~39)에 둔다
+  'blog.postSeo': { severity: 'improving', rank: 26 },
   // 방치되면 기존 글 노출까지 함께 내려간다
   'blog.freshness': { severity: 'losing', rank: 28 },
   // 남의 목록으로 소개되고 있다 — 당장 손해는 아니나 통제권이 없다

@@ -45,6 +45,19 @@ test('parseBlogCheckFeed: 채널 제목·item(제목/링크/logNo/발행일/카�
   assert.equal(second.publishedAt, null); // 파싱 불가 → null (graceful)
 });
 
+test('parseBlogCheckFeed: RSS 가 준 글 내용과 사진 유무를 담는다 (추가 요청 없이 본문 확보)', () => {
+  const rss = SAMPLE_RSS.replace(
+    '<description><![CDATA[<p>본문 일부</p>]]></description>',
+    '<description><![CDATA[<p>이중턱은 지방만 원인이 아닙니다.</p> <img src="https://blogthumb.pstatic.net/a.png" />]]></description>',
+  );
+  const [withImage, withoutDescription] = parseBlogCheckFeed(rss).items;
+  assert.equal(withImage.summary, '이중턱은 지방만 원인이 아닙니다.');
+  assert.equal(withImage.hasImage, true);
+  // description 자체가 없는 글도 죽지 않는다
+  assert.equal(withoutDescription.summary, '');
+  assert.equal(withoutDescription.hasImage, false);
+});
+
 test('parseBlogCheckFeed: limit 만큼만, 빈/비정상 입력은 빈 피드', () => {
   assert.equal(parseBlogCheckFeed(SAMPLE_RSS, 1).items.length, 1);
   assert.deepEqual(parseBlogCheckFeed(''), { blogTitle: '', items: [] });
@@ -202,4 +215,35 @@ test('fetchLatestBodies: 모바일 URL 로 본문 수집, 실패 글은 건너�
   assert.equal(bodies.length, 1);
   assert.equal(bodies[0].title, '수성구 도수치료 어디서 받을까');
   assert.ok(bodies[0].body.includes('도수치료 안내'));
+});
+
+test('fetchLatestBodies: 예산(deadline)이 끝나면 남은 글을 포기하고 모은 것만 돌려준다', async () => {
+  const feed = parseBlogCheckFeed(SAMPLE_RSS);
+  const bodyHtml = `<div class="se-main-container"><p>${'도수치료 안내 문장입니다. '.repeat(10)}</p></div></div>`;
+  let calls = 0;
+
+  const bodies = await fetchLatestBodies('testclinic', feed.items, {
+    limit: 5,
+    // 이미 지난 시각 = 예산 0 → 요청 자체를 만들지 않는다
+    deadline: Date.now() - 1,
+    fetchImpl: (async () => {
+      calls += 1;
+      return new Response(bodyHtml, { status: 200 });
+    }) as typeof fetch,
+  });
+
+  assert.equal(calls, 0, '예산이 없으면 외부 요청을 만들면 안 된다');
+  assert.deepEqual(bodies, []);
+});
+
+test('fetchLatestBodies: 예산이 남아 있으면 편수 상한까지 수집한다', async () => {
+  const feed = parseBlogCheckFeed(SAMPLE_RSS);
+  const bodyHtml = `<div class="se-main-container"><p>${'도수치료 안내 문장입니다. '.repeat(10)}</p></div></div>`;
+  const bodies = await fetchLatestBodies('testclinic', feed.items, {
+    limit: 5,
+    deadline: Date.now() + 10_000,
+    fetchImpl: mockFetch(() => ({ status: 200, body: bodyHtml })),
+  });
+  // 두 번째 글은 logNo 를 못 뽑는 링크가 아니므로 둘 다 수집된다
+  assert.equal(bodies.length, 2);
 });
