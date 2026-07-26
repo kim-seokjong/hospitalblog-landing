@@ -275,8 +275,12 @@ test('★공개되는 병원 소개문도 의료광고법 게이트를 지난다
   // 막으면 안전한 조치까지 차단된다(마이페이지는 프로필 전체를 매번 전송한다).
   assert.match(profileRouteSource, /const skipCheck =/);
   assert.match(profileRouteSource, /skipCheck \? \{ violations: \[\] \} : checkCompliance/);
-  // 변경 여부 조회가 실패해도 안전한 저장(자동발행 끄기 등)을 막지 않는다.
-  assert.match(profileRouteSource, /Boolean\(currentErr\)/);
+  // ★ 변경 여부를 확인할 수 없으면 소개문만 빼고 나머지는 저장한다.
+  //   검사만 건너뛰고 저장하면 미검수 문구가 공개된 뒤 "변경 없음"으로 판정돼
+  //   영영 검사되지 않는다(fail-open). 반대로 전체를 막으면 안전 조치까지 막힌다.
+  assert.match(profileRouteSource, /if \(currentErr\) \{/);
+  assert.match(profileRouteSource, /delete updates\.hospital_desc/);
+  assert.match(profileRouteSource, /descDeferred = true/);
 });
 
 test('부분 저장 상태를 정확히 알린다(전환 실패 응답이 버려진 항목을 가리지 않는다)', () => {
