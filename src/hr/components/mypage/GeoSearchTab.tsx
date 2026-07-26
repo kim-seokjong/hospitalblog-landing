@@ -219,9 +219,10 @@ function AiReferralSection({
       <p className="text-[11px] text-[#5b6573] leading-relaxed border-t border-[#eef2f6] pt-3">
         ※ 브라우저나 AI 서비스가 유입 경로를 전달하지 않으면 집계되지 않아, 실제보다 적게
         나올 수 있습니다. 집계는 병원 블로그({'{'}주소{'}'}.hospitalblog.kr)에서만 이뤄지며,
-        방문자의 IP·기기 정보·방문 시각 등 개인을 식별할 수 있는 값은{' '}
-        <strong className="font-semibold">데이터베이스에 저장하지 않습니다</strong>. 날짜별
-        방문 수만 남습니다. 방문 수가 적은 글은 개별로 표시하지 않고 묶어서 보여줍니다.
+        방문자의 IP·기기 정보·방문 시각은{' '}
+        <strong className="font-semibold">이 기능의 데이터베이스에 저장하지 않습니다</strong>
+        (날짜별 방문 수만 남습니다). 방문 수가 적은 글은 제목과 함께 개별로 표시하지 않고
+        묶어서 보여주지만, 합계·출처별 수치에는 작은 값이 그대로 보일 수 있습니다.
       </p>
     </div>
   );

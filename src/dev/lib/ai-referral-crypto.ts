@@ -3,17 +3,20 @@
  *
  * 두 가지 일을 한다.
  *
- * 1) **비콘 서명 토큰** — 페이지를 렌더할 때 (병원 slug · 글 id · 만료시각) 을 묶어
- *    HMAC-SHA256 으로 서명하고, 비콘이 그 서명을 되돌려주면 대조한다.
- *    이것이 없으면 slug·postId 가 전부 공개값이라 **누구나 임의 병원의 통계를
- *    조작**할 수 있다(경쟁 병원이 우리 고객 데이터를 오염시키는 시나리오).
- *    서명은 "우리 서버가 그 병원의 그 페이지를 최근에 실제로 렌더했다"는 증거이며,
- *    남의 병원 slug 로는 애초에 토큰을 만들 수 없다.
+ * 1) **비콘 서명 토큰** — (병원 slug · 출처 · 글 id · 만료시각) 을 묶어 HMAC-SHA256
+ *    으로 서명하고, 비콘이 그 서명을 되돌려주면 대조한다. 발급은 방문 시점에
+ *    별도 동적 경로(/api/clinic-site/ai-referral/token)에서 이뤄진다 — 페이지
+ *    HTML 에 박으면 토큰 수명과 페이지 캐시 수명이 어긋나 정상 유입이 조용히
+ *    거부된다(2차 리뷰에서 차단된 실제 버그).
  *
- *    ⚠️ 한계(수용): 공개 페이지이므로 공격자가 직접 페이지를 받아 토큰을 뽑아
- *    재사용하는 것까지는 막지 못한다. 짧은 만료(10분) + 발신원 단위 레이트리밋으로
- *    재사용 창과 속도를 좁힌다. 완전 차단이 필요해지면 1회용 nonce 저장소가 필요한데,
- *    현 단계에서는 과설계다.
+ *    ★ 보증 범위 (과대 표현 금지):
+ *      - 보증한다: 서명이 우리 서버에서 발급됐고(오프라인 위조 불가), 10분 안이며,
+ *        적재되는 (slug·source·postId) 가 서명 시점과 같다.
+ *      - 보증하지 않는다: 사람인지, 정말 AI 에서 왔는지, 처음 쓰이는 토큰인지.
+ *        발급 경로도 병원 페이지도 공개라 **누구나 유효 토큰을 얻을 수 있다.**
+ *    즉 "위조 방어"가 아니라 **위조 비용을 올리는 장치**다(오프라인 대량 생성 차단,
+ *    온라인 왕복 강제, 재사용 창 10분). 피해 규모를 실제로 묶는 것은 발신원 단위
+ *    레이트리밋이다. 1회용 nonce 저장소는 현 단계에서 과설계로 판단했다.
  *
  * 2) **레이트리밋 키 해싱** — 원본 IP 를 카운터 키로 쓰면 그 값이 하루치 메모리에
  *    남는다. 프로세스마다 무작위 salt + KST 일자로 HMAC 해 되돌릴 수 없는 키만
@@ -33,6 +36,7 @@ import {
   kstDateKey,
   type ParsedBeacon,
 } from '@/content/lib/ai-referral/request';
+import type { AiReferralSourceId } from '@/content/lib/ai-referral/sources';
 
 /** 시크릿을 읽는다. 미설정(또는 너무 짧으면) null → 비콘 비활성. */
 function readSecret(): string | null {
@@ -56,11 +60,12 @@ export interface BeaconToken {
 }
 
 /**
- * 페이지 렌더 시 토큰을 발급한다. 시크릿 미설정이면 null (비콘 비활성).
- * 절대 throw 하지 않는다 — 계측 때문에 방문자 페이지가 500 이 되면 안 된다.
+ * 방문 시점에 토큰을 발급한다. 시크릿 미설정이면 null (비콘 비활성).
+ * 절대 throw 하지 않는다 — 계측 때문에 요청이 500 이 되면 안 된다.
  */
 export function issueBeaconToken(
   slug: string,
+  source: AiReferralSourceId,
   postId: string | null = null,
   now: number = Date.now(),
 ): BeaconToken | null {
@@ -69,7 +74,7 @@ export function issueBeaconToken(
   try {
     const exp = now + BEACON_TOKEN_TTL_MS;
     const token = createHmac('sha256', secret)
-      .update(buildBeaconSigningInput(slug, postId, exp))
+      .update(buildBeaconSigningInput(slug, source, postId, exp))
       .digest('hex');
     return { token, exp };
   } catch {
@@ -87,7 +92,7 @@ export function verifyBeaconToken(beacon: ParsedBeacon, now: number = Date.now()
   if (!isBeaconExpValid(beacon.exp, now)) return false;
   try {
     const expected = createHmac('sha256', secret)
-      .update(buildBeaconSigningInput(beacon.slug, beacon.postId, beacon.exp))
+      .update(buildBeaconSigningInput(beacon.slug, beacon.source, beacon.postId, beacon.exp))
       .digest('hex');
     if (expected.length !== BEACON_SIGNATURE_LENGTH || beacon.token.length !== expected.length) {
       return false;

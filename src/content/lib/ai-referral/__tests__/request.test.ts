@@ -6,7 +6,6 @@ import {
   parseAiReferralBeaconText,
   kstDateKey,
   buildAiReferralRecord,
-  buildBeaconSigningInput,
   isBeaconExpValid,
   AI_REFERRAL_RECORD_KEYS,
   MAX_BEACON_BODY_BYTES,
@@ -73,25 +72,6 @@ test('isLikelyBotUserAgent: UA 가 없으면 봇으로 본다', () => {
 // ---------------------------------------------------------------------------
 // 서명 토큰 — 위조 방어의 핵심
 // ---------------------------------------------------------------------------
-
-test('buildBeaconSigningInput: 병원·글·만료를 모두 서명 대상에 넣는다', () => {
-  assert.equal(
-    buildBeaconSigningInput('my-clinic', VALID_POST_ID, 1700),
-    `v1|my-clinic|${VALID_POST_ID}|1700`,
-  );
-  assert.equal(buildBeaconSigningInput('my-clinic', null, 1700), 'v1|my-clinic||1700');
-});
-
-test('buildBeaconSigningInput: 병원·글이 다르면 서명 대상이 반드시 달라진다', () => {
-  // 남의 병원 slug 나 다른 글로 토큰을 재활용할 수 없어야 한다.
-  const inputs = new Set([
-    buildBeaconSigningInput('clinic-a', null, 1700),
-    buildBeaconSigningInput('clinic-b', null, 1700),
-    buildBeaconSigningInput('clinic-a', VALID_POST_ID, 1700),
-    buildBeaconSigningInput('clinic-a', null, 1800),
-  ]);
-  assert.equal(inputs.size, 4);
-});
 
 test('isBeaconExpValid: 만료된 토큰과 지나치게 먼 미래 토큰을 거부한다', () => {
   assert.equal(isBeaconExpValid(NOW + 60_000, NOW), true);

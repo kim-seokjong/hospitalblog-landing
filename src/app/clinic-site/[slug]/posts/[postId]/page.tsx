@@ -18,7 +18,6 @@ import { formatBylineText, resolveAuthorAttribution } from '@/content/lib/clinic
 import { rankRelatedPosts, RELATED_POSTS_LIMIT } from '@/content/lib/clinic-site/related-posts';
 import ClinicSiteFooter, { formatClinicDate } from '../../site-chrome';
 import AiReferralBeacon from '../../ai-referral-beacon';
-import { issueBeaconToken } from '@/dev/lib/ai-referral-crypto';
 
 /**
  * 병원 서브도메인 블로그 — 글 본문 (공개, 인증 없음).
@@ -121,10 +120,6 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
   const navHoverClass = theme.hasBrandColor
     ? 'hover:text-[color:var(--clinic-accent)]'
     : 'hover:text-[#202020]';
-  // AI 유입 비콘 서명 — 이 병원의 이 글을 서버가 실제로 렌더했다는 증거.
-  // 시크릿 미설정이면 null 이고 비콘은 아무 요청도 보내지 않는다(기능만 비활성).
-  const beacon = issueBeaconToken(validated.slug, post.id);
-
   const bodyAccentClass = theme.hasBrandColor
     ? ' [&_h2]:pl-3 [&_h2]:border-l-4 [&_h2]:border-[color:var(--clinic-accent)] [&_a]:text-[color:var(--clinic-accent)]'
     : '';
@@ -132,12 +127,7 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-white text-[#202020]" style={accentStyle}>
       {/* AI 검색 유입 집계 — 렌더 경로 밖(브라우저 백그라운드 전송). 화면에 아무것도 그리지 않는다. */}
-      <AiReferralBeacon
-        slug={validated.slug}
-        postId={post.id}
-        token={beacon?.token ?? null}
-        exp={beacon?.exp ?? null}
-      />
+      <AiReferralBeacon slug={validated.slug} postId={post.id} />
 
       <script
         type="application/ld+json"

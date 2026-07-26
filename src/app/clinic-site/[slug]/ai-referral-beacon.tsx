@@ -18,19 +18,28 @@ import { detectAiReferral } from '@/content/lib/ai-referral/detect';
  *     하면 캐시 여부와 무관하게 항상 그 방문의 실제 유입 경로로 판정된다.
  *  3) 봇 제외 — 크롤러는 이 스크립트를 실행하지 않으므로 자연히 빠진다.
  *
- * ★ 위조 방어 — token/exp 는 **서버가 렌더 시 발급한 HMAC 서명**이다.
- *   slug·postId 는 전부 공개값이라 서명이 없으면 누구나 임의 병원의 통계를 조작할
- *   수 있다(경쟁 병원이 우리 고객 데이터를 오염시키는 시나리오). 서명은 남의 병원
- *   slug 로는 만들 수 없고, 짧은 만료로 재사용 창을 좁힌다.
- *   token 이 null 이면(시크릿 미설정) 비콘은 **아무 요청도 보내지 않는다**.
+ * ★ 서명 토큰을 **방문 시점에 별도 경로에서 받아온다** (2차 리뷰 차단 사항):
+ *   토큰을 서버 렌더 시 HTML 에 박으면 토큰 수명(10분)과 페이지 캐시 수명이
+ *   어긋난다. 이 페이지들은 `revalidate = 3600` 을 선언하고 있어, 한 번이라도
+ *   캐시되면 캐시 생성 후 ~12분까지만 유효하고 그 뒤 최대 48분 동안 **정상 AI
+ *   유입이 전부 거부된다**(조용한 실패). 발급을 동적 경로로 분리하면 페이지가
+ *   캐시되든 말든 토큰은 항상 신선하다.
+ *   서명이 실제로 보증하는 범위는 발급 경로 주석 참조 — "위조 방어"가 아니라
+ *   위조 비용을 올리는 장치다(오프라인 생성 차단·온라인 왕복 강제·10분 재사용 창).
+ *   시크릿 미설정이면 발급 경로가 204 를 주고 비콘은 조용히 포기한다.
  *
- * DB 에 저장되는 것은 병원 slug·출처·글 id·KST 일자뿐이다. 이 기능은 쿠키·
- * localStorage 를 쓰지 않고, 방문자 식별자를 만들지도 보내지도 않는다.
- * (요청 처리 중 IP·UA 가 메모리와 플랫폼 로그에 스치는 것까지 없앨 수는 없으므로
- *  "수집하지 않는다"가 아니라 "DB 에 저장하지 않는다"고 말한다.)
+ * ★ 요청 순서 — AI 유입일 때만 네트워크를 쓴다:
+ *   판정(로컬) → 토큰 GET → 비콘 POST. AI 유입이 아니면 요청이 0건이다.
+ *
+ * 이 기능의 DB 에 저장되는 것은 병원 slug·출처·글 id·KST 일자뿐이다. 쿠키·
+ * localStorage 를 쓰지 않고 방문자 식별자를 만들지도 보내지도 않는다.
+ * (공개 HTTP API 를 거치므로 Vercel/CDN 액세스 로그에 시각·IP 가 남는 것까지
+ *  없앨 수는 없다 — 그래서 "수집하지 않는다"가 아니라 "이 기능의 DB 에 저장하지
+ *  않는다"고 말한다.)
  */
 
 const BEACON_PATH = '/api/clinic-site/ai-referral';
+const TOKEN_PATH = '/api/clinic-site/ai-referral/token';
 
 /**
  * "이 문서 로드에서 이미 보냈는가" 플래그 — **모듈 스코프인 것이 핵심**이다.
@@ -48,53 +57,69 @@ interface AiReferralBeaconProps {
   slug: string;
   /** 글 상세면 글 id, 블로그 홈이면 생략. */
   postId?: string | null;
-  /** 서버가 발급한 HMAC 서명. null 이면 계측 비활성(시크릿 미설정). */
-  token: string | null;
-  /** 토큰 만료시각(epoch ms). token 과 짝. */
-  exp: number | null;
 }
 
-export default function AiReferralBeacon({
-  slug,
-  postId = null,
-  token,
-  exp,
-}: AiReferralBeaconProps) {
+/** 발급 경로 응답 — 형태를 신뢰하지 않고 좁혀서 쓴다. */
+function readIssuedToken(raw: unknown): { token: string; exp: number } | null {
+  if (raw === null || typeof raw !== 'object') return null;
+  const { token, exp } = raw as { token?: unknown; exp?: unknown };
+  if (typeof token !== 'string' || token.length === 0) return null;
+  if (typeof exp !== 'number' || !Number.isSafeInteger(exp)) return null;
+  return { token, exp };
+}
+
+export default function AiReferralBeacon({ slug, postId = null }: AiReferralBeaconProps) {
   useEffect(() => {
-    // 서명이 없으면 계측 비활성 — 플래그도 세우지 않는다(설정되면 다음 로드부터 동작).
-    if (token === null || exp === null) return;
     // 문서 1회 = 방문 1회. 내부 이동·StrictMode 재실행에서는 다시 보내지 않는다.
     if (beaconSentForThisDocument) return;
+
+    const source = detectAiReferral({
+      referrer: document.referrer,
+      search: window.location.search,
+    });
+    // AI 유입이 아니면 아무 요청도 보내지 않는다 (검색·소셜·직접 방문은 범위 밖).
+    // 이 경우에도 플래그를 세운다 — 같은 문서의 내부 이동은 모두 같은 판정이다.
     beaconSentForThisDocument = true;
+    if (!source) return;
 
-    try {
-      const source = detectAiReferral({
-        referrer: document.referrer,
-        search: window.location.search,
-      });
-      // AI 유입이 아니면 아무 요청도 보내지 않는다 (검색·소셜·직접 방문은 범위 밖).
-      if (!source) return;
+    const params = new URLSearchParams({ slug, source });
+    if (postId) params.set('postId', postId);
 
-      const payload = JSON.stringify({ slug, source, postId, exp, token });
+    // 토큰 발급 → 비콘 전송. 전부 렌더 이후 백그라운드이며 실패는 조용히 무시한다.
+    void (async () => {
+      try {
+        const res = await fetch(`${TOKEN_PATH}?${params.toString()}`, { cache: 'no-store' });
+        if (!res.ok || res.status === 204) return; // 시크릿 미설정·검증 실패 → 포기
+        const issued = readIssuedToken(await res.json());
+        if (issued === null) return;
 
-      // sendBeacon: 브라우저가 렌더·이탈과 무관하게 백그라운드로 전송한다.
-      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-        const blob = new Blob([payload], { type: 'application/json' });
-        if (navigator.sendBeacon(BEACON_PATH, blob)) return;
+        const payload = JSON.stringify({
+          slug,
+          source,
+          postId,
+          exp: issued.exp,
+          token: issued.token,
+        });
+
+        // sendBeacon: 브라우저가 렌더·이탈과 무관하게 백그라운드로 전송한다.
+        if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+          const blob = new Blob([payload], { type: 'application/json' });
+          if (navigator.sendBeacon(BEACON_PATH, blob)) return;
+        }
+
+        // 폴백 — keepalive fetch.
+        await fetch(BEACON_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+          cache: 'no-store',
+        });
+      } catch {
+        // 계측 실패가 방문자 화면을 깨서는 안 된다.
       }
-
-      // 폴백 — keepalive fetch. 실패는 조용히 무시한다.
-      void fetch(BEACON_PATH, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true,
-        cache: 'no-store',
-      }).catch(() => undefined);
-    } catch {
-      // 계측 실패가 방문자 화면을 깨서는 안 된다.
-    }
-  }, [slug, postId, token, exp]);
+    })();
+  }, [slug, postId]);
 
   return null;
 }

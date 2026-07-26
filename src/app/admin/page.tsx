@@ -7,6 +7,7 @@ import NoticeComposer from '@/components/admin/NoticeComposer';
 import BlogAuditPanel from '@/components/admin/BlogAuditPanel';
 import FunnelPanel from '@/components/admin/FunnelPanel';
 import { fetchFunnelStatRows } from '@/dev/lib/funnel-admin-server';
+import { isBeaconSigningEnabled } from '@/dev/lib/ai-referral-crypto';
 import { aggregateFunnelStats } from '@/content/lib/funnel-admin-stats';
 import type {
   DashboardData,
@@ -290,6 +291,21 @@ export default async function AdminPage() {
             SaaS KPI 대시보드 · {headerSub}
           </p>
         </div>
+
+        {/* 설정 누락 경고 — 시크릿이 없으면 AI 유입 집계가 조용히 꺼진 채로 돈다.
+            데이터가 0인 것과 기능이 꺼진 것을 구분할 수 있는 유일한 지점이다. */}
+        {!isBeaconSigningEnabled() && (
+          <div className="rounded-xl border border-[#ff4628]/40 bg-[#ffece7] px-4 py-3">
+            <p className="text-sm font-semibold text-[#202020]">
+              AI 검색 유입 집계가 꺼져 있습니다
+            </p>
+            <p className="text-xs text-[#5b6573] mt-1 leading-relaxed">
+              환경변수 <code className="font-mono">AI_REFERRAL_BEACON_SECRET</code>(16자 이상)이
+              설정되지 않아 비콘 서명 토큰이 발급되지 않습니다. 병원 블로그의 AI 유입이
+              전혀 기록되지 않으며, 마이페이지에는 계속 0으로 표시됩니다.
+            </p>
+          </div>
+        )}
 
         <KpiDashboard data={data} />
 

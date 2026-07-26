@@ -1,6 +1,11 @@
 -- 051 — AI 검색 유입 집계 (병원 서브도메인 블로그 실측 방문)
--- 적용 방법: Supabase SQL Editor에서 수동 실행 (idempotent)
+-- 적용 방법: Supabase SQL Editor에서 수동 실행
 -- DB 적용은 사용자가 직접 수행한다 (코드/배포와 분리).
+--
+-- ⚠️ 재실행 안전성: 처음부터 다시 실행하거나, 리뷰 전 초안이 적용된 상태 위에
+--    다시 실행하는 것은 안전하다(create ... if not exists / drop column if exists /
+--    create or replace). 다만 "완전 멱등"은 아니다 — 사람이 손으로 컬럼을 바꾸는 등
+--    임의의 부분 적용 상태까지 교정하지는 않는다.
 --
 -- 배경:
 --   마이그 037(geo_citations)은 "AI가 우리 병원을 언급했는가"(인용 여부)만 본다.
@@ -215,13 +220,20 @@ stable
 set search_path = ''
 as $$
   with bounds as (
-    select least(greatest(coalesce(p_top_posts, 5), 1), 50) as top_n
+    select
+      least(greatest(coalesce(p_top_posts, 5), 1), 50) as top_n,
+      coalesce(p_end, current_date) as end_date,
+      -- 조회 범위 상한 366일 — 넓은 범위를 반복 호출해 비싼 집계를 유발하지 못하게 한다.
+      greatest(
+        coalesce(p_start, coalesce(p_end, current_date) - 29),
+        coalesce(p_end, current_date) - 366
+      ) as start_date
   ),
   base as (
     select r.visit_date, r.source, r.post_id, r.visits
       from public.clinic_ai_referrals r
-     where r.visit_date >= p_start
-       and r.visit_date <= p_end
+     where r.visit_date >= (select bo.start_date from bounds bo)
+       and r.visit_date <= (select bo.end_date from bounds bo)
   )
   select jsonb_build_object(
     'total_visits', coalesce((select sum(b.visits) from base b), 0),

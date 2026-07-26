@@ -10,7 +10,10 @@
  *
  * ★ 관측성: 모든 오류를 조용히 삼키면 "데이터가 아예 안 쌓이는데 아무도 모르는"
  *   상태가 될 수 있다. 마이그 미적용을 제외한 실제 오류는 운영 환경에서도
- *   코드 단위로 **디듀프해서** 경고를 남긴다(개인정보 없음, 로그 폭주 없음).
+ *   경고를 남긴다 — 남기는 값은 **스코프 + 오류 코드 + Supabase 오류 메시지(200자
+ *   절단)** 다. 메시지는 DB 가 준 문자열을 그대로 싣는다(방문자 식별자는 애초에
+ *   이 경로에 존재하지 않지만, 병원 slug 같은 공개 식별자는 포함될 수 있다).
+ *   같은 코드는 5분에 한 번만 남겨 로그 폭주를 막는다.
  */
 
 import { createAdminClient, createServerSupabaseClient } from '@/dev/lib/supabase/server';
@@ -34,7 +37,7 @@ const WARN_INTERVAL_MS = 5 * 60 * 1000;
 const warnedAt = new Map<string, number>();
 
 /**
- * 개인정보가 섞이지 않는 형태로만 경고를 남긴다 (스코프 + 오류 코드 + 메시지).
+ * 스코프 + 오류 코드 + DB 오류 메시지(200자 절단)를 남긴다.
  * 마이그 미적용은 정상 상태이므로 로그를 남기지 않는다.
  */
 function warnOnce(scope: string, code: string | undefined, message: string): void {
