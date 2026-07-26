@@ -17,6 +17,7 @@ import { renderBodyHtml } from '@/content/lib/geo-export';
 import { formatBylineText, resolveAuthorAttribution } from '@/content/lib/clinic-site/byline';
 import { rankRelatedPosts, RELATED_POSTS_LIMIT } from '@/content/lib/clinic-site/related-posts';
 import ClinicSiteFooter, { formatClinicDate } from '../../site-chrome';
+import AiReferralBeacon from '../../ai-referral-beacon';
 
 /**
  * 병원 서브도메인 블로그 — 글 본문 (공개, 인증 없음).
@@ -125,6 +126,9 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-white text-[#202020]" style={accentStyle}>
+      {/* AI 검색 유입 집계 — 렌더 경로 밖(브라우저 백그라운드 전송). 화면에 아무것도 그리지 않는다. */}
+      <AiReferralBeacon slug={validated.slug} postId={post.id} />
+
       <script
         type="application/ld+json"
         // serializeJsonLd 가 "</" 를 "<\/" 로 이스케이프 (geo-schema — XSS 가드)
