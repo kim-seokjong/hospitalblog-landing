@@ -206,8 +206,21 @@ export async function PUT(req: NextRequest) {
     // hospital_desc — 공개 블로그(홈 · 병원 소개 페이지)에 그대로 나가는 자유 입력이다.
     // 글은 3층 검수를 거치는데 이 문구만 무검수로 공개되면 의료광고법 우회 통로가 된다.
     // 발행 게이트와 같은 선(HIGH/CRITICAL)에서 저장 자체를 막고 사유를 돌려준다.
+    //
+    // ⚠️ "값이 실제로 바뀔 때만" 검사한다. 마이페이지는 저장할 때마다 프로필 전체를
+    //    전송하므로, 기존에 저장돼 있던 문구를 그대로 되보내는 것만으로 400 이 나면
+    //    자동발행 끄기 같은 안전한 조치까지 막혀 버린다(값을 고칠 때 교정하면 된다).
     if (typeof updates.hospital_desc === 'string' && updates.hospital_desc.trim() !== '') {
-      const { violations } = checkCompliance(updates.hospital_desc)
+      const { data: currentRow } = await supabase
+        .from('profiles')
+        .select('hospital_desc')
+        .eq('id', user.id)
+        .maybeSingle<{ hospital_desc: string | null }>()
+
+      const unchanged =
+        (currentRow?.hospital_desc ?? '').trim() === updates.hospital_desc.trim()
+
+      const { violations } = unchanged ? { violations: [] } : checkCompliance(updates.hospital_desc)
       const blocking = violations.filter(
         (v) => v.severity === 'HIGH' || v.severity === 'CRITICAL',
       )
@@ -229,56 +242,13 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    // ★ 자동발행 'auto' 전환은 기준 시각과 함께 **한 UPDATE 로** 처리한다.
-    //
-    //   자동발행은 site_auto_publish_since 이후에 만들어진 글만 대상으로 한다
-    //   (보관함의 과거 글이 한꺼번에 공개되는 것을 막는 유일한 기준).
-    //   두 값을 따로 쓰면 그 사이에 다른 요청이 끼어들어 "cadence 는 auto 인데
-    //   기준 시각은 예전 값"인 상태가 만들어진다 — 껐던 기간에 쌓인 글이 전부 공개된다.
-    //
-    //   조건 `현재 cadence != 'auto'` 가 "새로 켜는 전환"만 골라낸다:
-    //    · 전환이면 두 값이 원자적으로 함께 기록된다.
-    //    · 이미 auto 면 0행 — 기준 시각을 앞으로 밀지 않는다(그 사이 쓴 글이
-    //      제외되면 안 된다. 마이페이지 저장 때마다 전체 프로필이 전송된다).
-    //
-    //   처리 후에는 cadence 를 아래 메인 update 페이로드에서 제거한다. 남겨 두면
-    //   메인 update 가 cadence 만 다시 auto 로 써서, 그 사이 다른 요청이 off 로
-    //   바꿔 둔 경우 기준 시각 없이 auto 가 되살아난다.
-    if (updates.site_publish_cadence === 'auto') {
-      const { error: autoError } = await supabase
-        .from('profiles')
-        .update({
-          site_publish_cadence: 'auto',
-          site_auto_publish_since: new Date().toISOString(),
-        })
-        .eq('id', user.id)
-        .neq('site_publish_cadence', 'auto')
-
-      // 가드 컬럼이 없으면(마이그 052 미적용) 자동발행을 켜지 않는다 —
-      // 기준 시각 없이 켜면 cron 의 소급 차단 필터가 통째로 꺼져 과거 글이 공개된다.
-      // (이 UPDATE 의 컬럼은 둘뿐이라 42703 의 원인이 모호하지 않다.)
-      if (isMissingColumnError(autoError)) {
-        return NextResponse.json(
-          { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 잠시 후 다시 시도해주세요.' },
-          { status: 503 }
-        )
-      }
-      // 23514 = 마이그 048(cadence 'auto' 허용) 미적용
-      if (autoError?.code === '23514') {
-        return NextResponse.json(
-          { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 잠시 후 다시 시도해주세요.' },
-          { status: 503 }
-        )
-      }
-      if (autoError) {
-        console.error('[profile] 자동발행 전환 실패:', autoError.message)
-        return NextResponse.json(
-          { error: '바로 발행 설정을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.' },
-          { status: 500 }
-        )
-      }
-      delete updates.site_publish_cadence
-    }
+    // 자동발행 'auto' 전환은 메인 update 와 분리해 **아래에서** 처리한다.
+    //  · 여기서 페이로드에서 빼 두는 이유: 메인 update 가 cadence 를 쓰면
+    //    그 사이 다른 요청이 off 로 바꿔 둔 것을 기준 시각 없이 되살린다.
+    //  · 메인 update 뒤로 미루는 이유: 먼저 켜 놓고 메인 update 가 실패하면
+    //    "저장 실패"라고 답했는데 자동발행만 켜져 있는 상태가 남는다.
+    const turningOnAuto = updates.site_publish_cadence === 'auto'
+    if (turningOnAuto) delete updates.site_publish_cadence
 
     // 넓은 update → 컬럼 없음(42703)이면 최신 마이그 컬럼부터 제거하며 재시도한다.
     // 순서: 044(site_publish_cadence) → 043(site_slug) → 042(채널 3종) → 028(naver)
@@ -317,15 +287,50 @@ export async function PUT(req: NextRequest) {
       if (error.code === '23505') {
         return NextResponse.json({ error: '이미 사용 중인 주소입니다. 다른 주소를 입력해주세요.' }, { status: 409 })
       }
-      // 23514 = check 제약 위반. 마이그 048(cadence 'auto' 허용) 미적용 환경에서
-      // 'auto' 를 저장하면 여기로 온다 — 배포가 깨지지 않게 안내 메시지로 폴백한다.
-      if (error.code === '23514' && updates.site_publish_cadence === 'auto') {
+      // 'auto' 전환의 23514(마이그 048 미적용)는 아래 전용 UPDATE 가 따로 처리한다 —
+      // 이 페이로드에는 cadence 'auto' 가 들어오지 않는다(위에서 제거).
+      return NextResponse.json({ error: '프로필 저장 실패' }, { status: 500 })
+    }
+
+
+    // ★ 자동발행 'auto' 전환 — 기준 시각과 **한 UPDATE 로** 함께 쓴다.
+    //
+    //   자동발행은 site_auto_publish_since 이후에 만들어진 글만 대상으로 한다
+    //   (보관함의 과거 글이 한꺼번에 공개되는 것을 막는 유일한 기준).
+    //   두 값을 따로 쓰면 그 사이 다른 요청이 끼어들어 "cadence 는 auto 인데
+    //   기준 시각은 예전 값"인 상태가 만들어진다 — 껐던 기간에 쌓인 글이 전부 공개된다.
+    //
+    //   조건 `현재 cadence != 'auto'` 가 "새로 켜는 전환"만 골라낸다:
+    //    · 전환이면 두 값이 원자적으로 함께 기록된다.
+    //    · 이미 auto 면 0행 — 기준 시각을 앞으로 밀지 않는다(그 사이 쓴 글이
+    //      제외되면 안 된다. 마이페이지 저장 때마다 전체 프로필이 전송된다).
+    if (turningOnAuto) {
+      const { error: autoError } = await supabase
+        .from('profiles')
+        .update({
+          site_publish_cadence: 'auto',
+          site_auto_publish_since: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+        .neq('site_publish_cadence', 'auto')
+
+      // 가드 컬럼이 없거나(42703 · 마이그 052 미적용) 'auto' 가 아직 허용되지
+      // 않으면(23514 · 마이그 048 미적용) 자동발행을 켜지 않는다 —
+      // 기준 시각 없이 켜면 cron 의 소급 차단 필터가 통째로 꺼져 과거 글이 공개된다.
+      // (이 UPDATE 의 컬럼은 둘뿐이라 42703 의 원인이 모호하지 않다.)
+      if (isMissingColumnError(autoError) || autoError?.code === '23514') {
         return NextResponse.json(
-          { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 잠시 후 다시 시도해주세요.' },
+          { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 나머지 정보는 저장되었습니다.' },
           { status: 503 }
         )
       }
-      return NextResponse.json({ error: '프로필 저장 실패' }, { status: 500 })
+      if (autoError) {
+        console.error('[profile] 자동발행 전환 실패:', autoError.message)
+        return NextResponse.json(
+          { error: '바로 발행 설정을 저장하지 못했습니다. 나머지 정보는 저장되었습니다.' },
+          { status: 500 }
+        )
+      }
     }
 
     // 나머지 필드는 저장됐지만 신규 공개 컬럼이 마이그 미적용으로 버려졌다면

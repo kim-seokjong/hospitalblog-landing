@@ -162,10 +162,14 @@ export default async function ClinicSiteAboutPage({ params }: PageProps) {
             </section>
           )}
 
-          {/* 진료시간 — 미설정 구간은 줄 자체가 없다 */}
-          {hoursRows.length > 0 && (
+          {/* 진료시간 — 미설정 구간은 줄 자체가 없다.
+              요일을 하나도 채우지 않고 안내 문구만 남긴 경우에도 그 문구는 보여야 한다
+              (저장은 됐는데 화면에서 사라지면 사용자가 원인을 알 수 없다.
+               노출 판정 hasClinicAboutContent 도 "문구만 있어도 내용 있음"으로 센다). */}
+          {(hoursRows.length > 0 || hoursNote !== '') && (
             <section aria-label="진료시간" className="mb-10">
               <h2 className="text-base font-semibold mb-3 text-[#202020]">진료시간</h2>
+              {hoursRows.length > 0 && (
               <dl className="rounded-xl border border-[#e5e9ef] divide-y divide-[#e5e9ef] overflow-hidden">
                 {hoursRows.map((row) => (
                   <div
@@ -177,14 +181,17 @@ export default async function ClinicSiteAboutPage({ params }: PageProps) {
                   </div>
                 ))}
               </dl>
+              )}
               {hoursNote !== '' && (
-                <p className="mt-2.5 text-xs text-[#5b6573] leading-relaxed break-keep">
+                <p className={`${hoursRows.length > 0 ? 'mt-2.5 text-xs text-[#5b6573]' : 'text-sm text-[#3d4551]'} leading-relaxed break-keep`}>
                   {hoursNote}
                 </p>
               )}
-              <p className="mt-2 text-xs text-[#73808f] leading-relaxed">
-                진료시간은 사정에 따라 변경될 수 있습니다. 방문 전 전화로 확인해주세요.
-              </p>
+              {hoursRows.length > 0 && (
+                <p className="mt-2 text-xs text-[#73808f] leading-relaxed">
+                  진료시간은 사정에 따라 변경될 수 있습니다. 방문 전 전화로 확인해주세요.
+                </p>
+              )}
             </section>
           )}
 

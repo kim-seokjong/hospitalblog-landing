@@ -123,7 +123,7 @@ test('결제 훅: 플랜 활성화(activateUserPlan) 지점에서 블로그를 �
   const activateBody = paymentRepoSource.slice(
     paymentRepoSource.indexOf('export async function activateUserPlan'),
   );
-  assert.match(activateBody.slice(0, 2000), /provisionClinicSite\(admin, params\.userId\)/);
+  assert.match(activateBody.slice(0, 2000), /provisionClinicSite\(admin, params\.userId, signal\)/);
 });
 
 test('결제 훅: service role 클라이언트로 실행된다(남의 슬러그 중복 확인 필요)', () => {
@@ -245,10 +245,13 @@ test('★기준 시각은 "현재 auto 가 아닐 때만" 찍는다(껐다 켠 �
   // 껐던 기간에 쌓인 글이 전부 자동발행 대상이 된다.
   assert.ok(!/\.is\('site_auto_publish_since', null\)/.test(profileRouteSource));
   assert.match(profileRouteSource, /\.neq\('site_publish_cadence', 'auto'\)/);
-  // 조건이 성립하려면 cadence 를 바꾸기 "전에" 실행돼야 한다.
+  // ★ 전환 UPDATE 는 메인 update "뒤"에 온다 — 먼저 켜 놓고 메인 update 가 실패하면
+  //   "저장 실패"라고 답했는데 자동발행만 켜진 상태가 남는다.
   const stampIndex = profileRouteSource.indexOf("site_auto_publish_since: new Date()");
   const peelIndex = profileRouteSource.indexOf('PEEL_GROUPS_NEWEST_FIRST');
-  assert.ok(stampIndex >= 0 && peelIndex > stampIndex);
+  assert.ok(peelIndex >= 0 && stampIndex > peelIndex);
+  // 메인 update 페이로드에는 cadence 'auto' 가 들어가지 않는다.
+  assert.match(profileRouteSource, /if \(turningOnAuto\) delete updates\.site_publish_cadence/);
 });
 
 test('★cadence 전환과 기준 시각은 한 UPDATE 로 함께 쓴다(경합 시 불일치 방지)', () => {
@@ -268,6 +271,10 @@ test('★공개되는 병원 소개문도 의료광고법 게이트를 지난다
   assert.match(profileRouteSource, /import \{ checkCompliance \}/);
   assert.match(profileRouteSource, /updates\.hospital_desc/);
   assert.match(profileRouteSource, /v\.severity === 'HIGH' \|\| v\.severity === 'CRITICAL'/);
+  // 값이 바뀔 때만 검사한다 — 기존 문구를 그대로 되보내는 저장(자동발행 끄기 등)을
+  // 막으면 안전한 조치까지 차단된다(마이페이지는 프로필 전체를 매번 전송한다).
+  assert.match(profileRouteSource, /const unchanged =/);
+  assert.match(profileRouteSource, /unchanged \? \{ violations: \[\] \} : checkCompliance/);
 });
 
 test('★결제 훅의 늦은 쓰기가 고객의 자동발행 해제를 되살리지 못한다', () => {
@@ -296,9 +303,19 @@ test('★가드 컬럼(마이그 052)이 없으면 자동발행을 켜지 않는
 
 test('★블로그 개설이 결제 응답을 무한정 붙잡지 못한다(시간 예산)', () => {
   assert.match(paymentRepoSource, /PROVISION_BUDGET_MS/);
-  assert.match(paymentRepoSource, /withProvisionBudget\(provisionClinicSite\(/);
+  assert.match(paymentRepoSource, /withProvisionBudget\(\(signal\) =>/);
   // 예산 초과는 실패로 처리될 뿐 결제를 되돌리지 않는다(throw 없음).
   assert.ok(!/throw[^\n]*provisionClinicSite/.test(paymentRepoSource));
+});
+
+test('★예산 초과 시 진행 중인 요청을 실제로 끊는다(늦은 쓰기가 고객 설정을 덮어쓰지 못하게)', () => {
+  // compare-and-set 은 "값이 달라진" 경합만 막고 "같은 값으로 다시 저장한" 의도는 못 본다.
+  assert.match(paymentRepoSource, /new AbortController\(\)/);
+  assert.match(paymentRepoSource, /controller\.abort\(\)/);
+  // 신호가 실제 쿼리까지 전달돼야 의미가 있다.
+  assert.match(provisionSource, /query\.abortSignal\(signal\)/);
+  assert.match(provisionSource, /withSignal\(guarded, signal\)/);
+  assert.match(provisionSource, /loadProfile\(admin, userId, signal\)/);
 });
 
 // ---------------------------------------------------------------------------

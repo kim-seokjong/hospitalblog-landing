@@ -115,20 +115,26 @@ const PROVISION_BUDGET_MS = 5000
 
 /**
  * 개설 작업에 시간 상한을 둔다. 넘기면 기다리지 않고 'failed' 로 넘어간다.
- * 남은 작업은 그대로 진행돼도 안전하다(멱등·조건부 UPDATE 이며 throw 하지 않는다).
+ *
+ * ★ 예산 초과 시 진행 중인 요청을 **실제로 끊는다**(AbortController).
+ *   Promise.race 만 걸면 응답을 돌려준 뒤에도 UPDATE 가 살아 있어, 그 사이 고객이
+ *   마이페이지에서 바꾼 설정을 뒤늦게 덮어쓸 수 있다. compare-and-set 은 값이
+ *   달라진 경합만 막고 "같은 값으로 다시 저장한" 의도는 볼 수 없으므로 취소가 필요하다.
+ *   개설은 멱등이라 끊겨도 다음 결제·갱신에서 다시 시도된다.
  */
 async function withProvisionBudget(
-  work: Promise<ProvisionOutcome>,
+  run: (signal: AbortSignal) => Promise<ProvisionOutcome>,
 ): Promise<ProvisionOutcome> {
+  const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
   const budget = new Promise<ProvisionOutcome>((resolve) => {
-    timer = setTimeout(
-      () => resolve({ status: 'failed', reason: '개설 시간 예산 초과' }),
-      PROVISION_BUDGET_MS,
-    )
+    timer = setTimeout(() => {
+      controller.abort()
+      resolve({ status: 'failed', reason: '개설 시간 예산 초과' })
+    }, PROVISION_BUDGET_MS)
   })
   try {
-    return await Promise.race([work, budget])
+    return await Promise.race([run(controller.signal), budget])
   } finally {
     if (timer) clearTimeout(timer)
   }
@@ -166,7 +172,9 @@ export async function activateUserPlan(params: {
   //   결제 확인은 사용자가 기다리는 경로이고, 정기결제 cron 은 회원 수만큼 이 함수를
   //   반복 호출한다(maxDuration 300s). 예산을 넘기면 결과를 기다리지 않고 넘어간다 —
   //   개설은 멱등이라 다음 결제·갱신에서 다시 시도된다.
-  const outcome = await withProvisionBudget(provisionClinicSite(admin, params.userId))
+  const outcome = await withProvisionBudget((signal) =>
+    provisionClinicSite(admin, params.userId, signal),
+  )
   if (outcome.status === 'failed') {
     console.error('[activateUserPlan] 병원 블로그 자동 개설 실패:', params.userId, outcome.reason)
   }

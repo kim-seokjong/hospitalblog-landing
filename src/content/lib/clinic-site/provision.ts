@@ -37,6 +37,21 @@ function isMissingColumn(error: PostgrestErrorLike | null): boolean {
   return error?.code === '42703';
 }
 
+/**
+ * 취소 신호를 쿼리에 붙인다(있을 때만).
+ *
+ * 왜 필요한가: 결제 경로는 이 작업에 시간 예산을 건다. 예산을 넘긴 뒤에도 요청이
+ * 그대로 살아 있으면, 응답을 돌려준 다음 고객이 마이페이지에서 바꾼 설정을
+ * 뒤늦게 도착한 UPDATE 가 덮어쓸 수 있다. compare-and-set 은 "값이 달라진" 경합만
+ * 막고 "같은 값으로 다시 저장한" 의도는 볼 수 없으므로, 애초에 요청을 끊는다.
+ */
+function withSignal<T extends { abortSignal(signal: AbortSignal): T }>(
+  query: T,
+  signal?: AbortSignal,
+): T {
+  return signal ? query.abortSignal(signal) : query;
+}
+
 /** unique 위반 — 슬러그 중복. */
 function isUniqueViolation(error: PostgrestErrorLike | null): boolean {
   return error?.code === '23505';
@@ -77,23 +92,25 @@ interface LoadedProfile {
   markerAvailable: boolean;
 }
 
-async function loadProfile(admin: Admin, userId: string): Promise<LoadedProfile | null> {
-  const full = await admin
-    .from('profiles')
-    .select(PROFILE_COLS_FULL)
-    .eq('id', userId)
-    .maybeSingle<ProfileRow>();
+async function loadProfile(
+  admin: Admin,
+  userId: string,
+  signal?: AbortSignal,
+): Promise<LoadedProfile | null> {
+  const full = await withSignal(
+    admin.from('profiles').select(PROFILE_COLS_FULL).eq('id', userId),
+    signal,
+  ).maybeSingle<ProfileRow>();
 
   if (!isMissingColumn(full.error)) {
     if (full.error || !full.data) return null;
     return { row: full.data, markerAvailable: true };
   }
 
-  const legacy = await admin
-    .from('profiles')
-    .select(PROFILE_COLS_LEGACY)
-    .eq('id', userId)
-    .maybeSingle<ProfileRow>();
+  const legacy = await withSignal(
+    admin.from('profiles').select(PROFILE_COLS_LEGACY).eq('id', userId),
+    signal,
+  ).maybeSingle<ProfileRow>();
 
   if (legacy.error || !legacy.data) return null;
   return { row: legacy.data, markerAvailable: false };
@@ -136,6 +153,7 @@ async function applyPatch(
   patch: UpdatePatch,
   slugGuard: { column: 'site_slug'; expected: string | null },
   cadenceGuard?: { expected: string | null },
+  signal?: AbortSignal,
 ): Promise<{ ok: true; rows: number } | { ok: false; error: PostgrestErrorLike }> {
   const MARKER_COLS = ['site_provisioned_at', 'site_auto_publish_since'] as const;
 
@@ -155,7 +173,7 @@ async function applyPatch(
           : slugGuarded.eq('site_publish_cadence', cadenceGuard.expected)
         : slugGuarded;
 
-    const { data, error } = await guarded.select('id');
+    const { data, error } = await withSignal(guarded, signal).select('id');
     if (!error) return { ok: true, rows: data?.length ?? 0 };
 
     if (isMissingColumn(error) && MARKER_COLS.some((col) => col in payload)) {
@@ -188,9 +206,10 @@ async function applyPatch(
 export async function provisionClinicSite(
   admin: Admin,
   userId: string,
+  signal?: AbortSignal,
 ): Promise<ProvisionOutcome> {
   try {
-    const loaded = await loadProfile(admin, userId);
+    const loaded = await loadProfile(admin, userId, signal);
     if (!loaded) return { status: 'skipped', reason: 'profile_missing' };
 
     const { row, markerAvailable } = loaded;
@@ -224,6 +243,7 @@ export async function provisionClinicSite(
         patch,
         { column: 'site_slug', expected: row.site_slug },
         { expected: row.site_publish_cadence },
+        signal,
       );
       if (!applied.ok) {
         return { status: 'failed', reason: applied.error.message ?? '프로필 저장 실패' };
@@ -274,6 +294,7 @@ export async function provisionClinicSite(
         patch,
         { column: 'site_slug', expected: null },
         { expected: row.site_publish_cadence },
+        signal,
       );
 
       if (applied.ok) {
