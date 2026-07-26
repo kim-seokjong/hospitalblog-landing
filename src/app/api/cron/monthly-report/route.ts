@@ -159,23 +159,43 @@ async function aggregateUserReport(
   if (complianceErr) throw new Error(`검사 수 집계 실패: ${complianceErr.message}`);
 
   // 4) 지난달 순위 시계열 → 추적 키워드 수·상위 10위 진입·순위 상승 상위 5
-  const { data: rankRows, error: rankErr } = await admin
-    .from('post_rankings')
-    .select('post_id, keyword, rank, checked_at')
-    .eq('user_id', profile.id)
-    .gte('checked_at', startIso)
-    .lt('checked_at', endIso)
-    .order('checked_at', { ascending: true })
-    .limit(MAX_RANKING_ROWS);
-  if (rankErr) throw new Error(`순위 집계 실패: ${rankErr.message}`);
+  // status 는 마이그 052 이후 컬럼 — 미적용 환경(42703)에서는 빼고 재조회한다.
+  // ★ status='invalid'(2026-07 이전 고장난 파이프라인 산출물)은 리포트에서 제외한다.
+  type RankRow = {
+    post_id: string | null;
+    keyword: string;
+    rank: number | null;
+    checked_at: string;
+    status?: string | null;
+  };
+  let rankRows: RankRow[];
+  {
+    const withStatus = await admin
+      .from('post_rankings')
+      .select('post_id, keyword, rank, checked_at, status')
+      .eq('user_id', profile.id)
+      .gte('checked_at', startIso)
+      .lt('checked_at', endIso)
+      .order('checked_at', { ascending: true })
+      .limit(MAX_RANKING_ROWS);
+    if (withStatus.error) {
+      const legacy = await admin
+        .from('post_rankings')
+        .select('post_id, keyword, rank, checked_at')
+        .eq('user_id', profile.id)
+        .gte('checked_at', startIso)
+        .lt('checked_at', endIso)
+        .order('checked_at', { ascending: true })
+        .limit(MAX_RANKING_ROWS);
+      if (legacy.error) throw new Error(`순위 집계 실패: ${legacy.error.message}`);
+      rankRows = (legacy.data ?? []) as RankRow[];
+    } else {
+      rankRows = (withStatus.data ?? []) as RankRow[];
+    }
+  }
 
   const rankings = aggregateRankings(
-    ((rankRows ?? []) as Array<{
-      post_id: string | null;
-      keyword: string;
-      rank: number | null;
-      checked_at: string;
-    }>).map(
+    rankRows.filter((r) => r.status !== 'invalid').map(
       (r): RankingPointRow => ({
         postId: r.post_id,
         keyword: r.keyword,

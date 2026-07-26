@@ -2,13 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   findRankInResults,
+  findPostRank,
+  parseNaverPostUrl,
+  titleSimilarity,
   extractBlogId,
   extractNaverBlogId,
   type BlogSearchResult,
 } from '../rank-tracking.ts';
 
-function r(link: string, bloggername = ''): BlogSearchResult {
-  return { link, bloggername };
+function r(link: string, bloggername = '', title = ''): BlogSearchResult {
+  return { link, bloggername, title };
 }
 
 // ── extractBlogId ──
@@ -127,19 +130,143 @@ test('publishedUrl 없으면 link 의 blogId 매칭', () => {
   assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 3);
 });
 
-test('link 매칭 실패 시 bloggername 매칭', () => {
-  const results = [
-    r('https://blog.naver.com/PostView.nhn?blogId=x&logNo=1', 'happyclinic'),
-  ];
+// ★ bloggername 은 블로그 ID 가 아니라 표시용 별명이라 오탐 위험이 있다.
+//   link 를 전혀 파싱할 수 없을 때만 최후 수단으로 쓴다.
+test('link 를 파싱할 수 없을 때만 bloggername 으로 매칭', () => {
+  const results = [r('', 'happyclinic')];
   assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 1);
 });
 
-test('가장 먼저 매칭되는 결과의 1-base 위치 반환', () => {
+test('★ link 로 블로그를 판별할 수 있으면 bloggername 은 쓰지 않는다 (오탐 방지)', () => {
+  // 남의 블로그 글인데 별명이 우연히 내 블로그 ID 와 같은 경우
+  const results = [r('https://blog.naver.com/someoneelse/123', 'happyclinic')];
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), null);
+});
+
+test('쿼리스트링 형태 link 에서 blogId 를 뽑아 매칭', () => {
+  const results = [r('https://blog.naver.com/PostView.nhn?blogId=happyclinic&logNo=1')];
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 1);
+});
+
+// ── URL 정확 매칭 (글 번호까지) ──
+test('★ 글 번호가 접두어로 겹쳐도 다른 글로 본다 (/123 vs /1234)', () => {
+  const results = [r('https://blog.naver.com/happyclinic/1234')];
+  const outcome = findPostRank(results, {
+    publishedUrl: 'https://blog.naver.com/happyclinic/123',
+  });
+  assert.equal(outcome.found, false);
+});
+
+test('★ 블로그 홈 주소는 어떤 글과도 일치하지 않는다', () => {
+  const results = [r('https://blog.naver.com/happyclinic/223456')];
+  const outcome = findPostRank(results, { publishedUrl: 'https://blog.naver.com/happyclinic' });
+  assert.equal(outcome.found, false);
+});
+
+test('parseNaverPostUrl: 형태별 (blogId, logNo) 추출', () => {
+  assert.deepEqual(parseNaverPostUrl('https://blog.naver.com/happyclinic/223456'), { blogId: 'happyclinic', logNo: '223456' });
+  assert.deepEqual(parseNaverPostUrl('https://m.blog.naver.com/happyclinic/223456'), { blogId: 'happyclinic', logNo: '223456' });
+  assert.deepEqual(parseNaverPostUrl('https://blog.naver.com/PostView.naver?blogId=happyclinic&logNo=223456'), { blogId: 'happyclinic', logNo: '223456' });
+  assert.deepEqual(parseNaverPostUrl('https://happyclinic.blog.me/223456'), { blogId: 'happyclinic', logNo: '223456' });
+  assert.equal(parseNaverPostUrl('https://blog.naver.com/happyclinic'), null, '글 번호 없음');
+  assert.equal(parseNaverPostUrl('https://example.com/a/1'), null);
+  assert.equal(parseNaverPostUrl(''), null);
+});
+
+// ★ 쿼리 형태는 호스트를 검사해야 한다. 안 그러면 외부 URL 이 내 글로 매칭된다.
+test('★ 네이버가 아닌 호스트의 blogId/logNo 쿼리는 인정하지 않는다', () => {
+  assert.equal(parseNaverPostUrl('https://example.com/?blogId=happyclinic&logNo=123'), null);
+  assert.equal(parseNaverPostUrl('https://evil.kr/x?blogId=happyclinic&logNo=123'), null);
+});
+
+test('내 글이 1건만 잡히면 그 위치 반환', () => {
+  const results = [
+    r('https://blog.naver.com/other/1'),
+    r('https://blog.naver.com/happyclinic/2'),
+  ];
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 2);
+});
+
+// ★ 회귀 (수정 전 동작): 같은 블로그 글 2편이 잡히면 예전 로직은 둘 다 "1위"로 기록했다.
+//    이제는 제목 단서 없이 단정하지 않는다 → ambiguous.
+test('★ 같은 블로그 글이 여럿인데 제목 단서가 없으면 순위를 단정하지 않는다', () => {
   const results = [
     r('https://blog.naver.com/happyclinic/1'),
     r('https://blog.naver.com/happyclinic/2'),
   ];
-  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 1);
+  const outcome = findPostRank(results, { blogId: 'happyclinic' });
+  assert.equal(outcome.found, false);
+  assert.equal(outcome.found === false && outcome.ambiguous, true);
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), null);
+});
+
+test('★ 제목이 있으면 같은 블로그 글 여러 편 중 올바른 글을 고른다', () => {
+  const results = [
+    r('https://blog.naver.com/happyclinic/1', '', '구로동치과 신경치료 실패 줄이는 3가지 주의사항'),
+    r('https://blog.naver.com/happyclinic/2', '', '구로동치과 신경치료 전 알아야 할 4가지 핵심 체크리스트'),
+  ];
+  const outcome = findPostRank(results, {
+    blogId: 'happyclinic',
+    title: '구로동치과 신경치료 전 알아야 할 4가지 핵심 체크리스트',
+  });
+  assert.equal(outcome.found, true);
+  assert.equal(outcome.found && outcome.match.rank, 2);
+  assert.equal(outcome.found && outcome.match.matchedBy, 'title');
+});
+
+test('publishedUrl 이 있으면 제목·blogId 보다 우선한다', () => {
+  const results = [
+    r('https://blog.naver.com/happyclinic/1', '', '완전히 똑같은 제목'),
+    r('https://blog.naver.com/happyclinic/2', '', '다른 제목'),
+  ];
+  const outcome = findPostRank(results, {
+    blogId: 'happyclinic',
+    title: '완전히 똑같은 제목',
+    publishedUrl: 'https://blog.naver.com/happyclinic/2',
+  });
+  assert.equal(outcome.found && outcome.match.rank, 2);
+  assert.equal(outcome.found && outcome.match.matchedBy, 'url');
+});
+
+// ── startOffset (페이지 순회) ──
+test('★ startOffset 으로 2페이지 이후 순위를 계산한다 (101위~)', () => {
+  const results = [r('https://blog.naver.com/happyclinic/1')];
+  const outcome = findPostRank(results, { blogId: 'happyclinic', startOffset: 100 });
+  assert.equal(outcome.found && outcome.match.rank, 101);
+});
+
+test('startOffset 미지정/비정상 값은 0 취급', () => {
+  const results = [r('https://blog.naver.com/happyclinic/1')];
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic', startOffset: -5 }), 1);
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic', startOffset: NaN }), 1);
+});
+
+test('matchedLink 는 원본 표기(대소문자 보존)를 돌려준다', () => {
+  const results = [r('https://blog.naver.com/HappyClinic/223456')];
+  const outcome = findPostRank(results, { blogId: 'happyclinic' });
+  assert.equal(outcome.found && outcome.match.link, 'https://blog.naver.com/HappyClinic/223456');
+});
+
+// ── titleSimilarity ──
+test('titleSimilarity: 동일 제목은 1', () => {
+  assert.equal(titleSimilarity('사랑니 발치 총정리', '사랑니 발치 총정리'), 1);
+});
+
+test('titleSimilarity: 특수문자·공백 차이는 무시', () => {
+  assert.equal(titleSimilarity('사랑니 발치, 총정리!', '사랑니발치총정리'), 1);
+});
+
+test('titleSimilarity: 말줄임(부분 포함)도 강한 일치', () => {
+  assert.equal(titleSimilarity('구로동치과 신경치료 실패 줄이는 3가지 주의사항', '구로동치과 신경치료 실패 줄이는'), 1);
+});
+
+test('titleSimilarity: 무관한 제목은 낮다', () => {
+  assert.ok(titleSimilarity('사랑니 발치 총정리', '임플란트 건강보험 적용 기준') < 0.3);
+});
+
+test('titleSimilarity: 빈값은 0', () => {
+  assert.equal(titleSimilarity('', '무언가'), 0);
+  assert.equal(titleSimilarity(null, undefined), 0);
 });
 
 // ── 미발견 / 방어 ──

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { buildServerComplianceReport } from '@/content/lib/compliance-report-server';
 import { sanitizeImageUrls, sanitizeTags, sanitizeSeoScore } from '@/content/lib/saved-post-fields';
+import { normalizeKeywordInput } from '@/content/lib/keyword-list';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -125,6 +126,9 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
             return NextResponse.json({ error: '본문은 비워둘 수 없습니다.' }, { status: 400 });
           }
           updates[field] = val.trim();
+        } else if (field === 'keyword') {
+          // 저장 경계에서 정규화 — 빈 토큰·중복 제거. 순위 추적이 이 값을 콤마로 분리해 쓴다.
+          updates[field] = normalizeKeywordInput(body[field]) || null;
         } else if (field === 'tags') {
           // 빈 배열·null = 사용자가 의도적으로 비운 것 → 비운다.
           // 그 외 형태 불일치(객체·문자열 등)는 기존 값을 파괴하지 않고 보존한다.
