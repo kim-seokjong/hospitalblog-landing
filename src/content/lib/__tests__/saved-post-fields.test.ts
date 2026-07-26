@@ -121,6 +121,18 @@ test('toImageUrlSlots: 배열이 아니거나 비면 빈 배열', () => {
   assert.deepEqual(toImageUrlSlots([{ id: 'img-1' }]), []);
 });
 
+test('toImageUrlSlots: id 가 섞여 있으면 id 없는 항목은 버린다(슬롯 덮어쓰기 금지)', () => {
+  const a = asset('u1/a.png');
+  const c = asset('u1/c.png');
+  const x = asset('u1/x.png');
+  const result = toImageUrlSlots([
+    { id: 'img-1', url: a },
+    { id: 'img-3', url: c },
+    { id: 'upload-abc', url: x },
+  ]);
+  assert.deepEqual(result, [a, null, c]);
+});
+
 test('toImageUrlSlots: 범위를 벗어난 번호는 버린다', () => {
   const a = asset('u1/a.png');
   assert.deepEqual(toImageUrlSlots([{ id: `img-${MAX_IMAGE_URLS + 1}`, url: a }]), []);

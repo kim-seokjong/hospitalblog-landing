@@ -90,19 +90,30 @@ const IMAGE_ID_RE = /^img-(\d+)$/;
  *   그대로 저장하면 3번 사진이 본문 `[이미지 2]` 설명 자리에 붙는다.
  *   응답이 `id: "img-N"` 으로 원래 번호를 들고 있으므로 그 N 을 슬롯으로 쓴다.
  *
- * id 가 없는 구 데이터는 배열 위치로 폴백한다.
+ * id 가 하나도 `img-N` 형태가 아닌 **전부 구 데이터일 때만** 배열 위치로 폴백한다.
+ * 섞여 있을 때 항목별로 폴백하면(예: [img-1, img-3, upload-x]) 세 번째 항목이
+ * 3번 슬롯을 덮어써 img-3 을 밀어낸다 — 미리보기(BlogBodyRenderer)와도 계약이 어긋난다.
  */
 export function toImageUrlSlots(images: unknown): (string | null)[] {
   if (!Array.isArray(images)) return [];
   const items: readonly unknown[] = images;
-  const slots: (string | null)[] = [];
+  const slotIdOf = (item: unknown): number | null => {
+    if (!item || typeof item !== 'object') return null;
+    const id = (item as { id?: unknown }).id;
+    const matched = typeof id === 'string' ? IMAGE_ID_RE.exec(id) : null;
+    return matched ? Number.parseInt(matched[1], 10) : null;
+  };
+  const hasSlotIds = items.some((item) => slotIdOf(item) !== null);
 
+  const slots: (string | null)[] = [];
   items.forEach((item, index) => {
     if (!item || typeof item !== 'object') return;
-    const record = item as { id?: unknown; url?: unknown };
-    const url = typeof record.url === 'string' ? record.url : null;
-    const matched = typeof record.id === 'string' ? IMAGE_ID_RE.exec(record.id) : null;
-    const slot = matched ? Number.parseInt(matched[1], 10) : index + 1;
+    const url = (item as { url?: unknown }).url;
+    if (typeof url !== 'string') return;
+    const fromId = slotIdOf(item);
+    // 슬롯 id 가 쓰이는 목록에서 id 없는 항목은 자리를 알 수 없다 — 버린다(덮어쓰기 금지).
+    if (fromId === null && hasSlotIds) return;
+    const slot = fromId ?? index + 1;
     if (!Number.isFinite(slot) || slot < 1 || slot > MAX_IMAGE_URLS) return;
     while (slots.length < slot) slots.push(null);
     slots[slot - 1] = url;
