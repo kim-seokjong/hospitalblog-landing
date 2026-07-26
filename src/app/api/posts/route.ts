@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
+import { sanitizeImageUrls, sanitizeTags, sanitizeSeoScore } from '@/content/lib/saved-post-fields';
 
 export async function GET(req: NextRequest) {
   try {
@@ -91,10 +92,12 @@ export async function POST(req: NextRequest) {
       title: title.trim(),
       content: content.trim(),
       keyword: keyword ?? null,
-      tags: Array.isArray(tags) ? tags : null,
+      // 산출물 3종은 서버에서도 정규화한다 — 클라이언트가 TagResult(객체)나
+      // data URL 을 그대로 보내도 컬럼 형태(text[]/int)에 맞게 걸러 저장한다.
+      tags: sanitizeTags(tags),
       specialty: specialty ?? null,
-      seo_score: typeof seo_score === 'number' ? seo_score : null,
-      image_urls: Array.isArray(image_urls) ? image_urls : null,
+      seo_score: sanitizeSeoScore(seo_score),
+      image_urls: sanitizeImageUrls(image_urls, process.env.NEXT_PUBLIC_SUPABASE_URL),
       sns_copy: sns_copy ?? null,
       sms_copy: sms_copy ?? null,
       status: validStatus,

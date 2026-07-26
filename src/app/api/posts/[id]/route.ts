@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
+import { sanitizeImageUrls, sanitizeTags, sanitizeSeoScore } from '@/content/lib/saved-post-fields';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -51,7 +52,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
 
     const body = await req.json();
-    const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score', 'target_site', 'published_url'];
+    // image_urls 추가(2026-W30) — 누락돼 있어 재복사·재저장으로는 이미지를 영구히 채울 수 없었다.
+    const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score', 'image_urls', 'target_site', 'published_url'];
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     // compliance_report(검사 증빙 스냅샷) — 재복사(PATCH)로 최신 검사 결과가 오면 갱신.
@@ -101,7 +103,17 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
           }
           updates[field] = val.trim();
         } else if (field === 'tags') {
-          updates[field] = Array.isArray(body[field]) ? body[field] : null;
+          // 정규화 실패(형태 불일치)로 기존 태그를 null 로 파괴하지 않는다 — 건드리지 않고 보존.
+          const normalized = sanitizeTags(body[field]);
+          if (normalized) updates[field] = normalized;
+        } else if (field === 'image_urls') {
+          // Storage(clinic-assets) public URL 만 통과. 통과분이 없으면 기존 값을 보존한다.
+          const normalized = sanitizeImageUrls(body[field], process.env.NEXT_PUBLIC_SUPABASE_URL);
+          if (normalized) updates[field] = normalized;
+        } else if (field === 'seo_score') {
+          // 타입 미검증으로 문자열이 넘어가면 Postgres 22P02 로 저장 전체가 실패했다.
+          const normalized = sanitizeSeoScore(body[field]);
+          if (normalized !== null) updates[field] = normalized;
         } else if (field === 'status') {
           const validStatuses = ['draft', 'scheduled', 'published'];
           if (!validStatuses.includes(body[field])) {

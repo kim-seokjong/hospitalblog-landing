@@ -3,6 +3,7 @@ import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 import { OPENAI_IMAGE_MODEL } from '@/content/lib/openai';
 import { logUsage } from '@/dev/lib/usage-logger';
 import { requirePaidPlan } from '@/payment/lib/usage-guard';
+import { persistPostImage } from '@/content/lib/post-image-storage';
 import type { GeneratedImage } from '@/types';
 
 export const maxDuration = 60;
@@ -208,9 +209,13 @@ export async function POST(req: NextRequest) {
       logUsage({ feature: 'regenerate-image', api_provider: 'openai', image_count: 1, user_id: gate.userId, user_agent: req.headers.get('user-agent') ?? null });
     }
 
+    // 영속화 — generate-images 와 동일하게 clinic-assets 로 옮겨 영구 public URL 로.
+    // 실패 시 원본 URL 유지(화면 표시 정상, 저장만 스킵).
+    const persistedUrl = await persistPostImage(gate.userId, url);
+
     const image: GeneratedImage = {
       id: imageId || `img-${Date.now()}`,
-      url,
+      url: persistedUrl,
       prompt,                          // 사용자가 입력한 원문(한국어) 저장
       revised_prompt: englishPrompt.slice(0, 120),  // 실제 사용된 영어 프롬프트
     };

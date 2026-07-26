@@ -4,6 +4,7 @@ import { OPENAI_IMAGE_MODEL } from '@/content/lib/openai';
 import { logUsage } from '@/dev/lib/usage-logger';
 import { findProcedureCues } from '@/content/lib/procedure-visual-cues';
 import { requirePaidPlan } from '@/payment/lib/usage-guard';
+import { persistPostImages } from '@/content/lib/post-image-storage';
 import type { GeneratedImage } from '@/types';
 
 export const maxDuration = 300;
@@ -538,7 +539,14 @@ export async function POST(req: NextRequest) {
       const numB = parseInt(b.id.replace('img-', ''), 10);
       return numA - numB;
     });
-    return NextResponse.json({ images });
+
+    // 영속화 — base64 data URL·만료성 CDN URL 을 clinic-assets 로 옮겨 영구 public URL 로 바꾼다.
+    // 이 단계를 거쳐야 saved_posts.image_urls 에 저장되고 서브도메인 블로그에도 실린다.
+    // 실패 시 원본 URL 유지(화면 표시는 정상, 저장만 스킵) — 생성 응답을 막지 않는다.
+    const persistedUrls = await persistPostImages(userId, images.map((img) => img.url));
+    const persistedImages = images.map((img, i) => ({ ...img, url: persistedUrls[i] ?? img.url }));
+
+    return NextResponse.json({ images: persistedImages });
   } catch (error) {
     console.error('이미지 생성 오류:', error);
     const message = error instanceof Error ? error.message : '알 수 없는 오류';
