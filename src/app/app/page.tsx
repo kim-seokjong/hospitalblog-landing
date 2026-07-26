@@ -24,7 +24,12 @@ import { safeFetchJson } from '@/content/lib/safe-fetch';
 import { MULTICHANNEL_SRC_KEY, encodeMultichannelSrc } from '@/content/lib/multichannel-src';
 import { checkCompliance } from '@/content/lib/medical-compliance';
 import { buildComplianceReport } from '@/content/lib/compliance-report';
-import { sanitizeImageUrls, sanitizeTags, sanitizeSeoScore } from '@/content/lib/saved-post-fields';
+import {
+  sanitizeImageUrls,
+  sanitizeSeoScore,
+  sanitizeTags,
+  toImageUrlSlots,
+} from '@/content/lib/saved-post-fields';
 import { getOnboardingKeywords, shouldShowOnboarding } from '@/content/lib/onboarding-keyword';
 
 type ViewStep = 'input' | 'content';
@@ -1084,8 +1089,10 @@ export default function AppPage() {
     // saved_posts 15/15 가 전부 비어 있었다(2026-W30 실측).
     // image_urls 는 Storage(clinic-assets) public URL 만 통과한다 — data URL·만료성
     // 외부 CDN URL 은 sanitizeImageUrls 가 걸러내 죽은 링크가 DB 에 남지 않는다.
+    // ★ toImageUrlSlots: 이미지 id("img-N")로 본문 [이미지 N] 자리를 맞춘다.
+    //   images.map(url) 로 만들면 부분 실패 시(2번만 실패) 3번 사진이 2번 자리로 당겨진다.
     const imageUrls = sanitizeImageUrls(
-      images.map((img) => img.url),
+      toImageUrlSlots(images),
       process.env.NEXT_PUBLIC_SUPABASE_URL,
     );
     const savedTags = sanitizeTags(tags);

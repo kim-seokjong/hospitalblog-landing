@@ -13,6 +13,7 @@ import {
   sanitizeImageUrls,
   sanitizeTags,
   sanitizeSeoScore,
+  toImageUrlSlots,
   MAX_IMAGE_URLS,
   MAX_TAGS,
 } from '../saved-post-fields.ts';
@@ -93,6 +94,37 @@ test('sanitizeImageUrls: 탈락분은 빼지 않고 null 로 자리를 남긴다
 test('sanitizeImageUrls: 끝쪽 빈 자리는 잘라낸다', () => {
   const a = asset('u1/a.png');
   assert.deepEqual(sanitizeImageUrls([a, 'data:image/png;base64,AAAA', null], SUPABASE), [a]);
+});
+
+/* ─── toImageUrlSlots (생성 이미지 → 위치 보존) ─── */
+
+test('toImageUrlSlots: 부분 실패로 배열이 비어도 id 의 N 으로 자리를 맞춘다', () => {
+  const a = asset('u1/a.png');
+  const c = asset('u1/c.png');
+  // 2번 생성 실패 → 응답 배열은 [1번, 3번]. 그대로 map 하면 3번이 2번 자리로 당겨진다.
+  const result = toImageUrlSlots([
+    { id: 'img-1', url: a, prompt: '' },
+    { id: 'img-3', url: c, prompt: '' },
+  ]);
+  assert.deepEqual(result, [a, null, c]);
+});
+
+test('toImageUrlSlots: id 가 없으면 배열 위치로 폴백한다(구 데이터)', () => {
+  const a = asset('u1/a.png');
+  const b = asset('u1/b.png');
+  assert.deepEqual(toImageUrlSlots([{ url: a }, { url: b }]), [a, b]);
+});
+
+test('toImageUrlSlots: 배열이 아니거나 비면 빈 배열', () => {
+  assert.deepEqual(toImageUrlSlots(null), []);
+  assert.deepEqual(toImageUrlSlots([]), []);
+  assert.deepEqual(toImageUrlSlots([{ id: 'img-1' }]), []);
+});
+
+test('toImageUrlSlots: 범위를 벗어난 번호는 버린다', () => {
+  const a = asset('u1/a.png');
+  assert.deepEqual(toImageUrlSlots([{ id: `img-${MAX_IMAGE_URLS + 1}`, url: a }]), []);
+  assert.deepEqual(toImageUrlSlots([{ id: 'img-0', url: a }]), []);
 });
 
 test('sanitizeImageUrls: 통과분이 없으면 null(컬럼 미설정)', () => {
