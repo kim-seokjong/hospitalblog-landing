@@ -21,10 +21,13 @@ import type { AiComplianceFinding, AiComplianceReview } from './medical-complian
  * 검사 엔진 버전 라벨 — 리포트에 표기되는 증빙용 식별자.
  * 검사 체계(층 구성·룰셋 대개편)가 바뀔 때만 올린다.
  */
-export const COMPLIANCE_ENGINE_VERSION = 'doctorpost-compliance v1';
+export const COMPLIANCE_ENGINE_VERSION = 'doctorpost-compliance v2';
 
-/** 스냅샷 스키마 버전(파싱 하위 호환용). */
-export const COMPLIANCE_REPORT_SCHEMA_VERSION = 1;
+/**
+ * 스냅샷 스키마 버전(파싱 하위 호환용).
+ * v2(2026-W30): keyword.autoFixed 신설 — 자동치환으로 본문에서 사라진 A층 위반을 증빙으로 보존.
+ */
+export const COMPLIANCE_REPORT_SCHEMA_VERSION = 2;
 
 /** 최종 등급 — PASS(검출 없음) < LOW < MEDIUM < HIGH < CRITICAL. */
 export type ComplianceGrade = 'PASS' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -61,8 +64,18 @@ export interface ComplianceReportSnapshot {
   /** A층 — 키워드/상품명 검사 결과. */
   keyword: {
     isCompliant: boolean;
+    /** 최종 본문에 **남아 있는** 위반(등급 산정 기준). */
     violations: ReportViolation[];
     warnings: string[];
+    /**
+     * 자동치환(autoFix)으로 최종 본문에서 제거된 A층 위반 — 검사가 실제로 작동했다는 증빙.
+     *
+     * ⚠️ 이 필드가 없으면 "A층이 아무것도 못 잡았다"와 "A층이 잡아서 고쳤다"가 구분되지
+     * 않는다(2026-W30 이전 리포트가 전부 violations=[] 였던 원인). 등급에는 반영하지
+     * 않되(발행본에 없는 표현이므로), HIGH·CRITICAL 이 섞이면 needsManualReview 를 켠다 —
+     * 기계적 문자열 치환이라 문맥상 위험이 남을 수 있기 때문(recall 우선).
+     */
+    autoFixed: ReportViolation[];
   };
   /** B층 — LLM 심의관 결과. 심의 미수행(실패/스킵) 시 null. */
   aiReview: {
@@ -120,9 +133,43 @@ export interface BuildReportInput {
     violations: ReadonlyArray<ComplianceViolation>;
     warnings: ReadonlyArray<string>;
   };
-  aiReview?: Pick<AiComplianceReview, 'reviewed' | 'findings'> | null;
+  /**
+   * B층 결과. 생성 경로는 AiComplianceReview, 재저장 경로는 저장된 스냅샷
+   * (ReportAiFinding — severity 가 string)을 그대로 넘기므로 둘 다 받는다.
+   */
+  aiReview?: {
+    reviewed: boolean;
+    findings: ReadonlyArray<AiComplianceFinding | ReportAiFinding>;
+  } | null;
+  /** 자동치환으로 최종 본문에서 사라진 A층 위반(증빙 보존용). 없으면 빈 배열 취급. */
+  autoFixed?: ReadonlyArray<ReportViolation>;
   /** 검사 시각(기본: 호출 시각). 재검사 경로에서 명시 전달. */
   checkedAt?: string;
+}
+
+/** ComplianceViolation → ReportViolation 정규화(불변). */
+function toReportViolation(v: ComplianceViolation | ReportViolation): ReportViolation {
+  return {
+    word: v.word,
+    index: v.index,
+    suggestion: v.suggestion,
+    rule: v.rule,
+    severity: v.severity,
+  };
+}
+
+/**
+ * 자동치환으로 사라진 위반을 산출한다 — 치환 전 검사에는 있고 치환 후 검사에는 없는 항목.
+ *
+ * 같은 금지어가 여러 번 나오면 checkCompliance 가 단어당 1건만 보고하므로
+ * word 기준 비교로 충분하다(index 는 치환으로 밀리므로 비교에 쓰지 않는다).
+ */
+export function diffAutoFixedViolations(
+  beforeFix: ReadonlyArray<ComplianceViolation>,
+  afterFix: ReadonlyArray<ComplianceViolation>,
+): ComplianceViolation[] {
+  const remaining = new Set(afterFix.map((v) => v.word));
+  return beforeFix.filter((v) => !remaining.has(v.word));
 }
 
 /**
@@ -135,12 +182,20 @@ export function buildComplianceReport(input: BuildReportInput): ComplianceReport
   const { compliance } = input;
   const aiReview = input.aiReview ?? null;
   const reviewed = aiReview?.reviewed === true;
-  const findings: AiComplianceFinding[] = reviewed && Array.isArray(aiReview?.findings)
-    ? aiReview.findings
-    : [];
+  const findings: ReadonlyArray<AiComplianceFinding | ReportAiFinding> =
+    reviewed && Array.isArray(aiReview?.findings) ? aiReview.findings : [];
 
   const keywordWarnings = compliance.warnings.filter((w) => !w.startsWith(AI_WARNING_PREFIX));
+  const autoFixed = input.autoFixed ?? [];
 
+  // 등급·검수 권고는 **발행될 현재 본문** 기준으로만 산정한다.
+  //
+  // ⚠️ autoFixed(생성 시점의 자동교정 이력)는 여기에 반영하지 않는다. 반영하면
+  //    사용자가 본문을 안전하게 고쳐도 과거 이력 때문에 needsManualReview 가 영구히
+  //    켜져 site-publish·GEO export·auto-publish 가 해제 불가능하게 잠긴다
+  //    (compliance-recheck 는 기존 스냅샷을 그대로 반환하므로 되돌릴 수단도 없다).
+  //    자동치환 후 남은 위험(예: "부작용 없음"→"부작용이 적은")은 최종 본문을 보는
+  //    B층 LLM 심의가 잡는 것이 옳은 층위다. autoFixed 는 증빙 표시 전용으로 남긴다.
   const grade = computeComplianceGrade({
     violations: compliance.violations,
     warnings: keywordWarnings,
@@ -159,14 +214,9 @@ export function buildComplianceReport(input: BuildReportInput): ComplianceReport
     needsManualReview,
     keyword: {
       isCompliant: compliance.isCompliant,
-      violations: compliance.violations.map((v) => ({
-        word: v.word,
-        index: v.index,
-        suggestion: v.suggestion,
-        rule: v.rule,
-        severity: v.severity,
-      })),
+      violations: compliance.violations.map(toReportViolation),
       warnings: [...keywordWarnings],
+      autoFixed: autoFixed.map(toReportViolation),
     },
     aiReview: reviewed
       ? {
@@ -186,6 +236,26 @@ export function buildComplianceReport(input: BuildReportInput): ComplianceReport
 /** 문자열 필드를 안전하게 자른다(비문자열은 빈 문자열). */
 function safeText(value: unknown, maxLen = MAX_TEXT_LEN): string {
   return typeof value === 'string' ? value.slice(0, maxLen) : '';
+}
+
+/** 외부 입력의 위반 배열을 검증·정규화한다(길이·문자열 캡 적용). */
+function parseViolationArray(raw: ReadonlyArray<unknown>): ReportViolation[] {
+  const out: ReportViolation[] = [];
+  for (const item of raw.slice(0, MAX_VIOLATIONS)) {
+    if (!item || typeof item !== 'object') continue;
+    const v = item as Record<string, unknown>;
+    const word = safeText(v.word, 100);
+    const rule = safeText(v.rule);
+    if (!word && !rule) continue; // 완전 빈 원소는 스킵
+    out.push({
+      word,
+      index: typeof v.index === 'number' && Number.isFinite(v.index) ? Math.max(0, Math.floor(v.index)) : 0,
+      suggestion: safeText(v.suggestion),
+      rule,
+      severity: safeText(v.severity, 20) || 'MEDIUM',
+    });
+  }
+  return out;
 }
 
 /**
@@ -209,21 +279,9 @@ export function validateComplianceReport(raw: unknown): ComplianceReportSnapshot
   const keyword = keywordRaw as Record<string, unknown>;
   if (!Array.isArray(keyword.violations) || !Array.isArray(keyword.warnings)) return null;
 
-  const violations: ReportViolation[] = [];
-  for (const item of keyword.violations.slice(0, MAX_VIOLATIONS)) {
-    if (!item || typeof item !== 'object') continue;
-    const v = item as Record<string, unknown>;
-    const word = safeText(v.word, 100);
-    const rule = safeText(v.rule);
-    if (!word && !rule) continue; // 완전 빈 원소는 스킵
-    violations.push({
-      word,
-      index: typeof v.index === 'number' && Number.isFinite(v.index) ? Math.max(0, Math.floor(v.index)) : 0,
-      suggestion: safeText(v.suggestion),
-      rule,
-      severity: safeText(v.severity, 20) || 'MEDIUM',
-    });
-  }
+  const violations = parseViolationArray(keyword.violations);
+  // autoFixed 는 v2 신설 — v1 리포트에는 없으므로 부재 시 빈 배열(하위 호환).
+  const autoFixed = Array.isArray(keyword.autoFixed) ? parseViolationArray(keyword.autoFixed) : [];
 
   const warnings = keyword.warnings
     .slice(0, MAX_WARNINGS)
@@ -265,6 +323,7 @@ export function validateComplianceReport(raw: unknown): ComplianceReportSnapshot
       isCompliant: keyword.isCompliant === true,
       violations,
       warnings,
+      autoFixed,
     },
     aiReview,
   };

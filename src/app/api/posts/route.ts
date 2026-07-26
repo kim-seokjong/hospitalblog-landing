@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
-import { validateComplianceReport } from '@/content/lib/compliance-report';
+import { buildServerComplianceReport } from '@/content/lib/compliance-report-server';
+import { sanitizeImageUrls, sanitizeTags, sanitizeSeoScore } from '@/content/lib/saved-post-fields';
 
 export async function GET(req: NextRequest) {
   try {
@@ -84,17 +85,25 @@ export async function POST(req: NextRequest) {
     // compliance_report: 의료광고법 검사 증빙 스냅샷(서버 검증·정규화 후 저장).
     // 검증 실패(형태 불일치)나 미전송 시 컬럼 자체를 insert에서 제외해 하위 호환
     // (마이그 034 미적용 환경 보호 + 글 저장 자체는 리포트 문제로 막지 않는 방침).
-    const validComplianceReport = validateComplianceReport(compliance_report);
+    //
+    // ⚠️ A층 결과·등급·검수 권고는 **서버가 본문으로 재산정한다**. 클라이언트가 보낸
+    //    grade/needsManualReview 를 그대로 믿으면 위반 글에 grade:"PASS" 를 실어
+    //    발행 게이트(site-publish·GEO export·auto-publish)를 우회할 수 있다.
+    //    B층(LLM) 결과와 autoFixed 이력은 재현 비용이 크므로 클라이언트 보고분을
+    //    쓰되, 게이트 판정에는 관여하지 않는 표시 전용 데이터다.
+    const validComplianceReport = buildServerComplianceReport(compliance_report, content);
 
     const insertRow = {
       user_id: user.id,
       title: title.trim(),
       content: content.trim(),
       keyword: keyword ?? null,
-      tags: Array.isArray(tags) ? tags : null,
+      // 산출물 3종은 서버에서도 정규화한다 — 클라이언트가 TagResult(객체)나
+      // data URL 을 그대로 보내도 컬럼 형태(text[]/int)에 맞게 걸러 저장한다.
+      tags: sanitizeTags(tags),
       specialty: specialty ?? null,
-      seo_score: typeof seo_score === 'number' ? seo_score : null,
-      image_urls: Array.isArray(image_urls) ? image_urls : null,
+      seo_score: sanitizeSeoScore(seo_score),
+      image_urls: sanitizeImageUrls(image_urls, process.env.NEXT_PUBLIC_SUPABASE_URL),
       sns_copy: sns_copy ?? null,
       sms_copy: sms_copy ?? null,
       status: validStatus,

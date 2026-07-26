@@ -63,6 +63,11 @@ export interface BlogContent {
   charCount: number;
   compliance: ComplianceResult;
   autoReplaced?: { word: string; suggestion: string }[];
+  /**
+   * A층이 검출해 자동교정한 위반 — 최종 본문에는 없지만 "검사가 작동했다"는 증빙.
+   * compliance_report.keyword.autoFixed 로 저장된다.
+   */
+  autoFixedViolations?: ComplianceViolation[];
   imageGuidelines: ImageGuidelines;
   seoAnalysis: {
     keywordCount: number;
@@ -199,7 +204,12 @@ export interface SavedPost {
   tags: string[] | null
   specialty: string | null
   seo_score: number | null
-  image_urls: string[] | null
+  /**
+   * 본문 이미지 URL. **index i 는 본문 `[이미지 i+1]` 마커를 가리키는 위치 계약**이라
+   * 원소가 null 일 수 있다(그 번호에 쓸 이미지가 없음). 압축하지 말 것 —
+   * 압축하면 뒤 이미지가 앞 번호로 당겨져 본문 설명과 다른 사진이 붙는다.
+   */
+  image_urls: (string | null)[] | null
   sns_copy: string | null
   sms_copy: string | null
   status: 'draft' | 'scheduled' | 'published'

@@ -93,48 +93,192 @@ function isHeadingLine(line: string): boolean {
 }
 
 /**
+ * 본문에 렌더할 이미지 1장.
+ *
+ * url 은 **호출부가 화이트리스트 검증을 마친 값**이어야 한다
+ * (clinic-site/theme.ts `isAllowedClinicAssetUrl` — 자체 Supabase clinic-assets
+ * public 경로만). 이 모듈은 순수 문자열 조립만 하고 도메인 판정을 하지 않는다.
+ */
+export interface BodyImage {
+  url: string;
+  /** 대체 텍스트 — 비어 있으면 alt="" (장식 이미지로 취급). */
+  alt: string;
+}
+
+/**
+ * 이미지 슬롯 배열 — **index i 는 본문 마커 번호 i+1 을 뜻한다(위치 계약)**.
+ *
+ * null 은 "그 번호에는 이미지가 없다"는 뜻이며, 호출부는 검증에서 탈락한 URL 을
+ * 배열에서 빼지 말고 반드시 null 로 남겨야 한다. 빼면 뒤 이미지가 앞 번호로
+ * 당겨져 본문 설명과 다른 사진이 붙는다.
+ */
+export type BodyImageSlots = ReadonlyArray<BodyImage | null>;
+
+/** `[이미지 N: 설명]` — 줄 단독이든 문장 중간이든 동일하게 인식한다. */
+const IMAGE_MARKER_RE = /\[이미지\s*(\d+)\s*:[^\]]*\]/g;
+
+/** 한 줄에 들어 있는 이미지 마커 번호를 등장 순서대로 모은다. 없으면 빈 배열. */
+function imageMarkerNumbers(line: string): number[] {
+  const re = new RegExp(IMAGE_MARKER_RE.source, 'g');
+  const out: number[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(line)) !== null) {
+    const n = Number.parseInt(match[1], 10);
+    if (Number.isFinite(n) && n > 0) out.push(n);
+  }
+  return out;
+}
+
+/** 텍스트에서 마커 조각을 제거한다(화면에 문자열로 새지 않게). */
+function stripMarkers(line: string): string {
+  return line.replace(new RegExp(IMAGE_MARKER_RE.source, 'g'), '').replace(/\s{2,}/g, ' ').trim();
+}
+
+/** 소제목 판정 — ▶ 는 h3, 짧은 독립 줄은 h2. 둘 다 아니면 null(단락). */
+function headingHtml(text: string): string | null {
+  if (text.startsWith('▶')) return `<h3>${escapeHtml(text.replace(/^▶\s*/, ''))}</h3>`;
+  if (isHeadingLine(text)) return `<h2>${escapeHtml(text)}</h2>`;
+  return null;
+}
+
+/**
+ * <figure><img> 한 덩어리. 반응형·지연로딩은 속성으로 고정하고(스타일 무관),
+ * 시각 스타일은 호출부 CSS 에 맡긴다(스탠드얼론 HTML/서브블로그 양쪽에서 동작).
+ */
+function renderFigure(image: BodyImage): string {
+  const alt = escapeHtml((image.alt ?? '').trim());
+  return `<figure><img src="${escapeHtml(image.url)}" alt="${alt}" loading="lazy" decoding="async" /></figure>`;
+}
+
+/**
+ * 마커가 하나도 없는 본문에서 이미지를 넣을 블록 경계를 고른다.
+ *
+ * k 번째(1-based) 이미지를 전체 B 블록 중 `round(B*k/(K+1))` 번째 블록 **뒤**에 둔다
+ * — 첫 단락(도입부) 앞에는 절대 두지 않고(글의 훅을 밀어내지 않는다), 마지막
+ * 블록 뒤로도 넘어가지 않아 본문 안에 고르게 흩어진다.
+ */
+function evenBoundaries(blockCount: number, imageCount: number): number[] {
+  if (blockCount <= 0 || imageCount <= 0) return [];
+  const out: number[] = [];
+  for (let k = 1; k <= imageCount; k++) {
+    const raw = Math.round((blockCount * k) / (imageCount + 1));
+    out.push(Math.min(blockCount, Math.max(1, raw)));
+  }
+  return out;
+}
+
+/**
  * 플레인 텍스트 본문을 시맨틱 HTML 로 변환한다.
  * - "▶ …" 줄 → <h3>
  * - 빈 줄로 둘러싸인 짧은 독립 줄(문장 아님) → <h2>
+ * - `[이미지 N: 설명]` 마커 → images[N-1] 이 있으면 <figure><img>, 없으면 아무것도 렌더하지 않음
+ *   (줄 단독이든 문장 끝이든 동일. 문장에 섞여 있으면 그 줄 텍스트 뒤에 놓는다)
  * - 그 외 → <p> (블록 내 줄바꿈은 <br /> 유지)
  * 모든 텍스트는 이스케이프되어 태그로 해석되지 않는다.
+ *
+ * 이미지 배치 규칙 (images 를 넘겼을 때만 동작 — 기본값 빈 배열이면 기존과 동일):
+ *  1. 마커가 있으면 **마커 위치가 곧 이미지 위치**다. 앱 미리보기(BlogBodyRenderer)와
+ *     네이버 발행본이 쓰는 매핑(N ↔ images[N-1])을 그대로 따라 세 화면이 일치한다.
+ *     그래서 images 는 압축하면 안 되는 **슬롯 배열**이다(BodyImageSlots 참조).
+ *  2. 마커에 대응하는 이미지가 없으면(슬롯이 null) 아무것도 렌더하지 않는다
+ *     (기존 strip 동작 유지). 같은 번호가 여러 번 나오면 첫 마커에만 렌더한다.
+ *  3. 마커가 하나도 없으면(수동 편집 글 등) 블록 사이에 균등 배치한다.
+ *  4. 마커가 있는데 참조되지 않은 이미지가 남으면 본문 끝에 순서대로 덧붙인다(유실 방지).
  */
-export function renderBodyHtml(bodyText: string): string {
+export function renderBodyHtml(bodyText: string, images: BodyImageSlots = []): string {
   const blocks = (bodyText ?? '')
     .split(/\n{2,}/)
     .map((b) => b.trim())
     .filter((b) => b.length > 0);
 
   const parts: string[] = [];
+  /** 각 블록이 끝난 시점의 parts 길이 — 균등 배치 삽입 지점. */
+  const blockEnds: number[] = [];
+  const used = new Set<number>();
+  let sawMarker = false;
+
+  const pushImageAt = (n: number): void => {
+    sawMarker = true;
+    const image = images[n - 1];
+    if (!image || used.has(n - 1)) return;
+    used.add(n - 1);
+    parts.push(renderFigure(image));
+  };
+
+  type BlockItem = { kind: 'image'; n: number } | { kind: 'text'; text: string };
+
   for (const block of blocks) {
-    const lines = block.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-
-    if (lines.length === 1 && lines[0].startsWith('▶')) {
-      parts.push(`<h3>${escapeHtml(lines[0].replace(/^▶\s*/, ''))}</h3>`);
-      continue;
+    // 줄을 (텍스트 | 이미지 마커) 항목으로 정규화한다.
+    // ★ 마커 인식이 소제목 판정보다 먼저다 — "소제목 [이미지 1: …]" 처럼 마커가
+    //   섞인 짧은 줄이 <h2> 로 굳어 마커 문자열이 화면에 노출되는 것을 막고,
+    //   줄 단독 마커든 문장 끝 마커든 똑같이 "그 자리"로 취급한다.
+    //   마커가 없던 줄은 원문 그대로 둔다(공백 정규화로 기존 렌더가 바뀌지 않게).
+    const items: BlockItem[] = [];
+    for (const raw of block.split('\n').map((l) => l.trim())) {
+      if (raw.length === 0) continue;
+      const markerNs = imageMarkerNumbers(raw);
+      if (markerNs.length === 0) {
+        items.push({ kind: 'text', text: raw });
+        continue;
+      }
+      const cleaned = stripMarkers(raw);
+      if (cleaned.length > 0) items.push({ kind: 'text', text: cleaned });
+      for (const n of markerNs) items.push({ kind: 'image', n });
     }
-    if (lines.length === 1 && isHeadingLine(lines[0])) {
-      parts.push(`<h2>${escapeHtml(lines[0])}</h2>`);
-      continue;
-    }
 
-    // 블록 안에 ▶ 줄이 섞여 있으면 h3 로 분리, 나머지 연속 줄은 하나의 단락으로
+    // 블록의 텍스트가 딱 한 줄이면 소제목 후보다 (마커가 함께 있어도 동일 — 마커를
+    // 위로 올리는 upstream strip 이 하던 판정과 결과가 같아야 한다).
+    const textItems = items.filter(
+      (item): item is { kind: 'text'; text: string } => item.kind === 'text',
+    );
+    const soleHeading = textItems.length === 1 ? headingHtml(textItems[0].text) : null;
+
+    // 블록 안에 ▶·이미지 마커가 섞여 있으면 분리, 나머지 연속 줄은 하나의 단락으로
     const paragraphLines: string[] = [];
     const flush = () => {
       if (paragraphLines.length === 0) return;
       parts.push(`<p>${paragraphLines.map(escapeHtml).join('<br />')}</p>`);
       paragraphLines.length = 0;
     };
-    for (const line of lines) {
-      if (line.startsWith('▶')) {
+    for (const item of items) {
+      if (item.kind === 'image') {
         flush();
-        parts.push(`<h3>${escapeHtml(line.replace(/^▶\s*/, ''))}</h3>`);
-      } else {
-        paragraphLines.push(line);
+        pushImageAt(item.n);
+        continue;
       }
+      if (soleHeading !== null) {
+        parts.push(soleHeading);
+        continue;
+      }
+      if (item.text.startsWith('▶')) {
+        flush();
+        parts.push(`<h3>${escapeHtml(item.text.replace(/^▶\s*/, ''))}</h3>`);
+        continue;
+      }
+      paragraphLines.push(item.text);
     }
     flush();
+    blockEnds.push(parts.length);
   }
+
+  const leftovers = images.filter(
+    (image, i): image is BodyImage => image !== null && !used.has(i),
+  );
+  if (leftovers.length > 0) {
+    if (!sawMarker) {
+      // 규칙 3 — 마커가 전혀 없는 본문: 블록 사이 균등 배치.
+      const boundaries = evenBoundaries(blockEnds.length, leftovers.length);
+      // 뒤에서부터 삽입해야 앞쪽 인덱스가 밀리지 않는다.
+      for (let k = leftovers.length - 1; k >= 0; k--) {
+        const at = blockEnds[boundaries[k] - 1] ?? parts.length;
+        parts.splice(at, 0, renderFigure(leftovers[k]));
+      }
+    } else {
+      // 규칙 4 — 마커는 있는데 짝을 못 찾은 이미지: 본문 끝에.
+      for (const image of leftovers) parts.push(renderFigure(image));
+    }
+  }
+
   return parts.join('\n');
 }
 
@@ -176,6 +320,8 @@ const BASE_STYLE = `    article { max-width: 720px; margin: 0 auto; padding: 24p
     article h3 { font-size: 1.05em; margin-top: 1.5em; }
     article section[aria-label="핵심 요약"] { background: #f6f7f9; border-radius: 12px; padding: 16px 20px; }
     article section[aria-label="핵심 요약"] h2 { margin-top: 0; }
+    article figure { margin: 1.75em 0; }
+    article figure img { display: block; width: 100%; height: auto; border-radius: 12px; }
     article p.byline { margin-top: 2.5em; padding-top: 1em; border-top: 1px solid #e5e9ef; color: #73808f; font-size: 0.85em; }`;
 
 /** 저자 바이라인 footer — 텍스트가 있을 때만 절제된 <p> 로 렌더. */

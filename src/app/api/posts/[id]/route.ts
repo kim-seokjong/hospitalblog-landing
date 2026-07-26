@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
-import { validateComplianceReport } from '@/content/lib/compliance-report';
+import { buildServerComplianceReport } from '@/content/lib/compliance-report-server';
+import { sanitizeImageUrls, sanitizeTags, sanitizeSeoScore } from '@/content/lib/saved-post-fields';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+/**
+ * "의도적으로 비우기"인지 판정한다 — null 또는 빈 배열.
+ * 타입이 어긋난 입력(객체·문자열 등)과 구분해, 잘못된 페이로드가 기존 산출물을
+ * 조용히 파괴하는 것을 막는다.
+ */
+function isExplicitClear(value: unknown): boolean {
+  return value === null || (Array.isArray(value) && value.length === 0);
+}
 
 export async function GET(_req: NextRequest, { params }: RouteContext) {
   try {
@@ -51,17 +61,32 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
 
     const body = await req.json();
-    const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score', 'target_site', 'published_url'];
+    // image_urls 추가(2026-W30) — 누락돼 있어 재복사·재저장으로는 이미지를 영구히 채울 수 없었다.
+    const allowedFields = ['title', 'content', 'tags', 'status', 'keyword', 'seo_score', 'image_urls', 'target_site', 'published_url'];
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     // compliance_report(검사 증빙 스냅샷) — 재복사(PATCH)로 최신 검사 결과가 오면 갱신.
     // 서버 검증 실패(형태 불일치)나 미전송 시 건드리지 않는다(글 수정 자체는 막지 않는 방침,
     // 마이그 034 미적용 환경은 아래 42703 폴백이 보호).
+    //
+    // POST 와 동일하게 A층·등급·검수 권고를 서버가 본문으로 재산정한다. 본문이 함께
+    // 오지 않으면 재검사할 대상이 없으므로 리포트 갱신을 건너뛴다 — 검증만 통과한
+    // 클라이언트 등급을 그대로 저장하면 발행 게이트를 우회할 수 있다.
     const incomingReport = 'compliance_report' in body
-      ? validateComplianceReport(body.compliance_report)
+      ? buildServerComplianceReport(body.compliance_report, body.content)
       : null;
     if (incomingReport) {
       updates.compliance_report = incomingReport;
+    } else if (typeof body.content === 'string' && body.content.trim() !== '') {
+      // 본문이 바뀌었는데 새 검사 결과가 없으면 기존 스냅샷을 **무효화**한다.
+      //
+      // 무효화하지 않으면 PASS 로 저장된 글의 본문만 금지 표현으로 바꿔(PostEditor 는
+      // { title, content, tags } 만 보낸다) 옛 PASS 스냅샷을 그대로 남길 수 있다.
+      // site-publish·auto-publish·GEO export 는 본문을 재검사하지 않고 이 값을 읽으므로
+      // 그대로면 발행 게이트가 뚫린다.
+      // 리포트 없음 = 발행 차단(publish-gate 의 fail-closed 규칙)이고,
+      // compliance-recheck 가 A층+B층으로 다시 검사해 복구할 수 있다.
+      updates.compliance_report = null;
     }
 
     // original_content(VOICE-DNA 원본 스냅샷)는 불변 — 최초 1회만 채운다.
@@ -101,7 +126,21 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
           }
           updates[field] = val.trim();
         } else if (field === 'tags') {
-          updates[field] = Array.isArray(body[field]) ? body[field] : null;
+          // 빈 배열·null = 사용자가 의도적으로 비운 것 → 비운다.
+          // 그 외 형태 불일치(객체·문자열 등)는 기존 값을 파괴하지 않고 보존한다.
+          const normalized = sanitizeTags(body[field]);
+          if (normalized) updates[field] = normalized;
+          else if (isExplicitClear(body[field])) updates[field] = null;
+        } else if (field === 'image_urls') {
+          // Storage(clinic-assets) public URL 만 통과. 빈 배열·null 은 명시적 비우기.
+          const normalized = sanitizeImageUrls(body[field], process.env.NEXT_PUBLIC_SUPABASE_URL);
+          if (normalized) updates[field] = normalized;
+          else if (isExplicitClear(body[field])) updates[field] = null;
+        } else if (field === 'seo_score') {
+          // 타입 미검증으로 문자열이 넘어가면 Postgres 22P02 로 저장 전체가 실패했다.
+          const normalized = sanitizeSeoScore(body[field]);
+          if (normalized !== null) updates[field] = normalized;
+          else if (body[field] === null) updates[field] = null;
         } else if (field === 'status') {
           const validStatuses = ['draft', 'scheduled', 'published'];
           if (!validStatuses.includes(body[field])) {
@@ -143,7 +182,12 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
     // 마이그 034(compliance_report) 미적용 환경 폴백 — 컬럼 없음(42703)이면
     // 리포트만 제외하고 재시도한다(글 수정 자체를 막지 않는다).
-    if (error && incomingReport && error.code === '42703') {
+    //
+    // 조건은 `incomingReport` 가 아니라 **updates 에 컬럼이 들어갔는지**로 판정한다.
+    // 무효화 경로(compliance_report = null)는 incomingReport 가 null 이라
+    // 예전 조건으로는 폴백을 타지 못해, 컬럼 미존재 환경에서 PostEditor 의
+    // 본문 저장이 500 으로 실패했다.
+    if (error && 'compliance_report' in updates && error.code === '42703') {
       const { compliance_report: _omitted, ...withoutReport } = updates;
       ({ data, error } = await supabase
         .from('saved_posts')

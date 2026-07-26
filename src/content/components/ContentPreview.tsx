@@ -177,7 +177,9 @@ export default function ContentPreview({ content, onGenerateImages, onImagesUplo
           style={{ colorScheme: 'light', color: '#1f2937' }}
         >
           <h1 className="text-sm font-bold !text-gray-900 mb-3 pb-3 border-b border-gray-200">{content.title}</h1>
-          <div className="!text-gray-800">{renderBlogBody(content.body, { highlight: highlightViolations })}</div>
+          {/* images 를 넘겨야 [이미지 N] 자리에 실제 썸네일이 뜬다 —
+              본문 편집 모달·서브도메인 블로그와 같은 매핑(id 'img-N')을 쓴다. */}
+          <div className="!text-gray-800">{renderBlogBody(content.body, { highlight: highlightViolations, images })}</div>
         </div>
       </div>
 

@@ -36,6 +36,12 @@ export interface GeoSchemaPost {
   content: string;
   /** 발행 시각(ISO). 없으면 저장 시각 등으로 대체 가능, 파싱 불가면 필드 생략 */
   publishedAt?: string | null;
+  /**
+   * 본문 이미지 URL — **호출부가 화이트리스트 검증을 마친 값만** 넘긴다
+   * (clinic-site/theme.ts `isAllowedClinicAssetUrl`). Article.image 로 나가며,
+   * 없으면 필드 자체를 생략한다.
+   */
+  imageUrls?: ReadonlyArray<string> | null;
 }
 
 export interface GeoHospitalProfile {
@@ -110,13 +116,24 @@ export function stripImagePlaceholders(content: string): string {
   return (content ?? '').replace(IMAGE_PLACEHOLDER_RE, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+/**
+ * 요약·FAQ 블록만 제거하고 **[이미지 N: …] 마커는 남긴다.**
+ *
+ * 서브도메인 블로그처럼 마커 위치에 실제 이미지를 렌더하는 화면이 쓴다
+ * (geo-export `renderBodyHtml(body, images)`). 마커를 먼저 지워버리면
+ * 이미지 위치 정보가 사라져 본문 어디에 넣을지 알 수 없게 된다.
+ */
+export function stripSummaryAndFaqBlocks(content: string): string {
+  return (content ?? '')
+    .replace(SUMMARY_BLOCK_RE, '')
+    .replace(FAQ_BLOCK_RE, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** 요약·FAQ 블록과 이미지 플레이스홀더를 제거한 순수 본문. */
 export function stripStructureBlocks(content: string): string {
-  return stripImagePlaceholders(
-    (content ?? '')
-      .replace(SUMMARY_BLOCK_RE, '')
-      .replace(FAQ_BLOCK_RE, ''),
-  );
+  return stripImagePlaceholders(stripSummaryAndFaqBlocks(content));
 }
 
 /**
@@ -173,6 +190,9 @@ export function buildArticleSchema(
 ): JsonLdObject {
   const authorNode = buildAuthorNode(attributionOf(profile));
   const datePublished = safeIsoDate(post.publishedAt);
+  const images = (post.imageUrls ?? []).filter(
+    (url): url is string => typeof url === 'string' && url.length > 0,
+  );
 
   return {
     '@context': SCHEMA_CONTEXT,
@@ -180,6 +200,7 @@ export function buildArticleSchema(
     headline: normalized(post.title),
     description: buildMetaDescription(post.content),
     inLanguage: 'ko',
+    ...(images.length > 0 ? { image: [...images] } : {}),
     ...(authorNode ? { author: authorNode } : {}),
     ...(datePublished ? { datePublished } : {}),
   };

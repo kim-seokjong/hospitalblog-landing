@@ -90,6 +90,22 @@ function renderFaqBox(lines: string[], keyPrefix: string, highlight: Highlight):
   );
 }
 
+/**
+ * 마커 번호 N 에 해당하는 이미지를 찾는다.
+ *
+ * ★ 배열 위치가 아니라 id("img-N")로 찾는다 — 이미지 생성은 부분 실패를 허용해서
+ *   2번만 실패하면 배열이 [1번, 3번] 이 되고, images[n-1] 로 읽으면 3번 사진이
+ *   2번 설명 자리에 뜬다(저장·서브블로그 렌더와도 어긋난다).
+ *   id 가 없는 구 데이터일 때만 배열 위치로 폴백한다.
+ */
+function findImageForMarker(images: GeneratedImage[] | undefined, n: number): GeneratedImage | undefined {
+  if (!images || !Number.isFinite(n)) return undefined;
+  const byId = images.find((img) => img.id === `img-${n}`);
+  if (byId) return byId;
+  const hasSlotIds = images.some((img) => /^img-\d+$/.test(img.id ?? ''));
+  return hasSlotIds ? undefined : images[n - 1];
+}
+
 function renderImagePlaceholder(
   line: string,
   keyPrefix: string,
@@ -98,7 +114,7 @@ function renderImagePlaceholder(
   const match = line.match(/^\[이미지\s*(\d+):/);
   const caption = line.replace(/[\[\]]/g, '');
   const n = match ? parseInt(match[1], 10) : NaN;
-  const img = Number.isFinite(n) && images ? images[n - 1] : undefined;
+  const img = findImageForMarker(images, n);
 
   // 실제 생성 이미지가 있으면 인라인 썸네일(네이버형 본문 내 이미지 느낌)
   if (img) {

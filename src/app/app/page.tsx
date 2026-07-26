@@ -24,6 +24,12 @@ import { safeFetchJson } from '@/content/lib/safe-fetch';
 import { MULTICHANNEL_SRC_KEY, encodeMultichannelSrc } from '@/content/lib/multichannel-src';
 import { checkCompliance } from '@/content/lib/medical-compliance';
 import { buildComplianceReport } from '@/content/lib/compliance-report';
+import {
+  sanitizeImageUrls,
+  sanitizeSeoScore,
+  sanitizeTags,
+  toImageUrlSlots,
+} from '@/content/lib/saved-post-fields';
 import { getOnboardingKeywords, shouldShowOnboarding } from '@/content/lib/onboarding-keyword';
 
 type ViewStep = 'input' | 'content';
@@ -1072,10 +1078,30 @@ export default function AppPage() {
     const originalContent = originalBodyRef.current;
     // 컴플라이언스 증빙 스냅샷 — A층(편집 반영 재검사분) + B층(생성 시 LLM 심의) 결과를
     // 저장 시점에 정리해 함께 보관한다(리포트 페이지 /app/report/[postId]에서 재사용).
+    // autoFixed: 생성 시 A층이 잡아 자동교정한 위반 — 최종 본문엔 없으나 "검사가 작동했다"는 증빙.
     const complianceReport = buildComplianceReport({
       compliance: content.compliance,
       aiReview: content.aiReview ?? null,
+      autoFixed: content.autoFixedViolations ?? [],
     });
+    // 산출물 보존 — 이미지·태그·SEO 점수를 함께 저장한다.
+    // 이 세 필드가 페이로드에서 빠져 있어 이미지 546장·태그 91회를 만들고도
+    // saved_posts 15/15 가 전부 비어 있었다(2026-W30 실측).
+    // image_urls 는 Storage(clinic-assets) public URL 만 통과한다 — data URL·만료성
+    // 외부 CDN URL 은 sanitizeImageUrls 가 걸러내 죽은 링크가 DB 에 남지 않는다.
+    // ★ toImageUrlSlots: 이미지 id("img-N")로 본문 [이미지 N] 자리를 맞춘다.
+    //   images.map(url) 로 만들면 부분 실패 시(2번만 실패) 3번 사진이 2번 자리로 당겨진다.
+    const imageUrls = sanitizeImageUrls(
+      toImageUrlSlots(images),
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+    );
+    const savedTags = sanitizeTags(tags);
+    const savedSeoScore = sanitizeSeoScore(selectedTitle?.seoScore);
+    const artifactFields = {
+      ...(imageUrls ? { image_urls: imageUrls } : {}),
+      ...(savedTags ? { tags: savedTags } : {}),
+      ...(savedSeoScore !== null ? { seo_score: savedSeoScore } : {}),
+    };
     copySaveQueueRef.current = copySaveQueueRef.current.then(async () => {
       try {
         const existingId = savedPostIdRef.current;
@@ -1090,6 +1116,7 @@ export default function AppPage() {
               target_site: payload.targetSite,
               status: 'published',
               compliance_report: complianceReport,
+              ...artifactFields,
               ...(originalContent ? { original_content: originalContent } : {}),
             }),
           });
@@ -1106,6 +1133,7 @@ export default function AppPage() {
             target_site: payload.targetSite,
             status: 'published',
             compliance_report: complianceReport,
+            ...artifactFields,
             ...(originalContent ? { original_content: originalContent } : {}),
           }),
         });

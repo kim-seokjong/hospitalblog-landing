@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL, proofreadContent } from '@/content/lib/anthropic';
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/content/lib/medical-compliance';
 import { reviewComplianceWithAI, type AiComplianceReview } from '@/content/lib/medical-compliance-ai';
+import { diffAutoFixedViolations } from '@/content/lib/compliance-report';
 import { stripAiCliches } from '@/content/lib/anti-ai';
 import { logUsage } from '@/dev/lib/usage-logger';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
@@ -565,6 +566,12 @@ ${formatGuide}
     // 마무리 인사 상투어는 검출만 해서 교정 패스에 전달. 문맥은 보호한다.
     const { cleaned: deCliched, detected: aiCliches } = stripAiCliches(mdCleaned);
 
+    // ⚠️ A층 1차 검사 — **자동치환 이전** 원문 기준.
+    // autoFix 가 금지어를 전부 치환해버리기 때문에, 치환 후에만 검사하면 A층 위반이
+    // 구조적으로 항상 0건이 된다(2026-W30 실측: 운영 리포트 6/6 violations=[]).
+    // 검사가 실제로 무엇을 잡았는지는 이 시점에만 알 수 있으므로 여기서 스냅샷을 뜬다.
+    const preFixCompliance = checkCompliance(deCliched);
+
     // 의료광고법 금지어 자동 교체 — Claude가 생성했더라도 100% 필터링
     const { fixed: cleanedBody, replaced: autoReplaced } = autoFix(deCliched);
 
@@ -584,7 +591,22 @@ ${formatGuide}
 
     const bodyForCount = body.replace(/\[이미지\s*\d+:[^\]]*\]/g, '');
     const charCount = bodyForCount.length;
-    const keywordCompliance = checkCompliance(body);
+    // A층 2차 검사 — 발행될 최종 본문의 **잔존** 위반(등급 산정 기준).
+    const residualCompliance = checkCompliance(body);
+    // 자동치환 효과는 autoFix 직후(cleanedBody)와 비교해야 정확하다.
+    // 최종 body 와 비교하면 교정 LLM(proofread)이 지운 표현이나 저자 블록 추가분까지
+    // "자동치환됨"으로 잘못 기록된다(예: autoFix 대상이 아닌 '전후 사진'·'후기').
+    const postFixCompliance = checkCompliance(cleanedBody);
+    const autoFixedViolations = diffAutoFixedViolations(
+      preFixCompliance.violations,
+      postFixCompliance.violations,
+    );
+    // 경고는 자동치환 대상이 아니지만, 치환이 문장을 바꾸며 패턴이 어긋날 수 있으므로
+    // 1·2차 합집합으로 둔다(recall 우선 — 놓치느니 남긴다).
+    const keywordCompliance = {
+      ...residualCompliance,
+      warnings: Array.from(new Set([...preFixCompliance.warnings, ...residualCompliance.warnings])),
+    };
 
     // Layer B — LLM 심의관(best-effort). 실패해도 응답 전체를 막지 않는다(reviewed=false 로 진행).
     // reviewComplianceWithAI 는 throw 하지 않지만, 만일을 대비해 한 번 더 감싼다.
@@ -609,6 +631,8 @@ ${formatGuide}
     const hasKeywordHigh = keywordCompliance.violations.some(
       (v) => v.severity === 'HIGH' || v.severity === 'CRITICAL',
     );
+    // autoFixedViolations 는 게이트에 넣지 않는다 — 현재 본문에 없는 표현으로 발행을
+    // 잠그면 사용자가 본문을 고쳐도 해제할 수 없다(buildComplianceReport 주석 참조).
     const hasAiHigh = aiReview.findings.some((f) => f.severity === 'HIGH');
     const needsManualReview = hasKeywordHigh || hasAiHigh;
 
@@ -712,6 +736,8 @@ ${formatGuide}
       // 발행 게이트 권고 플래그 — HIGH 위반/지적 존재 시 발행 전 검수 권고(하드 차단 아님).
       needsManualReview,
       autoReplaced: autoReplaced.length > 0 ? autoReplaced : undefined,
+      // A층이 잡아서 자동교정한 위반 — 증빙 리포트(compliance_report.keyword.autoFixed)에 저장된다.
+      autoFixedViolations,
       imageGuidelines: {
         recommendedCount: Math.max(6, placementHints.length),
         placementHints,

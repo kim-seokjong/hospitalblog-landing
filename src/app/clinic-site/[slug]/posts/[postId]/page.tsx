@@ -11,9 +11,14 @@ import {
   extractFaqItems,
   extractSummaryLines,
   serializeJsonLd,
-  stripStructureBlocks,
+  stripSummaryAndFaqBlocks,
 } from '@/content/lib/geo-schema';
 import { renderBodyHtml } from '@/content/lib/geo-export';
+import {
+  buildClinicPostImages,
+  pickLeadImageUrl,
+  toImageUrlList,
+} from '@/content/lib/clinic-site/post-images';
 import { formatBylineText, resolveAuthorAttribution } from '@/content/lib/clinic-site/byline';
 import { rankRelatedPosts, RELATED_POSTS_LIMIT } from '@/content/lib/clinic-site/related-posts';
 import ClinicSiteFooter, { formatClinicDate } from '../../site-chrome';
@@ -25,6 +30,9 @@ import AiReferralBeacon from '../../ai-referral-beacon';
  *
  * - 발행 확정(published_to_site=true) 글만 — 아니면 404 (검수 게이트는 발행 API가 담당)
  * - 본문 렌더·JSON-LD 는 geo-export/geo-schema 재사용 (직렬화 이스케이프 그대로)
+ * - 본문 이미지: `[이미지 N: 설명]` 마커 위치에 image_urls[N-1] 을 렌더한다
+ *   (clinic-site/post-images.ts — 자체 Storage 화이트리스트 통과분만). 이미지가
+ *   없으면 마커는 사라지고 기존과 완전히 동일한 텍스트 본문이 된다.
  * - canonical = 서브도메인 절대 URL. ISR 1시간.
  * - 브랜드킷 자동 테마: 로고(헤더)·브랜드 컬러(h2 보더·홈 링크 hover) 절제 적용.
  *   미등록이면 기본 디자인 그대로 (theme-data.ts graceful).
@@ -49,6 +57,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const canonical = clinicSiteUrl(validated.slug, `/posts/${post.id}`);
   const description = buildMetaDescription(post.content);
 
+  // 대표 이미지 = 본문 첫 이미지. 화이트리스트 통과분만(외부 URL 은 OG 에도 안 나간다).
+  const leadImageUrl = pickLeadImageUrl(
+    buildClinicPostImages(
+      post.content,
+      post.imageUrls,
+      process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
+      post.title,
+    ),
+  );
+
   return {
     title: { absolute: post.title },
     description,
@@ -59,7 +77,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url: canonical,
       type: 'article',
       locale: 'ko_KR',
+      ...(leadImageUrl ? { images: [{ url: leadImageUrl, alt: post.title }] } : {}),
     },
+    ...(leadImageUrl
+      ? { twitter: { card: 'summary_large_image' as const, images: [leadImageUrl] } }
+      : {}),
   };
 }
 
@@ -85,8 +107,21 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
     RELATED_POSTS_LIMIT,
   );
 
+  // 본문 이미지 — 마커(N) ↔ image_urls[N-1] 매핑. 화이트리스트 탈락분은 전부 제외된다.
+  const bodyImages = buildClinicPostImages(
+    post.content,
+    post.imageUrls,
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
+    post.title,
+  );
+
   const schemas = buildGeoSchemas(
-    { title: post.title, content: post.content, publishedAt: post.publishedAt },
+    {
+      title: post.title,
+      content: post.content,
+      publishedAt: post.publishedAt,
+      imageUrls: toImageUrlList(bodyImages),
+    },
     {
       hospitalName: clinic.hospitalName,
       specialty: clinic.hospitalType,
@@ -110,8 +145,10 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
 
   const summaryLines = extractSummaryLines(post.content);
   const faqItems = extractFaqItems(post.content);
-  // renderBodyHtml 은 모든 텍스트를 escapeHtml 처리한 시맨틱 HTML 문자열을 만든다
-  const bodyHtml = renderBodyHtml(stripStructureBlocks(post.content));
+  // renderBodyHtml 은 모든 텍스트를 escapeHtml 처리한 시맨틱 HTML 문자열을 만든다.
+  // 이미지 마커를 남긴 본문을 넘겨야 마커 위치에 이미지가 들어간다 —
+  // bodyImages 가 비어 있으면 마커는 그대로 사라져 기존 렌더와 동일하다.
+  const bodyHtml = renderBodyHtml(stripSummaryAndFaqBlocks(post.content), bodyImages);
 
   // 브랜드 컬러 — 검증 통과(hasBrandColor)시에만. CSS 변수는 hex 검증 완료값만 주입.
   const accentStyle: CSSProperties | undefined = theme.hasBrandColor
@@ -179,7 +216,10 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
             className={`clinic-post-body space-y-4 text-[15px] sm:text-base
               [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-9 [&_h2]:mb-2
               [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-7 [&_h3]:mb-1.5
-              [&_p]:leading-[1.8]${bodyAccentClass}`}
+              [&_p]:leading-[1.8]
+              [&_figure]:my-7
+              [&_figure_img]:block [&_figure_img]:w-full [&_figure_img]:h-auto
+              [&_figure_img]:rounded-xl [&_figure_img]:bg-[#f1f3f6]${bodyAccentClass}`}
             dangerouslySetInnerHTML={{ __html: bodyHtml }}
           />
 
