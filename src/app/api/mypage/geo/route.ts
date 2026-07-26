@@ -11,6 +11,11 @@ import {
   type GeoReadinessScore,
   type WeeklyCitationPoint,
 } from '@/content/lib/geo-tracking';
+import { getAiReferralSummary } from '@/dev/lib/ai-referral-server';
+import {
+  AI_REFERRAL_WINDOW_DAYS,
+  type AiReferralSummary,
+} from '@/content/lib/ai-referral/summary';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +72,14 @@ export interface GeoTabResponse {
    * true 면 weekly 에서 그 주를 제외했다(부분 표본으로 인용률이 왜곡되는 것 방지).
    */
   rowsTruncated: boolean;
+  /**
+   * AI 검색에서 병원 블로그로 실제 넘어온 방문의 최근 30일 집계.
+   * 인용(latest/weekly)은 "언급됐는가", 이쪽은 "사람이 왔는가" — 서로 다른 지표다.
+   * 데이터 0건·마이그 051 미적용에서도 빈 요약이 들어와 화면이 깨지지 않는다.
+   */
+  aiReferral: AiReferralSummary;
+  /** 병원 블로그(서브도메인) 개설 여부. 미개설이면 유입 집계 대상 자체가 없다. */
+  clinicSiteEnabled: boolean;
 }
 
 function toCitationType(value: string | null): GeoCheckItem['citationType'] {
@@ -148,6 +161,22 @@ export async function GET() {
       posts.map((p) => ({ title: p.title ?? '', content: p.content ?? '' })),
     );
 
+    // 5) AI 검색 유입 실측 — 최근 30일.
+    // 집계는 DB 함수(clinic_ai_referral_summary, SECURITY INVOKER → RLS 적용)가 한다.
+    // 원시 행을 끌어와 합산하면 행 수 상한에 걸리는 순간 통계가 조용히 잘리기 때문에
+    // 앱에서 LIMIT 기반으로 읽지 않는다. 마이그 051 미적용·오류면 빈 요약이 온다.
+    const aiReferral: AiReferralSummary = await getAiReferralSummary(AI_REFERRAL_WINDOW_DAYS);
+
+    // 6) 병원 블로그 개설 여부 — 미개설이면 유입 집계 자체가 성립하지 않아 안내가 달라진다
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('site_slug')
+      .eq('id', user.id)
+      .maybeSingle();
+    const clinicSiteEnabled = Boolean(
+      (profileData as { site_slug: string | null } | null)?.site_slug,
+    );
+
     return NextResponse.json({
       liveEnabled: isGeoLiveQueryEnabled(),
       latest,
@@ -155,6 +184,8 @@ export async function GET() {
       readiness,
       checkedPostCount: posts.length,
       rowsTruncated,
+      aiReferral,
+      clinicSiteEnabled,
     } satisfies GeoTabResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류';
