@@ -57,10 +57,17 @@ export async function POST(req: NextRequest) {
     const outcome = await lookupClinics(name, { region });
 
     if (outcome.kind === 'unavailable') {
+      // ⚠️ 셋을 구분해서 알린다. "설정 문제"를 "그런 병원 없음"처럼 보이게 하면
+      //    운영 중 키가 만료돼도 아무도 눈치채지 못한다(실제로 그랬다).
       const message =
         outcome.reason === 'not_configured'
           ? '병원 조회 서비스가 아직 연결되지 않았어요. 블로그 주소로 진단하는 방법을 이용해 주세요.'
-          : '병원 정보를 조회하지 못했어요. 잠시 후 다시 시도해 주세요.';
+          : outcome.reason === 'key_rejected'
+            ? '병원 조회 서비스 연결에 문제가 생겼어요(담당자 확인 중). 병원이 없는 것이 아니니, 아래에서 블로그·홈페이지 주소로 진단해 주세요.'
+            : '병원 정보를 조회하지 못했어요. 잠시 후 다시 시도해 주세요.';
+      if (outcome.reason === 'key_rejected') {
+        console.error('[clinic-diagnosis/lookup] 행안부 조회 키 거부 — 운영 확인 필요');
+      }
       // 실패는 캐시하지 않는다 — 일시 장애를 하루 동안 굳히지 않기 위해.
       return NextResponse.json({ error: message, outcome }, { status: 503 });
     }

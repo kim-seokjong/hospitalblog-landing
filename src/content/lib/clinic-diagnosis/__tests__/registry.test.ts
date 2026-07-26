@@ -98,8 +98,15 @@ test('splitRegionHint 는 앞쪽 지역 토큰을 떼고 정식 시도명으로 
 
 /* ── 응답 파싱 ──────────────────────────────────────────── */
 
+/** 성공 파싱만 꺼내는 헬퍼 — 실패면 그 자리에서 테스트를 깨뜨린다. */
+function parsedPage(payload: unknown) {
+  const parsed = parseRegistryResponse(payload);
+  assert.equal(parsed.ok, true, `파싱 실패: ${parsed.ok === false ? parsed.message : ''}`);
+  return parsed.ok ? parsed.page : { totalCount: 0, items: [] };
+}
+
 test('parseRegistryResponse 는 행안부 응답을 후보로 정규화한다', () => {
-  const page = parseRegistryResponse(envelope([ROW_VB]));
+  const page = parsedPage(envelope([ROW_VB]));
   assert.equal(page.totalCount, 1);
   const [clinic] = page.items;
   assert.equal(clinic.name, '브이비성형외과의원');
@@ -112,15 +119,47 @@ test('parseRegistryResponse 는 행안부 응답을 후보로 정규화한다', 
 });
 
 test('parseRegistryResponse 는 items 가 객체 래핑(item)이어도 읽는다', () => {
-  const page = parseRegistryResponse({ response: { body: { totalCount: 1, items: { item: [ROW_VB] } } } });
-  assert.equal(page.items.length, 1);
+  assert.equal(parsedPage({ response: { body: { totalCount: 1, items: { item: [ROW_VB] } } } }).items.length, 1);
 });
 
-test('parseRegistryResponse 는 형태가 어긋나면 빈 페이지를 준다 (throw 금지)', () => {
-  for (const bad of [null, undefined, 'text', 42, {}, { response: {} }, { response: { body: { items: 'x' } } }]) {
-    const page = parseRegistryResponse(bad);
-    assert.equal(page.items.length, 0);
+test('parseRegistryResponse: 진짜 0건은 정상 응답으로 통과시킨다', () => {
+  const page = parsedPage(envelope([]));
+  assert.equal(page.items.length, 0);
+  assert.equal(page.totalCount, 0);
+});
+
+/**
+ * ★ 이 진단의 실측 사고 회귀 방지.
+ * 공공데이터포털은 키가 거부돼도 HTTP 200 에 오류 본문을 실어 보낸다.
+ * 그걸 "0건"으로 읽는 바람에 배포 환경에서 **모든 병원이 not_found** 로 표시됐고
+ * 아무도 장애를 눈치채지 못했다.
+ */
+test('parseRegistryResponse: 키 거부 응답을 0건으로 읽지 않는다', () => {
+  const rejected = [
+    { OpenAPI_ServiceResponse: { cmmMsgHeader: { returnAuthMsg: 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR', returnReasonCode: '30' } } },
+    { cmmMsgHeader: { returnAuthMsg: 'LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR' } },
+    { response: { header: { resultCode: '30', resultMsg: 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR' } } },
+    'SERVICE ERROR: DEADLINE_HAS_EXPIRED',
+  ];
+  for (const payload of rejected) {
+    const parsed = parseRegistryResponse(payload);
+    assert.equal(parsed.ok, false, `키 거부 응답이 정상으로 통과됐다: ${JSON.stringify(payload)}`);
+    assert.equal(parsed.ok === false && parsed.reason, 'key_rejected');
   }
+});
+
+test('parseRegistryResponse: 정체불명 응답도 0건으로 단정하지 않는다', () => {
+  for (const bad of [null, undefined, 42, {}, { response: {} }, { response: { body: {} } }]) {
+    const parsed = parseRegistryResponse(bad);
+    assert.equal(parsed.ok, false, `${JSON.stringify(bad)} 를 정상 0건으로 읽었다`);
+  }
+});
+
+test('parseRegistryResponse: 성공 코드가 붙어 있으면 통과한다', () => {
+  const page = parsedPage({
+    response: { header: { resultCode: '00', resultMsg: 'NORMAL SERVICE.' }, body: { totalCount: 1, items: [ROW_VB] } },
+  });
+  assert.equal(page.items.length, 1);
 });
 
 test('toClinicCandidate 는 관리번호나 상호가 없으면 버린다', () => {
@@ -311,6 +350,43 @@ test('lookupClinics: 지역을 안 넣었으면 region_miss 로 강등하지 않
     new Response(JSON.stringify(envelope([{ ...ROW_VB }])), { headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch;
   const outcome = await lookupClinics('브이비성형외과의원', { env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl });
   assert.equal(outcome.kind, 'resolved');
+});
+
+/* ── ★ "설정 문제"를 "그런 병원 없음"으로 뭉개지 않는다 ── */
+
+test('lookupClinics: 200 OK 에 담긴 키 거부 응답을 not_found 로 속이지 않는다', async () => {
+  // 실측 재현: 배포 환경에서 어떤 병원명을 넣어도 전부 not_found 였다.
+  // 원인은 게이트웨이가 200 으로 돌려준 오류 본문을 "0건"으로 읽은 것이었다.
+  const fetchImpl = (async () =>
+    new Response(
+      JSON.stringify({ OpenAPI_ServiceResponse: { cmmMsgHeader: { returnAuthMsg: 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR' } } }),
+      { headers: { 'content-type': 'application/json' } },
+    )) as unknown as typeof fetch;
+
+  const outcome = await lookupClinics('브이비성형외과의원', { env: { DATA_GO_SERVICE_KEY: 'expired' }, fetchImpl });
+  assert.deepEqual(outcome, { kind: 'unavailable', reason: 'key_rejected' });
+});
+
+test('lookupClinics: 401·403·429 는 키 문제로 분류한다', async () => {
+  for (const status of [401, 403, 429]) {
+    const fetchImpl = (async () => new Response('Unauthorized', { status })) as unknown as typeof fetch;
+    const outcome = await lookupClinics('브이비성형외과의원', { env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl });
+    assert.deepEqual(outcome, { kind: 'unavailable', reason: 'key_rejected' }, `HTTP ${status}`);
+  }
+});
+
+test('lookupClinics: JSON 이 아닌 오류 본문(XML)도 키 문제로 읽는다', async () => {
+  const xml = '<OpenAPI_ServiceResponse><cmmMsgHeader><returnAuthMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</returnAuthMsg></cmmMsgHeader></OpenAPI_ServiceResponse>';
+  const fetchImpl = (async () => new Response(xml, { headers: { 'content-type': 'application/xml' } })) as unknown as typeof fetch;
+  const outcome = await lookupClinics('브이비성형외과의원', { env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl });
+  assert.deepEqual(outcome, { kind: 'unavailable', reason: 'key_rejected' });
+});
+
+test('lookupClinics: 정상 응답으로 0건이면 그때만 not_found', async () => {
+  const fetchImpl = (async () =>
+    new Response(JSON.stringify(envelope([])), { headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch;
+  const outcome = await lookupClinics('없는병원의원', { env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl });
+  assert.deepEqual(outcome, { kind: 'not_found' });
 });
 
 test('lookupClinics: 이름이 2자 미만이면 호출 없이 not_found', async () => {

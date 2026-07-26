@@ -137,13 +137,17 @@ export default function ClinicCandidatePicker({ outcome, onPick, onNeedRegion, b
   }
 
   if (outcome.kind === 'unavailable') {
+    // "그런 병원이 없다"와 확실히 다르게 보여야 한다 — 원장이 자기 병원이 미등록이라고
+    // 오해하면 그 자리에서 이탈한다. 원인별 문구를 각각 둔다.
+    const message =
+      outcome.reason === 'not_configured'
+        ? '병원 조회 서비스가 아직 연결되지 않았어요. 아래 상세 진단에서 블로그·홈페이지 주소를 직접 넣어 주시면 진단해 드릴게요.'
+        : outcome.reason === 'key_rejected'
+          ? '병원 조회 서비스에 일시적인 문제가 생겼어요. 병원이 등록되지 않은 것이 아니라 저희 쪽 조회 문제입니다 — 아래 상세 진단에서 블로그·홈페이지 주소를 넣어 주시면 그대로 진단해 드릴게요.'
+          : '병원 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
     return (
       <div className="mt-6 bg-yellow-50 border border-yellow-500/30 rounded-2xl px-4 py-4">
-        <p className="text-[13px] text-yellow-800 leading-relaxed">
-          {outcome.reason === 'not_configured'
-            ? '병원 조회 서비스가 아직 연결되지 않았어요. 아래 상세 진단에서 블로그·홈페이지 주소를 직접 넣어 주시면 진단해 드릴게요.'
-            : '병원 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'}
-        </p>
+        <p className="text-[13px] text-yellow-800 leading-relaxed">{message}</p>
       </div>
     );
   }

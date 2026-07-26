@@ -1,13 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MAX_QUESTIONS,
-  buildDiagnosisQuestions,
+  MAX_HTTP_ATTEMPTS,
+  MAX_RECOMMEND_QUESTIONS,
+  NAMED_QUERY_ENGINES,
+  buildDiagnosisQueries,
   classifyCitationPath,
   hostOf,
   isOwnedSource,
   runAiCitation,
+  summarizeProbes,
 } from '../ai-citation.ts';
+import type { CitationProbe } from '../types.ts';
 import { buildComplianceAxis, softenRule, type ComplianceCheckShape } from '../compliance-scan.ts';
 
 const OWNED = { blogId: 'vbps_official', siteHost: 'vb.vbeauty.co.kr' };
@@ -62,17 +66,53 @@ test('자기 자산과 디렉터리가 섞이면 owned 가 우선한다', () => 
   );
 });
 
-/* ── 질의 생성: 비용 상한 ───────────────────────────────── */
+/* ── 질의 생성: 두 종류 분리 + 비용 상한 ────────────────── */
 
-test('질의는 상한을 넘지 않고 중복되지 않는다', () => {
-  const questions = buildDiagnosisQuestions({ region: '수성구', specialty: '성형외과', clinicName: '플로르 성형외과 의원' });
-  assert.ok(questions.length <= MAX_QUESTIONS, `질의 ${questions.length}개 — 상한 초과`);
-  assert.equal(new Set(questions).size, questions.length);
-  assert.ok(questions.some((q) => q.includes('플로르')), '지명 질의가 있어야 인지 여부를 직접 확인할 수 있다');
+test('추천 질의에는 병원 이름이 절대 들어가지 않는다 (판정의 정본)', () => {
+  const { recommend, named } = buildDiagnosisQueries({
+    region: '대구 수성구', specialty: '성형외과', clinicName: '하이업성형외과의원',
+  });
+  assert.ok(recommend.length >= 2);
+  assert.ok(recommend.length <= MAX_RECOMMEND_QUESTIONS, `추천 질의 ${recommend.length}개 — 상한 초과`);
+  for (const q of recommend) {
+    assert.ok(!q.includes('하이업'), `추천 질의에 병원 이름이 들어갔다: ${q}`);
+    assert.ok(q.includes('성형외과'), `진료과가 빠졌다: ${q}`);
+  }
+  assert.equal(new Set(recommend).size, recommend.length);
+  assert.ok(named && named.includes('하이업'), '이름 질의는 병원 이름을 넣어야 한다');
+});
+
+test('질의 구성이 비용 상한 안에 들어간다 (엔진 2종 기준)', () => {
+  const { recommend } = buildDiagnosisQueries({ region: '대구 수성구', specialty: '성형외과', clinicName: '하이업성형외과의원' });
+  // 추천은 전 엔진 × N, 이름은 엔진 1곳 × 1
+  const worstCase = recommend.length * 2 + NAMED_QUERY_ENGINES;
+  assert.ok(worstCase <= MAX_HTTP_ATTEMPTS, `최악 ${worstCase}회 — HTTP 시도 상한 ${MAX_HTTP_ATTEMPTS} 초과`);
 });
 
 test('재료가 없으면 질의를 만들지 않는다 (빈 호출로 비용 쓰지 않음)', () => {
-  assert.deepEqual(buildDiagnosisQuestions({ region: '', specialty: '', clinicName: '' }), []);
+  const queries = buildDiagnosisQueries({ region: '', specialty: '', clinicName: '' });
+  assert.deepEqual(queries.recommend, []);
+  assert.equal(queries.named, null);
+});
+
+/* ── 집계: 추천/이름을 섞어 세지 않는다 ─────────────────── */
+
+function probe(kind: CitationProbe['kind'], mentioned: boolean): CitationProbe {
+  return { question: 'q', kind, engine: 'openai', mentioned, path: mentioned ? 'directory' : 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] };
+}
+
+test('summarizeProbes 는 추천 질의와 이름 질의를 따로 센다 (실측 오판 회귀 방지)', () => {
+  // 실측 사고 재현: 이름 질의 2건만 등장, 추천 질의 4건은 전부 미등장.
+  // 이걸 합쳐서 "6개 중 2개 = 33% 잘하고 있어요"로 내보냈던 것이 정반대 결론이었다.
+  const summary = summarizeProbes([
+    probe('recommend', false), probe('recommend', false), probe('recommend', false), probe('recommend', false),
+    probe('named', true), probe('named', true),
+  ]);
+  assert.equal(summary.recommendTotal, 4);
+  assert.equal(summary.recommendMentioned, 0, '추천 질의는 한 번도 안 나왔다');
+  assert.equal(summary.namedTotal, 2);
+  assert.equal(summary.namedMentioned, 2);
+  assert.equal(summary.mentionedCount, 2);
 });
 
 /* ── 실행 계층 ──────────────────────────────────────────── */

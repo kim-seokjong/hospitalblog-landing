@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  FINDING_WEIGHT,
   RANK_CAVEAT,
   buildAiFindings,
   buildComplianceFindings,
   buildFindings,
   buildSiteFindings,
   collectUnchecked,
+  groupFindings,
   summarizeFindings,
 } from '../findings.ts';
 import { EMPTY_SITE_AXIS } from '../site-audit.ts';
@@ -84,7 +86,7 @@ test('우리 제품과 무관한 항목(ourScope=false)이 반드시 섞인다',
   const findings = buildFindings({
     blog: { ...BLOG_OK, daysSinceLatest: 200, keywords: [{ keyword: '대구 성형외과', apiRank: null, docCount: 10 }] },
     site: { ...SITE_OK, https: 'fail', httpsNote: 'x', viewport: 'fail' },
-    ai: { ...EMPTY_AI_AXIS, checked: true, probes: [{ question: 'q', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] }] },
+    ai: { ...EMPTY_AI_AXIS, checked: true, recommendTotal: 1, probes: [{ question: 'q', kind: 'recommend', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] }] },
     compliance: { ...EMPTY_COMPLIANCE_AXIS, checked: true, postsScanned: 10, hits: [{ postTitle: 't', postLink: 'l', phrase: '최고', note: 'n', level: 'review' }], postsWithHits: 1 },
   });
   const outside = findings.filter((f) => !f.ourScope);
@@ -98,6 +100,54 @@ test('잘하고 있는 항목은 그대로 칭찬한다', () => {
   const good = findings.filter((f) => f.tone === 'good');
   assert.ok(good.length >= 4, `좋은 항목이 ${good.length}개뿐 — 전부 빨간불이면 신뢰가 안 간다`);
   for (const f of good) assert.equal(f.why, null, `${f.id}: 좋은 항목에 문제 설명이 붙어 있다`);
+});
+
+/* ── 3분류: 초짜가 봐도 뭐부터 볼지 알아야 한다 ─────────── */
+
+test('groupFindings 는 못된 점 / 개선할 점 / 잘된 점 / 미확인으로 나눈다', () => {
+  const findings = buildFindings({
+    blog: { ...BLOG_OK, daysSinceLatest: 120, postsPerWeek: 0.2 },
+    site: { ...SITE_OK, https: 'fail', httpsNote: '인증서 만료', viewport: 'fail', jsonLd: 'fail', jsonLdTypes: [] },
+    ai: EMPTY_AI_AXIS,
+    compliance: EMPTY_COMPLIANCE_AXIS,
+  });
+  const groups = groupFindings(findings);
+
+  // 분류 합계는 원본과 정확히 같아야 한다 (누락·중복 금지)
+  assert.equal(
+    groups.bad.length + groups.improve.length + groups.good.length + groups.unknown.length,
+    findings.length,
+  );
+  assert.ok(groups.bad.some((f) => f.id === 'site.https'), 'HTTPS 실패는 지금 손해다');
+  assert.ok(groups.improve.some((f) => f.id === 'site.readable'), '기술 위생은 개선할 점이다');
+  assert.ok(groups.unknown.every((f) => f.tone === 'unknown'));
+  assert.ok(groups.good.every((f) => f.tone === 'good'));
+});
+
+test('덩어리 안은 중요도(rank) 순으로 정렬된다', () => {
+  const findings = buildFindings({
+    blog: { ...BLOG_OK, daysSinceLatest: 200, keywords: [{ keyword: '대구 성형외과', apiRank: null, docCount: 10 }] },
+    site: { ...SITE_OK, https: 'fail', httpsNote: 'x' },
+    ai: EMPTY_AI_AXIS,
+    compliance: { ...EMPTY_COMPLIANCE_AXIS, checked: true, postsScanned: 10, hits: [{ postTitle: 't', postLink: 'l', phrase: '최고', note: 'n', level: 'review' }], postsWithHits: 1 },
+  });
+  const ranks = groupFindings(findings).bad.map((f) => FINDING_WEIGHT[f.id]?.rank ?? 900);
+  assert.deepEqual([...ranks].sort((a, b) => a - b), ranks, `정렬이 깨졌다: ${ranks.join(',')}`);
+  // 환자 이탈에 직접 영향하는 항목이 검색 노출 항목보다 앞이어야 한다
+  assert.ok((FINDING_WEIGHT['site.https']?.rank ?? 0) < (FINDING_WEIGHT['blog.rank']?.rank ?? 0));
+});
+
+test('모든 카드 id 가 중요도 표에 등록돼 있다 (표 누락 방지)', () => {
+  const findings = buildFindings({
+    blog: BLOG_OK,
+    site: SITE_OK,
+    ai: { ...EMPTY_AI_AXIS, checked: true, recommendTotal: 2, recommendMentioned: 0, namedTotal: 1, namedMentioned: 1,
+      probes: [{ question: 'q', kind: 'recommend', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] }] },
+    compliance: { ...EMPTY_COMPLIANCE_AXIS, checked: true, postsScanned: 3 },
+  });
+  for (const f of findings) {
+    assert.ok(FINDING_WEIGHT[f.id], `${f.id} 가 FINDING_WEIGHT 에 없다 — 정렬이 맨 뒤로 밀린다`);
+  }
 });
 
 /* ── 정직성: 못 구한 것은 못 구했다고 ───────────────────── */
@@ -160,14 +210,74 @@ function aiAxis(over: Partial<AiAxis>): AiAxis {
   return { ...EMPTY_AI_AXIS, checked: true, ...over };
 }
 
+/**
+ * ★ 실측 사고 회귀 방지.
+ * 하이업성형외과 진단에서 "질문 6개 중 2개(33%) 등장 → 잘하고 있어요"가 나갔는데,
+ * 그 2개는 전부 병원 이름을 넣은 질의였고 추천 질의 4개는 전부 미등장이었다.
+ */
+test('이름을 넣은 질의만 나온 상태를 절대 "잘하고 있어요"로 판정하지 않는다', () => {
+  const findings = buildAiFindings(
+    aiAxis({
+      probes: [
+        { question: '대구 수성구 성형외과 추천해줘', kind: 'recommend', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
+        { question: '대구 수성구 성형외과 추천해줘', kind: 'recommend', engine: 'perplexity', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
+        { question: '대구 수성구 성형외과 중에 잘하는 곳 세 군데만 알려줘', kind: 'recommend', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
+        { question: '대구 수성구 성형외과 중에 잘하는 곳 세 군데만 알려줘', kind: 'recommend', engine: 'perplexity', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
+        { question: '대구 수성구 하이업성형외과의원 어떤 병원이야?', kind: 'named', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: ['goodoc.co.kr'] },
+      ],
+      mentionedCount: 1, directoryCount: 1,
+      recommendTotal: 4, recommendMentioned: 0, namedTotal: 1, namedMentioned: 1,
+    }),
+    true,
+  );
+
+  const presence = findings.find((f) => f.id === 'ai.presence');
+  assert.equal(presence?.tone, 'warn', '추천 질의 전패인데 good 이 나오면 결론이 뒤집힌다');
+  assert.match(presence?.state ?? '', /이름 없이/);
+  assert.match(presence?.state ?? '', /4번 모두 나오지 않았습니다/);
+
+  // 이름 질의는 배경 사실로만 — 성과로 포장하지 않는다
+  const known = findings.find((f) => f.id === 'ai.known');
+  assert.equal(known?.tone, 'good');
+  assert.match(known?.action ?? '', /기본입니다/);
+  assert.equal(known?.ourScope, false);
+});
+
+test('이름을 넣었는데도 AI가 모르면 심각한 문제로 올린다', () => {
+  const findings = buildAiFindings(
+    aiAxis({
+      probes: [
+        { question: 'r', kind: 'recommend', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
+        { question: 'n', kind: 'named', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
+      ],
+      recommendTotal: 1, recommendMentioned: 0, namedTotal: 1, namedMentioned: 0,
+    }),
+    false,
+  );
+  const known = findings.find((f) => f.id === 'ai.known');
+  assert.equal(known?.tone, 'warn');
+  assert.match(known?.why ?? '', /병원 존재 자체를 모르는/);
+});
+
+test('추천 질의에서 실제로 나오면 그때 칭찬한다', () => {
+  const findings = buildAiFindings(
+    aiAxis({
+      probes: [{ question: 'r', kind: 'recommend', engine: 'openai', mentioned: true, path: 'owned', evidence: 'e', ownedSources: ['https://blog.naver.com/vbps_official/1'], thirdPartyHosts: [] }],
+      mentionedCount: 1, ownedCount: 1, recommendTotal: 2, recommendMentioned: 1,
+    }),
+    true,
+  );
+  assert.equal(findings.find((f) => f.id === 'ai.presence')?.tone, 'good');
+});
+
 test('AI가 언급했지만 근거가 전부 디렉터리면 그 사실을 정면으로 말한다', () => {
   const findings = buildAiFindings(
     aiAxis({
       probes: [
-        { question: 'q1', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: ['goodoc.co.kr'] },
-        { question: 'q2', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: ['modoodoc.com'] },
+        { question: 'q1', kind: 'recommend', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: ['goodoc.co.kr'] },
+        { question: 'q2', kind: 'recommend', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: ['modoodoc.com'] },
       ],
-      mentionedCount: 2, directoryCount: 2, ownedCount: 0,
+      mentionedCount: 2, directoryCount: 2, ownedCount: 0, recommendTotal: 2, recommendMentioned: 2,
     }),
     true,
   );
@@ -180,8 +290,8 @@ test('AI가 언급했지만 근거가 전부 디렉터리면 그 사실을 정�
 test('자기 자산이 근거로 잡혔으면 칭찬하고 팔지 않는다', () => {
   const findings = buildAiFindings(
     aiAxis({
-      probes: [{ question: 'q', engine: 'openai', mentioned: true, path: 'owned', evidence: 'e', ownedSources: ['https://blog.naver.com/vbps_official/1'], thirdPartyHosts: [] }],
-      mentionedCount: 1, ownedCount: 1,
+      probes: [{ question: 'q', kind: 'recommend', engine: 'openai', mentioned: true, path: 'owned', evidence: 'e', ownedSources: ['https://blog.naver.com/vbps_official/1'], thirdPartyHosts: [] }],
+      mentionedCount: 1, ownedCount: 1, recommendTotal: 1, recommendMentioned: 1,
     }),
     true,
   );
@@ -232,17 +342,74 @@ test('홈페이지 주소를 못 찾으면 요청 없이 안내만 한다', () =
   assert.equal(findings[0].tone, 'unknown');
 });
 
-test('AI 크롤러 차단은 무조건 나쁘다고 하지 않는다 (의도적 차단 가능성 인정)', () => {
-  const findings = buildSiteFindings({ ...SITE_OK, aiCrawler: 'blocked', blockedAiBots: ['GPTBot', 'ClaudeBot'] });
-  const card = findings.find((f) => f.id === 'site.aiCrawler');
-  assert.match(card?.action ?? '', /콘텐츠 보호가 목적이었다면 그대로 두셔도 됩니다/);
+test('홈페이지 카드는 HTTPS 하나 + 통합 항목 하나, 총 2개로만 나간다', () => {
+  const findings = buildSiteFindings(SITE_OK);
+  assert.deepEqual(ids(findings), ['site.https', 'site.readable']);
 });
 
-test('구조화 데이터가 있어도 병원용 스키마가 아니면 경고한다', () => {
-  const findings = buildSiteFindings({ ...SITE_OK, jsonLd: 'pass', jsonLdTypes: ['WebSite', 'Organization'] });
-  const card = findings.find((f) => f.id === 'site.jsonld');
+test('기본 화면 문구에 기술 용어를 노출하지 않는다 (원장이 모르는 말)', () => {
+  const findings = buildSiteFindings({ ...SITE_OK, jsonLd: 'fail', jsonLdTypes: [], sitemapXml: 'fail', viewport: 'fail' });
+  const jargon = ['JSON-LD', 'robots.txt', 'sitemap', 'MedicalClinic', 'viewport', 'meta description', 'OG'];
+  for (const f of findings) {
+    const surface = `${f.label} ${f.state} ${f.why ?? ''} ${f.action}`;
+    for (const word of jargon) {
+      assert.ok(!surface.includes(word), `${f.id} 기본 문구에 "${word}" 가 노출됐다`);
+    }
+  }
+});
+
+test('통합 항목은 "몇 개 갖춰지고 몇 개 빠졌는지"까지만 말하고 세부는 접어 둔다', () => {
+  const findings = buildSiteFindings({ ...SITE_OK, jsonLd: 'fail', jsonLdTypes: [], sitemapXml: 'fail' });
+  const card = findings.find((f) => f.id === 'site.readable');
   assert.equal(card?.tone, 'warn');
-  assert.match(card?.state ?? '', /병원 정보용 항목은 없습니다/);
+  assert.match(card?.state ?? '', /\d+가지 중 \d+가지는 갖춰져 있고 \d+가지가 빠져 있습니다/);
+  // 세부는 details 안에만 존재한다
+  assert.ok((card?.details?.length ?? 0) >= 5);
+  assert.ok(card?.details?.some((d) => d.ok === false));
+  assert.equal(card?.ourScope, false, '홈페이지는 우리 제품 밖 영역이어야 한다');
+});
+
+test('전부 갖춰졌으면 통합 항목도 칭찬한다', () => {
+  const card = buildSiteFindings(SITE_OK).find((f) => f.id === 'site.readable');
+  assert.equal(card?.tone, 'good');
+  assert.equal(card?.why, null);
+});
+
+test('AI 크롤러 차단은 세부 항목으로만 표시하고 단정하지 않는다', () => {
+  const card = buildSiteFindings({ ...SITE_OK, aiCrawler: 'blocked', blockedAiBots: ['GPTBot', 'ClaudeBot'] })
+    .find((f) => f.id === 'site.readable');
+  const detail = card?.details?.find((d) => d.label.includes('AI 검색 접근'));
+  assert.equal(detail?.ok, false);
+});
+
+test('병원용 스키마가 아니면 세부 항목에서 빠진 것으로 잡힌다', () => {
+  const card = buildSiteFindings({ ...SITE_OK, jsonLd: 'pass', jsonLdTypes: ['WebSite', 'Organization'] })
+    .find((f) => f.id === 'site.readable');
+  const detail = card?.details?.find((d) => d.label.includes('병원 정보'));
+  assert.equal(detail?.ok, false);
+  assert.equal(card?.tone, 'warn');
+});
+
+/* ── 주소는 눌러서 열려야 한다 ──────────────────────────── */
+
+test('홈페이지 주소는 클릭 가능한 링크로 나간다', () => {
+  const card = buildSiteFindings(SITE_OK).find((f) => f.id === 'site.https');
+  assert.equal(card?.link?.href, 'https://vb.vbeauty.co.kr/');
+  assert.equal(card?.link?.insecure, false);
+});
+
+test('HTTPS 가 안 되면 실제 응답한 http 주소로 연결하고 그 사실을 표시한다', () => {
+  const card = buildSiteFindings({
+    ...SITE_OK, https: 'fail', httpsNote: '인증서 문제', finalUrl: 'http://vb.vbeauty.co.kr/',
+  }).find((f) => f.id === 'site.https');
+  assert.equal(card?.link?.href, 'http://vb.vbeauty.co.kr/');
+  assert.equal(card?.link?.insecure, true);
+});
+
+test('블로그 주소도 눌러서 열 수 있다', () => {
+  const card = buildFindings({ blog: BLOG_OK, site: EMPTY_SITE_AXIS, ai: EMPTY_AI_AXIS, compliance: EMPTY_COMPLIANCE_AXIS })
+    .find((f) => f.id === 'blog.exists');
+  assert.equal(card?.link?.href, 'https://blog.naver.com/vbps_official');
 });
 
 /* ── 요약 ───────────────────────────────────────────────── */

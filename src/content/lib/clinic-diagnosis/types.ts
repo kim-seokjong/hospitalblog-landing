@@ -62,8 +62,21 @@ export type ClinicLookupOutcome =
       readonly candidates: readonly ClinicCandidate[];
       readonly truncated: boolean;
     }
-  /** 행안부 API 를 호출하지 못했다(키 미설정·장애). */
-  | { readonly kind: 'unavailable'; readonly reason: 'not_configured' | 'fetch_failed' };
+  /**
+   * 행안부 API 를 호출하지 못했다.
+   *
+   *  · not_configured : 서비스 키가 아예 설정돼 있지 않다
+   *  · key_rejected   : 키는 있는데 게이트웨이가 거부했다(만료·미등록 IP·일일 한도 초과)
+   *  · fetch_failed   : 네트워크·타임아웃·정체불명 응답
+   *
+   * ⚠️ 이 셋 중 어느 것도 not_found 로 뭉개면 안 된다. 실제로 키가 거부되던
+   *    기간 동안 모든 병원이 "그런 병원 없음"으로 표시돼 아무도 장애를 눈치채지
+   *    못했다. "설정 문제"와 "그런 병원이 없다"는 화면에서 반드시 달라야 한다.
+   */
+  | {
+      readonly kind: 'unavailable';
+      readonly reason: 'not_configured' | 'key_rejected' | 'fetch_failed';
+    };
 
 /* ── 2단계 ①: 네이버 블로그 ──────────────────────────────── */
 
@@ -166,8 +179,23 @@ export type CitationPath =
   /** 언급 자체가 없다. */
   | 'none';
 
+/**
+ * 질의 종류 — **이 진단에서 가장 중요한 구분**이다.
+ *
+ * named     : 병원 이름을 넣고 물었다 ("대구 수성구 하이업성형외과의원 어떤 병원이야?")
+ *             → 나오는 게 기본이다. 나왔다고 성과가 아니다.
+ *             안 나오면 심각하다(AI 가 병원 존재 자체를 모른다).
+ * recommend : 이름 없이 지역+진료과로만 물었다 ("대구 수성구 성형외과 추천해줘")
+ *             → **환자가 실제로 하는 검색이다. 종합 판정은 이것만으로 한다.**
+ *
+ * 실측에서 이 구분이 없어 "6개 중 2개 등장 → 잘하고 있어요"가 나갔는데,
+ * 그 2개는 전부 병원 이름을 넣은 질의였고 추천 질의 4개는 전부 미등장이었다.
+ */
+export type CitationQueryKind = 'named' | 'recommend';
+
 export interface CitationProbe {
   readonly question: string;
+  readonly kind: CitationQueryKind;
   readonly engine: string;
   readonly mentioned: boolean;
   readonly path: CitationPath;
@@ -187,6 +215,13 @@ export interface AiAxis {
   readonly mentionedCount: number;
   readonly ownedCount: number;
   readonly directoryCount: number;
+  /** 추천 질의(이름 없이 지역+진료과) 수 — **종합 판정의 분모**. */
+  readonly recommendTotal: number;
+  /** 그중 병원 이름이 등장한 수 — **종합 판정의 분자**. */
+  readonly recommendMentioned: number;
+  /** 이름 확인 질의 수 — 배경 사실용(성과 지표 아님). */
+  readonly namedTotal: number;
+  readonly namedMentioned: number;
   /** 실제 발생한 HTTP 시도 수 (비용 산정 정본). */
   readonly httpAttempts: number;
 }
@@ -219,6 +254,37 @@ export interface ComplianceAxis {
 export type FindingTone = 'good' | 'warn' | 'unknown';
 
 /**
+ * 결과 화면의 3분류 — 축(블로그/홈페이지/AI/의료광고법)이 아니라 **원장이 할 판단**으로 나눈다.
+ *
+ * bad     : 못된 점 — 지금 손해를 보고 있는 것 (맨 위, 가장 크게)
+ * improve : 개선할 점 — 해두면 나아지는 것
+ * good    : 잘된 점 — 이미 되고 있는 것 (짧게, 접어도 됨)
+ * unknown : 확인 못 한 것
+ */
+export type FindingGroup = 'bad' | 'improve' | 'good' | 'unknown';
+
+/**
+ * 접어두기(details) 안에 넣는 세부 점검 항목.
+ * 기본 화면에는 보이지 않는다 — 원장이 알 필요 없는 기술 용어를 앞에 세우지 않기 위해.
+ */
+export interface FindingDetail {
+  readonly label: string;
+  /** true=갖춰짐, false=빠짐, null=확인 못 함. */
+  readonly ok: boolean | null;
+  /** 이게 뭔지 한 줄 쉬운 말. */
+  readonly hint: string;
+}
+
+/** 결과 카드에서 실제로 클릭해 열어볼 수 있는 주소(홈페이지·블로그). */
+export interface FindingLink {
+  readonly href: string;
+  /** 화면에 보일 문자열 (스킴 없이 짧게). */
+  readonly label: string;
+  /** https 가 아닌 주소인가 — 화면에 그 사실을 표시한다. */
+  readonly insecure: boolean;
+}
+
+/**
  * 결과 화면의 최소 단위.
  * 항목마다 "지금 상태(사실) / 왜 문제인가 / 그래서 뭘 해야 하나"가 반드시 붙는다.
  */
@@ -238,6 +304,10 @@ export interface Finding {
    * false 인 항목(홈페이지 TLS·robots 등)을 반드시 섞어 광고로 읽히지 않게 한다.
    */
   readonly ourScope: boolean;
+  /** 클릭해서 열어볼 주소. 없으면 생략. */
+  readonly link?: FindingLink;
+  /** 접어두기 안에 넣을 세부 항목. 기본 화면에는 안 보인다. */
+  readonly details?: readonly FindingDetail[];
 }
 
 export interface DiagnosisReport {

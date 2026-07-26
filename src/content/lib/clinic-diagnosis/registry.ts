@@ -233,25 +233,124 @@ export interface RegistryPage {
   readonly items: readonly ClinicCandidate[];
 }
 
-/** 행안부 JSON 응답 파싱 (순수 함수). 형태가 어긋나면 빈 페이지. */
-export function parseRegistryResponse(payload: unknown): RegistryPage {
-  if (!payload || typeof payload !== 'object') return { totalCount: 0, items: [] };
+/**
+ * 응답 파싱 결과.
+ *
+ * ok:false 를 반드시 구분해야 하는 이유 — 공공데이터포털 게이트웨이는 키가
+ * 만료되거나 일일 한도를 넘겼을 때 **HTTP 200 에 오류 본문**을 실어 보낸다.
+ * 그걸 "0건"으로 읽으면 모든 병원이 "그런 병원 없음"으로 표시되고, 운영자는
+ * 장애를 영영 눈치채지 못한다(실제로 그렇게 됐다).
+ */
+export type RegistryParse =
+  | { readonly ok: true; readonly page: RegistryPage }
+  | { readonly ok: false; readonly reason: 'key_rejected' | 'service_error'; readonly message: string };
+
+/**
+ * 게이트웨이 오류 본문에 등장하는 토큰.
+ * 키 문제(만료·미등록·한도 초과·IP 제한)는 운영자가 조치해야 하는 사안이라 따로 뽑는다.
+ */
+const KEY_ERROR_TOKENS: readonly string[] = [
+  'SERVICE_KEY_IS_NOT_REGISTERED',
+  'SERVICE KEY IS NOT REGISTERED',
+  'LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS',
+  'SERVICE_ACCESS_DENIED',
+  'ACCESS_DENIED',
+  'DEADLINE_HAS_EXPIRED',
+  'UNREGISTERED_IP',
+  'UNAUTHORIZED',
+  'TEMPORARILY_DISABLE_THE_SERVICEKEY',
+  'NO_OPENAPI_SERVICE_ERROR',
+];
+
+/** 어떤 형태의 오류 본문이든 문자열로 훑어 키 문제인지 판정한다. */
+function classifyErrorText(text: string): 'key_rejected' | 'service_error' {
+  const upper = text.toUpperCase();
+  return KEY_ERROR_TOKENS.some((token) => upper.includes(token)) ? 'key_rejected' : 'service_error';
+}
+
+/** 성공을 뜻하는 결과 코드 (포털 표준 '00' / 행안부 'INFO-000'). */
+function isSuccessCode(code: string): boolean {
+  const value = code.trim().toUpperCase();
+  return value === '' || value === '00' || value === '0' || value === 'INFO-000' || value === 'INFO-00';
+}
+
+/** 응답 어디에 있든 결과 코드/메시지를 찾아낸다 (엔벨로프 변형 대비). */
+function readResultCode(root: Record<string, unknown>, response: Record<string, unknown>): { code: string; message: string } {
+  for (const holder of [response, root]) {
+    const header = holder.header;
+    if (header && typeof header === 'object') {
+      const h = header as Record<string, unknown>;
+      const code = typeof h.resultCode === 'string' ? h.resultCode : '';
+      if (code) return { code, message: typeof h.resultMsg === 'string' ? h.resultMsg : '' };
+    }
+    const result = holder.RESULT;
+    if (result && typeof result === 'object') {
+      const r = result as Record<string, unknown>;
+      const code = typeof r.CODE === 'string' ? r.CODE : '';
+      if (code) return { code, message: typeof r.MESSAGE === 'string' ? r.MESSAGE : '' };
+    }
+  }
+  return { code: '', message: '' };
+}
+
+/**
+ * 행안부 JSON 응답 파싱 (순수 함수).
+ *
+ * 판정 순서:
+ *   ① 게이트웨이 오류 엔벨로프(cmmMsgHeader 등) → 오류
+ *   ② 결과 코드가 성공이 아니면 → 오류
+ *   ③ items / totalCount 중 하나도 못 알아보면 → 오류(정체불명 응답을 0건으로 읽지 않는다)
+ *   ④ 그 외에는 정상 페이지 (0건도 정상 — 진짜로 없는 것)
+ */
+export function parseRegistryResponse(payload: unknown): RegistryParse {
+  if (typeof payload === 'string') {
+    return { ok: false, reason: classifyErrorText(payload), message: payload.slice(0, 200) };
+  }
+  if (!payload || typeof payload !== 'object') {
+    return { ok: false, reason: 'service_error', message: '응답을 해석하지 못했습니다.' };
+  }
   const root = payload as Record<string, unknown>;
+
+  // ① 게이트웨이 오류 엔벨로프 — 정상 응답에는 절대 없는 키다.
+  const gateway = root.OpenAPI_ServiceResponse ?? root.cmmMsgHeader;
+  if (gateway && typeof gateway === 'object') {
+    const text = JSON.stringify(gateway);
+    return { ok: false, reason: classifyErrorText(text), message: text.slice(0, 200) };
+  }
+
   const response = (root.response && typeof root.response === 'object' ? root.response : root) as Record<string, unknown>;
+
+  // ② 결과 코드
+  const result = readResultCode(root, response);
+  if (!isSuccessCode(result.code)) {
+    const text = `${result.code} ${result.message}`;
+    return { ok: false, reason: classifyErrorText(text), message: text.trim().slice(0, 200) };
+  }
+
   const body = (response.body && typeof response.body === 'object' ? response.body : {}) as Record<string, unknown>;
 
   let rawItems: unknown = body.items;
   if (rawItems && typeof rawItems === 'object' && !Array.isArray(rawItems)) {
     rawItems = (rawItems as Record<string, unknown>).item;
   }
-  const list = Array.isArray(rawItems) ? rawItems : [];
-  const items = list
-    .map(toClinicCandidate)
-    .filter((c): c is ClinicCandidate => c !== null);
 
+  const hasItemsField = rawItems !== undefined && rawItems !== null;
   const totalRaw = Number(body.totalCount);
-  const totalCount = Number.isFinite(totalRaw) && totalRaw >= 0 ? Math.floor(totalRaw) : items.length;
-  return { totalCount, items };
+  const hasTotalField = body.totalCount !== undefined && Number.isFinite(totalRaw) && totalRaw >= 0;
+
+  // ③ 우리가 아는 형태가 하나도 없다 — "0건"이라고 단정하면 안 된다.
+  if (!hasItemsField && !hasTotalField) {
+    return {
+      ok: false,
+      reason: 'service_error',
+      message: '알 수 없는 응답 형식입니다(items·totalCount 없음).',
+    };
+  }
+
+  const list = Array.isArray(rawItems) ? rawItems : [];
+  const items = list.map(toClinicCandidate).filter((c): c is ClinicCandidate => c !== null);
+  const totalCount = hasTotalField ? Math.floor(totalRaw) : items.length;
+  return { ok: true, page: { totalCount, items } };
 }
 
 /**
@@ -340,14 +439,27 @@ export function isRegistryConfigured(env: RegistryEnv): boolean {
   return typeof env.DATA_GO_SERVICE_KEY === 'string' && env.DATA_GO_SERVICE_KEY.trim().length > 0;
 }
 
-/** 시드 1건 조회. 실패·타임아웃은 null (절대 throw 안 함). */
+export type RegistryFetch =
+  | { readonly ok: true; readonly page: RegistryPage }
+  | {
+      readonly ok: false;
+      readonly reason: 'not_configured' | 'key_rejected' | 'service_error' | 'network';
+      readonly message: string;
+    };
+
+/**
+ * 시드 1건 조회. 절대 throw 하지 않는다.
+ *
+ * ⚠️ 실패를 한 덩어리(null)로 뭉개지 않는다. "키가 거부됐다"와 "네트워크가 죽었다"는
+ *    운영상 완전히 다른 사건이고, 둘 다 "그런 병원 없음"과는 더더욱 다르다.
+ */
 async function fetchRegistryPage(
   seed: string,
   region: string,
   options: { env: RegistryEnv; fetchImpl: typeof fetch; timeoutMs: number },
-): Promise<RegistryPage | null> {
+): Promise<RegistryFetch> {
   const key = (options.env.DATA_GO_SERVICE_KEY ?? '').trim();
-  if (!key) return null;
+  if (!key) return { ok: false, reason: 'not_configured', message: 'DATA_GO_SERVICE_KEY 미설정' };
 
   const params = new URLSearchParams({
     serviceKey: key,
@@ -366,10 +478,31 @@ async function fetchRegistryPage(
       cache: 'no-store',
       headers: { Accept: 'application/json' },
     });
-    if (!res.ok) return null;
-    return parseRegistryResponse(await res.json());
-  } catch {
-    return null;
+
+    // 인증·한도 계열 상태코드는 그 자체로 키 문제다.
+    if (res.status === 401 || res.status === 403 || res.status === 429) {
+      return { ok: false, reason: 'key_rejected', message: `HTTP ${res.status}` };
+    }
+
+    // JSON 이 아닌 오류 본문(XML·평문)도 그대로 읽어 원인을 남긴다.
+    const text = await res.text();
+    if (!res.ok) {
+      const reason = classifyErrorText(text) === 'key_rejected' ? 'key_rejected' : 'service_error';
+      return { ok: false, reason, message: `HTTP ${res.status} ${text.slice(0, 200)}` };
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(text) as unknown;
+    } catch {
+      // JSON 을 요청했는데 JSON 이 아니면 거의 항상 게이트웨이 오류 본문이다.
+      payload = text;
+    }
+
+    const parsed = parseRegistryResponse(payload);
+    return parsed.ok ? { ok: true, page: parsed.page } : { ok: false, reason: parsed.reason, message: parsed.message };
+  } catch (error) {
+    return { ok: false, reason: 'network', message: error instanceof Error ? error.message : '알 수 없는 오류' };
   } finally {
     clearTimeout(timer);
   }
@@ -408,11 +541,26 @@ export async function lookupClinics(
     attempts.push({ seed: seeds[seeds.length - 1], region: '' });
   }
 
-  let anyCallSucceeded = false;
+  /**
+   * "빈 결과를 봤다"와 "결과를 못 봤다"를 반드시 나눈다.
+   * anySuccess 가 false 인데 not_found 를 돌려주면, 장애 기간 내내 모든 병원이
+   * "그런 병원 없음"으로 표시되고 아무도 눈치채지 못한다.
+   */
+  let anySuccess = false;
+  let keyRejected: string | null = null;
+  let lastFailure: string | null = null;
+
   for (const attempt of attempts.slice(0, MAX_REGISTRY_CALLS)) {
-    const page = await fetchRegistryPage(attempt.seed, attempt.region, { env, fetchImpl, timeoutMs });
-    if (page === null) continue;
-    anyCallSucceeded = true;
+    const result = await fetchRegistryPage(attempt.seed, attempt.region, { env, fetchImpl, timeoutMs });
+
+    if (!result.ok) {
+      if (result.reason === 'key_rejected' && keyRejected === null) keyRejected = result.message;
+      lastFailure = `${result.reason}: ${result.message}`;
+      continue;
+    }
+
+    anySuccess = true;
+    const page = result.page;
     if (page.items.length === 0) continue;
 
     const outcome = decideLookup(page.items, parsed.name, {
@@ -429,7 +577,15 @@ export async function lookupClinics(
     return outcome;
   }
 
-  if (!anyCallSucceeded) return { kind: 'unavailable', reason: 'fetch_failed' };
+  if (keyRejected !== null) {
+    // 운영자가 봐야 하는 유일한 사건 — 조용히 넘기지 않는다.
+    console.error('[clinic-diagnosis/registry] 행안부 서비스 키가 거부됐습니다(만료·한도·IP 확인 필요):', keyRejected);
+    return { kind: 'unavailable', reason: 'key_rejected' };
+  }
+  if (!anySuccess) {
+    console.error('[clinic-diagnosis/registry] 행안부 조회 전건 실패:', lastFailure ?? '원인 미상');
+    return { kind: 'unavailable', reason: 'fetch_failed' };
+  }
   return { kind: 'not_found' };
 }
 
