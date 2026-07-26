@@ -56,6 +56,7 @@
  *    "analyze" 금지 조항에 걸릴 소지가 있어 별도 법무 검토가 필요하다.
  */
 
+import { ENABLE_GEMINI_FLAG, isGeminiOptedIn } from './flags.ts';
 import { postJsonWithRetry } from './http.ts';
 import { asArray, asRecord, asString, requireArray, requireRecord } from './parse-utils.ts';
 import { MAX_SOURCES, type GeoEngineAdapter, type GeoEngineEnv, type GeoEngineRunContext, type GeoLiveAnswer, type GeoSource } from './types.ts';
@@ -90,12 +91,19 @@ export async function resolveGroundingUri(
   url: string,
   fetchImpl: typeof fetch,
   timeoutMs: number = REDIRECT_TIMEOUT_MS,
+  externalSignal?: AbortSignal,
 ): Promise<string> {
   let current = url;
   for (let hop = 0; hop < REDIRECT_MAX_HOPS; hop++) {
     if (!isGroundingRedirect(current)) return current;
+    // 실행 데드라인이 이미 지났으면 복원을 포기한다(원본 URL 유지)
+    if (externalSignal?.aborted) return current;
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // 공통 데드라인 시그널에 연결 — 최대 2홉 × 3초가 데드라인 밖으로 새는 것을 막는다
+    const onExternalAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
     try {
       const res = await fetchImpl(current, {
         method: 'GET',
@@ -109,6 +117,7 @@ export async function resolveGroundingUri(
       return current;
     } finally {
       clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
     }
   }
   return current;
@@ -145,15 +154,32 @@ export function parseGeminiResponse(payload: unknown): GeoLiveAnswer {
   return { text, sources, searchQueryCount: Math.max(1, executed) };
 }
 
+/**
+ * ⚠️ 약관 방어선 — 이 어댑터는 옵트인 없이는 절대 동작하지 않는다.
+ *
+ * 레지스트리(index.ts)의 getEnabledEngines 가 이미 걸러내지만,
+ * geminiEngine 을 직접 import 하면 그 방어를 우회할 수 있다.
+ * 그래서 isConfigured 와 run **양쪽**에서 같은 검사를 반복한다.
+ * 실수로 켜지면 곧바로 구글 약관 위반이므로 가장 보수적으로 처리한다.
+ */
+const OPT_IN_ERROR =
+  'Gemini 엔진은 기본 비활성입니다. Google Gemini API 약관상 Grounded Results 의 analyze/cache 가 ' +
+  `금지되어 이 용도로 사용할 수 없습니다. 구글과 별도 계약 또는 약관 변경 없이 ${ENABLE_GEMINI_FLAG}=true 로 켜지 마십시오.`;
+
 export const geminiEngine: GeoEngineAdapter = {
   id: 'gemini',
   label: 'Gemini',
 
   isConfigured(env: GeoEngineEnv): boolean {
+    // 키만으로는 부족하다 — 옵트인(정확히 'true')까지 있어야 설정된 것으로 본다
+    if (!isGeminiOptedIn(env)) return false;
     return Boolean(env.GEMINI_API_KEY);
   },
 
   async run(question: string, ctx: GeoEngineRunContext): Promise<GeoLiveAnswer> {
+    // 직접 호출 우회 방어 — 옵트인 없이 호출되면 외부 요청을 보내기 전에 중단
+    if (!isGeminiOptedIn(ctx.env)) throw new Error(OPT_IN_ERROR);
+
     const apiKey = ctx.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
 
@@ -182,7 +208,7 @@ export const geminiEngine: GeoEngineAdapter = {
     const resolved = await Promise.all(
       parsed.sources.map(async (source) => ({
         ...source,
-        url: await resolveGroundingUri(source.url, ctx.fetchImpl),
+        url: await resolveGroundingUri(source.url, ctx.fetchImpl, REDIRECT_TIMEOUT_MS, ctx.signal),
       })),
     );
     return { ...parsed, sources: resolved };

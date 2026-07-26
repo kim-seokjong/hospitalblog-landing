@@ -26,6 +26,7 @@ import {
   geminiPerRunSearchBudget,
 } from './budget.ts';
 import { createGeoQueryCache, type GeoQueryCache } from './cache.ts';
+import { isGeminiOptedIn } from './flags.ts';
 import { geminiEngine } from './gemini.ts';
 import { openAiEngine } from './openai.ts';
 import { perplexityEngine } from './perplexity.ts';
@@ -38,15 +39,18 @@ export const GEO_ENGINES: readonly GeoEngineAdapter[] = [openAiEngine, perplexit
 /**
  * ⚠️ Google Gemini API 약관상 Grounded Results 의 analyze/cache 가 금지되어 있어
  * 이 용도로 사용할 수 없다. 구글과 별도 계약 또는 약관 변경 없이 켜지 말 것.
- * (약관 원문과 상세 근거는 gemini.ts 파일 상단 참조)
+ * (약관 원문과 상세 근거는 gemini.ts 파일 상단, 판정 함수는 flags.ts 참조)
  *
- * 그래서 GEMINI_API_KEY 가 설정돼 있어도 그것만으로는 활성화되지 않는다.
- * 반드시 이 플래그를 명시적으로 'true' 로 둬야 한다.
+ * GEMINI_API_KEY 가 설정돼 있어도 그것만으로는 활성화되지 않는다.
+ * 값이 **정확히 'true'** 인 GEO_ENABLE_GEMINI 가 있어야 한다(대소문자 변형 거부).
+ * 어댑터 자신도 같은 검사를 하므로(gemini.ts) 직접 import 로도 우회되지 않는다.
  */
-export const ENABLE_GEMINI_FLAG = 'GEO_ENABLE_GEMINI';
+export { ENABLE_GEMINI_FLAG, isGeminiOptedIn } from './flags.ts';
 
-/** 기본 비활성 엔진 — 옵트인 플래그가 있어야만 활성화된다 */
-const OPT_IN_ONLY: Readonly<Record<string, string>> = { gemini: ENABLE_GEMINI_FLAG };
+/** 기본 비활성 엔진 — 옵트인 판정 함수가 true 를 줘야만 활성화된다 */
+const OPT_IN_GUARDS: Readonly<Record<string, (env: GeoEngineEnv) => boolean>> = {
+  gemini: isGeminiOptedIn,
+};
 
 /** 1회 요청 타임아웃 — 웹검색 툴은 응답이 느리다. 데드라인이 더 가까우면 그쪽으로 좁혀진다 */
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -70,11 +74,10 @@ export const ENGINE_THROTTLE: Readonly<Record<GeoEngineId, EngineThrottle>> = {
   gemini: { concurrency: 2, minIntervalMs: 1_000 },
 };
 
-/** 옵트인 플래그가 필요한 엔진인지, 그리고 켜져 있는지 */
+/** 옵트인이 필요한 엔진인지, 그리고 정확한 값으로 켜져 있는지 */
 function isOptInSatisfied(engineId: GeoEngineId, env: GeoEngineEnv): boolean {
-  const flag = OPT_IN_ONLY[engineId];
-  if (!flag) return true;
-  return (env[flag] ?? '').toLowerCase() === 'true';
+  const guard = OPT_IN_GUARDS[engineId];
+  return guard ? guard(env) : true;
 }
 
 /** 키가 설정되고 옵트인 조건까지 만족한 엔진만 반환 — 나머지는 조용히 제외 */
@@ -234,6 +237,7 @@ export async function executeGeoQueries(input: ExecuteQueriesInput): Promise<Exe
             concurrency: throttle.concurrency,
             minIntervalMs: throttle.minIntervalMs,
             deadlineAt: input.deadlineAt,
+            signal: deadline.signal, // throttle 대기도 데드라인에 즉시 깨어난다
             now: input.now,
             sleepImpl: input.sleepImpl,
           },

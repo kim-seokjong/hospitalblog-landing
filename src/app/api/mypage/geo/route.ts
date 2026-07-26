@@ -92,6 +92,9 @@ export async function GET() {
       .eq('user_id', user.id) // RLS 로도 걸리지만 이중 방어
       .gte('checked_at', since.toISOString())
       .order('checked_at', { ascending: false })
+      // checked_at 이 동일한 행이 상한 경계에 걸리면 어떤 행이 잘릴지 비결정적이 된다
+      // → 보조 정렬 키로 순서를 고정한다
+      .order('id', { ascending: false })
       .limit(MAX_ROWS + 1);
     // 마이그 037(geo_citations) 미적용 DB 폴백 — 테이블 없음(42P01)이면
     // 인용 기록만 비운 채 준비도 점수는 계속 제공한다(탭 자체를 막지 않는다).
@@ -120,13 +123,17 @@ export async function GET() {
     }
 
     // 3) 주간 인용률 추이 (과거 → 현재)
-    //    상한에 걸렸다면 가장 오래된 주는 행이 잘려 있어 인용률이 왜곡된다 → 제외.
+    //    상한에 걸렸다면 가장 오래된 주는 행이 잘려 있어 인용률이 왜곡된다 → 항상 제외한다.
+    //    잘린 행이 전부 한 주에 몰려 주가 1개뿐인 경우에도 예외를 두지 않는다
+    //    (그 하나가 바로 왜곡된 주다). 결과가 비면 rowsTruncated 플래그로 UI가 판단한다.
     const aggregated = aggregateWeeklyCitations(
       rows.map((r) => ({ checkedAt: r.checked_at, cited: r.cited })),
     );
-    const weekly = rowsTruncated && aggregated.length > 1 ? aggregated.slice(1) : aggregated;
+    const weekly = rowsTruncated ? aggregated.slice(1) : aggregated;
     if (rowsTruncated) {
-      console.warn(`[mypage/geo] 인용 기록 조회 상한(${MAX_ROWS}) 도달 — 최고령 주를 추이에서 제외`);
+      console.warn(
+        `[mypage/geo] 인용 기록 조회 상한(${MAX_ROWS}) 도달 — 표본이 잘린 최고령 주를 추이에서 제외 (user=${user.id})`,
+      );
     }
 
     // 4) GEO 준비도 점수 — 최근 발행 글 구조 규칙 검사 (라이브 질의와 무관하게 항상 제공)

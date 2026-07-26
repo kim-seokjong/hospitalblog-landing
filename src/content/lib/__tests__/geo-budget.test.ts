@@ -8,11 +8,26 @@ import {
   MAX_CALLS_PER_ENGINE,
   MAX_HTTP_ATTEMPTS_PER_RUN,
   QUERY_DEADLINE_MS,
-  SAVE_RESERVE_MS,
+  QUERY_DRAIN_ALLOWANCE_MS,
+  CITATION_MATCH_ALLOWANCE_MS,
+  SAVE_DEADLINE_MS,
+  INSERT_CHUNK_TIMEOUT_MS,
+  MIN_INSERT_WINDOW_MS,
+  LOCK_FINALIZE_TIMEOUT_MS,
+  RESPONSE_ALLOWANCE_MS,
+  PLATFORM_MAX_DURATION_MS,
+  worstCaseRuntimeMs,
   capQuestionPlan,
   geminiPerRunSearchBudget,
   maxUniqueQuestionsFor,
 } from '../geo-engines/budget.ts';
+import {
+  PG_UNDEFINED_TABLE,
+  PG_UNIQUE_VIOLATION,
+  STALE_LOCK_MS,
+  interpretLockInsert,
+  staleThresholdIso,
+} from '../geo-engines/run-lock.ts';
 
 // ---------------------------------------------------------------------------
 // Gemini 무료 할당량 방어선
@@ -60,12 +75,48 @@ test('HTTP 시도 상한: 논리 호출 상한 + 재시도 여유 20%', () => {
   assert.ok(MAX_HTTP_ATTEMPTS_PER_RUN > MAX_API_CALLS_PER_RUN);
 });
 
-test('데드라인·저장 몫 합계가 플랫폼 제한(300초)을 넘지 않는다', () => {
-  assert.equal(QUERY_DEADLINE_MS, 240_000);
-  assert.equal(SAVE_RESERVE_MS, 60_000);
-  assert.ok(QUERY_DEADLINE_MS + SAVE_RESERVE_MS <= 300_000);
-  // 저장 몫이 0이면 수집분이 DB 도달 전에 함수가 죽는다
-  assert.ok(SAVE_RESERVE_MS > 0);
+// ---------------------------------------------------------------------------
+// 최악 실행 시간이 플랫폼 한도(300초) 안에 들어온다는 것을 고정한다
+// ---------------------------------------------------------------------------
+
+test('★최악 실행 시간이 플랫폼 한도(300초) 미만임을 구간별로 증명', () => {
+  // 구간 상한 (budget.ts "실행 시간 예산" 블록과 1:1 대응)
+  assert.equal(QUERY_DEADLINE_MS, 200_000);
+  assert.equal(QUERY_DRAIN_ALLOWANCE_MS, 5_000);
+  assert.equal(CITATION_MATCH_ALLOWANCE_MS, 5_000);
+  assert.equal(SAVE_DEADLINE_MS, 285_000);
+  assert.equal(LOCK_FINALIZE_TIMEOUT_MS, 3_000);
+  assert.equal(RESPONSE_ALLOWANCE_MS, 2_000);
+
+  const queryEnd = QUERY_DEADLINE_MS + QUERY_DRAIN_ALLOWANCE_MS; // 205s
+  const matchEnd = queryEnd + CITATION_MATCH_ALLOWANCE_MS; // 210s
+  // 인용 판정이 끝난 뒤에도 저장 데드라인까지 여유가 남아야 한다
+  assert.ok(matchEnd < SAVE_DEADLINE_MS, `matchEnd=${matchEnd} >= save=${SAVE_DEADLINE_MS}`);
+
+  const worst = worstCaseRuntimeMs(); // 285 + 3 + 2 = 290s
+  assert.equal(worst, 290_000);
+  assert.ok(worst < PLATFORM_MAX_DURATION_MS, `worst=${worst} >= limit=${PLATFORM_MAX_DURATION_MS}`);
+  // 최소 10초 여유를 남긴다 (플랫폼 콜드스타트·네트워크 편차 흡수)
+  assert.ok(PLATFORM_MAX_DURATION_MS - worst >= 10_000);
+});
+
+test('저장 구간: 마지막 청크가 저장 데드라인을 넘지 못한다', () => {
+  // 청크 타임아웃은 min(10초, 남은 시간)으로 좁혀지고,
+  // 남은 시간이 MIN_INSERT_WINDOW_MS 미만이면 청크를 시작하지 않는다
+  assert.equal(INSERT_CHUNK_TIMEOUT_MS, 10_000);
+  assert.equal(MIN_INSERT_WINDOW_MS, 1_000);
+  const latestStart = SAVE_DEADLINE_MS - MIN_INSERT_WINDOW_MS; // 284s
+  const latestEnd = latestStart + Math.min(INSERT_CHUNK_TIMEOUT_MS, SAVE_DEADLINE_MS - latestStart);
+  assert.ok(latestEnd <= SAVE_DEADLINE_MS, `latestEnd=${latestEnd}`);
+});
+
+test('저장 구간: 질의 데드라인이 저장 데드라인보다 충분히 앞선다', () => {
+  // 저장에 쓸 수 있는 실질 시간 = 285 - 210 = 75초
+  const usableSaveMs = SAVE_DEADLINE_MS - (QUERY_DEADLINE_MS + QUERY_DRAIN_ALLOWANCE_MS + CITATION_MATCH_ALLOWANCE_MS);
+  assert.equal(usableSaveMs, 75_000);
+  // 최대 청크 수(1,500행 ÷ 200 = 8) × 청크 타임아웃 10초 = 80초.
+  // 75초로는 최악의 경우 일부 청크가 밀릴 수 있고, 그때 insertAborted 로 보고된다.
+  assert.ok(usableSaveMs >= 7 * INSERT_CHUNK_TIMEOUT_MS);
 });
 
 // ---------------------------------------------------------------------------
@@ -119,6 +170,61 @@ test('절단: 상한 0 이면 전원 제외되고 그 수가 보고된다', () =
   assert.equal(result.kept.length, 0);
   assert.equal(result.truncatedUsers, 2);
   assert.equal(result.droppedQuestions, 2);
+});
+
+// ---------------------------------------------------------------------------
+// [Codex 2차-3] cron 동시 실행 차단 — 외부 API 비용이 나가기 전에 막아야 한다
+// ---------------------------------------------------------------------------
+
+test('★잠금: insert 성공 = 이번 실행이 주차를 선점 (진행)', () => {
+  const decision = interpretLockInsert(null);
+  assert.equal(decision.mode, 'acquired');
+  assert.equal(decision.proceed, true);
+});
+
+test('★잠금: 고유키 충돌 = 다른 실행이 선점 → 진행 금지 (비용 발생 전에 차단)', () => {
+  const decision = interpretLockInsert({ code: PG_UNIQUE_VIOLATION, message: 'duplicate key' });
+  assert.equal(decision.mode, 'locked');
+  assert.equal(decision.proceed, false);
+  assert.match(decision.reason ?? '', /중복 실행 차단/);
+});
+
+test('★잠금: 동시 실행 시 두 번째 인스턴스가 차단된다', () => {
+  // 원자적 insert 는 정확히 하나만 성공한다 — 그 결과를 해석하는 계약을 고정
+  const first = interpretLockInsert(null);
+  const second = interpretLockInsert({ code: PG_UNIQUE_VIOLATION, message: 'duplicate key' });
+  assert.equal(first.proceed, true);
+  assert.equal(second.proceed, false);
+  assert.notEqual(first.mode, second.mode);
+});
+
+test('★잠금: stale 인계에 성공하면 진행한다', () => {
+  const decision = interpretLockInsert({ code: PG_UNIQUE_VIOLATION }, true);
+  assert.equal(decision.mode, 'acquired');
+  assert.equal(decision.proceed, true);
+  assert.match(decision.reason ?? '', /인계/);
+});
+
+test('★잠금: 테이블 미적용(42P01)은 잠금 없이 진행하되 사실을 명시', () => {
+  const decision = interpretLockInsert({ code: PG_UNDEFINED_TABLE, message: 'relation does not exist' });
+  assert.equal(decision.mode, 'unavailable');
+  assert.equal(decision.proceed, true);
+  assert.match(decision.reason ?? '', /048/);
+  assert.match(decision.reason ?? '', /차단되지 않습니다/);
+});
+
+test('★잠금: 상태를 알 수 없으면 진행하지 않는다 (폴백 진행 = 이중 과금)', () => {
+  const decision = interpretLockInsert({ code: '08006', message: 'connection failure' });
+  assert.equal(decision.mode, 'error');
+  assert.equal(decision.proceed, false);
+  assert.match(decision.reason ?? '', /이중 과금 방지/);
+});
+
+test('잠금: stale 기준은 함수 최대 실행시간(300초)보다 충분히 길다', () => {
+  assert.equal(STALE_LOCK_MS, 600_000);
+  assert.ok(STALE_LOCK_MS > PLATFORM_MAX_DURATION_MS);
+  const iso = staleThresholdIso(1_000_000_000_000);
+  assert.equal(iso, new Date(1_000_000_000_000 - STALE_LOCK_MS).toISOString());
 });
 
 test('절단: 구 버그 재현 방지 — 100명×5질의를 2엔진 상한(120 고유질의)에 넣으면 잘린 수가 드러난다', () => {

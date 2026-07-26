@@ -10,6 +10,7 @@ import {
   executeGeoQueries,
   GEO_ENGINES,
   ENABLE_GEMINI_FLAG,
+  isGeminiOptedIn,
 } from '../geo-engines/index.ts';
 import { createGeoQueryCache } from '../geo-engines/cache.ts';
 import { postJsonWithRetry } from '../geo-engines/http.ts';
@@ -206,15 +207,46 @@ test('★Gemini: GEO_ENABLE_GEMINI=true 옵트인 시에만 포함된다', () =>
   assert.deepEqual(enabled.map((e) => e.id), ['openai', 'gemini']);
 });
 
-test('★Gemini: 옵트인 플래그가 true 가 아니면 무시된다', () => {
-  for (const value of ['1', 'yes', 'TRUE ', 'on', '']) {
+test('★Gemini: 대소문자 변형은 전부 거부된다 (정확히 소문자 true 만)', () => {
+  // toLowerCase 로 비교하면 아래가 전부 통과해 약관 위반으로 이어진다
+  const variants = ['TRUE', 'True', 'tRuE', 'TrUe', ' true', 'true ', '1', 'yes', 'on', 'Y', ''];
+  for (const value of variants) {
+    assert.equal(isGeminiOptedIn({ [ENABLE_GEMINI_FLAG]: value }), false, `flag=${JSON.stringify(value)}`);
     const enabled = getEnabledEngines({ GEMINI_API_KEY: 'c', [ENABLE_GEMINI_FLAG]: value });
     assert.deepEqual(enabled.map((e) => e.id), [], `flag=${JSON.stringify(value)}`);
   }
+  assert.equal(isGeminiOptedIn({ [ENABLE_GEMINI_FLAG]: 'true' }), true);
 });
 
 test('★Gemini: 옵트인해도 키가 없으면 여전히 제외', () => {
   assert.deepEqual(getEnabledEngines({ [ENABLE_GEMINI_FLAG]: 'true' }), []);
+});
+
+test('★Gemini: 어댑터 자체가 옵트인을 검사한다 (직접 import 우회 방어)', () => {
+  // 레지스트리를 건너뛰고 geminiEngine 을 직접 써도 방어가 남아 있어야 한다
+  assert.equal(geminiEngine.isConfigured({ GEMINI_API_KEY: 'c' }), false);
+  assert.equal(geminiEngine.isConfigured({ GEMINI_API_KEY: 'c', [ENABLE_GEMINI_FLAG]: 'TRUE' }), false);
+  assert.equal(geminiEngine.isConfigured({ GEMINI_API_KEY: 'c', [ENABLE_GEMINI_FLAG]: 'true' }), true);
+});
+
+test('★Gemini: 옵트인 없이 run 하면 외부 요청 전에 약관 사유로 거부', async () => {
+  let called = 0;
+  const fetchImpl = (async () => {
+    called++;
+    return new Response('{}', { status: 200 });
+  }) as unknown as typeof fetch;
+
+  await assert.rejects(
+    () =>
+      geminiEngine.run('q', {
+        fetchImpl,
+        env: { GEMINI_API_KEY: 'c' }, // 키는 있지만 옵트인 없음
+        timeoutMs: 1_000,
+        maxAttempts: 1,
+      }),
+    /약관/,
+  );
+  assert.equal(called, 0, '외부 요청이 나가면 안 된다');
 });
 
 test('GEO_LIVE_QUERY=off 면 키가 다 있어도 전체 비활성', () => {
@@ -231,7 +263,11 @@ test('키 없이 run 하면 명시적 에러 (조용한 실패 금지)', async (
   const ctx = { fetchImpl: fetch, env: {}, timeoutMs: 100, maxAttempts: 1 };
   await assert.rejects(() => openAiEngine.run('q', ctx), /OPENAI_API_KEY/);
   await assert.rejects(() => perplexityEngine.run('q', ctx), /PERPLEXITY_API_KEY/);
-  await assert.rejects(() => geminiEngine.run('q', ctx), /GEMINI_API_KEY/);
+  // Gemini 는 약관 옵트인 검사가 먼저다 — 옵트인해도 키가 없으면 키 사유로 실패
+  await assert.rejects(
+    () => geminiEngine.run('q', { ...ctx, env: { [ENABLE_GEMINI_FLAG]: 'true' } }),
+    /GEMINI_API_KEY/,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -825,4 +861,60 @@ test('파서 가드: Perplexity search_results 원소가 문자열이어도 무�
     search_results: ['bad', { url: 'https://ok.example', title: 'ok' }],
   });
   assert.deepEqual(answer.sources, [{ url: 'https://ok.example', title: 'ok' }]);
+});
+
+// ---------------------------------------------------------------------------
+// [Codex 2차-2] 데드라인 뒤로 새어 나가는 구간이 없어야 한다
+// ---------------------------------------------------------------------------
+
+test('풀: throttle 대기가 데드라인 시그널로 즉시 깨어난다', async () => {
+  const controller = new AbortController();
+  const started: number[] = [];
+  const begin = Date.now();
+
+  const result = await runPool(
+    [1, 2, 3, 4, 5],
+    async (n) => {
+      started.push(n);
+      if (n === 1) controller.abort(); // 첫 작업 직후 데드라인 도달
+    },
+    {
+      concurrency: 1,
+      minIntervalMs: 30_000, // 취소되지 않으면 30초를 기다린다
+      deadlineAt: Date.now() + 60_000,
+      signal: controller.signal,
+    },
+  );
+
+  // 30초 sleep 이 즉시 깨어나 곧바로 종료돼야 한다
+  assert.ok(Date.now() - begin < 2_000, `경과 ${Date.now() - begin}ms`);
+  assert.deepEqual(started, [1]);
+  assert.equal(result.skipped, 4);
+});
+
+test('Gemini 리다이렉트 복원: 공통 시그널이 aborted 면 요청하지 않고 원본 유지', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let called = 0;
+  const fetchImpl = (async () => {
+    called++;
+    return new Response(null, { status: 302, headers: { location: 'https://blog.naver.com/x' } });
+  }) as unknown as typeof fetch;
+
+  const original = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc';
+  assert.equal(await resolveGroundingUri(original, fetchImpl, 3_000, controller.signal), original);
+  assert.equal(called, 0);
+});
+
+test('Gemini 리다이렉트 복원: 실행 중 abort 되면 원본으로 그레이스풀 종료', async () => {
+  const controller = new AbortController();
+  const fetchImpl = (async (_url: string, init: RequestInit) => {
+    const signal = init.signal as AbortSignal;
+    controller.abort();
+    if (signal.aborted) throw new Error('aborted');
+    return new Response(null, { status: 302, headers: { location: 'https://blog.naver.com/x' } });
+  }) as unknown as typeof fetch;
+
+  const original = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc';
+  assert.equal(await resolveGroundingUri(original, fetchImpl, 3_000, controller.signal), original);
 });

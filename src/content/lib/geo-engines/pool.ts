@@ -19,6 +19,11 @@ export interface PoolOptions {
   readonly minIntervalMs: number;
   /** 이 시각(Date.now() 기준 ms)을 넘으면 새 작업을 시작하지 않는다 */
   readonly deadlineAt: number;
+  /**
+   * 데드라인 시그널. throttle 대기도 이 시그널로 즉시 깨운다 —
+   * 취소되지 않는 sleep 이 남아 있으면 데드라인 뒤로 최대 minIntervalMs 만큼 새어 나간다.
+   */
+  readonly signal?: AbortSignal;
   readonly now?: () => number;
   readonly sleepImpl?: (ms: number) => Promise<void>;
 }
@@ -29,8 +34,21 @@ export interface PoolResult {
   readonly skipped: number;
 }
 
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** 데드라인 시그널로 즉시 깨울 수 있는 sleep */
+function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 export async function runPool<T>(
@@ -39,7 +57,7 @@ export async function runPool<T>(
   options: PoolOptions,
 ): Promise<PoolResult> {
   const now = options.now ?? Date.now;
-  const doSleep = options.sleepImpl ?? defaultSleep;
+  const doSleep = options.sleepImpl ?? ((ms: number) => abortableSleep(ms, options.signal));
   const concurrency = Math.max(1, Math.min(options.concurrency, items.length || 1));
 
   let cursor = 0;
@@ -51,6 +69,7 @@ export async function runPool<T>(
       if (!first && options.minIntervalMs > 0) await doSleep(options.minIntervalMs);
       first = false;
 
+      if (options.signal?.aborted) return;
       if (now() >= options.deadlineAt) return;
       const index = cursor;
       if (index >= items.length) return;
