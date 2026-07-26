@@ -21,6 +21,8 @@ export interface ClinicSiteProfile {
   hospitalType: string | null;
   region: string | null;
   address: string | null;
+  /** 병원 대표번호 (profiles.hospital_phone) — 마이그 052 미적용이면 null */
+  phone: string | null;
   /** 저자 이름 (profiles.full_name) — 바이라인/E-E-A-T 파생용 */
   authorFullName: string | null;
   /** 저자 직책 (profiles.position — 원장/부원장/… ) — 임상 역할일 때만 개인 저자 */
@@ -45,9 +47,16 @@ interface ProfileRow {
   hospital_type: string | null;
   region: string | null;
   hospital_address: string | null;
+  /** 마이그 052 미적용 환경에서는 조회 자체를 하지 않는다(undefined). */
+  hospital_phone?: string | null;
   full_name: string | null;
   position: string | null;
 }
+
+/** 공개 페이지가 읽는 프로필 컬럼 — 052(hospital_phone) 미적용이면 좁은 셋으로 재시도한다. */
+const CLINIC_PROFILE_COLS_BASE =
+  'id, site_slug, hospital_name, hospital_type, region, hospital_address, full_name, position';
+const CLINIC_PROFILE_COLS_WITH_PHONE = `${CLINIC_PROFILE_COLS_BASE}, hospital_phone`;
 
 interface PostRow {
   id: string;
@@ -86,11 +95,22 @@ export function isUuid(value: string): boolean {
 export async function getClinicBySlug(slug: string): Promise<ClinicSiteProfile | null> {
   try {
     const admin = createAdminClient();
-    const { data, error } = await admin
+
+    // 마이그 052(hospital_phone) 미적용 환경 폴백 — 컬럼 없음(42703)이면
+    // 전화번호를 빼고 재조회한다(전화 블록만 렌더되지 않고 나머지는 그대로).
+    let { data, error } = await admin
       .from('profiles')
-      .select('id, site_slug, hospital_name, hospital_type, region, hospital_address, full_name, position')
+      .select(CLINIC_PROFILE_COLS_WITH_PHONE)
       .eq('site_slug', slug)
       .single<ProfileRow>();
+
+    if (error?.code === '42703') {
+      ({ data, error } = await admin
+        .from('profiles')
+        .select(CLINIC_PROFILE_COLS_BASE)
+        .eq('site_slug', slug)
+        .single<ProfileRow>());
+    }
 
     if (error || !data || !data.hospital_name) return null;
     return {
@@ -100,6 +120,7 @@ export async function getClinicBySlug(slug: string): Promise<ClinicSiteProfile |
       hospitalType: data.hospital_type,
       region: data.region,
       address: data.hospital_address,
+      phone: data.hospital_phone ?? null,
       authorFullName: data.full_name,
       authorPosition: data.position,
     };

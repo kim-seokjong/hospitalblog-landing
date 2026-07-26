@@ -92,6 +92,7 @@ export default async function ClinicSitePostPage({ params }: PageProps) {
       specialty: clinic.hospitalType,
       region: clinic.region,
       address: clinic.address,
+      telephone: clinic.phone,
       logoUrl: theme.logoUrl,
       authorFullName: clinic.authorFullName,
       authorPosition: clinic.authorPosition,

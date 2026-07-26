@@ -49,6 +49,12 @@ export interface GeoHospitalProfile {
   /** 병원 로고 URL (브랜드킷 — 자체 스토리지 검증 통과분만 전달) — 없으면 생략 */
   logoUrl?: string | null;
   /**
+   * 병원 대표번호 (profiles.hospital_phone) — 없으면 생략.
+   * "병원 추천형" 질의에서 AI 가 실제 연락 가능한 병원으로 인식하려면 필요한 공개 사실정보.
+   * ⚠️ profiles.phone(담당자 개인 연락처)은 절대 여기에 넣지 않는다.
+   */
+  telephone?: string | null;
+  /**
    * 저자 이름 (profiles.full_name) — 임상 역할(원장·부원장)일 때만 개인 저자로 쓰인다.
    * 없거나 비임상 직책이면 저자는 병원(Organization)으로 파생된다.
    */
@@ -219,6 +225,7 @@ export function buildMedicalClinicSchema(profile: GeoHospitalProfile): JsonLdObj
   const region = normalized(profile.region);
   const address = normalized(profile.address);
   const logoUrl = normalized(profile.logoUrl);
+  const telephone = normalized(profile.telephone);
 
   const postalAddress: JsonLdObject | null = region || address
     ? {
@@ -235,6 +242,7 @@ export function buildMedicalClinicSchema(profile: GeoHospitalProfile): JsonLdObj
     name: hospitalName,
     ...(specialty ? { medicalSpecialty: specialty } : {}),
     ...(postalAddress ? { address: postalAddress } : {}),
+    ...(telephone ? { telephone } : {}),
     ...(logoUrl ? { logo: logoUrl } : {}),
   };
 }

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { provisionClinicSite } from '@/content/lib/clinic-site/provision'
 import type { Payment, PaymentStatus, Profile, BillingKey } from './types'
 import type { PlanId } from './plans'
 
@@ -113,7 +114,8 @@ export async function activateUserPlan(params: {
   plan: PlanId
   expiresAt: string
 }): Promise<void> {
-  const { error } = await getAdmin()
+  const admin = getAdmin()
+  const { error } = await admin
     .from('profiles')
     .upsert({
       id: params.userId,
@@ -125,6 +127,18 @@ export async function activateUserPlan(params: {
       updated_at: new Date().toISOString(),
     })
   if (error) throw new Error(`플랜 활성화 실패: ${error.message}`)
+
+  // ★ 유료 활성화 = 병원 블로그 자동 개설 시점.
+  //   여기(플랜 활성화 단일 관문)에 거는 이유: 최초 빌링 확인(payment/billing/confirm),
+  //   일반 결제 확인(verify.verifyAndActivate → payment/confirm · webhook), 정기결제
+  //   cron(billing-charge / billing-retry) 이 모두 이 함수를 지나므로 어떤 결제 경로도
+  //   빠지지 않는다. 모두 service role 서버 경로라 남의 슬러그 중복 확인이 가능하다.
+  //   provisionClinicSite 는 멱등이며(회원당 1회) 절대 throw 하지 않는다 —
+  //   개설 실패가 결제 성공을 되돌리면 안 된다.
+  const outcome = await provisionClinicSite(admin, params.userId)
+  if (outcome.status === 'failed') {
+    console.error('[activateUserPlan] 병원 블로그 자동 개설 실패:', params.userId, outcome.reason)
+  }
 }
 
 /**

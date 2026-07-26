@@ -22,6 +22,10 @@ interface ProfileData {
   phone: string;
   hospital_name: string;
   hospital_address: string;
+  /** 병원 대표번호(공개) — 공개 블로그에 표시된다. 담당자 개인 연락처(phone)와 다르다. */
+  hospital_phone: string;
+  /** 진료과 — 공개 블로그·검색엔진 구조화 데이터에 표시되는 값 */
+  hospital_type: string;
   position: string;
   specialty: string;
   specialty_detail: string;
@@ -45,6 +49,8 @@ const DEFAULT_PROFILE: ProfileData = {
   phone: '',
   hospital_name: '',
   hospital_address: '',
+  hospital_phone: '',
+  hospital_type: '',
   position: '',
   specialty: '',
   specialty_detail: '',
@@ -64,6 +70,24 @@ const DEFAULT_PROFILE: ProfileData = {
 };
 
 const POSITIONS = ['원장', '부원장', '간호사', '원무', '마케터', '기타'];
+
+/**
+ * 진료과(profiles.hospital_type) 선택지 — 가입 폼(AuthModal)과 같은 목록.
+ * 가입 후에는 이 값을 바꿀 방법이 없었는데, 공개 블로그·JSON-LD 가 표시하는 값이라
+ * 마이페이지에서 수정 가능해야 한다.
+ */
+const HOSPITAL_TYPES = [
+  '내과', '외과', '피부과', '성형외과', '정형외과', '안과',
+  '이비인후과', '치과', '한의원', '산부인과', '소아과', '신경과',
+  '정신건강의학과', '재활의학과', '가정의학과', '비뇨기과', '기타',
+];
+
+/** 병원 대표번호 형식 — 서버(/api/profile)와 같은 기준. */
+function isValidHospitalPhone(value: string): boolean {
+  if (!/^[0-9+\-()\s]{6,25}$/.test(value)) return false;
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 6 && digits.length <= 15;
+}
 
 const SPECIALTIES = [
   '내과', '외과', '정형외과', '신경외과', '피부과', '성형외과',
@@ -197,6 +221,8 @@ export default function ProfileTab() {
       ...prev,
       hospital_name: c.name || prev.hospital_name,
       specialty: c.specialty || prev.specialty,
+      // 진료과(공개 표시값)는 선택지에 있는 값일 때만 자동 반영한다(임의 문자열 방지).
+      hospital_type: HOSPITAL_TYPES.includes(c.specialty) ? c.specialty : prev.hospital_type,
       hospital_address: c.roadAddress || c.address || prev.hospital_address,
       region: matchedRegion || prev.region,
     }));
@@ -425,6 +451,42 @@ export default function ProfileTab() {
               placeholder="서울시 강남구 테헤란로 123"
             />
           </Field>
+
+          {/* 공개 블로그에 그대로 표시되는 항목 — 대표번호·진료과 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="병원 대표번호">
+              <Input
+                value={profile.hospital_phone}
+                onChange={v => setProfile(p => ({ ...p, hospital_phone: v }))}
+                placeholder="02-123-4567"
+                type="tel"
+              />
+            </Field>
+            <Field label="진료과">
+              <Select
+                value={profile.hospital_type}
+                onChange={v => setProfile(p => ({ ...p, hospital_type: v }))}
+                options={[{ value: '', label: '진료과 선택' }, ...HOSPITAL_TYPES.map(t => ({ value: t, label: t }))]}
+              />
+            </Field>
+          </div>
+          {(() => {
+            const v = profile.hospital_phone.trim();
+            if (v !== '' && !isValidHospitalPhone(v)) {
+              return (
+                <p className="-mt-1 mb-2 text-xs text-red-600">
+                  전화번호 형식이 아닙니다. 숫자와 하이픈(-)만 사용해 입력해주세요. 예: 02-123-4567
+                </p>
+              );
+            }
+            return (
+              <p className="-mt-1 mb-2 text-xs text-[#5b6573] leading-relaxed">
+                대표번호와 진료과는 <strong className="text-[#202020]">내 블로그 공개 페이지</strong>에
+                병원명·주소와 함께 표시됩니다. (담당자 개인 전화번호는 공개되지 않습니다)
+              </p>
+            );
+          })()}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="진료과목">
               <Select

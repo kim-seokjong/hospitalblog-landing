@@ -8,6 +8,10 @@ interface ProfileUpdateBody {
   phone?: string
   hospital_name?: string
   hospital_address?: string
+  /** 병원 대표번호(공개) — 담당자 개인 연락처(phone)와 다른 컬럼이다. */
+  hospital_phone?: string
+  /** 진료과 — 서브도메인 블로그·JSON-LD 가 표시하는 값(가입 후 수정 가능해야 한다). */
+  hospital_type?: string
   position?: string
   specialty?: string
   specialty_detail?: string
@@ -27,20 +31,23 @@ interface ProfileUpdateBody {
 }
 
 // 마이그레이션이 아직 적용 안 된 환경에서도 안 깨지게 컬럼 셋을 단계적으로 축소한다.
+//  - +PHONE: +SCHED + hospital_phone(052)
 //  - +SCHED: base + naver(028) + 자사 채널(042) + site_slug(043) + site_publish_cadence(044)
 //  - +SITE : base + naver(028) + 자사 채널(042) + site_slug(043)
 //  - FULL : base + naver_blog_url(028) + 자사 채널(042)
 //  - +NAVER: base + naver_blog_url (042 미적용)
 //  - BASE : 코어 컬럼만 (028·042 모두 미적용)
 const PROFILE_COLS_BASE =
-  'full_name, phone, hospital_name, hospital_address, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage'
+  'full_name, phone, hospital_name, hospital_address, hospital_type, position, specialty, specialty_detail, hospital_desc, hospital_keywords, region, sms_enabled, sms_phone, notify_expiry, notify_usage'
 const PROFILE_COLS_WITH_NAVER = `${PROFILE_COLS_BASE}, naver_blog_url`
 const PROFILE_COLS_FULL = `${PROFILE_COLS_WITH_NAVER}, instagram_handle, threads_handle, youtube_channel_id`
 const PROFILE_COLS_WITH_SITE = `${PROFILE_COLS_FULL}, site_slug`
 const PROFILE_COLS_WITH_SCHEDULE = `${PROFILE_COLS_WITH_SITE}, site_publish_cadence`
+const PROFILE_COLS_WITH_PHONE = `${PROFILE_COLS_WITH_SCHEDULE}, hospital_phone`
 
 // 넓은 것 → 좁은 것 순. 42703(컬럼 없음)이면 다음 후보로 재시도한다.
 const SELECT_CANDIDATES: readonly string[] = [
+  PROFILE_COLS_WITH_PHONE,
   PROFILE_COLS_WITH_SCHEDULE,
   PROFILE_COLS_WITH_SITE,
   PROFILE_COLS_FULL,
@@ -49,13 +56,31 @@ const SELECT_CANDIDATES: readonly string[] = [
 ]
 
 // 저장 시 빈 문자열 → null 로 정규화하는 선택 입력 컬럼.
+// ⚠️ hospital_type 은 NOT NULL DEFAULT ''(마이그 014/015)이라 여기에 넣으면 안 된다.
 const NULLABLE_TEXT_COLS: readonly (keyof ProfileUpdateBody)[] = [
   'naver_blog_url',
   'instagram_handle',
   'threads_handle',
   'youtube_channel_id',
   'site_slug',
+  'hospital_phone',
 ]
+
+/**
+ * 병원 대표번호 형식 — 숫자·하이픈·공백·괄호·+ 만 허용, 숫자 6~15자리.
+ * 공개 페이지의 tel: 링크와 JSON-LD telephone 으로 나가는 값이라
+ * 임의 문자열이 들어가지 않게 경계에서 막는다.
+ */
+const HOSPITAL_PHONE_RE = /^[0-9+\-()\s]{6,25}$/
+
+function isValidHospitalPhone(value: string): boolean {
+  if (!HOSPITAL_PHONE_RE.test(value)) return false
+  const digits = value.replace(/\D/g, '')
+  return digits.length >= 6 && digits.length <= 15
+}
+
+/** 진료과 표시값 상한 — 화면·스키마에 그대로 나가므로 길이를 제한한다. */
+const HOSPITAL_TYPE_MAX_LENGTH = 30
 
 // 042(자사 채널) 컬럼 — 미적용 환경에서 제거 후 재시도할 대상.
 const CHANNEL_COLS: readonly string[] = [
@@ -112,7 +137,8 @@ export async function PUT(req: NextRequest) {
     const body = await req.json() as ProfileUpdateBody
 
     const allowed: (keyof ProfileUpdateBody)[] = [
-      'full_name', 'phone', 'hospital_name', 'hospital_address', 'position',
+      'full_name', 'phone', 'hospital_name', 'hospital_address', 'hospital_phone',
+      'hospital_type', 'position',
       'specialty', 'specialty_detail', 'hospital_desc', 'hospital_keywords',
       'region', 'sms_enabled', 'sms_phone', 'notify_expiry', 'notify_usage',
       'naver_blog_url', 'instagram_handle', 'threads_handle', 'youtube_channel_id',
@@ -143,6 +169,24 @@ export async function PUT(req: NextRequest) {
       updates.site_slug = validated.slug
     }
 
+    // hospital_phone — 공개 페이지 tel: 링크·JSON-LD telephone 으로 나가므로 형식 검증.
+    if (typeof updates.hospital_phone === 'string' && !isValidHospitalPhone(updates.hospital_phone)) {
+      return NextResponse.json(
+        { error: '병원 대표번호 형식이 올바르지 않습니다. 예: 02-123-4567' },
+        { status: 400 },
+      )
+    }
+
+    // hospital_type — NOT NULL DEFAULT ''(마이그 014/015). 빈 값은 ''(미설정)으로 저장한다.
+    if ('hospital_type' in updates) {
+      const raw = updates.hospital_type
+      const value = typeof raw === 'string' ? raw.trim() : ''
+      if (value.length > HOSPITAL_TYPE_MAX_LENGTH) {
+        return NextResponse.json({ error: '진료과는 30자 이하로 입력해주세요.' }, { status: 400 })
+      }
+      updates.hospital_type = value
+    }
+
     // site_publish_cadence — 허용값(off/auto/weekly/biweekly)만. NOT NULL 컬럼이라 빈 값/미허용값은 거부.
     if ('site_publish_cadence' in updates) {
       if (!isValidCadence(updates.site_publish_cadence)) {
@@ -156,6 +200,7 @@ export async function PUT(req: NextRequest) {
       supabase.from('profiles').update(payload).eq('id', user.id)
 
     const PEEL_GROUPS_NEWEST_FIRST: readonly (readonly string[])[] = [
+      ['hospital_phone'],
       ['site_publish_cadence'],
       ['site_slug'],
       CHANNEL_COLS,
@@ -185,6 +230,21 @@ export async function PUT(req: NextRequest) {
         )
       }
       return NextResponse.json({ error: '프로필 저장 실패' }, { status: 500 })
+    }
+
+    // 자동발행을 'auto' 로 켠 순간을 기록한다 — 자동발행은 이 시각 이후에 만들어진
+    // 글만 대상으로 한다(보관함의 과거 글이 한꺼번에 공개되는 것을 막는 유일한 기준).
+    // 이미 값이 있으면 앞당기지 않는다(조건부 update). 실패·컬럼 없음은 무시한다
+    // (프로필 저장 자체는 이미 성공 — cron 이 다음 실행에서 같은 기준으로 확정한다).
+    if (updates.site_publish_cadence === 'auto') {
+      const { error: sinceError } = await supabase
+        .from('profiles')
+        .update({ site_auto_publish_since: new Date().toISOString() })
+        .eq('id', user.id)
+        .is('site_auto_publish_since', null)
+      if (sinceError && !isMissingColumnError(sinceError)) {
+        console.error('[profile] 자동발행 시작시각 기록 실패:', sinceError.message)
+      }
     }
 
     return NextResponse.json({ success: true })

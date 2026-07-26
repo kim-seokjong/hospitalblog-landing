@@ -70,12 +70,19 @@ export default async function ClinicSiteHomePage({ params }: PageProps) {
     specialty: clinic.hospitalType,
     region: clinic.region,
     address: clinic.address,
+    telephone: clinic.phone,
     logoUrl: theme.logoUrl,
   });
 
   const facts = [clinic.hospitalType, clinic.region].filter(
     (v): v is string => Boolean(v && v.trim()),
   );
+
+  // 병원 공개 사실정보 — 값이 있는 항목만 렌더한다(빈 라벨이 남지 않게).
+  const address = clinic.address?.trim() ?? '';
+  const phone = clinic.phone?.trim() ?? '';
+  // tel: 링크는 다이얼 가능한 문자만 남긴다(공백·괄호 제거).
+  const telHref = phone.replace(/[^0-9+]/g, '');
 
   // 브랜드 컬러 — 검증 통과(hasBrandColor)시에만 적용. CSS 변수는 hex 검증 완료값만 주입.
   const accentStyle: CSSProperties | undefined = theme.hasBrandColor
@@ -123,6 +130,31 @@ export default async function ClinicSiteHomePage({ params }: PageProps) {
           <p className="mt-3 text-sm text-[#5b6573] leading-relaxed">
             {clinic.hospitalName}의 공식 건강정보 블로그입니다.
           </p>
+
+          {/* 병원 정보 — 주소·대표번호(등록된 것만). 값이 없으면 블록 자체가 사라진다. */}
+          {(address !== '' || (phone !== '' && telHref !== '')) && (
+            <dl className="mt-4 space-y-1.5 text-sm text-[#3d4551]">
+              {address !== '' && (
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-[#73808f]">주소</dt>
+                  <dd className="break-keep">{address}</dd>
+                </div>
+              )}
+              {phone !== '' && telHref !== '' && (
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-[#73808f]">전화</dt>
+                  <dd>
+                    <a
+                      href={`tel:${telHref}`}
+                      className="font-medium underline underline-offset-4 hover:text-[#202020]"
+                    >
+                      {phone}
+                    </a>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          )}
         </header>
 
         {/* 히어로 — 시설/대표 사진 (동의·URL 검증 통과분만, LCP 후보라 lazy 미적용) */}
