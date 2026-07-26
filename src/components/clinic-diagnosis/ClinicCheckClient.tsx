@@ -206,7 +206,7 @@ export default function ClinicCheckClient() {
         </form>
 
         <p className="text-[11px] text-[#8a93a0] text-center mt-2.5 leading-relaxed">
-          행정안전부 공표 정보 · 네이버 공개 API · 홈페이지 1회 조회만 사용해요 · 무료
+          행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 무료
         </p>
 
         {(lookupLoading || busyMngNo !== null) && (

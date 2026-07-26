@@ -317,7 +317,7 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
       )}
 
       <p className="text-[11px] text-[#8a93a0] text-center leading-relaxed mt-7">
-        본 진단은 행정안전부 공표 정보와 네이버 공개 API, 홈페이지 1회 조회로 만든 특정 시점의 참고 자료예요.
+        본 진단은 행정안전부 공표 정보와 네이버 공개 API, 그리고 공개된 블로그 글·홈페이지를 각각 한 번씩 열어 만든 특정 시점의 참고 자료예요.
         매출·방문자 수치는 추정하지 않고, 확인하지 못한 항목은 비워 둡니다. 검색 순위는 API 기준이라 실제 검색 화면과 다를 수 있어요.
       </p>
     </div>
