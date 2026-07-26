@@ -123,22 +123,37 @@ type UpdatePatch = Record<string, unknown>;
 /**
  * 슬러그·자동발행 설정을 저장한다. 42703(마커 컬럼 없음)·23514(cadence 'auto'
  * 미허용)는 해당 필드를 빼고 재시도한다. 반환값은 실제 갱신 행 수(0 = 경합).
+ *
+ * ★ compare-and-set: 읽은 시점의 값(slug · cadence)이 그대로일 때만 쓴다.
+ *   결제 경로에는 시간 예산(withProvisionBudget)이 걸려 있어, 예산을 넘긴 뒤에도
+ *   이 UPDATE 가 뒤늦게 DB 에 도달할 수 있다. 그 사이 고객이 마이페이지에서
+ *   자동발행을 꺼 두었다면 늦게 도착한 쓰기가 그 선택을 되살린다 —
+ *   cadence 를 바꾸는 경우 "읽었을 때의 cadence 일 때만" 쓰도록 조건을 건다.
  */
 async function applyPatch(
   admin: Admin,
   userId: string,
   patch: UpdatePatch,
   slugGuard: { column: 'site_slug'; expected: string | null },
+  cadenceGuard?: { expected: string | null },
 ): Promise<{ ok: true; rows: number } | { ok: false; error: PostgrestErrorLike }> {
   const MARKER_COLS = ['site_provisioned_at', 'site_auto_publish_since'] as const;
 
   let payload: UpdatePatch = patch;
   for (let attempt = 0; attempt < 3; attempt++) {
     const query = admin.from('profiles').update(payload).eq('id', userId);
-    const guarded =
+    const slugGuarded =
       slugGuard.expected === null
         ? query.is(slugGuard.column, null)
         : query.eq(slugGuard.column, slugGuard.expected);
+
+    // cadence 를 바꾸지 않는 재시도(위에서 필드가 제거된 경우)에는 조건을 걸지 않는다.
+    const guarded =
+      cadenceGuard && 'site_publish_cadence' in payload
+        ? cadenceGuard.expected === null
+          ? slugGuarded.is('site_publish_cadence', null)
+          : slugGuarded.eq('site_publish_cadence', cadenceGuard.expected)
+        : slugGuarded;
 
     const { data, error } = await guarded.select('id');
     if (!error) return { ok: true, rows: data?.length ?? 0 };
@@ -203,10 +218,13 @@ export async function provisionClinicSite(
         //   "새로 켜는" 전환 시점이고, nowIso 는 기존 값보다 항상 미래다(앞당기지 않는다).
         patch.site_auto_publish_since = nowIso;
       }
-      const applied = await applyPatch(admin, userId, patch, {
-        column: 'site_slug',
-        expected: row.site_slug,
-      });
+      const applied = await applyPatch(
+        admin,
+        userId,
+        patch,
+        { column: 'site_slug', expected: row.site_slug },
+        { expected: row.site_publish_cadence },
+      );
       if (!applied.ok) {
         return { status: 'failed', reason: applied.error.message ?? '프로필 저장 실패' };
       }
@@ -250,10 +268,13 @@ export async function provisionClinicSite(
         patch.site_auto_publish_since = nowIso;
       }
 
-      const applied = await applyPatch(admin, userId, patch, {
-        column: 'site_slug',
-        expected: null,
-      });
+      const applied = await applyPatch(
+        admin,
+        userId,
+        patch,
+        { column: 'site_slug', expected: null },
+        { expected: row.site_publish_cadence },
+      );
 
       if (applied.ok) {
         if (applied.rows === 0) {

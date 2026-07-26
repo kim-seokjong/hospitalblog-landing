@@ -251,6 +251,33 @@ test('★기준 시각은 "현재 auto 가 아닐 때만" 찍는다(껐다 켠 �
   assert.ok(stampIndex >= 0 && peelIndex > stampIndex);
 });
 
+test('★cadence 전환과 기준 시각은 한 UPDATE 로 함께 쓴다(경합 시 불일치 방지)', () => {
+  // 두 값을 따로 쓰면 그 사이 다른 요청이 끼어들어
+  // "cadence 는 auto 인데 기준 시각은 옛날 값"이 만들어진다.
+  assert.match(
+    profileRouteSource,
+    /\.update\(\{\s*site_publish_cadence: 'auto',\s*site_auto_publish_since: new Date\(\)\.toISOString\(\),\s*\}\)/,
+  );
+  // 처리 후 메인 update 가 cadence 를 다시 쓰면 안 된다
+  // (그 사이 off 로 바꾼 요청을 기준 시각 없이 되살린다).
+  assert.match(profileRouteSource, /delete updates\.site_publish_cadence/);
+});
+
+test('★공개되는 병원 소개문도 의료광고법 게이트를 지난다', () => {
+  // 글은 3층 검수를 거치는데 이 자유 입력만 무검수로 공개되면 우회 통로가 된다.
+  assert.match(profileRouteSource, /import \{ checkCompliance \}/);
+  assert.match(profileRouteSource, /updates\.hospital_desc/);
+  assert.match(profileRouteSource, /v\.severity === 'HIGH' \|\| v\.severity === 'CRITICAL'/);
+});
+
+test('★결제 훅의 늦은 쓰기가 고객의 자동발행 해제를 되살리지 못한다', () => {
+  // 시간 예산(5초)을 넘긴 UPDATE 가 뒤늦게 도달할 수 있다 —
+  // 읽은 시점의 cadence 일 때만 쓰도록 compare-and-set 을 건다.
+  assert.match(provisionSource, /cadenceGuard\?: \{ expected: string \| null \}/);
+  assert.match(provisionSource, /slugGuarded\.eq\('site_publish_cadence', cadenceGuard\.expected\)/);
+  assert.match(provisionSource, /\{ expected: row\.site_publish_cadence \}/);
+});
+
 test('★개설 훅도 기준 시각을 항상 새로 찍는다(조건부 기록 금지)', () => {
   assert.ok(!/if \(!row\.site_auto_publish_since\)/.test(provisionSource));
   assert.match(provisionSource, /patch\.site_auto_publish_since = nowIso/);
@@ -263,7 +290,7 @@ test('★가드 컬럼(마이그 052)이 없으면 자동발행을 켜지 않는
   assert.match(provisionSource, /if \(!guardAvailable\) return null/);
   assert.match(provisionSource, /resolveCadence\(row\.site_publish_cadence, markerAvailable\)/);
   // /api/profile 도 같은 이유로 켜지 못하게 막는다(503).
-  assert.match(profileRouteSource, /isMissingColumnError\(sinceError\)/);
+  assert.match(profileRouteSource, /isMissingColumnError\(autoError\)/);
   assert.match(profileRouteSource, /status: 503/);
 });
 

@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/dev/lib/supabase/server'
 import { validateSlug } from '@/content/lib/clinic-site/slug'
 import { isValidCadence } from '@/content/lib/clinic-site/auto-publish'
 import { validateClinicHoursInput } from '@/content/lib/clinic-site/hours'
+import { checkCompliance } from '@/content/lib/medical-compliance'
 
 interface ProfileUpdateBody {
   full_name?: string
@@ -202,6 +203,25 @@ export async function PUT(req: NextRequest) {
       updates.hospital_hours = validated.hours
     }
 
+    // hospital_desc — 공개 블로그(홈 · 병원 소개 페이지)에 그대로 나가는 자유 입력이다.
+    // 글은 3층 검수를 거치는데 이 문구만 무검수로 공개되면 의료광고법 우회 통로가 된다.
+    // 발행 게이트와 같은 선(HIGH/CRITICAL)에서 저장 자체를 막고 사유를 돌려준다.
+    if (typeof updates.hospital_desc === 'string' && updates.hospital_desc.trim() !== '') {
+      const { violations } = checkCompliance(updates.hospital_desc)
+      const blocking = violations.filter(
+        (v) => v.severity === 'HIGH' || v.severity === 'CRITICAL',
+      )
+      if (blocking.length > 0) {
+        const words = [...new Set(blocking.map((v) => v.word))].slice(0, 5).join(', ')
+        return NextResponse.json(
+          {
+            error: `병원 소개에 의료광고법 위반 소지 표현이 있습니다: ${words}. 표현을 수정한 뒤 저장해주세요.`,
+          },
+          { status: 400 },
+        )
+      }
+    }
+
     // site_publish_cadence — 허용값(off/auto/weekly/biweekly)만. NOT NULL 컬럼이라 빈 값/미허용값은 거부.
     if ('site_publish_cadence' in updates) {
       if (!isValidCadence(updates.site_publish_cadence)) {
@@ -209,36 +229,55 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    // ★ 자동발행을 'auto' 로 "새로 켜는" 순간을 기록한다 — 자동발행은 이 시각 이후에
-    //   만들어진 글만 대상으로 한다(보관함의 과거 글이 한꺼번에 공개되는 것을 막는 유일한 기준).
+    // ★ 자동발행 'auto' 전환은 기준 시각과 함께 **한 UPDATE 로** 처리한다.
     //
-    //   반드시 cadence 를 바꾸기 "전에" 실행한다: 조건이 `현재 cadence != 'auto'` 이므로
-    //   순서가 뒤바뀌면 조건이 항상 거짓이 된다. 이 조건부 UPDATE 한 방이
-    //   "이미 auto 인 회원의 저장 때마다 기준시각이 앞으로 밀려 그 사이 쓴 글이 제외되는" 문제와
-    //   "껐다 켠 회원의 기준시각이 과거로 남아 껐던 기간의 글이 전부 공개되는" 문제를 동시에 막는다.
-    //   (TOCTOU 없음 — 읽고 판단하는 대신 DB 조건으로 표현했다.)
+    //   자동발행은 site_auto_publish_since 이후에 만들어진 글만 대상으로 한다
+    //   (보관함의 과거 글이 한꺼번에 공개되는 것을 막는 유일한 기준).
+    //   두 값을 따로 쓰면 그 사이에 다른 요청이 끼어들어 "cadence 는 auto 인데
+    //   기준 시각은 예전 값"인 상태가 만들어진다 — 껐던 기간에 쌓인 글이 전부 공개된다.
+    //
+    //   조건 `현재 cadence != 'auto'` 가 "새로 켜는 전환"만 골라낸다:
+    //    · 전환이면 두 값이 원자적으로 함께 기록된다.
+    //    · 이미 auto 면 0행 — 기준 시각을 앞으로 밀지 않는다(그 사이 쓴 글이
+    //      제외되면 안 된다. 마이페이지 저장 때마다 전체 프로필이 전송된다).
+    //
+    //   처리 후에는 cadence 를 아래 메인 update 페이로드에서 제거한다. 남겨 두면
+    //   메인 update 가 cadence 만 다시 auto 로 써서, 그 사이 다른 요청이 off 로
+    //   바꿔 둔 경우 기준 시각 없이 auto 가 되살아난다.
     if (updates.site_publish_cadence === 'auto') {
-      const { error: sinceError } = await supabase
+      const { error: autoError } = await supabase
         .from('profiles')
-        .update({ site_auto_publish_since: new Date().toISOString() })
+        .update({
+          site_publish_cadence: 'auto',
+          site_auto_publish_since: new Date().toISOString(),
+        })
         .eq('id', user.id)
         .neq('site_publish_cadence', 'auto')
 
       // 가드 컬럼이 없으면(마이그 052 미적용) 자동발행을 켜지 않는다 —
-      // 기준시각 없이 켜면 cron 의 소급 차단 필터가 통째로 꺼져 과거 글이 공개된다.
-      if (isMissingColumnError(sinceError)) {
+      // 기준 시각 없이 켜면 cron 의 소급 차단 필터가 통째로 꺼져 과거 글이 공개된다.
+      // (이 UPDATE 의 컬럼은 둘뿐이라 42703 의 원인이 모호하지 않다.)
+      if (isMissingColumnError(autoError)) {
         return NextResponse.json(
           { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 잠시 후 다시 시도해주세요.' },
           { status: 503 }
         )
       }
-      if (sinceError) {
-        console.error('[profile] 자동발행 시작시각 기록 실패:', sinceError.message)
+      // 23514 = 마이그 048(cadence 'auto' 허용) 미적용
+      if (autoError?.code === '23514') {
+        return NextResponse.json(
+          { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 잠시 후 다시 시도해주세요.' },
+          { status: 503 }
+        )
+      }
+      if (autoError) {
+        console.error('[profile] 자동발행 전환 실패:', autoError.message)
         return NextResponse.json(
           { error: '바로 발행 설정을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.' },
           { status: 500 }
         )
       }
+      delete updates.site_publish_cadence
     }
 
     // 넓은 update → 컬럼 없음(42703)이면 최신 마이그 컬럼부터 제거하며 재시도한다.
