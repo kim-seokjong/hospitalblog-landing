@@ -16,13 +16,31 @@
  *  - 응답: 200 성공 / 202 키 검증 대기 / 400 형식오류 / 403 키 불일치 /
  *    422 호스트 불일치 / 429 과다요청.
  *  - "Submit only when content has changed. Do not resubmit unchanged URLs."
+ *  - 네이버 가이드: "IndexNow를 사용하기 시작한 이후 추가된 URL만 게시해야 합니다"
+ *    → 과거 글 일괄 백필 금지. 우리 구현은 발행 시점에만 제출하므로 이를 지킨다.
  *
  * ⚠️ 러너 제약(slug.ts / auto-publish.ts 패턴): node --experimental-strip-types
  *    테스트 러너가 별칭·상대 경로 해석 없이 로드할 수 있도록 값 import 없이
  *    자립 모듈로 유지한다. 실제 네트워크 호출은 indexnow-submit.ts 가 담당한다.
  */
 
-/** 글로벌 엔드포인트 — 여기 1곳에 보내면 참여 검색엔진 전체로 전파된다. */
+/**
+ * 글로벌 엔드포인트 — 여기 1곳에 보내면 참여 검색엔진 전체로 전파된다.
+ *
+ * 참여 엔진(https://www.indexnow.org/searchengines.json, 확인일 2026-07-26):
+ *   Bing · Naver · Yandex · Seznam.cz · Yep · Internet Archive · Amazonbot
+ *   ⚠️ 구글은 참여하지 않는다 — 구글 색인은 사이트맵 인덱스가 담당한다.
+ *
+ * ★ 네이버 공식 확인 (영업 메시지에 인용 가능):
+ *   - https://searchadvisor.naver.com/guide/indexnow-about
+ *     "서치 어드바이저는 IndexNow protocol 을 지원합니다."
+ *   - 네이버 웹마스터 공지(2023-07): https://blog.naver.com/naver_webmaster/223165612654
+ *     "[공지] 네이버 검색에서 IndexNow 프로토콜을 지원합니다."
+ *   - 네이버 전용 엔드포인트도 있으나(searchadvisor.naver.com/indexnow) 스펙상
+ *     한 곳에만 보내면 전 엔진에 공유되므로 글로벌 엔드포인트만 쓴다.
+ *   - ⚠️ 네이버 FAQ: "색인을 보장하지는 않습니다" · 사이트맵/RSS/수집요청을
+ *     대체하지 않는다(보완재). 그래서 사이트맵 인덱스와 병행한다.
+ */
 export const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow';
 
 /** 스펙상 1회 POST 최대 URL 수. */
@@ -34,8 +52,16 @@ export const INDEXNOW_PROTOCOL_MAX_URLS = 10_000;
  */
 export const INDEXNOW_SUBMIT_LIMIT = 100;
 
-/** 외부 호출 타임아웃 — 색인 요청이 발행 응답을 지연시키면 안 된다. */
+/** 외부 호출 기본 타임아웃 (백그라운드 cron 등 사람이 기다리지 않는 경로). */
 export const INDEXNOW_TIMEOUT_MS = 4_000;
+
+/**
+ * 사용자가 화면에서 기다리는 경로(수동 발행 버튼)의 타임아웃.
+ * 색인 요청 때문에 발행 응답이 늦어지면 안 된다 — 이 시간 안에 응답이 없으면
+ * 그냥 포기하고 발행 성공을 반환한다. 놓친 URL 은 사이트맵 인덱스로 결국 수집된다.
+ * (정상 응답은 보통 수백 ms 이므로 1.5초면 대부분 성공한다.)
+ */
+export const INDEXNOW_INTERACTIVE_TIMEOUT_MS = 1_500;
 
 /**
  * 키 형식: 8~128자, 소문자·대문자·숫자·하이픈.
