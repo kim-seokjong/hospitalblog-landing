@@ -15,22 +15,35 @@
 -- ※ 미적용 상태에서도 코드는 죽지 않는다(42P01 폴백). 단 그때는 잠금이 없으므로
 --   cron 응답의 lock.mode 가 'unavailable' 로 내려간다.
 
+-- ★ status 가 'done' 이면 그 주는 영구히 잠긴다. 그래서 **완전 성공에만** done 을 찍고,
+--   저장 실패·마감 중단·일부 회원 누락이 있으면 'failed' 로 마감해 재실행을 허용한다.
+--   done 으로 찍어 버리면 앞쪽 청크만 저장된 반쪽 데이터가 그 주의 최종 결과로 확정된다
+--   (돈은 다 쓰고 데이터는 반만 남는 상태를 복구할 수 없다).
+--   재실행이 중복을 만들지 않는 것은 회원 단위 중복 조회(이미 저장된 회원 skip)가 보장한다.
+
 create table if not exists public.geo_tracking_runs (
   week_start   date primary key,          -- 그 주 월요일(UTC). 주 1회 cron의 실행 단위
   started_at   timestamptz not null default now(),
   finished_at  timestamptz,
-  status       text not null default 'running',  -- 'running' | 'done'
+  status       text not null default 'running',  -- 'running' | 'done' | 'failed'
   users        integer,                   -- 저장 완료 회원 수 (관측용)
   inserted     integer,                   -- 삽입 행 수 (관측용)
-  http_attempts integer                   -- 재시도 포함 실제 외부 HTTP 요청 수 (비용 관측)
+  http_attempts integer,                  -- 재시도 포함 실제 외부 HTTP 요청 수 (비용 관측)
+  note         text                       -- 실패·중단 사유 (재실행 판단용)
 );
+
+-- 이미 적용한 DB 를 위한 컬럼 보강 (idempotent)
+alter table public.geo_tracking_runs add column if not exists note text;
 
 comment on table public.geo_tracking_runs is
   'GEO 인용 추적 cron 의 주차 단위 실행 잠금 + 실행 기록. week_start 고유키 insert 로 동시 실행을 원자적으로 차단한다.';
 comment on column public.geo_tracking_runs.status is
-  'running = 실행 중(또는 비정상 종료). done = 정상 완료. running 이 오래 남아 있으면 cron 이 stale 판정 후 인계한다.';
+  'running = 실행 중(또는 비정상 종료) / done = 완전 성공, 그 주 재실행 불가 / failed = 부분 실패, 재실행 허용. '
+  'cron 은 failed 이거나 오래된 running 을 인계해 남은 회원만 이어서 처리한다.';
 comment on column public.geo_tracking_runs.http_attempts is
   '재시도를 포함한 실제 외부 API 요청 수. 비용 상한(MAX_HTTP_ATTEMPTS_PER_RUN) 대비 실사용 관측용.';
+comment on column public.geo_tracking_runs.note is
+  'failed 로 마감된 사유. 대표가 수동 재실행 여부를 판단할 때 본다.';
 
 create index if not exists idx_geo_tracking_runs_started_at
   on public.geo_tracking_runs(started_at desc);

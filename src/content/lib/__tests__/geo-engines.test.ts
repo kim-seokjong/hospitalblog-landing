@@ -906,6 +906,35 @@ test('Gemini 리다이렉트 복원: 공통 시그널이 aborted 면 요청하�
   assert.equal(called, 0);
 });
 
+test('HTTP: 재시도 backoff 대기도 데드라인 시그널로 즉시 깨어난다', async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const begin = Date.now();
+  const fetchImpl = (async () => {
+    calls++;
+    controller.abort(); // 첫 응답 직후 데드라인 도달
+    return new Response('busy', { status: 503, headers: { 'retry-after': '5' } });
+  }) as unknown as typeof fetch;
+
+  await assert.rejects(
+    () =>
+      postJsonWithRetry({
+        url: 'https://x.example',
+        headers: {},
+        body: {},
+        timeoutMs: 60_000,
+        maxAttempts: 3,
+        fetchImpl,
+        label: 'Test',
+        signal: controller.signal,
+        // sleepImpl 을 주지 않아 실제 abortableSleep 이 쓰인다
+      }),
+  );
+  // 5초 backoff 가 즉시 깨어나 재시도 없이 끝나야 한다
+  assert.ok(Date.now() - begin < 2_000, `경과 ${Date.now() - begin}ms`);
+  assert.equal(calls, 1);
+});
+
 test('Gemini 리다이렉트 복원: 실행 중 abort 되면 원본으로 그레이스풀 종료', async () => {
   const controller = new AbortController();
   const fetchImpl = (async (_url: string, init: RequestInit) => {

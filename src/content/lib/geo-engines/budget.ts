@@ -52,44 +52,58 @@ export const MAX_CALLS_PER_ENGINE = 120;
  */
 export const MAX_HTTP_ATTEMPTS_PER_RUN = 288;
 // ---------------------------------------------------------------------------
-// 실행 시간 예산 — 300초 안에 반드시 끝난다는 것을 구간별로 계산해 둔다
+// 실행 시간 예산 — 모든 구간에 "요청 시작 시각 기준 절대 마감"을 강제한다
 // ---------------------------------------------------------------------------
 //
-// "저장 몫 60초"처럼 기대치로만 두면 DB 지연·대량 insert 가 겹칠 때 300초를 넘겨
-// **앞쪽 청크만 저장된 채 강제 종료**된다. 그래서 구간마다 절대 시각 상한을 둔다.
+// ★ 상수 합계만 맞춰서는 아무것도 보장되지 않는다. 아래 각 마감은 실제 제어 흐름에서
+//   강제되며, 강제 지점을 주석에 명시한다(geo-tracking-run.ts 의 단계 번호).
 //
-//   0s   ─ 질의 시작
-// 200s   ─ QUERY_DEADLINE_MS. 공통 AbortSignal 발동:
-//            · 진행 중인 fetch 취소 (http.ts)
-//            · throttle sleep 즉시 깨움 (pool.ts)
-//            · Gemini 리다이렉트 복원 취소 (gemini.ts)
+//   0s   ─ 요청 진입. startedAt 고정.
+//  20s   ─ PREFLIGHT_DEADLINE_MS  [강제: runGeoTracking 1~3단계]
+//            잠금 insert·stale 인계·유료회원 count·profiles 조회·이번주 중복조회.
+//            각 호출 타임아웃 = min(5s, 마감까지 남은 시간). 예산 초과 시
+//            **외부 API 를 시작하지 않고** 잠금을 failed 로 정리하고 종료한다.
+//            (여기에 마감이 없으면 DB 지연만으로 300초를 넘길 수 있다)
+// 200s   ─ QUERY_DEADLINE_MS      [강제: executeGeoQueries 의 공통 AbortSignal]
+//            · 진행 중 fetch 취소(http.ts) · throttle sleep 즉시 깨움(pool.ts)
+//            · 재시도 backoff 즉시 깨움(http.ts abortableSleep)
+//            · Gemini 리다이렉트 복원 취소(gemini.ts)
 // 205s   ─ + QUERY_DRAIN_ALLOWANCE_MS(5s). 취소 전파·워커 정리 여유
-// 210s   ─ + CITATION_MATCH_ALLOWANCE_MS(5s). 인용 판정은 순수 문자열 매칭
-//            (최대 1,500행 × 정규식 → 실측 수십 ms. 5초는 과다 안전마진)
-// 285s   ─ SAVE_DEADLINE_MS. 이 시각 이후로는 새 insert 청크를 시작하지 않는다.
-//            청크별 타임아웃 = min(10s, 285s까지 남은 시간)
+// 210s   ─ MATCH_DEADLINE_MS      [강제: runGeoTracking 6단계 루프의 회원별 시각 검사]
+//            인용 판정은 순수 문자열 매칭이지만 상한을 코드로 검사하고,
+//            초과 시 중단하고 truncated.matchAborted 로 보고한다.
+// 285s   ─ SAVE_DEADLINE_MS       [강제: runGeoTracking 7단계 청크 루프]
+//            청크별 타임아웃 = min(10s, 남은 시간). 남은 시간이 1s 미만이면 중단.
 //            → 마지막 청크는 284s 에 시작해도 285s 에 끝난다
-// 288s   ─ + LOCK_FINALIZE_TIMEOUT_MS(3s). 실행 잠금 레코드 마무리 update
+// 288s   ─ FINALIZE_DEADLINE_MS   [강제: finally 의 잠금 마무리]
+//            타임아웃 = min(3s, 288s까지 남은 시간)
 // 290s   ─ + RESPONSE_ALLOWANCE_MS(2s). 응답 직렬화
-//            (failures/insertErrors 는 배열 길이를 상한으로 잘라 크기를 묶는다)
+//            (failures/insertErrors 는 배열 길이 상한으로 크기를 묶는다)
 //
-//   최악 총합 290s < 300s (여유 10s). worstCaseRuntimeMs() 가 이 계산을 코드로 고정하고
-//   테스트가 플랫폼 한도 초과를 막는다.
+//   최악 총합 290s < 300s (여유 10s).
 
 /** Vercel 함수 실행 한도 (vercel.json 의 geo-tracking maxDuration 과 일치) */
 export const PLATFORM_MAX_DURATION_MS = 300_000;
+/** 외부 API 호출 이전 DB 준비 작업 전체의 마감 */
+export const PREFLIGHT_DEADLINE_MS = 20_000;
+/** 준비 작업 1건당 타임아웃 (남은 시간이 더 짧으면 그쪽으로 좁힌다) */
+export const PREFLIGHT_OP_TIMEOUT_MS = 5_000;
+/** 준비 작업을 시작하려면 최소 이만큼은 남아 있어야 한다 */
+export const MIN_PREFLIGHT_WINDOW_MS = 500;
 /** 질의를 중단시키는 시각 — 이후 진행 중인 요청도 AbortSignal 로 취소된다 */
 export const QUERY_DEADLINE_MS = 200_000;
 /** 취소 전파·워커 정리 여유 */
 export const QUERY_DRAIN_ALLOWANCE_MS = 5_000;
-/** 인용 판정(순수 문자열 매칭) 여유 */
-export const CITATION_MATCH_ALLOWANCE_MS = 5_000;
+/** 인용 판정 루프 마감 */
+export const MATCH_DEADLINE_MS = 210_000;
 /** 이 시각 이후로는 새 DB insert 청크를 시작하지 않는다 */
 export const SAVE_DEADLINE_MS = 285_000;
 /** insert 청크 1건 타임아웃 (남은 시간이 더 짧으면 그쪽으로 좁힌다) */
 export const INSERT_CHUNK_TIMEOUT_MS = 10_000;
 /** 이보다 적게 남았으면 청크를 시작하지 않는다 */
 export const MIN_INSERT_WINDOW_MS = 1_000;
+/** 잠금 마무리 마감 — 에러 경로에서도 이 시각을 넘기지 않는다 */
+export const FINALIZE_DEADLINE_MS = 288_000;
 /** 실행 잠금 마무리 update 타임아웃 */
 export const LOCK_FINALIZE_TIMEOUT_MS = 3_000;
 /** 응답 직렬화 여유 */
@@ -98,13 +112,28 @@ export const RESPONSE_ALLOWANCE_MS = 2_000;
 /** 응답에 싣는 배열 길이 상한 — 직렬화 시간을 묶어 마지막 구간을 예측 가능하게 한다 */
 export const MAX_REPORTED_FAILURES = 50;
 
-/** 위 구간 계산을 코드로 고정한 최악 실행 시간 */
+/**
+ * 최악 실행 시간 = 마지막으로 강제되는 절대 마감 + 응답 직렬화 여유.
+ * 앞 구간이 아무리 지연돼도 각 단계가 자기 절대 마감에서 잘리므로
+ * 총합은 이 값을 넘지 않는다(구간별 강제 지점은 위 표 참조).
+ */
 export function worstCaseRuntimeMs(): number {
-  const queryEnd = QUERY_DEADLINE_MS + QUERY_DRAIN_ALLOWANCE_MS;
-  const matchEnd = queryEnd + CITATION_MATCH_ALLOWANCE_MS;
-  // 저장은 절대 시각 상한이라 앞 구간이 아무리 빨라도/늦어도 이 시각을 넘지 않는다
-  const saveEnd = Math.max(matchEnd, SAVE_DEADLINE_MS);
-  return saveEnd + LOCK_FINALIZE_TIMEOUT_MS + RESPONSE_ALLOWANCE_MS;
+  return FINALIZE_DEADLINE_MS + RESPONSE_ALLOWANCE_MS;
+}
+
+/**
+ * 절대 마감까지 남은 시간에 맞춰 좁힌 작업 타임아웃.
+ * 남은 시간이 minMs 미만이면 null — 호출부는 그 작업을 시작하지 않는다.
+ */
+export function clampTimeout(
+  nowMs: number,
+  deadlineAt: number,
+  maxMs: number,
+  minMs: number,
+): number | null {
+  const remaining = deadlineAt - nowMs;
+  if (remaining < minMs) return null;
+  return Math.min(maxMs, remaining);
 }
 
 // ---------------------------------------------------------------------------

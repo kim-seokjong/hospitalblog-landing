@@ -7,15 +7,19 @@ import {
   MAX_API_CALLS_PER_RUN,
   MAX_CALLS_PER_ENGINE,
   MAX_HTTP_ATTEMPTS_PER_RUN,
+  PREFLIGHT_DEADLINE_MS,
+  PREFLIGHT_OP_TIMEOUT_MS,
   QUERY_DEADLINE_MS,
   QUERY_DRAIN_ALLOWANCE_MS,
-  CITATION_MATCH_ALLOWANCE_MS,
+  MATCH_DEADLINE_MS,
   SAVE_DEADLINE_MS,
   INSERT_CHUNK_TIMEOUT_MS,
   MIN_INSERT_WINDOW_MS,
+  FINALIZE_DEADLINE_MS,
   LOCK_FINALIZE_TIMEOUT_MS,
   RESPONSE_ALLOWANCE_MS,
   PLATFORM_MAX_DURATION_MS,
+  clampTimeout,
   worstCaseRuntimeMs,
   capQuestionPlan,
   geminiPerRunSearchBudget,
@@ -26,6 +30,7 @@ import {
   PG_UNIQUE_VIOLATION,
   STALE_LOCK_MS,
   interpretLockInsert,
+  resolveFinalStatus,
   staleThresholdIso,
 } from '../geo-engines/run-lock.ts';
 
@@ -79,44 +84,57 @@ test('HTTP 시도 상한: 논리 호출 상한 + 재시도 여유 20%', () => {
 // 최악 실행 시간이 플랫폼 한도(300초) 안에 들어온다는 것을 고정한다
 // ---------------------------------------------------------------------------
 
-test('★최악 실행 시간이 플랫폼 한도(300초) 미만임을 구간별로 증명', () => {
+test('★구간 마감이 순서대로 배치되고 최악 실행 시간이 300초 미만이다', () => {
   // 구간 상한 (budget.ts "실행 시간 예산" 블록과 1:1 대응)
+  assert.equal(PREFLIGHT_DEADLINE_MS, 20_000);
   assert.equal(QUERY_DEADLINE_MS, 200_000);
   assert.equal(QUERY_DRAIN_ALLOWANCE_MS, 5_000);
-  assert.equal(CITATION_MATCH_ALLOWANCE_MS, 5_000);
+  assert.equal(MATCH_DEADLINE_MS, 210_000);
   assert.equal(SAVE_DEADLINE_MS, 285_000);
-  assert.equal(LOCK_FINALIZE_TIMEOUT_MS, 3_000);
+  assert.equal(FINALIZE_DEADLINE_MS, 288_000);
   assert.equal(RESPONSE_ALLOWANCE_MS, 2_000);
 
-  const queryEnd = QUERY_DEADLINE_MS + QUERY_DRAIN_ALLOWANCE_MS; // 205s
-  const matchEnd = queryEnd + CITATION_MATCH_ALLOWANCE_MS; // 210s
-  // 인용 판정이 끝난 뒤에도 저장 데드라인까지 여유가 남아야 한다
-  assert.ok(matchEnd < SAVE_DEADLINE_MS, `matchEnd=${matchEnd} >= save=${SAVE_DEADLINE_MS}`);
+  // 마감은 반드시 이 순서여야 한다 — 어긋나면 앞 구간이 뒤 구간을 잡아먹는다
+  assert.ok(PREFLIGHT_DEADLINE_MS < QUERY_DEADLINE_MS);
+  assert.ok(QUERY_DEADLINE_MS + QUERY_DRAIN_ALLOWANCE_MS <= MATCH_DEADLINE_MS);
+  assert.ok(MATCH_DEADLINE_MS < SAVE_DEADLINE_MS);
+  assert.ok(SAVE_DEADLINE_MS + LOCK_FINALIZE_TIMEOUT_MS <= FINALIZE_DEADLINE_MS);
 
-  const worst = worstCaseRuntimeMs(); // 285 + 3 + 2 = 290s
+  const worst = worstCaseRuntimeMs(); // 288 + 2 = 290s
   assert.equal(worst, 290_000);
   assert.ok(worst < PLATFORM_MAX_DURATION_MS, `worst=${worst} >= limit=${PLATFORM_MAX_DURATION_MS}`);
   // 최소 10초 여유를 남긴다 (플랫폼 콜드스타트·네트워크 편차 흡수)
   assert.ok(PLATFORM_MAX_DURATION_MS - worst >= 10_000);
 });
 
-test('저장 구간: 마지막 청크가 저장 데드라인을 넘지 못한다', () => {
-  // 청크 타임아웃은 min(10초, 남은 시간)으로 좁혀지고,
-  // 남은 시간이 MIN_INSERT_WINDOW_MS 미만이면 청크를 시작하지 않는다
+test('clampTimeout: 남은 시간으로 좁히고, 부족하면 null 로 작업을 막는다', () => {
+  // 여유가 충분하면 최대치 그대로
+  assert.equal(clampTimeout(0, 100_000, 10_000, 1_000), 10_000);
+  // 남은 시간이 더 짧으면 그쪽으로 좁힌다 → 마감을 절대 넘지 않는다
+  assert.equal(clampTimeout(95_000, 100_000, 10_000, 1_000), 5_000);
+  // 최소 창보다 적게 남으면 시작하지 않는다
+  assert.equal(clampTimeout(99_900, 100_000, 10_000, 1_000), null);
+  // 마감이 이미 지났으면 당연히 null
+  assert.equal(clampTimeout(101_000, 100_000, 10_000, 1_000), null);
+});
+
+test('저장 구간: 마지막 청크가 저장 마감을 넘지 못한다', () => {
   assert.equal(INSERT_CHUNK_TIMEOUT_MS, 10_000);
   assert.equal(MIN_INSERT_WINDOW_MS, 1_000);
   const latestStart = SAVE_DEADLINE_MS - MIN_INSERT_WINDOW_MS; // 284s
-  const latestEnd = latestStart + Math.min(INSERT_CHUNK_TIMEOUT_MS, SAVE_DEADLINE_MS - latestStart);
-  assert.ok(latestEnd <= SAVE_DEADLINE_MS, `latestEnd=${latestEnd}`);
+  const timeout = clampTimeout(latestStart, SAVE_DEADLINE_MS, INSERT_CHUNK_TIMEOUT_MS, MIN_INSERT_WINDOW_MS);
+  assert.equal(timeout, MIN_INSERT_WINDOW_MS);
+  assert.ok(latestStart + (timeout ?? 0) <= SAVE_DEADLINE_MS);
 });
 
-test('저장 구간: 질의 데드라인이 저장 데드라인보다 충분히 앞선다', () => {
-  // 저장에 쓸 수 있는 실질 시간 = 285 - 210 = 75초
-  const usableSaveMs = SAVE_DEADLINE_MS - (QUERY_DEADLINE_MS + QUERY_DRAIN_ALLOWANCE_MS + CITATION_MATCH_ALLOWANCE_MS);
-  assert.equal(usableSaveMs, 75_000);
-  // 최대 청크 수(1,500행 ÷ 200 = 8) × 청크 타임아웃 10초 = 80초.
-  // 75초로는 최악의 경우 일부 청크가 밀릴 수 있고, 그때 insertAborted 로 보고된다.
-  assert.ok(usableSaveMs >= 7 * INSERT_CHUNK_TIMEOUT_MS);
+test('준비 구간: 마감과 1건 타임아웃이 어긋나지 않는다', () => {
+  assert.equal(PREFLIGHT_OP_TIMEOUT_MS, 5_000);
+  // 준비 작업은 잠금·인계·count·목록·중복확인 최대 5회 → 5 × 5초 = 25초.
+  // 마감 20초가 먼저 걸리므로 어떤 조합에서도 20초를 넘지 않는다.
+  assert.ok(PREFLIGHT_OP_TIMEOUT_MS < PREFLIGHT_DEADLINE_MS);
+  // 마감 직전에 시작한 작업도 마감을 넘지 못한다
+  const timeout = clampTimeout(PREFLIGHT_DEADLINE_MS - 600, PREFLIGHT_DEADLINE_MS, PREFLIGHT_OP_TIMEOUT_MS, 500);
+  assert.equal(timeout, 600);
 });
 
 // ---------------------------------------------------------------------------
@@ -218,6 +236,48 @@ test('★잠금: 상태를 알 수 없으면 진행하지 않는다 (폴백 진�
   assert.equal(decision.mode, 'error');
   assert.equal(decision.proceed, false);
   assert.match(decision.reason ?? '', /이중 과금 방지/);
+});
+
+test('★마감 상태: 완전 성공에만 done — 나머지는 전부 failed(재실행 허용)', () => {
+  const clean = {
+    preflightAborted: false,
+    queryDeadlineReached: false,
+    matchAborted: false,
+    insertAborted: false,
+    insertErrorCount: 0,
+    usersDroppedPartialFailure: 0,
+    usersOverQueryBudget: 0,
+    threw: false,
+  };
+  assert.equal(resolveFinalStatus(clean), 'done');
+
+  // 하나라도 어긋나면 done 이 아니다 — done 은 그 주를 영구히 잠근다
+  const breakers: Array<Partial<typeof clean>> = [
+    { preflightAborted: true },
+    { queryDeadlineReached: true },
+    { matchAborted: true },
+    { insertAborted: true },
+    { insertErrorCount: 1 },
+    { usersDroppedPartialFailure: 1 },
+    { usersOverQueryBudget: 1 },
+    { threw: true },
+  ];
+  for (const breaker of breakers) {
+    assert.equal(
+      resolveFinalStatus({ ...clean, ...breaker }),
+      'failed',
+      `${JSON.stringify(breaker)} 인데 done 으로 마감됐다`,
+    );
+  }
+});
+
+test('잠금: locked/unavailable 은 정리할 잠금이 없다(needsFinalize=false)', () => {
+  assert.equal(interpretLockInsert({ code: PG_UNIQUE_VIOLATION }).needsFinalize, false);
+  assert.equal(interpretLockInsert({ code: PG_UNDEFINED_TABLE }).needsFinalize, false);
+  assert.equal(interpretLockInsert({ code: '08006' }).needsFinalize, false);
+  // 선점했거나 인계받았으면 반드시 정리해야 한다
+  assert.equal(interpretLockInsert(null).needsFinalize, true);
+  assert.equal(interpretLockInsert({ code: PG_UNIQUE_VIOLATION }, true).needsFinalize, true);
 });
 
 test('잠금: stale 기준은 함수 최대 실행시간(300초)보다 충분히 길다', () => {

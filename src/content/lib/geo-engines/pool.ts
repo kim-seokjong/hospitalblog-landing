@@ -12,6 +12,10 @@
  * 외부 의존 없는 순수 모듈(@/ alias import 금지).
  */
 
+// throttle 대기와 재시도 backoff 는 같은 취소 규칙을 따라야 하므로
+// abortableSleep 구현을 http.ts 하나로 통일한다(구현이 갈리면 한쪽만 새기 시작한다).
+import { abortableSleep } from './http.ts';
+
 export interface PoolOptions {
   /** 동시에 실행할 작업 수 (최소 1) */
   readonly concurrency: number;
@@ -32,23 +36,6 @@ export interface PoolResult {
   readonly completed: number;
   /** 데드라인 초과로 시작조차 못 한 작업 수 */
   readonly skipped: number;
-}
-
-/** 데드라인 시그널로 즉시 깨울 수 있는 sleep */
-function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
-  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
-  if (signal.aborted) return Promise.resolve();
-  return new Promise((resolve) => {
-    const onAbort = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
 }
 
 export async function runPool<T>(

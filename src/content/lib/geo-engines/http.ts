@@ -56,6 +56,28 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * 재시도 backoff 대기 — 공통 데드라인 시그널로 즉시 깨운다.
+ *
+ * 일반 sleep 이면 데드라인(200초)이 지난 뒤에도 최대 5초를 더 기다린 다음에야
+ * 중단 판정에 들어가, "질의 관련 대기는 전부 취소된다"는 보장이 깨진다.
+ */
+export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return sleep(ms);
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 function parseRetryAfterMs(value: string | null, now: () => number): number | null {
   if (!value) return null;
   const seconds = Number(value);
@@ -145,7 +167,8 @@ async function attemptPostJson(
 export async function postJsonWithRetry(options: PostJsonOptions): Promise<unknown> {
   const attempts = Math.max(1, options.maxAttempts);
   const now = options.now ?? Date.now;
-  const doSleep = options.sleepImpl ?? sleep;
+  // backoff 대기도 공통 데드라인 시그널로 깨운다 (질의 관련 대기 전부 취소 보장)
+  const doSleep = options.sleepImpl ?? ((ms: number) => abortableSleep(ms, options.signal));
   const budget = options.attemptBudget;
   let lastReason = `${options.label} 요청 실패`;
 
@@ -187,6 +210,10 @@ export async function postJsonWithRetry(options: PostJsonOptions): Promise<unkno
       break;
     }
     await doSleep(outcome.delayMs);
+    // 대기 중 데드라인이 지났으면 재시도하지 않는다
+    if (options.signal?.aborted) {
+      throw new Error(`${outcome.reason} (데드라인 도달로 재시도 취소)`);
+    }
   }
 
   throw new Error(lastReason);
