@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { validateSlug } from '@/content/lib/clinic-site/slug';
 import { isValidIndexNowKey } from '@/content/lib/clinic-site/indexnow';
+import { clinicSlugExists } from '@/content/lib/clinic-site/data';
 
 /**
  * IndexNow 키 파일 — {slug}.hospitalblog.kr/{key}.txt
@@ -37,6 +38,16 @@ export async function GET(_req: Request, { params }: RouteContext) {
     return new NextResponse('Not Found', { status: 404 });
   }
   if (key !== configuredKey) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
+  // 와일드카드 DNS 라 아무 슬러그나 이 라우트에 닿는다. 실제 병원에 할당된
+  // 슬러그일 때만 키를 노출해, 미할당 서브도메인이 IndexNow 소유 검증을
+  // 통과하는 상황을 막는다.
+  // 조회 실패(null)는 fail-open — 도메인 자체가 우리 것이라 위험이 낮고,
+  // 일시 장애로 검증이 깨져 색인 요청이 403 되는 쪽이 더 손해다.
+  const exists = await clinicSlugExists(validated.slug);
+  if (exists === false) {
     return new NextResponse('Not Found', { status: 404 });
   }
 

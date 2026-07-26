@@ -10,9 +10,13 @@
  * 설계 원칙:
  *  - 발행 글이 0편인 병원은 제외한다. 빈 사이트맵을 대량 제출하면 색인 품질 신호가
  *    나빠지고 서치콘솔에 "가져올 수 없음" 오류가 쌓인다.
- *  - 페이지네이션을 지원한다. 사이트맵 인덱스 1개는 최대 50,000개 sitemap 을 담을 수
- *    있고(sitemaps.org 프로토콜), 인덱스의 인덱스는 구글이 지원하지 않는다.
- *    → 페이지당 1,000개 · 최대 50페이지로 상한을 두어 프로토콜 한도 안에 머문다.
+ *  - ★ 인덱스 1개에 프로토콜 상한(50,000개)까지 전부 담는다. 예전에 1,000개로
+ *    끊었다가 1,001번째 병원부터 사이트맵에서 사라졌다 — "URL 하나만 제출하면
+ *    전부 자동 편입"이라는 목표가 깨지므로 절대 낮추지 말 것.
+ *  - 50,000개를 넘는 순간부터는 한 파일로 담을 수 없다(sitemaps.org 프로토콜 상한이자
+ *    구글이 인덱스의 인덱스를 지원하지 않기 때문). 이때는 ?page=N 으로 분할하고,
+ *    분할된 URL 전부를 메인 robots.txt 의 Sitemap 줄로 노출해 크롤러가 발견하게 한다
+ *    (src/app/robots.ts — 실제 병원 수를 세어 필요한 페이지만 나열).
  *  - URL 조립·슬러그 검증은 호출부가 주입한다(buildLoc). 이 모듈은 값 import 가 없다.
  *
  * ⚠️ 러너 제약(slug.ts / auto-publish.ts 패턴): node --experimental-strip-types
@@ -20,14 +24,17 @@
  *    자립 모듈로 유지한다.
  */
 
-/** 인덱스 1페이지에 담는 최대 sitemap 개수. */
-export const SITEMAP_INDEX_PAGE_SIZE = 1000;
+/**
+ * 인덱스 1페이지에 담는 최대 sitemap 개수 = sitemaps.org 프로토콜 상한.
+ * ★ 이 값을 낮추면 초과분 병원이 사이트맵에서 사라진다. 낮추지 말 것.
+ */
+export const SITEMAP_INDEX_PAGE_SIZE = 50_000;
 
 /**
- * 허용 최대 페이지 번호.
- * 1,000 × 50 = 50,000 = sitemaps.org 프로토콜의 인덱스당 sitemap 상한.
+ * 허용 최대 페이지 번호 (50,000 × 20 = 1,000,000 병원).
+ * 현실적으로 도달 불가능한 상한이지만, ?page= 를 무한히 받아 DB 를 긁지 않도록 둔다.
  */
-export const SITEMAP_INDEX_MAX_PAGE = 50;
+export const SITEMAP_INDEX_MAX_PAGE = 20;
 
 /** DB 에서 읽어온 병원별 발행 현황(집계 결과). */
 export interface ClinicSitemapSource {
@@ -130,4 +137,23 @@ export function sitemapPageRange(page: number): { from: number; to: number } {
   const safePage = page < 1 ? 1 : Math.min(page, SITEMAP_INDEX_MAX_PAGE);
   const from = (safePage - 1) * SITEMAP_INDEX_PAGE_SIZE;
   return { from, to: from + SITEMAP_INDEX_PAGE_SIZE - 1 };
+}
+
+/**
+ * 전체 병원 수를 담는 데 필요한 인덱스 페이지 수.
+ * 항상 1 이상 (0곳이어도 1페이지는 존재해야 서치콘솔 제출 URL 이 살아 있다).
+ * robots.txt 가 이 개수만큼 Sitemap 줄을 내보내 2페이지 이후도 발견되게 한다.
+ */
+export function sitemapIndexPageCount(total: number): number {
+  if (!Number.isFinite(total) || total <= SITEMAP_INDEX_PAGE_SIZE) return 1;
+  return Math.min(Math.ceil(total / SITEMAP_INDEX_PAGE_SIZE), SITEMAP_INDEX_MAX_PAGE);
+}
+
+/**
+ * 사이트맵 인덱스 페이지들의 상대 경로 목록.
+ * 1페이지는 쿼리 없는 기본 URL 이라 서치콘솔에 제출한 URL 이 그대로 유효하다.
+ */
+export function sitemapIndexPagePaths(total: number, basePath: string): string[] {
+  const count = sitemapIndexPageCount(total);
+  return Array.from({ length: count }, (_, i) => (i === 0 ? basePath : `${basePath}?page=${i + 1}`));
 }

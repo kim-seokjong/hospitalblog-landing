@@ -8,6 +8,8 @@ import {
   parseSitemapPage,
   selectIndexableClinics,
   sitemapPageRange,
+  sitemapIndexPageCount,
+  sitemapIndexPagePaths,
   toIsoOrNull,
   type ClinicSitemapSource,
 } from '../sitemap-index.ts';
@@ -131,6 +133,56 @@ test('sitemapPageRange: 0 기반 range 로 변환한다', () => {
   assert.deepEqual(sitemapPageRange(0), { from: 0, to: SITEMAP_INDEX_PAGE_SIZE - 1 });
 });
 
-test('페이지 상한이 사이트맵 프로토콜 한도(50,000)를 넘지 않는다', () => {
-  assert.ok(SITEMAP_INDEX_PAGE_SIZE * SITEMAP_INDEX_MAX_PAGE <= 50_000);
+test('★ 인덱스 "파일 1개"가 프로토콜 한도(50,000)를 넘지 않는다', () => {
+  // 상한은 파일당 <sitemap> 개수다. 총합이 아니라 페이지 크기가 기준.
+  assert.ok(SITEMAP_INDEX_PAGE_SIZE <= 50_000);
+  // 초과분은 페이지 분할로 처리하되, ?page= 를 무한히 받지는 않는다.
+  assert.ok(SITEMAP_INDEX_MAX_PAGE >= 2);
+  assert.equal(parseSitemapPage(String(SITEMAP_INDEX_MAX_PAGE + 1)), SITEMAP_INDEX_MAX_PAGE);
+});
+
+// ---------------------------------------------------------------------------
+// [차단 1 회귀] 1,001번째 병원이 사라지지 않는다
+// ---------------------------------------------------------------------------
+
+test('★ 1,001곳이어도 인덱스 1페이지에 전부 들어간다 (예전 1,000 상한 회귀 방지)', () => {
+  const many = Array.from({ length: 1001 }, (_, i) => source(`clinic-${String(i).padStart(5, '0')}`, 1));
+  const { from, to } = sitemapPageRange(1);
+
+  // 1페이지 range 가 1,001곳을 모두 덮는다
+  assert.ok(to - from + 1 >= 1001);
+  assert.equal(sitemapIndexPageCount(1001), 1, '1,001곳은 여전히 1페이지여야 한다');
+
+  const entries = selectIndexableClinics(many, buildLoc);
+  assert.equal(entries.length, 1001);
+  assert.ok(entries.some((e) => e.loc.includes('clinic-01000')), '1,001번째 병원이 포함돼야 한다');
+});
+
+test('★ 페이지 크기는 사이트맵 프로토콜 상한과 같다 (낮추면 초과분이 사라짐)', () => {
+  assert.equal(SITEMAP_INDEX_PAGE_SIZE, 50_000);
+});
+
+test('sitemapIndexPageCount: 50,000 경계', () => {
+  assert.equal(sitemapIndexPageCount(0), 1);        // 0곳이어도 제출 URL 은 살아 있어야 한다
+  assert.equal(sitemapIndexPageCount(1), 1);
+  assert.equal(sitemapIndexPageCount(50_000), 1);
+  assert.equal(sitemapIndexPageCount(50_001), 2);
+  assert.equal(sitemapIndexPageCount(100_000), 2);
+  assert.equal(sitemapIndexPageCount(100_001), 3);
+  assert.equal(sitemapIndexPageCount(Number.NaN), 1);
+});
+
+test('★ 50,000 초과분도 robots.txt 로 발견될 경로가 만들어진다', () => {
+  // 1페이지는 쿼리 없는 기본 URL — 서치콘솔에 제출한 URL 이 그대로 유효하다
+  assert.deepEqual(sitemapIndexPagePaths(50_000, '/sitemap-clinics.xml'), ['/sitemap-clinics.xml']);
+  assert.deepEqual(sitemapIndexPagePaths(120_000, '/sitemap-clinics.xml'), [
+    '/sitemap-clinics.xml',
+    '/sitemap-clinics.xml?page=2',
+    '/sitemap-clinics.xml?page=3',
+  ]);
+});
+
+test('페이지 경로와 range 가 서로 어긋나지 않는다 (2페이지 = 50,000번째부터)', () => {
+  assert.deepEqual(sitemapPageRange(2), { from: 50_000, to: 99_999 });
+  assert.deepEqual(sitemapPageRange(3), { from: 100_000, to: 149_999 });
 });

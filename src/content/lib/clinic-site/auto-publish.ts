@@ -30,10 +30,13 @@ const CADENCE_DAYS: Record<Exclude<SitePublishCadence, 'off'>, number> = {
 };
 
 /**
- * 1회 실행에서 한 회원에게 발행할 최대 편수.
+ * 한 회원에게 "하루(KST)" 발행할 최대 편수.
+ *
+ * ★ 이 값은 cron 호출 횟수와 무관하게 강제된다 — 호출부가 site_published_at 이
+ *   오늘인 글 수를 DB 에서 세어 남은 몫만 발행한다(remainingDailyQuota).
+ *   호출당 상한으로만 두면 재시도·수동 재실행에 하루 6편·9편이 나갔다.
  *
  * auto = 3편/일 근거:
- *  - cron 은 하루 1회 실행되므로 auto 의 실질 상한은 "하루 3편"이다.
  *  - 병원 블로그가 하루 4편 이상 쏟아지면 사람이 쓴 운영으로 보이지 않고
  *    대량 자동생성(스팸) 신호가 된다. 반대로 하루 1편은 AI 인용에 필요한
  *    콘텐츠 밀도가 쌓이는 속도가 너무 느리다.
@@ -50,6 +53,78 @@ export const CADENCE_MAX_POSTS_PER_RUN: Record<Exclude<SitePublishCadence, 'off'
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 한국 표준시 오프셋. "하루 몇 편" 판정은 병원 운영 감각(KST) 기준이어야 한다. */
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/**
+ * KST 기준 일 단위 인덱스 (1970-01-01 KST 부터의 일수).
+ * 순회 회전 창을 매일 한 칸씩 밀어 모든 회원이 반드시 처리되게 하는 데 쓴다.
+ */
+export function kstDayIndex(now: Date): number {
+  return Math.floor((now.getTime() + KST_OFFSET_MS) / DAY_MS);
+}
+
+/**
+ * KST 기준 오늘 00:00 의 UTC ISO 문자열.
+ * 일일 발행 상한을 DB(site_published_at) 기준으로 집계할 때의 경계값.
+ */
+export function kstDayStartIso(now: Date): string {
+  return new Date(kstDayIndex(now) * DAY_MS - KST_OFFSET_MS).toISOString();
+}
+
+/**
+ * 순회 회전 오프셋.
+ *
+ * 왜 필요한가: 자동발행 대상 회원을 id 순 상위 N 명만 조회하면 N+1 번째부터는
+ * 발행할 글이 있어도 영원히 처리되지 않는다(영구 기아). 창을 매일 한 칸씩 밀면
+ * 모든 회원이 최대 ceil(total / windowSize) 일 안에 반드시 창 안에 들어온다.
+ *
+ * 별도 커서 저장소가 필요 없고(날짜만으로 결정), 같은 날 재시도하면 같은 창을
+ * 처리하므로 재실행이 순회를 건너뛰지 않는다.
+ */
+export function rotationOffset(total: number, windowSize: number, dayIndex: number): number {
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  if (!Number.isFinite(windowSize) || windowSize <= 0) return 0;
+  if (total <= windowSize) return 0; // 전원이 한 창에 들어오면 회전 불필요
+
+  const windows = Math.ceil(total / windowSize);
+  // dayIndex 가 음수여도 안전하게 0 이상으로 정규화한다.
+  const slot = ((Math.trunc(dayIndex) % windows) + windows) % windows;
+  return slot * windowSize;
+}
+
+/**
+ * DB 일일 집계로 상한을 강제해야 하는 주기인지.
+ *
+ * weekly/biweekly 는 site_publish_last_run 간격(isDue)이 이미 DB 상태로 재발행을
+ * 막는다 — 재시도·재실행은 isDue 에서 걸러진다. 반면 'auto' 는 대기가 없어
+ * last_run 이 방어선이 되지 못하므로 "오늘 몇 편 나갔나"를 DB 에서 세는 것이
+ * 유일한 상한 강제 수단이다.
+ *
+ * ⚠️ 이 판정을 없애고 전 주기에 일일 집계를 적용하면, 회원이 마이페이지에서
+ *    수동 발행한 날 cron 이 건너뛰게 되어 weekly/biweekly 동작이 바뀐다.
+ */
+export function needsDailyQuotaCheck(cadence: SitePublishCadence): boolean {
+  return cadence === 'auto';
+}
+
+/**
+ * 오늘 남은 발행 몫.
+ *
+ * ★ cron 호출당 상한만으로는 부족하다 — 재시도·수동 재실행·중복 전달이 있으면
+ *   하루 6편, 9편이 나간다. 호출부는 이 값을 DB 집계(오늘 이미 발행된 편수)로
+ *   계산해 실제 상한을 강제해야 한다.
+ */
+export function remainingDailyQuota(
+  cadence: SitePublishCadence,
+  publishedToday: number,
+): number {
+  const cap = maxPostsPerRun(cadence);
+  if (cap <= 0) return 0;
+  const already = Number.isFinite(publishedToday) && publishedToday > 0 ? publishedToday : 0;
+  return Math.max(0, cap - already);
+}
 
 /** 문자열이 허용 주기값인지 판정한다(외부 입력 검증용). */
 export function isValidCadence(value: unknown): value is SitePublishCadence {
