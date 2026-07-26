@@ -21,6 +21,7 @@ const postsRouteSource = SRC('../../../../app/api/posts/route.ts');
 const cronRouteSource = SRC('../../../../app/api/cron/site-auto-publish/route.ts');
 const paymentRepoSource = SRC('../../../../payment/lib/repository.ts');
 const profileRouteSource = SRC('../../../../app/api/profile/route.ts');
+const serverGateSource = SRC('../server-publish-gate.ts');
 const dataSource = SRC('../data.ts');
 const migrationSource = SRC(
   '../../../../../supabase/migrations/20260726_052_clinic_site_auto_provision.sql',
@@ -157,9 +158,29 @@ test('개설 시 자동발행을 auto 로 켠다(기본값)', () => {
 });
 
 test('저장 즉시 발행은 수동 발행과 같은 검수 게이트를 쓴다', () => {
-  assert.match(onSaveSource, /publishBlockReason\(validateComplianceReport\(/);
+  assert.match(onSaveSource, /serverPublishBlockReason\(\s*validateComplianceReport\(/);
   // 게이트 판정을 자체 구현하지 않는다(HIGH/CRITICAL 문자열 비교가 재등장하면 안 된다).
   assert.ok(!/CRITICAL/.test(onSaveSource));
+  // 서버 게이트는 수동 발행 게이트를 그대로 감싸기만 한다(기준이 두 벌이 되지 않게).
+  assert.match(serverGateSource, /const snapshotReason = publishBlockReason\(report\)/);
+  assert.match(serverGateSource, /if \(snapshotReason !== null\) return snapshotReason/);
+});
+
+test('★무인 발행 경로는 저장된 스냅샷만 믿지 않고 서버가 본문을 재검사한다', () => {
+  // 스냅샷(compliance_report)은 클라이언트가 보낸 값이라 위조 가능하다.
+  assert.match(serverGateSource, /import \{ checkCompliance \}/);
+  assert.match(serverGateSource, /BLOCKING_SEVERITIES\.has\(v\.severity\)/);
+  // 차단선은 스냅샷 게이트와 같다 — HIGH/CRITICAL 만.
+  assert.match(serverGateSource, /new Set\(\['HIGH', 'CRITICAL'\]\)/);
+  // 저장 훅과 cron 모두 이 게이트를 쓴다(한쪽만 고쳐지는 드리프트 방지).
+  assert.match(onSaveSource, /serverPublishBlockReason/);
+  assert.match(cronRouteSource, /serverPublishBlockReason\(/);
+  assert.ok(!/[^r]publishBlockReason\(validateComplianceReport/.test(cronRouteSource));
+});
+
+test('재검사 자체가 실패하면 공개하지 않는다(fail-closed)', () => {
+  assert.match(serverGateSource, /catch \(err\)/);
+  assert.match(serverGateSource, /return SERVER_RECHECK_BLOCK_MESSAGE/);
 });
 
 test('저장 즉시 발행도 일일 상한을 cron 과 같은 원자 경로로 강제한다', () => {
@@ -216,8 +237,41 @@ test('★cron: 구독이 끝난 회원은 건너뛰되 기존 발행 글은 내�
 
 test('cadence 를 auto 로 켜는 순간(/api/profile)에도 기준 시각을 남긴다', () => {
   assert.match(profileRouteSource, /site_publish_cadence === 'auto'/);
-  assert.match(profileRouteSource, /site_auto_publish_since/);
-  assert.match(profileRouteSource, /\.is\('site_auto_publish_since', null\)/);
+  assert.match(profileRouteSource, /site_auto_publish_since: new Date\(\)\.toISOString\(\)/);
+});
+
+test('★기준 시각은 "현재 auto 가 아닐 때만" 찍는다(껐다 켠 회원의 낡은 기준 재사용 방지)', () => {
+  // .is(...,null) 조건이면 껐다 켠 회원의 오래된 기준이 그대로 남아
+  // 껐던 기간에 쌓인 글이 전부 자동발행 대상이 된다.
+  assert.ok(!/\.is\('site_auto_publish_since', null\)/.test(profileRouteSource));
+  assert.match(profileRouteSource, /\.neq\('site_publish_cadence', 'auto'\)/);
+  // 조건이 성립하려면 cadence 를 바꾸기 "전에" 실행돼야 한다.
+  const stampIndex = profileRouteSource.indexOf("site_auto_publish_since: new Date()");
+  const peelIndex = profileRouteSource.indexOf('PEEL_GROUPS_NEWEST_FIRST');
+  assert.ok(stampIndex >= 0 && peelIndex > stampIndex);
+});
+
+test('★개설 훅도 기준 시각을 항상 새로 찍는다(조건부 기록 금지)', () => {
+  assert.ok(!/if \(!row\.site_auto_publish_since\)/.test(provisionSource));
+  assert.match(provisionSource, /patch\.site_auto_publish_since = nowIso/);
+});
+
+test('★가드 컬럼(마이그 052)이 없으면 자동발행을 켜지 않는다', () => {
+  // 052 미적용이면 cron 의 소급 차단 필터가 통째로 꺼진다 —
+  // 그 상태에서 결제가 cadence 를 auto 로 켜면 과거 글이 순차 공개된다.
+  assert.match(provisionSource, /function resolveCadence\(current: string \| null, guardAvailable: boolean\)/);
+  assert.match(provisionSource, /if \(!guardAvailable\) return null/);
+  assert.match(provisionSource, /resolveCadence\(row\.site_publish_cadence, markerAvailable\)/);
+  // /api/profile 도 같은 이유로 켜지 못하게 막는다(503).
+  assert.match(profileRouteSource, /isMissingColumnError\(sinceError\)/);
+  assert.match(profileRouteSource, /status: 503/);
+});
+
+test('★블로그 개설이 결제 응답을 무한정 붙잡지 못한다(시간 예산)', () => {
+  assert.match(paymentRepoSource, /PROVISION_BUDGET_MS/);
+  assert.match(paymentRepoSource, /withProvisionBudget\(provisionClinicSite\(/);
+  // 예산 초과는 실패로 처리될 뿐 결제를 되돌리지 않는다(throw 없음).
+  assert.ok(!/throw[^\n]*provisionClinicSite/.test(paymentRepoSource));
 });
 
 // ---------------------------------------------------------------------------

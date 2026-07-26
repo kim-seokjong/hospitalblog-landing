@@ -99,8 +99,19 @@ async function loadProfile(admin: Admin, userId: string): Promise<LoadedProfile 
   return { row: legacy.data, markerAvailable: false };
 }
 
-/** 자동발행을 켤 값. 고객이 이미 다른 주기를 골랐다면 존중한다. */
-function resolveCadence(current: string | null): 'auto' | null {
+/**
+ * 자동발행을 켤 값. 고객이 이미 다른 주기를 골랐다면 존중한다.
+ *
+ * ★ guardAvailable=false(마이그 052 미적용)면 절대 켜지 않는다.
+ *   site_auto_publish_since 컬럼이 없으면 cron 의 소급 발행 차단 필터가 통째로
+ *   꺼진다(sinceAvailable=false → 필터 없음). 그 상태에서 결제가 cadence 를 'auto'
+ *   로 켜면 보관함의 과거 글이 하루 3편씩 순차 공개된다. 코드가 마이그보다 먼저
+ *   배포되는 창(운영 마이그는 수동 적용)에서 실제로 발생할 수 있는 경로다.
+ *   → 가드 컬럼이 없으면 주소만 만들고 자동발행은 켜지 않는다(마커도 남기지 않아
+ *     마이그 적용 후 다음 결제·갱신에서 다시 시도된다).
+ */
+function resolveCadence(current: string | null, guardAvailable: boolean): 'auto' | null {
+  if (!guardAvailable) return null;
   // 'off'(기본값) 또는 미설정일 때만 'auto' 로 켠다.
   // weekly/biweekly 를 고른 고객의 선택을 결제가 덮어쓰면 안 된다.
   if (current === null || current === '' || current === 'off') return 'auto';
@@ -135,6 +146,11 @@ async function applyPatch(
     if (isMissingColumn(error) && MARKER_COLS.some((col) => col in payload)) {
       const next: UpdatePatch = { ...payload };
       for (const col of MARKER_COLS) delete next[col];
+      // ★ 가드 컬럼(site_auto_publish_since)을 저장할 수 없으면 자동발행도 켜지 않는다.
+      //   켜 두면 cron 의 소급 차단 필터가 없는 채로 과거 글이 공개된다.
+      //   (resolveCadence 가 이미 막지만, 스키마 캐시 지연 등으로 여기까지 오는
+      //    경우를 위한 2차 방어다.)
+      delete next.site_publish_cadence;
       payload = next;
       continue;
     }
@@ -173,15 +189,19 @@ export async function provisionClinicSite(
     }
 
     const nowIso = new Date().toISOString();
-    const cadence = resolveCadence(row.site_publish_cadence);
+    const cadence = resolveCadence(row.site_publish_cadence, markerAvailable);
 
     // ② 주소가 이미 있으면 그대로 두고 자동발행만 켠다.
     if (row.site_slug) {
       const patch: UpdatePatch = { updated_at: nowIso, site_provisioned_at: nowIso };
       if (cadence) {
         patch.site_publish_cadence = cadence;
-        // 소급 발행 차단 기준 시각 — 이미 값이 있으면 앞당기지 않는다.
-        if (!row.site_auto_publish_since) patch.site_auto_publish_since = nowIso;
+        // ★ 소급 발행 차단 기준 시각은 "지금 켜는 순간"으로 항상 새로 찍는다.
+        //   과거에 auto 를 켰다 껐던 회원은 오래된 값이 남아 있는데, 그 값을 그대로
+        //   두면 껐던 기간에 쌓인 글이 전부 자동발행 대상이 된다(대량 소급 공개).
+        //   resolveCadence 가 off/미설정에서만 'auto' 를 돌려주므로 여기는 항상
+        //   "새로 켜는" 전환 시점이고, nowIso 는 기존 값보다 항상 미래다(앞당기지 않는다).
+        patch.site_auto_publish_since = nowIso;
       }
       const applied = await applyPatch(admin, userId, patch, {
         column: 'site_slug',
@@ -226,7 +246,8 @@ export async function provisionClinicSite(
       };
       if (cadence) {
         patch.site_publish_cadence = cadence;
-        if (!row.site_auto_publish_since) patch.site_auto_publish_since = nowIso;
+        // 위 ②와 같은 이유 — 켜는 순간을 항상 새로 찍는다(과거 값 재사용 금지).
+        patch.site_auto_publish_since = nowIso;
       }
 
       const applied = await applyPatch(admin, userId, patch, {

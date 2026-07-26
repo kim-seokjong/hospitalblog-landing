@@ -26,7 +26,7 @@ import { revalidatePath } from 'next/cache';
 import { isAuthorizedCron } from '@/dev/lib/cron-auth';
 import { createAdminClient } from '@/dev/lib/supabase/server';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
-import { publishBlockReason } from '@/content/lib/clinic-site/publish-gate';
+import { serverPublishBlockReason } from '@/content/lib/clinic-site/server-publish-gate';
 import {
   isDue,
   pickNextPosts,
@@ -281,11 +281,16 @@ export async function GET(req: NextRequest) {
         }
 
         // 검수 게이트 통과 + 본문 비어있지 않은 글만 후보로 남긴다(수동 발행과 동일 기준).
+        // ★ 무인 경로라 저장 스냅샷만 믿지 않고 서버가 본문을 직접 A층 재검사한다
+        //   (server-publish-gate.ts — 스냅샷은 클라이언트가 보낸 값이라 위조 가능).
         const candidates: AutoPublishCandidate[] = ((postRows ?? []) as CandidatePostRow[])
           .filter((row) => {
             const content = typeof row.content === 'string' ? row.content : '';
             if (content.trim() === '') return false;
-            return publishBlockReason(validateComplianceReport(row.compliance_report)) === null;
+            return serverPublishBlockReason(
+              validateComplianceReport(row.compliance_report),
+              content,
+            ) === null;
           })
           .map((row) => ({ id: row.id, createdAt: row.created_at }));
 

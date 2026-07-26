@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { provisionClinicSite } from '@/content/lib/clinic-site/provision'
+import type { ProvisionOutcome } from '@/content/lib/clinic-site/provision'
 import type { Payment, PaymentStatus, Profile, BillingKey } from './types'
 import type { PlanId } from './plans'
 
@@ -109,6 +110,30 @@ export async function cancelActiveBillingKeys(userId: string): Promise<void> {
     .eq('status', 'ACTIVE')
 }
 
+/** 블로그 자동 개설이 결제 응답을 붙잡을 수 있는 최대 시간. */
+const PROVISION_BUDGET_MS = 5000
+
+/**
+ * 개설 작업에 시간 상한을 둔다. 넘기면 기다리지 않고 'failed' 로 넘어간다.
+ * 남은 작업은 그대로 진행돼도 안전하다(멱등·조건부 UPDATE 이며 throw 하지 않는다).
+ */
+async function withProvisionBudget(
+  work: Promise<ProvisionOutcome>,
+): Promise<ProvisionOutcome> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const budget = new Promise<ProvisionOutcome>((resolve) => {
+    timer = setTimeout(
+      () => resolve({ status: 'failed', reason: '개설 시간 예산 초과' }),
+      PROVISION_BUDGET_MS,
+    )
+  })
+  try {
+    return await Promise.race([work, budget])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export async function activateUserPlan(params: {
   userId: string
   plan: PlanId
@@ -135,7 +160,13 @@ export async function activateUserPlan(params: {
   //   빠지지 않는다. 모두 service role 서버 경로라 남의 슬러그 중복 확인이 가능하다.
   //   provisionClinicSite 는 멱등이며(회원당 1회) 절대 throw 하지 않는다 —
   //   개설 실패가 결제 성공을 되돌리면 안 된다.
-  const outcome = await provisionClinicSite(admin, params.userId)
+  //
+  //   ★ 시간 예산(PROVISION_BUDGET_MS): 개설은 DB 왕복이 여러 번(프로필 조회 +
+  //   슬러그 후보별 조건부 update)이라 최악의 경우 결제 확인 응답을 붙잡을 수 있다.
+  //   결제 확인은 사용자가 기다리는 경로이고, 정기결제 cron 은 회원 수만큼 이 함수를
+  //   반복 호출한다(maxDuration 300s). 예산을 넘기면 결과를 기다리지 않고 넘어간다 —
+  //   개설은 멱등이라 다음 결제·갱신에서 다시 시도된다.
+  const outcome = await withProvisionBudget(provisionClinicSite(admin, params.userId))
   if (outcome.status === 'failed') {
     console.error('[activateUserPlan] 병원 블로그 자동 개설 실패:', params.userId, outcome.reason)
   }

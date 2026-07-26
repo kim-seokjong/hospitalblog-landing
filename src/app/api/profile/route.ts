@@ -209,6 +209,38 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    // ★ 자동발행을 'auto' 로 "새로 켜는" 순간을 기록한다 — 자동발행은 이 시각 이후에
+    //   만들어진 글만 대상으로 한다(보관함의 과거 글이 한꺼번에 공개되는 것을 막는 유일한 기준).
+    //
+    //   반드시 cadence 를 바꾸기 "전에" 실행한다: 조건이 `현재 cadence != 'auto'` 이므로
+    //   순서가 뒤바뀌면 조건이 항상 거짓이 된다. 이 조건부 UPDATE 한 방이
+    //   "이미 auto 인 회원의 저장 때마다 기준시각이 앞으로 밀려 그 사이 쓴 글이 제외되는" 문제와
+    //   "껐다 켠 회원의 기준시각이 과거로 남아 껐던 기간의 글이 전부 공개되는" 문제를 동시에 막는다.
+    //   (TOCTOU 없음 — 읽고 판단하는 대신 DB 조건으로 표현했다.)
+    if (updates.site_publish_cadence === 'auto') {
+      const { error: sinceError } = await supabase
+        .from('profiles')
+        .update({ site_auto_publish_since: new Date().toISOString() })
+        .eq('id', user.id)
+        .neq('site_publish_cadence', 'auto')
+
+      // 가드 컬럼이 없으면(마이그 052 미적용) 자동발행을 켜지 않는다 —
+      // 기준시각 없이 켜면 cron 의 소급 차단 필터가 통째로 꺼져 과거 글이 공개된다.
+      if (isMissingColumnError(sinceError)) {
+        return NextResponse.json(
+          { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 잠시 후 다시 시도해주세요.' },
+          { status: 503 }
+        )
+      }
+      if (sinceError) {
+        console.error('[profile] 자동발행 시작시각 기록 실패:', sinceError.message)
+        return NextResponse.json(
+          { error: '바로 발행 설정을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.' },
+          { status: 500 }
+        )
+      }
+    }
+
     // 넓은 update → 컬럼 없음(42703)이면 최신 마이그 컬럼부터 제거하며 재시도한다.
     // 순서: 044(site_publish_cadence) → 043(site_slug) → 042(채널 3종) → 028(naver)
     const runUpdate = (payload: Record<string, unknown>) =>
@@ -223,12 +255,21 @@ export async function PUT(req: NextRequest) {
       ['naver_blog_url'],
     ]
 
+    // 사용자가 실제로 값을 넣어 보낸 신규 공개 컬럼 — 마이그 미적용으로 이 값이
+    // 조용히 버려지면 "저장했는데 다시 보니 사라졌다"가 된다(원인을 알 수 없는 실패).
+    const droppedRequestedCols: string[] = []
+
     let payload = updates
     let { error } = await runUpdate(payload)
     for (const group of PEEL_GROUPS_NEWEST_FIRST) {
       if (!isMissingColumnError(error)) break
       payload = { ...payload }
-      for (const col of group) delete payload[col]
+      for (const col of group) {
+        if (col in payload && payload[col] !== null && payload[col] !== '') {
+          droppedRequestedCols.push(col)
+        }
+        delete payload[col]
+      }
       ;({ error } = await runUpdate(payload))
     }
 
@@ -248,19 +289,21 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: '프로필 저장 실패' }, { status: 500 })
     }
 
-    // 자동발행을 'auto' 로 켠 순간을 기록한다 — 자동발행은 이 시각 이후에 만들어진
-    // 글만 대상으로 한다(보관함의 과거 글이 한꺼번에 공개되는 것을 막는 유일한 기준).
-    // 이미 값이 있으면 앞당기지 않는다(조건부 update). 실패·컬럼 없음은 무시한다
-    // (프로필 저장 자체는 이미 성공 — cron 이 다음 실행에서 같은 기준으로 확정한다).
-    if (updates.site_publish_cadence === 'auto') {
-      const { error: sinceError } = await supabase
-        .from('profiles')
-        .update({ site_auto_publish_since: new Date().toISOString() })
-        .eq('id', user.id)
-        .is('site_auto_publish_since', null)
-      if (sinceError && !isMissingColumnError(sinceError)) {
-        console.error('[profile] 자동발행 시작시각 기록 실패:', sinceError.message)
+    // 나머지 필드는 저장됐지만 신규 공개 컬럼이 마이그 미적용으로 버려졌다면
+    // 성공이라고만 답하지 않는다 — 화면이 "저장됨"을 띄우면 사용자는 값이 사라진
+    // 이유를 영원히 알 수 없다. 저장된 것은 저장된 대로 두고 사실을 함께 알린다.
+    if (droppedRequestedCols.length > 0) {
+      const LABELS: Record<string, string> = {
+        hospital_phone: '병원 대표번호',
+        hospital_hours: '진료시간',
+        site_publish_cadence: '자동발행 주기',
+        site_slug: '블로그 주소',
       }
+      const names = droppedRequestedCols.map((col) => LABELS[col] ?? col).join(' · ')
+      return NextResponse.json({
+        success: true,
+        warning: `${names} 항목은 아직 저장할 수 없습니다(기능 준비 중). 나머지 정보는 저장되었습니다.`,
+      })
     }
 
     return NextResponse.json({ success: true })

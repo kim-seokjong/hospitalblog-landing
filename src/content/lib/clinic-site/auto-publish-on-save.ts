@@ -20,8 +20,9 @@ import { revalidatePath } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isActivePlan } from '@/payment/lib/plans';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
-import { publishBlockReason, decideAutoPublishOnSave } from './publish-gate';
+import { decideAutoPublishOnSave } from './publish-gate';
 import type { AutoPublishSkipReason } from './publish-gate';
+import { serverPublishBlockReason } from './server-publish-gate';
 import { claimPostsForPublish } from './auto-publish-claim';
 import { kstDayStartIso } from './auto-publish';
 import { clinicSiteHost, clinicSiteUrl } from './slug';
@@ -87,8 +88,12 @@ export async function autoPublishSavedPost(
       cadence: profile.site_publish_cadence,
       siteSlug: profile.site_slug,
       subscriptionActive: isActivePlan(profile.plan, profile.plan_expires_at),
-      // 수동 발행(/api/mypage/site-publish)과 완전히 같은 게이트.
-      blockReason: publishBlockReason(validateComplianceReport(input.complianceReport)),
+      // 수동 발행(/api/mypage/site-publish)과 같은 스냅샷 게이트 +
+      // 서버가 본문을 직접 A층 재검사(위조·낡은 스냅샷 방어) — server-publish-gate.ts.
+      blockReason: serverPublishBlockReason(
+        validateComplianceReport(input.complianceReport),
+        input.content,
+      ),
       content: input.content,
     });
 

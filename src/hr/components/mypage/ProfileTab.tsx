@@ -231,16 +231,22 @@ export default function ProfileTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profile),
       });
+      const json = await res.json().catch(() => ({})) as { error?: string; warning?: string };
       if (!res.ok) {
-        const json = await res.json() as { error?: string };
         throw new Error(json.error ?? '저장 실패');
       }
-      setSaveMsg({ type: 'success', text: '프로필이 저장되었습니다.' });
+      // 일부 항목이 아직 저장될 수 없는 경우(기능 준비 중) 서버가 사실을 알려준다 —
+      // "저장됨"만 띄우면 사용자는 값이 사라진 이유를 알 수 없다.
+      if (json.warning) {
+        setSaveMsg({ type: 'error', text: json.warning });
+      } else {
+        setSaveMsg({ type: 'success', text: '프로필이 저장되었습니다.' });
+      }
     } catch (e) {
       setSaveMsg({ type: 'error', text: e instanceof Error ? e.message : '저장 실패' });
     } finally {
       setSaving(false);
-      setTimeout(() => setSaveMsg(null), 3000);
+      setTimeout(() => setSaveMsg(null), 6000);
     }
   };
 
