@@ -143,7 +143,7 @@ export async function PUT(req: NextRequest) {
       updates.site_slug = validated.slug
     }
 
-    // site_publish_cadence — 허용값(off/weekly/biweekly)만. NOT NULL 컬럼이라 빈 값/미허용값은 거부.
+    // site_publish_cadence — 허용값(off/auto/weekly/biweekly)만. NOT NULL 컬럼이라 빈 값/미허용값은 거부.
     if ('site_publish_cadence' in updates) {
       if (!isValidCadence(updates.site_publish_cadence)) {
         return NextResponse.json({ error: '자동발행 주기 값이 올바르지 않습니다.' }, { status: 400 })
@@ -175,6 +175,14 @@ export async function PUT(req: NextRequest) {
       // 23505 = unique 위반 — profiles 의 사용자 편집 unique 컬럼은 site_slug 뿐
       if (error.code === '23505') {
         return NextResponse.json({ error: '이미 사용 중인 주소입니다. 다른 주소를 입력해주세요.' }, { status: 409 })
+      }
+      // 23514 = check 제약 위반. 마이그 048(cadence 'auto' 허용) 미적용 환경에서
+      // 'auto' 를 저장하면 여기로 온다 — 배포가 깨지지 않게 안내 메시지로 폴백한다.
+      if (error.code === '23514' && updates.site_publish_cadence === 'auto') {
+        return NextResponse.json(
+          { error: '바로 발행 옵션이 아직 활성화되지 않았습니다. 잠시 후 다시 시도해주세요.' },
+          { status: 503 }
+        )
       }
       return NextResponse.json({ error: '프로필 저장 실패' }, { status: 500 })
     }

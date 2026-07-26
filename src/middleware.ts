@@ -1,6 +1,10 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { resolveClinicSiteRewrite } from '@/content/lib/clinic-site/slug';
+import {
+  resolveClinicSiteRewrite,
+  isClinicSitePathname,
+  CLINIC_SITE_REQUEST_HEADER,
+} from '@/content/lib/clinic-site/slug';
 
 export async function middleware(request: NextRequest) {
   // 병원 서브도메인 블로그 — {slug}.hospitalblog.kr / {slug}.localhost 요청을
@@ -15,18 +19,40 @@ export async function middleware(request: NextRequest) {
   if (clinicSitePath) {
     const url = request.nextUrl.clone();
     url.pathname = clinicSitePath;
-    return NextResponse.rewrite(url);
+    const headers = new Headers(request.headers);
+    // 루트 레이아웃이 SaaS JSON-LD 를 빼도록 표시 (고객 블로그 정보 누출 차단).
+    headers.set(CLINIC_SITE_REQUEST_HEADER, '1');
+    return NextResponse.rewrite(url, { request: { headers } });
   }
+
+  // 메인 도메인에서 /clinic-site/* 로 직접 접근하는 경우도 병원 블로그 렌더링이다.
+  // 공개 페이지라 세션 갱신이 필요 없고, 동일하게 SaaS JSON-LD 를 뺀다.
+  if (isClinicSitePathname(request.nextUrl.pathname)) {
+    const headers = new Headers(request.headers);
+    headers.set(CLINIC_SITE_REQUEST_HEADER, '1');
+    return NextResponse.next({ request: { headers } });
+  }
+
+  /**
+   * 병원 블로그가 아닌 요청 — 위조된 x-clinic-site 헤더를 제거해 외부에서
+   * 메인 사이트의 JSON-LD 를 지우지 못하게 한다. 헤더 스냅샷은 호출 시점에
+   * 뜬다(그 사이 request.cookies.set 으로 갱신된 쿠키가 반영되도록).
+   */
+  const nextWithSanitizedHeaders = (): NextResponse => {
+    const headers = new Headers(request.headers);
+    headers.delete(CLINIC_SITE_REQUEST_HEADER);
+    return NextResponse.next({ request: { headers } });
+  };
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error('Supabase 환경변수(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)가 설정되지 않았습니다.');
-    return NextResponse.next({ request });
+    return nextWithSanitizedHeaders();
   }
 
-  let supabaseResponse = NextResponse.next({ request });
+  let supabaseResponse = nextWithSanitizedHeaders();
 
   const supabase = createServerClient(
     supabaseUrl,
@@ -40,7 +66,7 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = nextWithSanitizedHeaders();
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );

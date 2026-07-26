@@ -20,12 +20,24 @@ export interface GeoQuestionProfile {
   hospitalKeywords: string[] | null;
 }
 
-export const MAX_QUESTIONS_PER_USER = 3;
+export const MAX_QUESTIONS_PER_USER = 5;
 
 /**
  * 환자가 AI에게 실제로 물어볼 법한 질문을 프로필로부터 규칙 기반 생성.
- * 우선순위: ① 지역+진료과 추천 → ② 대표 키워드 잘하는 병원 → ③ 보조 키워드 상담처.
- * 재료가 부족하면 생성 가능한 것만 반환(최대 3개, 중복 제거).
+ *
+ * 질문은 서로 다른 "환자 의도"를 하나씩 맡는다 — 같은 재료로 표현만 바꾼
+ * 변형을 늘리면 AI 답변이 거의 같아져 샘플로서 가치가 없기 때문이다.
+ *  ① 지역+진료과 일반 추천        (탐색 초기)
+ *  ② 대표 키워드 전문성           (시술·증상 특정)
+ *  ③ 보조 키워드 증상 상담처       (증상 서술형)
+ *  ④ 복수 후보 나열 요청           ← 신규. AI가 병원명을 여러 개 열거하게 유도해
+ *                                   인용 판정 표본을 넓힌다.
+ *  ⑤ 평판·인지도 질의             ← 신규. "어디가 유명해?"는 실제 환자 검색어 패턴이며
+ *                                   추천형(①)과 다른 근거 문서를 물고 온다.
+ *
+ * ④⑤는 지역이 있을 때만 만든다. 지역 없는 전국 단위 질의는 개별 의원이
+ * 인용될 확률이 사실상 0이라 3엔진 호출 비용만 쓰기 때문이다.
+ * 재료가 부족하면 생성 가능한 것만 반환(최대 5개, 중복 제거).
  */
 export function buildGeoQuestions(profile: GeoQuestionProfile): string[] {
   const region = (profile.region ?? '').trim();
@@ -54,6 +66,20 @@ export function buildGeoQuestions(profile: GeoQuestionProfile): string[] {
   } else if (region && specialty && keywords.length === 0) {
     // 키워드가 하나도 없으면 지역+진료과 변형으로 보충
     questions.push(`${region} ${specialty} 어디가 좋아?`);
+  }
+
+  // ④ 복수 후보 나열 요청 — 지역이 있어야 의미가 있다
+  if (region && specialty) {
+    questions.push(`${region} ${specialty} 중에 잘하는 곳 세 군데만 알려줘`);
+  } else if (region && keywords[0]) {
+    questions.push(`${region}에서 ${keywords[0]} 잘하는 병원 세 군데만 알려줘`);
+  }
+
+  // ⑤ 평판·인지도 질의
+  if (region && specialty) {
+    questions.push(`${region} ${specialty} 중에 어디가 제일 유명해?`);
+  } else if (region && keywords[0]) {
+    questions.push(`${region}에서 ${keywords[0]}으로 유명한 병원 알려줘`);
   }
 
   // 중복 제거 + 상한

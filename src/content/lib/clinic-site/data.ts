@@ -60,8 +60,21 @@ interface PostRow {
   keyword: string | null;
 }
 
-/** 목록 페이지 글 수 상한. */
+/** 목록 페이지(사람이 보는 홈) 글 수 상한. */
 export const CLINIC_SITE_POST_LIMIT = 50;
+
+/**
+ * 병원별 sitemap.xml 에 담는 글 수 상한.
+ *
+ * ★ 목록 페이지 상한(50)을 그대로 쓰면 51번째 글부터 사이트맵에서 사라진다
+ *   ("모든 글 자동 발견" 목표와 정면 충돌). sitemaps.org 프로토콜 상한은
+ *   사이트맵당 URL 50,000개이므로 현실적으로 닿지 않는 5,000편으로 둔다
+ *   (하루 3편 자동발행 기준 약 4.5년치).
+ */
+export const CLINIC_SITE_SITEMAP_POST_LIMIT = 5_000;
+
+/** Supabase 기본 max-rows(1,000)에 맞춘 페이지 크기. */
+const SITEMAP_POST_PAGE = 1_000;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -124,6 +137,93 @@ export async function getPublishedPosts(userId: string): Promise<ClinicSitePost[
   } catch (err) {
     console.error('[clinic-site] 글 목록 조회 오류:', err instanceof Error ? err.message : err);
     return [];
+  }
+}
+
+/**
+ * 슬러그가 실제 병원에 할당돼 있는지만 확인한다 (IndexNow 키 파일 게이트용).
+ *  true  = 존재, false = 미할당, null = 조회 실패(호출부가 fail-open 판단)
+ * 프로필 본문을 읽지 않아 getClinicBySlug 보다 가볍고, "없음"과 "장애"를 구분한다.
+ */
+export async function clinicSlugExists(slug: string): Promise<boolean | null> {
+  try {
+    const admin = createAdminClient();
+    const { count, error } = await admin
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('site_slug', slug);
+
+    if (error) {
+      console.error('[clinic-site] 슬러그 존재 확인 오류:', error.message);
+      return null;
+    }
+    return typeof count === 'number' ? count > 0 : null;
+  } catch (err) {
+    console.error('[clinic-site] 슬러그 존재 확인 실패:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/** sitemap.xml 용 최소 정보 — 본문·태그를 읽지 않아 응답이 가볍다. */
+export interface ClinicSitePostRef {
+  id: string;
+  publishedAt: string | null;
+}
+
+interface PostRefRow {
+  id: string;
+  site_published_at: string | null;
+  published_at: string | null;
+  created_at: string | null;
+}
+
+/**
+ * 병원 sitemap.xml 용 발행 글 전체 목록 (id + 발행시각만).
+ *
+ * 목록 페이지와 달리 50편으로 자르지 않는다 — 잘린 글은 검색엔진이 영영 찾지
+ * 못한다. Supabase 기본 max-rows(1,000) 때문에 반드시 range 페이지네이션으로
+ * 훑어야 한다(.limit(5000) 만으로는 1,000행에서 잘린다).
+ *
+ * 실패하면 빈 배열이 아니라 null 을 돌려 호출부가 200 대신 5xx 를 내게 한다
+ * (빈 sitemap 을 200 으로 주면 검색엔진이 글이 사라진 것으로 받아들인다).
+ */
+export async function getPublishedPostRefs(userId: string): Promise<ClinicSitePostRef[] | null> {
+  try {
+    const admin = createAdminClient();
+    const refs: ClinicSitePostRef[] = [];
+
+    const maxPages = Math.ceil(CLINIC_SITE_SITEMAP_POST_LIMIT / SITEMAP_POST_PAGE);
+    for (let page = 0; page < maxPages; page++) {
+      const from = page * SITEMAP_POST_PAGE;
+      const { data, error } = await admin
+        .from('saved_posts')
+        .select('id, site_published_at, published_at, created_at')
+        .eq('user_id', userId)
+        .eq('published_to_site', true)
+        // 결정적 순서 — 페이지 경계에서 중복·누락이 없도록 id 로 tie-break 한다.
+        .order('site_published_at', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: true })
+        .range(from, from + SITEMAP_POST_PAGE - 1);
+
+      if (error) {
+        console.error('[clinic-site] sitemap 글 조회 오류:', error.message);
+        return null;
+      }
+
+      const rows = (data ?? []) as PostRefRow[];
+      refs.push(
+        ...rows.map((row) => ({
+          id: row.id,
+          publishedAt: row.site_published_at ?? row.published_at ?? row.created_at,
+        })),
+      );
+      if (rows.length < SITEMAP_POST_PAGE) break;
+    }
+
+    return refs;
+  } catch (err) {
+    console.error('[clinic-site] sitemap 글 조회 실패:', err instanceof Error ? err.message : err);
+    return null;
   }
 }
 

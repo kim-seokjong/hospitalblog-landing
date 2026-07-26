@@ -17,21 +17,30 @@ import {
 // 질문 생성
 // ---------------------------------------------------------------------------
 
-test('질문 생성: 지역+진료과+키워드 2개 → 3개 질문', () => {
+test('질문 생성: 지역+진료과+키워드 2개 → 5개 질문 (의도별로 서로 다름)', () => {
   const questions = buildGeoQuestions({
     region: '대구 수성구',
     specialty: '피부과',
     hospitalKeywords: ['여드름 흉터', '레이저 토닝'],
   });
-  assert.equal(questions.length, 3);
+  assert.equal(questions.length, 5);
   assert.equal(questions[0], '대구 수성구 피부과 추천해줘');
   assert.match(questions[1], /여드름 흉터/);
   assert.match(questions[1], /대구 수성구/);
   assert.match(questions[2], /레이저 토닝/);
   assert.match(questions[2], /어디로 가야 해/);
+  assert.equal(questions[3], '대구 수성구 피부과 중에 잘하는 곳 세 군데만 알려줘');
+  assert.equal(questions[4], '대구 수성구 피부과 중에 어디가 제일 유명해?');
+  assert.equal(new Set(questions).size, questions.length);
 });
 
-test('질문 생성: 지역 없이 진료과만 → 병원 추천형으로 폴백', () => {
+test('질문 생성: 첫 질의는 개인정보가 없어 회원 간 캐시 공유가 가능해야 한다', () => {
+  const profileA = { region: '대구 수성구', specialty: '피부과', hospitalKeywords: ['여드름'] };
+  const profileB = { region: '대구 수성구', specialty: '피부과', hospitalKeywords: ['모공'] };
+  assert.equal(buildGeoQuestions(profileA)[0], buildGeoQuestions(profileB)[0]);
+});
+
+test('질문 생성: 지역 없이 진료과만 → 전국 단위 질의는 1개만 (비용 방어)', () => {
   const questions = buildGeoQuestions({
     region: null,
     specialty: '치과',
@@ -41,14 +50,30 @@ test('질문 생성: 지역 없이 진료과만 → 병원 추천형으로 폴�
   assert.equal(questions[0], '치과 잘하는 병원 추천해줘');
 });
 
-test('질문 생성: 키워드 없이 지역+진료과 → 변형 질문으로 보충', () => {
+test('질문 생성: 키워드 없이 지역+진료과 → 지역 기반 변형으로 4개까지 보충', () => {
   const questions = buildGeoQuestions({
     region: '강남구',
     specialty: '정형외과',
     hospitalKeywords: null,
   });
-  assert.equal(questions.length, 2);
+  assert.equal(questions.length, 4);
+  assert.equal(questions[0], '강남구 정형외과 추천해줘');
   assert.equal(questions[1], '강남구 정형외과 어디가 좋아?');
+  assert.equal(questions[2], '강남구 정형외과 중에 잘하는 곳 세 군데만 알려줘');
+  assert.equal(questions[3], '강남구 정형외과 중에 어디가 제일 유명해?');
+});
+
+test('질문 생성: 진료과 없이 지역+키워드 → 키워드 기반 질의로 생성', () => {
+  const questions = buildGeoQuestions({
+    region: '수성구',
+    specialty: null,
+    hospitalKeywords: ['임플란트'],
+  });
+  assert.deepEqual(questions, [
+    '수성구에서 임플란트 잘하는 병원 어디야?',
+    '수성구에서 임플란트 잘하는 병원 세 군데만 알려줘',
+    '수성구에서 임플란트으로 유명한 병원 알려줘',
+  ]);
 });
 
 test('질문 생성: 재료 전무 → 빈 배열 (질의 스킵)', () => {
@@ -56,7 +81,8 @@ test('질문 생성: 재료 전무 → 빈 배열 (질의 스킵)', () => {
   assert.deepEqual(questions, []);
 });
 
-test('질문 생성: 상한 3개 초과 금지 + 중복 제거', () => {
+test('질문 생성: 상한 5개 초과 금지 + 중복 제거', () => {
+  assert.equal(MAX_QUESTIONS_PER_USER, 5);
   const questions = buildGeoQuestions({
     region: '서울',
     specialty: '내과',

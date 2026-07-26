@@ -15,6 +15,31 @@ export const EXTERNAL_FETCH_TIMEOUT_MS = 5_000;
 
 export type TimedJsonResult = { ok: true; data: unknown } | { ok: false };
 
+/**
+ * JSON 본문이 없는(또는 필요 없는) 요청용 — 상태코드만 돌려준다.
+ * IndexNow 처럼 빈 본문/텍스트 본문을 주는 엔드포인트에서 res.json() 이
+ * 파싱 실패로 오탐되는 것을 막는다. 네트워크 오류·타임아웃은 status:null.
+ */
+export type TimedStatusResult = { ok: boolean; status: number | null };
+
+export async function fetchStatusWithTimeout(
+  fetchImpl: typeof fetch,
+  input: string | URL | Request,
+  init: RequestInit = {},
+  timeoutMs: number = EXTERNAL_FETCH_TIMEOUT_MS
+): Promise<TimedStatusResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(input, { ...init, signal: controller.signal });
+    return { ok: res.ok, status: res.status };
+  } catch {
+    return { ok: false, status: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchJsonWithTimeout(
   fetchImpl: typeof fetch,
   input: string | URL | Request,
