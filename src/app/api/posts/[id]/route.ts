@@ -77,6 +77,16 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       : null;
     if (incomingReport) {
       updates.compliance_report = incomingReport;
+    } else if (typeof body.content === 'string' && body.content.trim() !== '') {
+      // 본문이 바뀌었는데 새 검사 결과가 없으면 기존 스냅샷을 **무효화**한다.
+      //
+      // 무효화하지 않으면 PASS 로 저장된 글의 본문만 금지 표현으로 바꿔(PostEditor 는
+      // { title, content, tags } 만 보낸다) 옛 PASS 스냅샷을 그대로 남길 수 있다.
+      // site-publish·auto-publish·GEO export 는 본문을 재검사하지 않고 이 값을 읽으므로
+      // 그대로면 발행 게이트가 뚫린다.
+      // 리포트 없음 = 발행 차단(publish-gate 의 fail-closed 규칙)이고,
+      // compliance-recheck 가 A층+B층으로 다시 검사해 복구할 수 있다.
+      updates.compliance_report = null;
     }
 
     // original_content(VOICE-DNA 원본 스냅샷)는 불변 — 최초 1회만 채운다.

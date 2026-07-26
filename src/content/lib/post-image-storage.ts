@@ -74,12 +74,45 @@ async function downloadImage(url: string): Promise<DecodedImage | null> {
   const contentType = res.headers.get('content-type') ?? 'image/png';
   const ext = extFromMime(contentType);
   if (!ext) return null;
-  // 선언된 길이가 이미 상한을 넘으면 본문을 읽지 않고 중단(메모리 고갈 방어).
+  // 선언된 길이가 이미 상한을 넘으면 본문을 읽지 않고 중단.
   const declared = Number(res.headers.get('content-length') ?? NaN);
   if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) return null;
-  const buffer = Buffer.from(await res.arrayBuffer());
-  if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) return null;
+
+  const buffer = await readCapped(res);
+  if (!buffer || buffer.length === 0) return null;
   return { buffer, contentType, ext };
+}
+
+/**
+ * 응답 본문을 상한까지만 읽는다 — 상한을 넘는 순간 중단하고 null.
+ *
+ * arrayBuffer() 로 통째로 받으면 content-length 가 없거나 거짓인 chunked 응답에서
+ * 상한 검사 전에 이미 메모리를 다 쓴다(허용 호스트에 공격자 통제 객체가 올라올 수 있다).
+ */
+async function readCapped(res: Response): Promise<Buffer | null> {
+  if (!res.body) {
+    const buf = Buffer.from(await res.arrayBuffer());
+    return buf.length > MAX_IMAGE_BYTES ? null : buf;
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_IMAGE_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return null;
+  }
+  return Buffer.concat(chunks, total);
 }
 
 /**

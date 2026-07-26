@@ -99,9 +99,10 @@ const OBVIOUS_VIOLATIONS: ReadonlyArray<{ label: string; text: string; min: Comp
     min: 'HIGH',
   },
   {
-    label: '전문병원 무단 표방',
+    // 지정 여부는 본문만으로 판정 불가 → MEDIUM 표면화(아래 전용 테스트에서 상세 고정).
+    label: '전문병원 표방',
     text: '저희는 척추 전문병원으로 운영되고 있습니다.',
-    min: 'HIGH',
+    min: 'MEDIUM',
   },
   {
     label: '결과·환불 보장',
@@ -232,18 +233,26 @@ test('리포트: 등급은 발행본(잔존) 기준 — 자동교정분이 등�
  * 3-b. 오탐 상한 — 승격 패턴이 적법 표현을 차단하지 않는가
  * ──────────────────────────────────────────────────────────── */
 
-test('전문병원: 복지부 지정 사실을 기술한 적법 표현은 걸리지 않는다', () => {
+// 지정 여부는 본문만으로 판정 불가 → 전부 검출하되 MEDIUM(표면화).
+// "지정" 인접 예외를 두면 "미지정 전문병원" 같은 부정문이 우회로가 되고,
+// 기관명이 길면 적법 표기를 오탐한다.
+test('전문병원: 표방은 모두 검출되지만 발행 게이트(HIGH)를 잠그지는 않는다', () => {
   for (const text of [
+    '저희는 척추 전문병원입니다.',
     '보건복지부 지정 척추 전문병원입니다.',
-    '보건복지부가 지정한 관절 전문병원으로 운영됩니다.',
+    '미지정 전문병원입니다.',
+    '전문병원으로 지정되지 않은 곳도 많습니다.',
   ]) {
-    assert.equal(gradeOf(text), 'PASS', `적법한 지정 기술이 차단됐다: ${text}`);
+    const r = checkCompliance(text);
+    assert.ok(
+      r.violations.some((v) => v.rule.includes('전문병원')),
+      `전문병원 표방이 검출되지 않았다(우회 가능): ${text}`,
+    );
+    assert.ok(
+      !r.violations.some((v) => v.severity === 'HIGH' && v.rule.includes('전문병원')),
+      `적법 가능성이 있는 표현을 HIGH 로 차단하면 안 된다: ${text}`,
+    );
   }
-});
-
-test('전문병원: 지정 언급 없는 표방은 여전히 HIGH 로 잡힌다', () => {
-  const r = checkCompliance('저희는 척추 전문병원입니다.');
-  assert.ok(r.violations.some((v) => v.severity === 'HIGH'));
 });
 
 test('전문의 권장 문구는 전문병원 패턴에 걸리지 않는다', () => {
