@@ -114,18 +114,31 @@ export interface BodyImage {
  */
 export type BodyImageSlots = ReadonlyArray<BodyImage | null>;
 
-/** 한 줄 전체가 `[이미지 N: 설명]` 인지 판정 (설명은 비어 있을 수 있다). */
-const IMAGE_MARKER_LINE_RE = /^\[이미지\s*(\d+)\s*:[^\]]*\]$/;
+/** `[이미지 N: 설명]` — 줄 단독이든 문장 중간이든 동일하게 인식한다. */
+const IMAGE_MARKER_RE = /\[이미지\s*(\d+)\s*:[^\]]*\]/g;
 
-/** 문단 안에 섞여 들어간 `[이미지 N: …]` 조각 — 화면에 텍스트로 새지 않게 제거한다. */
-const INLINE_IMAGE_MARKER_RE = /\[이미지\s*\d+\s*:[^\]]*\]/g;
+/** 한 줄에 들어 있는 이미지 마커 번호를 등장 순서대로 모은다. 없으면 빈 배열. */
+function imageMarkerNumbers(line: string): number[] {
+  const re = new RegExp(IMAGE_MARKER_RE.source, 'g');
+  const out: number[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(line)) !== null) {
+    const n = Number.parseInt(match[1], 10);
+    if (Number.isFinite(n) && n > 0) out.push(n);
+  }
+  return out;
+}
 
-/** 줄이 이미지 마커면 1-based 번호, 아니면 null. */
-function imageMarkerNumber(line: string): number | null {
-  const match = IMAGE_MARKER_LINE_RE.exec(line);
-  if (!match) return null;
-  const n = Number.parseInt(match[1], 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
+/** 텍스트에서 마커 조각을 제거한다(화면에 문자열로 새지 않게). */
+function stripMarkers(line: string): string {
+  return line.replace(new RegExp(IMAGE_MARKER_RE.source, 'g'), '').replace(/\s{2,}/g, ' ').trim();
+}
+
+/** 소제목 판정 — ▶ 는 h3, 짧은 독립 줄은 h2. 둘 다 아니면 null(단락). */
+function headingHtml(text: string): string | null {
+  if (text.startsWith('▶')) return `<h3>${escapeHtml(text.replace(/^▶\s*/, ''))}</h3>`;
+  if (isHeadingLine(text)) return `<h2>${escapeHtml(text)}</h2>`;
+  return null;
 }
 
 /**
@@ -158,7 +171,8 @@ function evenBoundaries(blockCount: number, imageCount: number): number[] {
  * 플레인 텍스트 본문을 시맨틱 HTML 로 변환한다.
  * - "▶ …" 줄 → <h3>
  * - 빈 줄로 둘러싸인 짧은 독립 줄(문장 아님) → <h2>
- * - `[이미지 N: 설명]` 줄 → images[N-1] 이 있으면 <figure><img>, 없으면 아무것도 렌더하지 않음
+ * - `[이미지 N: 설명]` 마커 → images[N-1] 이 있으면 <figure><img>, 없으면 아무것도 렌더하지 않음
+ *   (줄 단독이든 문장 끝이든 동일. 문장에 섞여 있으면 그 줄 텍스트 뒤에 놓는다)
  * - 그 외 → <p> (블록 내 줄바꿈은 <br /> 유지)
  * 모든 텍스트는 이스케이프되어 태그로 해석되지 않는다.
  *
@@ -191,55 +205,35 @@ export function renderBodyHtml(bodyText: string, images: BodyImageSlots = []): s
     parts.push(renderFigure(image));
   };
 
-  /**
-   * 텍스트 줄에서 인라인 마커 조각을 제거한다.
-   * 마커가 없던 줄은 **원문 그대로** 돌려준다 — 공백 정규화가 기존 렌더 결과를
-   * 바꾸지 않게 하려는 것(회귀 방지).
-   */
-  const cleanTextLine = (line: string): string => {
-    const withoutMarkers = line.replace(INLINE_IMAGE_MARKER_RE, '');
-    if (withoutMarkers === line) return line;
-    return withoutMarkers.replace(/\s{2,}/g, ' ').trim();
-  };
-
   type BlockItem = { kind: 'image'; n: number } | { kind: 'text'; text: string };
 
   for (const block of blocks) {
-    // 줄을 먼저 (이미지 마커 | 텍스트) 로 정규화한다.
-    // ★ 소제목 판정보다 마커 제거가 먼저다 — "소제목 [이미지 1: …]" 처럼 마커가
-    //   섞인 짧은 줄이 <h2> 로 굳어 마커 문자열이 화면에 노출되는 것을 막는다.
+    // 줄을 (텍스트 | 이미지 마커) 항목으로 정규화한다.
+    // ★ 마커 인식이 소제목 판정보다 먼저다 — "소제목 [이미지 1: …]" 처럼 마커가
+    //   섞인 짧은 줄이 <h2> 로 굳어 마커 문자열이 화면에 노출되는 것을 막고,
+    //   줄 단독 마커든 문장 끝 마커든 똑같이 "그 자리"로 취급한다.
+    //   마커가 없던 줄은 원문 그대로 둔다(공백 정규화로 기존 렌더가 바뀌지 않게).
     const items: BlockItem[] = [];
     for (const raw of block.split('\n').map((l) => l.trim())) {
       if (raw.length === 0) continue;
-      const markerN = imageMarkerNumber(raw);
-      if (markerN !== null) {
-        items.push({ kind: 'image', n: markerN });
+      const markerNs = imageMarkerNumbers(raw);
+      if (markerNs.length === 0) {
+        items.push({ kind: 'text', text: raw });
         continue;
       }
-      const cleaned = cleanTextLine(raw);
+      const cleaned = stripMarkers(raw);
       if (cleaned.length > 0) items.push({ kind: 'text', text: cleaned });
+      for (const n of markerNs) items.push({ kind: 'image', n });
     }
 
-    if (items.length === 1) {
-      const only = items[0];
-      if (only.kind === 'image') {
-        pushImageAt(only.n);
-        blockEnds.push(parts.length);
-        continue;
-      }
-      if (only.text.startsWith('▶')) {
-        parts.push(`<h3>${escapeHtml(only.text.replace(/^▶\s*/, ''))}</h3>`);
-        blockEnds.push(parts.length);
-        continue;
-      }
-      if (isHeadingLine(only.text)) {
-        parts.push(`<h2>${escapeHtml(only.text)}</h2>`);
-        blockEnds.push(parts.length);
-        continue;
-      }
-    }
+    // 블록의 텍스트가 딱 한 줄이면 소제목 후보다 (마커가 함께 있어도 동일 — 마커를
+    // 위로 올리는 upstream strip 이 하던 판정과 결과가 같아야 한다).
+    const textItems = items.filter(
+      (item): item is { kind: 'text'; text: string } => item.kind === 'text',
+    );
+    const soleHeading = textItems.length === 1 ? headingHtml(textItems[0].text) : null;
 
-    // 블록 안에 ▶·이미지 마커 줄이 섞여 있으면 분리, 나머지 연속 줄은 하나의 단락으로
+    // 블록 안에 ▶·이미지 마커가 섞여 있으면 분리, 나머지 연속 줄은 하나의 단락으로
     const paragraphLines: string[] = [];
     const flush = () => {
       if (paragraphLines.length === 0) return;
@@ -250,6 +244,10 @@ export function renderBodyHtml(bodyText: string, images: BodyImageSlots = []): s
       if (item.kind === 'image') {
         flush();
         pushImageAt(item.n);
+        continue;
+      }
+      if (soleHeading !== null) {
+        parts.push(soleHeading);
         continue;
       }
       if (item.text.startsWith('▶')) {

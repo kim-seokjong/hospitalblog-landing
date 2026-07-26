@@ -128,6 +128,9 @@ if (!post) {
 }
 
 const markers = (post.content ?? '').match(/\[이미지\s*(\d+)\s*:[^\]]*\]/g) ?? []
+const markerNumbers = [
+  ...new Set(markers.map((m) => Number.parseInt(/\d+/.exec(m)[0], 10))),
+].sort((a, b) => a - b)
 console.log('── 대상 글 ────────────────────────────────')
 console.log(`제목        : ${post.title}`)
 console.log(`소유자      : ${post.user_id}`)
@@ -142,9 +145,20 @@ for (let n = 1; n <= slotCount; n++) {
   console.log(f ? `  → [이미지 ${n}] ${f.name}` : `  → [이미지 ${n}] (비움 — 해당 마커는 렌더되지 않음)`)
 }
 
-if (markers.length > 0 && markers.length !== slotCount) {
-  console.warn(`\n⚠️ 본문 마커 ${markers.length}개 / 이미지 자리 ${slotCount}개 — 개수가 다릅니다.`)
-  console.warn('   짝이 없는 마커는 렌더되지 않고, 남는 이미지는 본문 끝에 붙습니다.')
+// 개수가 아니라 **번호 집합**을 비교한다 — 개수만 같고 번호가 어긋나면
+// 엉뚱한 설명 자리에 사진이 붙는데 개수 비교로는 잡히지 않는다.
+if (markerNumbers.length > 0) {
+  const fileNumbers = named.map((f) => f.n)
+  const missing = markerNumbers.filter((n) => !fileNumbers.includes(n))
+  const extra = fileNumbers.filter((n) => !markerNumbers.includes(n))
+  if (missing.length > 0) {
+    console.warn(`\n⚠️ 본문에는 있는데 파일이 없는 번호: ${missing.join(', ')} → 그 자리는 비어 렌더됩니다.`)
+  }
+  if (extra.length > 0) {
+    console.warn(`\n⚠️ 본문 마커에 없는 파일 번호: ${extra.join(', ')} → 본문 끝에 붙습니다.`)
+  }
+} else if (markers.length === 0) {
+  console.warn('\n⚠️ 본문에 [이미지 N: …] 마커가 없습니다 → 이미지는 문단 사이에 균등 배치됩니다.')
 }
 if (Array.isArray(post.image_urls) && post.image_urls.length > 0 && !force) {
   console.error('\n이미 image_urls 가 채워져 있습니다. 덮어쓰려면 --force 를 붙이세요.')

@@ -48,26 +48,34 @@ export function isPersistedImageUrl(
 }
 
 /**
- * image_urls 를 정규화한다 — 허용 URL만, 중복 제거, 개수 캡.
- * 저장할 것이 없으면 null(컬럼 미설정)을 반환한다.
+ * image_urls 를 정규화한다 — 허용 URL만, 개수 캡. **위치는 보존한다.**
+ *
+ * ★ 배열 index i 는 본문 `[이미지 i+1]` 마커를 가리키는 **위치 계약**이다
+ *   (서브도메인 블로그 렌더 clinic-site/post-images.ts, 앱 미리보기
+ *    BlogBodyRenderer 모두 같은 매핑을 쓴다).
+ *   그래서 탈락한 항목을 배열에서 빼면 안 된다 — 빼는 순간 뒤 이미지가 앞 번호로
+ *   당겨져 본문 설명과 다른 사진이 붙는다. 탈락분은 null 로 남기고, 의미 없는
+ *   끝쪽 null 만 잘라낸다. 같은 URL 이 두 자리에 쓰이는 것도 허용한다.
+ *
+ * 저장할 것이 하나도 없으면 null(컬럼 미설정)을 반환한다.
  */
 export function sanitizeImageUrls(
   raw: unknown,
   supabaseUrl: string | null | undefined,
-): string[] | null {
+): (string | null)[] | null {
   if (!Array.isArray(raw)) return null;
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const item of raw) {
-    if (!isPersistedImageUrl(item, supabaseUrl)) continue;
+  const items: readonly unknown[] = raw;
+  const out: (string | null)[] = [];
+  for (const item of items.slice(0, MAX_IMAGE_URLS)) {
     // 길이 캡은 저장 단계에서만 적용한다 — 판정 함수에 넣으면 theme.ts 렌더
     // 화이트리스트와 동치가 깨져 "저장은 됐는데 블로그에 안 뜨는" 상태가 생긴다.
-    if (item.length > MAX_URL_LENGTH) continue;
-    if (seen.has(item)) continue;
-    seen.add(item);
+    if (!isPersistedImageUrl(item, supabaseUrl) || item.length > MAX_URL_LENGTH) {
+      out.push(null);
+      continue;
+    }
     out.push(item);
-    if (out.length >= MAX_IMAGE_URLS) break;
   }
+  while (out.length > 0 && out[out.length - 1] === null) out.pop();
   return out.length > 0 ? out : null;
 }
 

@@ -81,11 +81,18 @@ test('isPersistedImageUrl: clinic-site/theme.ts 화이트리스트와 판정이 
   }
 });
 
-test('sanitizeImageUrls: 허용 URL만 남기고 중복을 제거한다', () => {
+// ★ 위치 계약: index i = 본문 [이미지 i+1]. 탈락분을 빼면 뒤 이미지가 앞 번호로
+//   당겨져 본문 설명과 다른 사진이 붙는다(서브블로그 렌더 post-images.ts 와 동일 계약).
+test('sanitizeImageUrls: 탈락분은 빼지 않고 null 로 자리를 남긴다', () => {
   const a = asset('u1/a.png');
   const b = asset('u1/b.png');
   const result = sanitizeImageUrls([a, 'data:image/png;base64,AAAA', b, a, 42], SUPABASE);
-  assert.deepEqual(result, [a, b]);
+  assert.deepEqual(result, [a, null, b, a]);
+});
+
+test('sanitizeImageUrls: 끝쪽 빈 자리는 잘라낸다', () => {
+  const a = asset('u1/a.png');
+  assert.deepEqual(sanitizeImageUrls([a, 'data:image/png;base64,AAAA', null], SUPABASE), [a]);
 });
 
 test('sanitizeImageUrls: 통과분이 없으면 null(컬럼 미설정)', () => {

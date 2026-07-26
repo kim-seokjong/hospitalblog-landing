@@ -22,6 +22,7 @@ import {
   toImageUrlList,
 } from '../post-images.ts';
 import { isAllowedClinicAssetUrl } from '../theme.ts';
+import { sanitizeImageUrls } from '../../saved-post-fields.ts';
 import { renderBodyHtml } from '../../geo-export.ts';
 import {
   buildArticleSchema,
@@ -254,8 +255,19 @@ describe('renderBodyHtml + 이미지', () => {
     const images = buildClinicPostImages(body, [IMG1], SUPABASE, '제목');
     const html = renderBodyHtml(body, images);
     assert.ok(!html.includes('[이미지'));
-    // 마커를 먼저 제거하므로 소제목 판정이 정상 동작한다
+    // 마커를 먼저 분리하므로 소제목 판정이 정상 동작한다
     assert.ok(html.includes('<h2>상담 전 확인할 것</h2>'));
+    // 인라인 마커도 "그 자리"다 — 소제목 바로 뒤에 이미지가 들어간다
+    assert.ok(html.indexOf('<h2>상담 전 확인할 것</h2>') < html.indexOf(IMG1));
+    assert.ok(html.indexOf(IMG1) < html.indexOf('뒤 단락 문장입니다.'));
+  });
+
+  it('인라인 마커가 있으면 균등 배치 폴백을 타지 않는다', () => {
+    // 마커 1개 + 이미지 2장 → 2장째만 본문 끝(규칙 4). 균등 배치(규칙 3)가 아니다.
+    const body = '앞 단락 문장입니다.\n\n상담 전 확인할 것 [이미지 1: 진료실]\n\n뒤 단락 문장입니다.';
+    const images = buildClinicPostImages(body, [IMG1, IMG2], SUPABASE, '제목');
+    const parts = renderBodyHtml(body, images).split('\n');
+    assert.ok(parts[parts.length - 1].includes(IMG2));
   });
 
   it('마커 없는 줄의 공백은 손대지 않는다 (기존 렌더 회귀 방지)', () => {
@@ -338,6 +350,21 @@ describe('pickLeadImageUrl', () => {
       '제목',
     );
     assert.deepEqual(toImageUrlList(images), [IMG2, IMG3]);
+  });
+});
+
+describe('저장 ↔ 렌더 위치 계약 왕복', () => {
+  it('빈 자리가 있는 배열을 다시 저장해도 자리가 유지된다', () => {
+    // 저장 경로(sanitizeImageUrls)가 압축하면, 다음 저장 때 3번 사진이 2번 자리로
+    // 당겨져 본문 설명과 어긋난다. 두 경로의 계약이 같아야 한다.
+    const stored = [IMG1, null, IMG3];
+    assert.deepEqual(sanitizeImageUrls(stored, SUPABASE), [IMG1, null, IMG3]);
+    assert.deepEqual(toClinicImageSlots(stored, SUPABASE), [IMG1, null, IMG3]);
+  });
+
+  it('같은 사진을 두 자리에 써도 저장·렌더 양쪽에서 유지된다', () => {
+    assert.deepEqual(sanitizeImageUrls([IMG1, IMG1], SUPABASE), [IMG1, IMG1]);
+    assert.deepEqual(toClinicImageSlots([IMG1, IMG1], SUPABASE), [IMG1, IMG1]);
   });
 });
 
