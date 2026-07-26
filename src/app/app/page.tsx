@@ -1072,9 +1072,11 @@ export default function AppPage() {
     const originalContent = originalBodyRef.current;
     // 컴플라이언스 증빙 스냅샷 — A층(편집 반영 재검사분) + B층(생성 시 LLM 심의) 결과를
     // 저장 시점에 정리해 함께 보관한다(리포트 페이지 /app/report/[postId]에서 재사용).
+    // autoFixed: 생성 시 A층이 잡아 자동교정한 위반 — 최종 본문엔 없으나 "검사가 작동했다"는 증빙.
     const complianceReport = buildComplianceReport({
       compliance: content.compliance,
       aiReview: content.aiReview ?? null,
+      autoFixed: content.autoFixedViolations ?? [],
     });
     copySaveQueueRef.current = copySaveQueueRef.current.then(async () => {
       try {

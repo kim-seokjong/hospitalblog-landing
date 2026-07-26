@@ -63,6 +63,11 @@ export interface BlogContent {
   charCount: number;
   compliance: ComplianceResult;
   autoReplaced?: { word: string; suggestion: string }[];
+  /**
+   * A층이 검출해 자동교정한 위반 — 최종 본문에는 없지만 "검사가 작동했다"는 증빙.
+   * compliance_report.keyword.autoFixed 로 저장된다.
+   */
+  autoFixedViolations?: ComplianceViolation[];
   imageGuidelines: ImageGuidelines;
   seoAnalysis: {
     keywordCount: number;

@@ -92,12 +92,22 @@ test('checkCompliance: 확대 최상급/보장 표현 검출', () => {
   assert.ok(r2.violations.some((v) => v.word === '평생보장'));
 });
 
-// ── 확대 커버리지: 유인·이벤트·지역+최상급 경고(패턴) ──
-test('checkCompliance: 유인·지역최상급 표현은 warnings 로 표면화', () => {
-  const r1 = checkCompliance('선착순 반값 이벤트를 진행합니다.');
-  assert.ok(r1.warnings.length > 0);
-  const r2 = checkCompliance('수성구 최고의 진료를 약속합니다.');
-  assert.ok(r2.warnings.some((w) => w.includes('지역명') || w.includes('배타')));
+// ── 확대 커버리지: 유인·이벤트·지역+최상급 (2026-W30 부터 violations 로 승격) ──
+// 승격 이유: 등급이 LOW 에 머물러 "명백한 유인·배타 표현"이 검수 우선순위에서 밀렸다.
+test('checkCompliance: 유인 표현은 MEDIUM 위반으로 승격된다', () => {
+  const r = checkCompliance('선착순 반값 이벤트를 진행합니다.');
+  assert.ok(
+    r.violations.some((v) => v.severity === 'MEDIUM' && v.rule.includes('유인')),
+    '유인 표현은 MEDIUM 위반이어야 한다',
+  );
+});
+
+test('checkCompliance: 지역명+최상급은 HIGH 위반으로 승격된다', () => {
+  const r = checkCompliance('수성구 최고의 진료를 약속합니다.');
+  assert.ok(
+    r.violations.some((v) => v.severity === 'HIGH'),
+    '지역명+최상급은 HIGH 위반이어야 한다',
+  );
 });
 
 // ── 빈 입력 ──
@@ -212,23 +222,23 @@ test('autoFix(W28): 신규 상품명·유인 표현은 자동치환하지 않음
   assert.equal(fixed, '젭바운드 안내와 선착순 한정 수량 무료 검사 안내');
 });
 
-// ── 2군: 유인 표현 → warnings(LOW 경로)로 검출·표시만 ──
-test('checkCompliance(W28): "선착순 이벤트" → 유인 경고 검출', () => {
+// ── 2군: 유인 표현 → 2026-W30 부터 MEDIUM 위반으로 승격(검출·표시만, 치환 없음) ──
+test('checkCompliance(W28): "선착순 이벤트" → 유인 위반 검출', () => {
   const r = checkCompliance('선착순 이벤트를 진행합니다.');
-  assert.ok(r.warnings.some((w) => w.includes('유인')));
+  assert.ok(r.violations.some((v) => v.rule.includes('유인')));
 });
 
-test('checkCompliance(W28): "한정 수량"·"동반 방문"·"지인 소개" → 유인 경고 검출', () => {
+test('checkCompliance(W28): "한정 수량"·"동반 방문"·"지인 소개" → 유인 위반 검출', () => {
   for (const text of ['한정 수량으로 준비했습니다.', '동반 방문 시 안내해 드립니다.', '지인 소개로 오시는 분들이 많습니다.']) {
     const r = checkCompliance(text);
-    assert.ok(r.warnings.some((w) => w.includes('유인')), `"${text}" 에서 유인 경고가 나와야 함`);
+    assert.ok(r.violations.some((v) => v.rule.includes('유인')), `"${text}" 에서 유인 위반이 나와야 함`);
   }
 });
 
-test('checkCompliance(W28): "무료 검사"·"무료 시술" → 유인 경고 검출', () => {
+test('checkCompliance(W28): "무료 검사"·"무료 시술" → 유인 위반 검출', () => {
   for (const text of ['무료 검사를 제공합니다.', '무료 시술 기회를 드립니다.']) {
     const r = checkCompliance(text);
-    assert.ok(r.warnings.some((w) => w.includes('유인')), `"${text}" 에서 유인 경고가 나와야 함`);
+    assert.ok(r.violations.some((v) => v.rule.includes('유인')), `"${text}" 에서 유인 위반이 나와야 함`);
   }
 });
 
@@ -240,9 +250,9 @@ test('checkCompliance(W28): "무료 상담 가능" 은 유인 경고 오발 없�
 });
 
 // ── 2군: 비급여 면제 → 경고, "책임 면제 조항"은 오탐 배제 ──
-test('checkCompliance(W28): "비급여 검사비 면제" → 면제 경고 검출', () => {
+test('checkCompliance(W28): "비급여 검사비 면제" → 면제 위반 검출(MEDIUM 승격)', () => {
   const r = checkCompliance('비급여 검사비 면제 혜택을 드립니다.');
-  assert.ok(r.warnings.some((w) => w.includes('면제')));
+  assert.ok(r.violations.some((v) => v.rule.includes('면제') || v.rule.includes('유인')));
 });
 
 test('checkCompliance(W28): "책임 면제 조항" 은 면제 경고 오발 없음', () => {
@@ -252,15 +262,18 @@ test('checkCompliance(W28): "책임 면제 조항" 은 면제 경고 오발 없�
 });
 
 // ── 2군: 경험담 위장 표현 → warnings 검출 ──
-test('checkCompliance(W28): "실제 후기입니다" → 후기 경고 검출', () => {
+test('checkCompliance(W28): "실제 후기입니다" → 후기 위반 검출(MEDIUM 승격)', () => {
   const r = checkCompliance('실제 후기입니다. 참고하세요.');
-  assert.ok(r.warnings.some((w) => w.includes('후기') || w.includes('체험담')));
+  assert.ok(r.violations.some((v) => v.rule.includes('후기') || v.rule.includes('경험담')));
 });
 
-test('checkCompliance(W28): "내돈내산"·"직접 받아보니" → 경험담 위장 경고 검출', () => {
+test('checkCompliance(W28): "내돈내산"·"직접 받아보니" → 경험담 위장 위반 검출', () => {
   for (const text of ['내돈내산 솔직 리뷰를 남깁니다.', '직접 받아보니 어땠는지 공유합니다.']) {
     const r = checkCompliance(text);
-    assert.ok(r.warnings.some((w) => w.includes('후기') || w.includes('체험담')), `"${text}" 에서 경험담 경고가 나와야 함`);
+    assert.ok(
+      r.violations.some((v) => v.rule.includes('후기') || v.rule.includes('경험담')),
+      `"${text}" 에서 경험담 위반이 나와야 함`,
+    );
   }
 });
 
@@ -278,12 +291,13 @@ test('checkCompliance(W28): "전문가의 의견을 인용하면" 은 오탐 없
   assert.equal(r.violations.length, 0);
 });
 
-// ── 2군: LOW 경로는 하드블록·치환에 관여하지 않음(warnings 만) ──
-test('checkCompliance(W28): 2군 유인 표현은 violations 가 아닌 warnings 로만 표면화', () => {
-  const r = checkCompliance('한정 수량, 동반 방문, 지인 소개 안내.');
-  assert.equal(r.violations.length, 0, '2군은 violations(치환·게이트 경로)에 넣지 않는다');
-  assert.ok(r.warnings.length > 0);
-  assert.equal(r.filteredContent, '한정 수량, 동반 방문, 지인 소개 안내.', '원문 무변형');
+// ── 2군: 위반으로 승격되더라도 **자동치환은 하지 않는다**(검출·표시만) ──
+// 이 단언이 핵심 — 패턴 승격이 본문을 건드리기 시작하면 문맥 파괴 회귀다.
+test('checkCompliance(W28): 2군 유인 표현은 위반으로 잡히되 원문은 변형하지 않는다', () => {
+  const src = '한정 수량, 동반 방문, 지인 소개 안내.';
+  const r = checkCompliance(src);
+  assert.ok(r.violations.length > 0, '유인 표현은 위반으로 표면화되어야 한다');
+  assert.equal(r.filteredContent, src, '원문 무변형 — 패턴 승격분은 자동치환 금지');
 });
 
 // ── 보존 회귀: 기존 정상 문구들이 여전히 통과하는지 ──
@@ -378,20 +392,21 @@ test('checkCompliance(W29): "실손보험 가입 여부 확인" 은 실손 경�
 });
 
 // ── 후기 유인 표현(LOW): 체험단 모집·후기 이벤트·후기 작성 시 → 검출·표시만 ──
-test('checkCompliance(W29): "체험단 모집"·"후기 이벤트"·"후기 작성 시" → 후기 유인 경고 검출', () => {
+test('checkCompliance(W29): "체험단 모집"·"후기 이벤트"·"후기 작성 시" → 후기 유인 위반 검출', () => {
   for (const text of ['체험단 모집 안내입니다.', '후기 이벤트에 참여하세요.', '후기 작성 시 안내해 드립니다.']) {
     const r = checkCompliance(text);
     assert.ok(
-      r.warnings.some((w) => w.includes('대가성 후기')),
-      `"${text}" 에서 대가성 후기 유인 경고가 나와야 함`
+      r.violations.some((v) => v.rule.includes('후기') || v.rule.includes('유인')),
+      `"${text}" 에서 대가성 후기 유인 위반이 나와야 함`
     );
   }
 });
 
-test('checkCompliance(W29): 후기 유인 표현은 violations 가 아닌 warnings 로만(원문 무변형)', () => {
-  const r = checkCompliance('체험단 모집 안내.');
-  assert.equal(r.violations.length, 0);
-  assert.equal(r.filteredContent, '체험단 모집 안내.', '원문 무변형');
+test('checkCompliance(W29): 후기 유인 표현은 위반이되 원문은 변형하지 않는다', () => {
+  const src = '체험단 모집 안내.';
+  const r = checkCompliance(src);
+  assert.ok(r.violations.length > 0);
+  assert.equal(r.filteredContent, src, '원문 무변형 — 자동치환 금지');
 });
 
 // ── autoFix 는 W29 신규 항목을 자동치환하지 않음 ──

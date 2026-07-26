@@ -13,6 +13,7 @@ import {
   isRiskyGrade,
   buildAuditResults,
   COMPLIANCE_ENGINE_VERSION,
+  COMPLIANCE_REPORT_SCHEMA_VERSION,
   AUDIT_COOLDOWN_HOURS,
 } from '../compliance-report.ts';
 
@@ -82,7 +83,7 @@ test('buildComplianceReport: A층 위반+B층 지적을 스냅샷으로 정리',
       ],
     },
   });
-  assert.equal(report.version, 1);
+  assert.equal(report.version, COMPLIANCE_REPORT_SCHEMA_VERSION);
   assert.equal(report.engine, COMPLIANCE_ENGINE_VERSION);
   assert.equal(report.grade, 'CRITICAL');
   assert.equal(report.needsManualReview, true);
