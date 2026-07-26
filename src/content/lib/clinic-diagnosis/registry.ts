@@ -88,6 +88,9 @@ export function stripInstitutionSuffix(value: string): string {
 export function deriveBrandCore(name: string): string {
   const value = (name ?? '').trim();
   if (!value) return '';
+  // 이름이 진료과 토큰으로 시작하면 브랜드 부분이 없다 ("성형외과의원" → '').
+  // 이 가드가 없으면 "성형외과의원"에서 "외과"(index 2)에 걸려 "성형"이 나온다.
+  if (SPECIALTY_TOKENS.some((token) => value.startsWith(token))) return '';
   let earliest = -1;
   for (const token of SPECIALTY_TOKENS) {
     const idx = value.indexOf(token);
