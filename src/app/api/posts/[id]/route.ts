@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
+import { normalizeKeywordInput } from '@/content/lib/keyword-list';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -100,6 +101,9 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
             return NextResponse.json({ error: '본문은 비워둘 수 없습니다.' }, { status: 400 });
           }
           updates[field] = val.trim();
+        } else if (field === 'keyword') {
+          // 저장 경계에서 정규화 — 빈 토큰·중복 제거. 순위 추적이 이 값을 콤마로 분리해 쓴다.
+          updates[field] = normalizeKeywordInput(body[field]) || null;
         } else if (field === 'tags') {
           updates[field] = Array.isArray(body[field]) ? body[field] : null;
         } else if (field === 'status') {

@@ -44,6 +44,8 @@ interface RankingRow {
   post_id: string | null;
   rank: number | null;
   checked_at: string;
+  /** 마이그 052 이후. 미적용 환경에서는 undefined */
+  status?: string | null;
 }
 
 interface ConversionRow {
@@ -96,16 +98,47 @@ export async function GET() {
       );
     }
 
-    // 2) 글별 최신 순위 (최신순 조회 → 글당 첫 관측치만 사용)
-    const { data: rankData } = await supabase
-      .from('post_rankings')
-      .select('post_id, rank, checked_at')
-      .order('checked_at', { ascending: false })
-      .limit(MAX_RANK_ROWS);
+    // 2) 글별 최신 순위.
+    //    ★ 순위는 이제 "글 × 키워드" 단위로 기록된다 → 글당 첫 행 하나만 보면
+    //      어느 키워드의 순위인지가 임의로 정해진다. 같은 측정일 안에서 가장 좋은
+    //      (숫자가 작은) 순위를 그 글의 대표값으로 쓴다.
+    //    ★ status='failed'/'invalid' 는 측정이 안 된 것이지 "순위권 밖"이 아니므로 제외한다.
+    //      (마이그 052 미적용 환경에서는 status 컬럼이 없어 전부 null → 기존과 동일하게 동작)
+    let rankData: RankingRow[] = [];
+    {
+      const withStatus = await supabase
+        .from('post_rankings')
+        .select('post_id, rank, checked_at, status')
+        .order('checked_at', { ascending: false })
+        .limit(MAX_RANK_ROWS);
+      if (withStatus.error) {
+        const legacy = await supabase
+          .from('post_rankings')
+          .select('post_id, rank, checked_at')
+          .order('checked_at', { ascending: false })
+          .limit(MAX_RANK_ROWS);
+        rankData = (legacy.data ?? []) as RankingRow[];
+      } else {
+        rankData = (withStatus.data ?? []) as RankingRow[];
+      }
+    }
     const latestRankByPost = new Map<string, number | null>();
-    for (const row of (rankData ?? []) as RankingRow[]) {
-      if (!row.post_id || latestRankByPost.has(row.post_id)) continue;
-      latestRankByPost.set(row.post_id, row.rank);
+    const latestDayByPost = new Map<string, string>();
+    for (const row of rankData) {
+      if (!row.post_id) continue;
+      if (row.status === 'failed' || row.status === 'invalid') continue;
+      const day = row.checked_at.slice(0, 10);
+      const seenDay = latestDayByPost.get(row.post_id);
+      if (seenDay === undefined) {
+        latestDayByPost.set(row.post_id, day);
+        latestRankByPost.set(row.post_id, row.rank);
+        continue;
+      }
+      if (day !== seenDay) continue; // 최신 측정일 것만 본다
+      const best = latestRankByPost.get(row.post_id) ?? null;
+      if (row.rank !== null && (best === null || row.rank < best)) {
+        latestRankByPost.set(row.post_id, row.rank);
+      }
     }
 
     // 3) 최근 영상(멀티채널) 변환 이력 (RLS select_own 정책으로 본인 것만)

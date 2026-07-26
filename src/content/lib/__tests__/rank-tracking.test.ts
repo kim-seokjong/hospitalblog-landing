@@ -2,13 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   findRankInResults,
+  findPostRank,
+  titleSimilarity,
   extractBlogId,
   extractNaverBlogId,
   type BlogSearchResult,
 } from '../rank-tracking.ts';
 
-function r(link: string, bloggername = ''): BlogSearchResult {
-  return { link, bloggername };
+function r(link: string, bloggername = '', title = ''): BlogSearchResult {
+  return { link, bloggername, title };
 }
 
 // ── extractBlogId ──
@@ -134,12 +136,94 @@ test('link 매칭 실패 시 bloggername 매칭', () => {
   assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 1);
 });
 
-test('가장 먼저 매칭되는 결과의 1-base 위치 반환', () => {
+test('내 글이 1건만 잡히면 그 위치 반환', () => {
+  const results = [
+    r('https://blog.naver.com/other/1'),
+    r('https://blog.naver.com/happyclinic/2'),
+  ];
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 2);
+});
+
+// ★ 회귀 (수정 전 동작): 같은 블로그 글 2편이 잡히면 예전 로직은 둘 다 "1위"로 기록했다.
+//    이제는 제목 단서 없이 단정하지 않는다 → ambiguous.
+test('★ 같은 블로그 글이 여럿인데 제목 단서가 없으면 순위를 단정하지 않는다', () => {
   const results = [
     r('https://blog.naver.com/happyclinic/1'),
     r('https://blog.naver.com/happyclinic/2'),
   ];
-  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), 1);
+  const outcome = findPostRank(results, { blogId: 'happyclinic' });
+  assert.equal(outcome.found, false);
+  assert.equal(outcome.found === false && outcome.ambiguous, true);
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic' }), null);
+});
+
+test('★ 제목이 있으면 같은 블로그 글 여러 편 중 올바른 글을 고른다', () => {
+  const results = [
+    r('https://blog.naver.com/happyclinic/1', '', '구로동치과 신경치료 실패 줄이는 3가지 주의사항'),
+    r('https://blog.naver.com/happyclinic/2', '', '구로동치과 신경치료 전 알아야 할 4가지 핵심 체크리스트'),
+  ];
+  const outcome = findPostRank(results, {
+    blogId: 'happyclinic',
+    title: '구로동치과 신경치료 전 알아야 할 4가지 핵심 체크리스트',
+  });
+  assert.equal(outcome.found, true);
+  assert.equal(outcome.found && outcome.match.rank, 2);
+  assert.equal(outcome.found && outcome.match.matchedBy, 'title');
+});
+
+test('publishedUrl 이 있으면 제목·blogId 보다 우선한다', () => {
+  const results = [
+    r('https://blog.naver.com/happyclinic/1', '', '완전히 똑같은 제목'),
+    r('https://blog.naver.com/happyclinic/2', '', '다른 제목'),
+  ];
+  const outcome = findPostRank(results, {
+    blogId: 'happyclinic',
+    title: '완전히 똑같은 제목',
+    publishedUrl: 'https://blog.naver.com/happyclinic/2',
+  });
+  assert.equal(outcome.found && outcome.match.rank, 2);
+  assert.equal(outcome.found && outcome.match.matchedBy, 'url');
+});
+
+// ── startOffset (페이지 순회) ──
+test('★ startOffset 으로 2페이지 이후 순위를 계산한다 (101위~)', () => {
+  const results = [r('https://blog.naver.com/happyclinic/1')];
+  const outcome = findPostRank(results, { blogId: 'happyclinic', startOffset: 100 });
+  assert.equal(outcome.found && outcome.match.rank, 101);
+});
+
+test('startOffset 미지정/비정상 값은 0 취급', () => {
+  const results = [r('https://blog.naver.com/happyclinic/1')];
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic', startOffset: -5 }), 1);
+  assert.equal(findRankInResults(results, { blogId: 'happyclinic', startOffset: NaN }), 1);
+});
+
+test('matchedLink 는 원본 표기(대소문자 보존)를 돌려준다', () => {
+  const results = [r('https://blog.naver.com/HappyClinic/223456')];
+  const outcome = findPostRank(results, { blogId: 'happyclinic' });
+  assert.equal(outcome.found && outcome.match.link, 'https://blog.naver.com/HappyClinic/223456');
+});
+
+// ── titleSimilarity ──
+test('titleSimilarity: 동일 제목은 1', () => {
+  assert.equal(titleSimilarity('사랑니 발치 총정리', '사랑니 발치 총정리'), 1);
+});
+
+test('titleSimilarity: 특수문자·공백 차이는 무시', () => {
+  assert.equal(titleSimilarity('사랑니 발치, 총정리!', '사랑니발치총정리'), 1);
+});
+
+test('titleSimilarity: 말줄임(부분 포함)도 강한 일치', () => {
+  assert.equal(titleSimilarity('구로동치과 신경치료 실패 줄이는 3가지 주의사항', '구로동치과 신경치료 실패 줄이는'), 1);
+});
+
+test('titleSimilarity: 무관한 제목은 낮다', () => {
+  assert.ok(titleSimilarity('사랑니 발치 총정리', '임플란트 건강보험 적용 기준') < 0.3);
+});
+
+test('titleSimilarity: 빈값은 0', () => {
+  assert.equal(titleSimilarity('', '무언가'), 0);
+  assert.equal(titleSimilarity(null, undefined), 0);
 });
 
 // ── 미발견 / 방어 ──

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
 import { validateComplianceReport } from '@/content/lib/compliance-report';
+import { normalizeKeywordInput } from '@/content/lib/keyword-list';
 
 export async function GET(req: NextRequest) {
   try {
@@ -90,7 +91,10 @@ export async function POST(req: NextRequest) {
       user_id: user.id,
       title: title.trim(),
       content: content.trim(),
-      keyword: keyword ?? null,
+      // 키워드 정규화 — 빈 토큰·중복·연속공백 제거 ("조원동치과, , 사랑니" → "조원동치과, 사랑니").
+      // ★ 순위 추적은 이 값을 콤마로 분리해 키워드별로 검색한다. 빈 토큰이 섞여 있으면
+      //   글 자체는 멀쩡해도 추적 단계에서 잡음이 된다 → 저장 경계에서 한 번 정리한다.
+      keyword: normalizeKeywordInput(keyword) || null,
       tags: Array.isArray(tags) ? tags : null,
       specialty: specialty ?? null,
       seo_score: typeof seo_score === 'number' ? seo_score : null,

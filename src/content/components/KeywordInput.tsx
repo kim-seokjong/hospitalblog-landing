@@ -4,6 +4,7 @@ import { useState, useRef, type ReactNode } from 'react';
 import type { WritingStyle, OptimizationMode, TargetSite, Readability } from '@/types';
 import SpecialtyKeywordSuggester from '@/content/components/SpecialtyKeywordSuggester';
 import GoldenKeywordFinder from '@/content/components/GoldenKeywordFinder';
+import { splitKeywords, MAX_TRACKED_KEYWORDS } from '@/content/lib/keyword-list';
 
 interface KeywordInputProps {
   onSubmit: (keyword: string, hospitalType: string, additionalInfo: string, writingStyle: WritingStyle, region: string, optimizationMode: OptimizationMode, targetSite: TargetSite, readability: Readability, useVoiceDna: boolean, viralHook: boolean, storytelling: boolean, reverseAnalysis: boolean) => void;
@@ -137,15 +138,22 @@ export default function KeywordInput({ onSubmit, isLoading, defaultKeyword, defa
   const effectiveHospitalType = lockedHospitalType || hospitalType;
 
   // 추천 칩 공용 핸들러 — 선택 시 입력창에 추가, 해제 시 제거 (불변 갱신)
+  //
+  // ★ 예전 구현은 빈 토큰을 만들었다: prev 가 "조원동치과," 인 상태에서 칩을 고르면
+  //   "조원동치과,, 사랑니" 가 되고, 해제 경로의 filter 도 빈 문자열을 걸러내지 않아
+  //   "조원동치과, , 사랑니" 가 그대로 저장됐다. 이 값이 순위 추적에서 한 덩어리 질의로
+  //   나가면서 두 달간 어떤 글도 검색에 잡히지 않았다.
+  //   → splitKeywords 로 항상 정규화한다 (빈 토큰·중복·연속공백 제거).
   const applyKeywordSelection = (kw: string, isSelected: boolean) => {
-    if (isSelected) {
-      setKeyword((prev) => (prev ? `${prev}, ${kw}` : kw));
-    } else {
-      setKeyword((prev) => {
-        const parts = prev.split(',').map((k) => k.trim()).filter((k) => k !== kw);
-        return parts.join(', ');
-      });
-    }
+    setKeyword((prev) => {
+      const parts = splitKeywords(prev, MAX_TRACKED_KEYWORDS);
+      const next = isSelected
+        ? (parts.some((k) => k.toLowerCase() === kw.trim().toLowerCase())
+            ? parts
+            : [...parts, kw.trim()])
+        : parts.filter((k) => k.toLowerCase() !== kw.trim().toLowerCase());
+      return splitKeywords(next.join(', '), MAX_TRACKED_KEYWORDS).join(', ');
+    });
     setTimeout(() => keywordInputRef.current?.focus(), 0);
   };
 
