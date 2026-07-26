@@ -33,8 +33,13 @@
 --   - 봇/크롤러 제외 판정에 User-Agent 를 쓰지만, 판정 직후 버린다(앱 레벨).
 --
 -- 쓰기 경로: 공개 비콘(/api/clinic-site/ai-referral) → service role → record RPC.
---            비콘은 **서버가 그 페이지를 실제로 렌더했다는 HMAC 서명 토큰**을 함께
---            보내야 한다(앱 레벨 검증). 남의 병원 slug 로는 토큰을 만들 수 없다.
+--            비콘은 HMAC 서명 토큰을 함께 보내야 한다(앱 레벨 검증).
+--            ★토큰이 보증하는 것: 우리 서버가 발급했고(오프라인 위조 불가), 10분 이내이며,
+--              적재되는 (slug·source·postId)가 서명 시점과 동일하다.
+--            ★보증하지 않는 것: 사람인지, 실제로 AI 에서 유입됐는지, 처음 쓰는 토큰인지.
+--              발급 경로(/api/clinic-site/ai-referral/token)도 병원 페이지도 공개라
+--              누구나 유효 토큰을 얻을 수 있다. 즉 "위조 방어"가 아니라 위조 비용을
+--              올리는 장치이며, 피해 규모를 실제로 묶는 것은 발신원 레이트리밋이다.
 -- 읽기 경로: 마이페이지 → summary RPC (SECURITY INVOKER → RLS 그대로 적용).
 
 create table if not exists public.clinic_ai_referrals (
