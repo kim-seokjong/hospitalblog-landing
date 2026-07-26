@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { validateSlug, clinicSiteUrl } from '@/content/lib/clinic-site/slug';
 import { getClinicBySlug, getPublishedPostRefs } from '@/content/lib/clinic-site/data';
+import { getClinicTheme } from '@/content/lib/clinic-site/theme-data';
+import { isEmptyClinicHours } from '@/content/lib/clinic-site/hours';
+import { hasClinicAboutContent } from '@/content/lib/clinic-site/about';
 
 /**
  * 병원 서브도메인 블로그 — sitemap.xml (공개, 인증 없음).
@@ -47,8 +50,22 @@ export async function GET(_req: Request, { params }: RouteContext) {
       });
     }
 
+    // 병원 소개 페이지는 "보여줄 내용이 있을 때만" 존재한다 —
+    // 페이지(404 판정)·홈 링크와 반드시 같은 기준을 써야 사이트맵에만 있는 죽은 URL 이 안 생긴다.
+    const theme = await getClinicTheme(clinic.userId);
+    const hasAbout = hasClinicAboutContent({
+      description: theme.description,
+      hasHours: !isEmptyClinicHours(clinic.hours),
+      address: clinic.address,
+      phone: clinic.phone,
+      galleryCount: theme.galleryUrls.length,
+    });
+
     const urls: string[] = [
       `  <url>\n    <loc>${escapeXml(clinicSiteUrl(validated.slug))}</loc>\n  </url>`,
+      ...(hasAbout
+        ? [`  <url>\n    <loc>${escapeXml(clinicSiteUrl(validated.slug, '/about'))}</loc>\n  </url>`]
+        : []),
       ...posts.map((post) => {
         const loc = escapeXml(clinicSiteUrl(validated.slug, `/posts/${post.id}`));
         const lastmod = post.publishedAt

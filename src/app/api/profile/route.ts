@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/dev/lib/supabase/server'
 import { validateSlug } from '@/content/lib/clinic-site/slug'
 import { isValidCadence } from '@/content/lib/clinic-site/auto-publish'
+import { validateClinicHoursInput } from '@/content/lib/clinic-site/hours'
 
 interface ProfileUpdateBody {
   full_name?: string
@@ -12,6 +13,8 @@ interface ProfileUpdateBody {
   hospital_phone?: string
   /** 진료과 — 서브도메인 블로그·JSON-LD 가 표시하는 값(가입 후 수정 가능해야 한다). */
   hospital_type?: string
+  /** 진료시간(공개) — 검증·정규화는 clinic-site/hours.ts 가 담당한다. */
+  hospital_hours?: unknown
   position?: string
   specialty?: string
   specialty_detail?: string
@@ -44,9 +47,11 @@ const PROFILE_COLS_FULL = `${PROFILE_COLS_WITH_NAVER}, instagram_handle, threads
 const PROFILE_COLS_WITH_SITE = `${PROFILE_COLS_FULL}, site_slug`
 const PROFILE_COLS_WITH_SCHEDULE = `${PROFILE_COLS_WITH_SITE}, site_publish_cadence`
 const PROFILE_COLS_WITH_PHONE = `${PROFILE_COLS_WITH_SCHEDULE}, hospital_phone`
+const PROFILE_COLS_WITH_HOURS = `${PROFILE_COLS_WITH_PHONE}, hospital_hours`
 
 // 넓은 것 → 좁은 것 순. 42703(컬럼 없음)이면 다음 후보로 재시도한다.
 const SELECT_CANDIDATES: readonly string[] = [
+  PROFILE_COLS_WITH_HOURS,
   PROFILE_COLS_WITH_PHONE,
   PROFILE_COLS_WITH_SCHEDULE,
   PROFILE_COLS_WITH_SITE,
@@ -142,7 +147,7 @@ export async function PUT(req: NextRequest) {
       'specialty', 'specialty_detail', 'hospital_desc', 'hospital_keywords',
       'region', 'sms_enabled', 'sms_phone', 'notify_expiry', 'notify_usage',
       'naver_blog_url', 'instagram_handle', 'threads_handle', 'youtube_channel_id',
-      'site_slug', 'site_publish_cadence',
+      'site_slug', 'site_publish_cadence', 'hospital_hours',
     ]
 
     const nullableSet = new Set<string>(NULLABLE_TEXT_COLS as readonly string[])
@@ -187,6 +192,16 @@ export async function PUT(req: NextRequest) {
       updates.hospital_type = value
     }
 
+    // hospital_hours — 공개 페이지·JSON-LD 로 나가므로 검증된 형태만 저장한다.
+    // 형식이 깨진 값은 조용히 버리지 않고 400 으로 돌려준다("저장했는데 사라졌다" 방지).
+    if ('hospital_hours' in updates) {
+      const validated = validateClinicHoursInput(updates.hospital_hours)
+      if (!validated.ok) {
+        return NextResponse.json({ error: validated.reason }, { status: 400 })
+      }
+      updates.hospital_hours = validated.hours
+    }
+
     // site_publish_cadence — 허용값(off/auto/weekly/biweekly)만. NOT NULL 컬럼이라 빈 값/미허용값은 거부.
     if ('site_publish_cadence' in updates) {
       if (!isValidCadence(updates.site_publish_cadence)) {
@@ -200,6 +215,7 @@ export async function PUT(req: NextRequest) {
       supabase.from('profiles').update(payload).eq('id', user.id)
 
     const PEEL_GROUPS_NEWEST_FIRST: readonly (readonly string[])[] = [
+      ['hospital_hours'],
       ['hospital_phone'],
       ['site_publish_cadence'],
       ['site_slug'],

@@ -55,6 +55,13 @@ export interface GeoHospitalProfile {
    */
   telephone?: string | null;
   /**
+   * 진료시간 — schema.org OpeningHoursSpecification 노드 배열.
+   * 검증·조립은 clinic-site/hours.ts 가 하고 여기서는 그대로 싣기만 한다
+   * (geo-schema 는 "프로필에서 파생만" 하는 모듈이라 시간 규칙을 갖지 않는다).
+   * 빈 배열이면 생략된다.
+   */
+  openingHours?: ReadonlyArray<Record<string, unknown>> | null;
+  /**
    * 저자 이름 (profiles.full_name) — 임상 역할(원장·부원장)일 때만 개인 저자로 쓰인다.
    * 없거나 비임상 직책이면 저자는 병원(Organization)으로 파생된다.
    */
@@ -226,6 +233,7 @@ export function buildMedicalClinicSchema(profile: GeoHospitalProfile): JsonLdObj
   const address = normalized(profile.address);
   const logoUrl = normalized(profile.logoUrl);
   const telephone = normalized(profile.telephone);
+  const openingHours = Array.isArray(profile.openingHours) ? profile.openingHours : [];
 
   const postalAddress: JsonLdObject | null = region || address
     ? {
@@ -243,6 +251,7 @@ export function buildMedicalClinicSchema(profile: GeoHospitalProfile): JsonLdObj
     ...(specialty ? { medicalSpecialty: specialty } : {}),
     ...(postalAddress ? { address: postalAddress } : {}),
     ...(telephone ? { telephone } : {}),
+    ...(openingHours.length > 0 ? { openingHoursSpecification: [...openingHours] } : {}),
     ...(logoUrl ? { logo: logoUrl } : {}),
   };
 }
