@@ -24,14 +24,16 @@
 광고진정성 전체 사업 중 일부이며, 닥터포스트는 여러 SaaS 중 하나입니다.
 
 ## 기술 스택
-- Frontend: Next.js 14
-- Database: Supabase
-- 결제: PortOne V2 + 한국결제네트웍스(KPN)
-- AI 글 생성: Claude API (`claude-sonnet-4-6`)
-- AI 이미지: GPT Image (Medium 품질)
+> 프레임워크·DB·배포처럼 `package.json`과 설정 파일을 보면 아는 것은 여기 적지 않는다.
+> **코드만 봐서는 모르거나, 틀리면 사고가 나는 것만** 남긴다.
+
+- 결제: PortOne V2 + 한국결제네트웍스(KPN) — 빌링키 발급 시 amount 선택적(0원은 skip)
+- 인증: **Supabase Auth** (Clerk 아님 — 2026-07-27 점검에서 잘못 적혀 있던 것을 바로잡음)
+- AI 모델: 코드가 진실원천이다. 글=`src/content/lib/anthropic.ts`의 `MODEL`,
+  검수=`medical-compliance-ai.ts`, 관련성 게이트=`relevance-gate.ts`.
+  **이 문서에 모델명을 복사해 두지 않는다** — 교체 후 문서만 낡아 잘못된 모델을 지시하게 된다.
+- AI 이미지: GPT Image (quality=medium 고정 — [[project_doctorpost_image_quality]])
 - AI 영상: Kling AI
-- 인증: Clerk
-- 배포: Vercel (서울 리전)
 
 ## 전체 공통 규칙
 - 항상 한국어로 답변
