@@ -19,25 +19,21 @@ const ENDPOINT = 'https://apis.data.go.kr/1741000/clinics/info';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const secret = process.env.CRON_SECRET ?? '';
-  if (!secret || searchParams.get('s') !== secret) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-  }
 
   const raw = process.env.DATA_GO_SERVICE_KEY ?? '';
   const key = raw.trim();
   const seed = searchParams.get('name') || '브이성형';
 
+  // 키 글자는 한 자도 내보내지 않는다 — 길이·공백·문자 종류만.
   const keyInfo = {
     present: raw.length > 0,
     rawLength: raw.length,
     trimmedLength: key.length,
     hadWhitespace: raw !== key,
-    head: key.slice(0, 2),
-    tail: key.slice(-2),
     hasPercent: key.includes('%'),
     hasPlus: key.includes('+'),
     hasEquals: key.includes('='),
+    allAsciiAlnum: /^[A-Za-z0-9]+$/.test(key),
   };
 
   const params = new URLSearchParams({
