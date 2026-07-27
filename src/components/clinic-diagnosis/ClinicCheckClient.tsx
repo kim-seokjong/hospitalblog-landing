@@ -39,8 +39,16 @@ export default function ClinicCheckClient() {
 
   const [report, setReport] = useState<DiagnosisReport | null>(null);
   const [busyMngNo, setBusyMngNo] = useState<string | null>(null);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  /** 결과를 메일로 보내는 동선의 열쇠 — 서버가 이 토큰으로 리포트를 다시 읽는다. */
+  /**
+   * 결과를 메일로 보내는 동선의 열쇠 — 서버가 이 토큰으로 리포트를 다시 읽는다.
+   *
+   * ★ 토큰은 받아 두되 **공유 주소를 화면에 띄우지 않는다.**
+   *   링크를 눈앞에 그대로 주면 결과를 남기는 데 이메일이 필요 없어지고,
+   *   그러면 우리에게는 아무것도 남지 않는다. 결과를 나중에 다시 열거나
+   *   원장께 전달하는 길은 메일 발송(DiagnosisEmailCapture)로 일원화한다 —
+   *   메일 본문에 같은 /clinic-check/r/[token] 링크가 그대로 들어가므로
+   *   기능이 사라지는 것은 아니다.
+   */
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
 
@@ -56,7 +64,6 @@ export default function ClinicCheckClient() {
       const reqId = ++reqRef.current;
       setBusyMngNo(clinic.mngNo);
       setError(null);
-      setShareUrl(null);
       setShareToken(null);
       try {
         const res = await fetch('/api/clinic-diagnosis', {
@@ -74,7 +81,6 @@ export default function ClinicCheckClient() {
         });
         const data = (await res.json()) as {
           report?: DiagnosisReport;
-          shareUrl?: string | null;
           shareToken?: string | null;
           error?: string;
         };
@@ -84,7 +90,6 @@ export default function ClinicCheckClient() {
           return;
         }
         setReport(data.report);
-        setShareUrl(data.shareUrl ?? null);
         setShareToken(typeof data.shareToken === 'string' ? data.shareToken : null);
         setShowDetail(false);
         // 퍼널: 결과까지 실제로 도달 (진단 실행 대비 실패율을 여기서 읽는다).
@@ -117,7 +122,6 @@ export default function ClinicCheckClient() {
     setError(null);
     setLookup(null);
     setReport(null);
-    setShareUrl(null);
     setShareToken(null);
     try {
       const res = await fetch('/api/clinic-diagnosis/lookup', {
@@ -291,22 +295,6 @@ export default function ClinicCheckClient() {
                 busy={busyMngNo !== null}
                 onPick={(blogId) => void runDiagnosis(report.clinic, { blogId, siteUrl: '', body: '' })}
               />
-            )}
-
-            {shareUrl && (
-              <div className="mt-6 bg-[#f7f9fb] border border-[#dbe2ea] rounded-2xl px-4 py-4">
-                <p className="text-[13px] font-bold">이 진단 결과를 링크로 보낼 수 있어요</p>
-                <p className="text-[12px] text-[#5b6573] mt-1 mb-2.5 leading-relaxed">
-                  원장님께 그대로 전달하거나 나중에 다시 열어보실 수 있어요 (30일 후 만료).
-                </p>
-                <input
-                  readOnly
-                  value={typeof window !== 'undefined' ? `${window.location.origin}${shareUrl}` : shareUrl}
-                  onFocus={(e) => e.currentTarget.select()}
-                  className={inputClass}
-                  style={{ colorScheme: 'light' }}
-                />
-              </div>
             )}
 
             {!showDetail && (
