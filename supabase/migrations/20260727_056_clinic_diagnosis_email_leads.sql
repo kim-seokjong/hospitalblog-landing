@@ -50,6 +50,16 @@ create table if not exists public.clinic_diagnosis_email_leads (
   sent          boolean not null default false,
   /** 발송 실패 사유 (있을 때만). */
   send_error    text,
+  /**
+   * 요청 IP 의 해시(sha256 앞 32자, 서버 솔트 DIAGNOSIS_EMAIL_IP_SALT).
+   * **원본 IP 는 저장하지 않는다.** 용도는 발송 한도 집계(하루 N회)뿐이며
+   * 개인 식별·추적 목적 조회를 금지한다.
+   *
+   * 왜 필요한가: 이 엔드포인트는 비회원이 우리 도메인 발신 메일을 임의 주소로
+   * 쏘는 통로다. 한도를 인메모리로 세면 서버리스 인스턴스마다 따로 돌아 캡이
+   * 인스턴스 수만큼 곱해진다 — 그래서 이 테이블로 센다.
+   */
+  ip_hash       text,
   source        text not null default 'clinic-check',
   /** 가입 전환 시 연결되는 회원. 미가입 리드는 null. */
   user_id       uuid references public.profiles(id) on delete set null,
@@ -63,11 +73,24 @@ comment on column public.clinic_diagnosis_email_leads.email is
 comment on column public.clinic_diagnosis_email_leads.summary is
   '진단 요약(DiagnosisLeadSummary JSON). 전화·메일 후속에서 그대로 읽는 값 — 추정값 없이 진단이 실제로 확인한 값만 담는다.';
 
-create index if not exists idx_clinic_dx_email_leads_email      on public.clinic_diagnosis_email_leads(email);
+-- 이미 이 파일을 한 번 적용한 환경을 위한 보정(컬럼만 뒤에 추가됨).
+-- ★ 이 파일 하나만 실행하면 되도록 유지한다 — 056 을 쪼개지 않는다.
+alter table public.clinic_diagnosis_email_leads add column if not exists ip_hash text;
+
+comment on column public.clinic_diagnosis_email_leads.ip_hash is
+  '요청 IP 해시(원본 미저장). 발송 한도 집계 전용 — 개인 식별·추적 목적 조회 금지.';
+
+-- 인덱스: 앞의 4개는 조회·영업 배정용, 뒤의 3개는 **발송 한도 집계 전용**이다.
+-- 한도는 전부 "오늘(KST) 이후 created_at" 범위 조회라 (키, created_at desc) 복합이 필요하다.
 create index if not exists idx_clinic_dx_email_leads_mng_no     on public.clinic_diagnosis_email_leads(mng_no);
 create index if not exists idx_clinic_dx_email_leads_created_at on public.clinic_diagnosis_email_leads(created_at desc);
 create index if not exists idx_clinic_dx_email_leads_region     on public.clinic_diagnosis_email_leads(region);
 create index if not exists idx_clinic_dx_email_leads_sent       on public.clinic_diagnosis_email_leads(sent, created_at desc);
+
+-- 한도 집계용 (수신주소 일 N회 / IP 일 N회 / 토큰 일 N회·토큰당 주소 수)
+create index if not exists idx_clinic_dx_email_leads_email_created   on public.clinic_diagnosis_email_leads(email, created_at desc);
+create index if not exists idx_clinic_dx_email_leads_ip_created      on public.clinic_diagnosis_email_leads(ip_hash, created_at desc);
+create index if not exists idx_clinic_dx_email_leads_token_created   on public.clinic_diagnosis_email_leads(share_token, created_at desc);
 
 -- RLS: 정책 없이 활성화만 → anon/authenticated 접근 전면 차단, service role 만 사용.
 -- (이메일이 들어 있는 테이블이라 055 보다 더 엄격하게 다뤄야 한다.)
