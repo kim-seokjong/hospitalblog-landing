@@ -36,13 +36,18 @@ export async function GET(req: NextRequest) {
     allAsciiAlnum: /^[A-Za-z0-9]+$/.test(key),
   };
 
+  // ★실제 lookup 과 동일 조건으로 재현한다. 다르게 부르면 원인을 못 잡는다.
+  const rows = searchParams.get('rows') || '100';
+  const region = searchParams.get('region') || '';
+
   const params = new URLSearchParams({
     serviceKey: key,
     pageNo: '1',
-    numOfRows: '5',
+    numOfRows: rows,
     returnType: 'json',
     'cond[BPLC_NM::LIKE]': seed,
   });
+  if (region) params.set('cond[ROAD_NM_ADDR::LIKE]', region);
 
   const url = `${ENDPOINT}?${params.toString()}`;
   const started = Date.now();
@@ -50,21 +55,54 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } });
     const text = await res.text();
+
+    // 실제 파이프라인이 보는 값들을 그대로 뽑아 본다
+    let shape: Record<string, unknown> = {};
+    try {
+      const j = JSON.parse(text) as Record<string, unknown>;
+      const resp = (j.response ?? j) as Record<string, unknown>;
+      const header = (resp.header ?? {}) as Record<string, unknown>;
+      const body = (resp.body ?? {}) as Record<string, unknown>;
+      const rawItems = body.items as unknown;
+      const itemArr = Array.isArray(rawItems)
+        ? rawItems
+        : rawItems && typeof rawItems === 'object'
+          ? (rawItems as Record<string, unknown>).item
+          : undefined;
+      shape = {
+        rootKeys: Object.keys(j),
+        respKeys: Object.keys(resp),
+        headerResultCode: header.resultCode,
+        headerResultMsg: header.resultMsg,
+        bodyKeys: Object.keys(body),
+        totalCount: body.totalCount,
+        itemsType: Array.isArray(rawItems) ? 'array' : typeof rawItems,
+        itemCount: Array.isArray(itemArr) ? itemArr.length : itemArr ? 1 : 0,
+        firstName: Array.isArray(itemArr) && itemArr[0] ? (itemArr[0] as Record<string, unknown>).BPLC_NM : null,
+        firstStatus: Array.isArray(itemArr) && itemArr[0] ? (itemArr[0] as Record<string, unknown>).SALS_STTS_CD : null,
+      };
+    } catch (e) {
+      shape = { parseError: e instanceof Error ? e.message : String(e) };
+    }
+
     return NextResponse.json({
       keyInfo,
       seed,
-      // 키가 들어간 부분은 잘라내고 쿼리 모양만 보여준다
+      rows,
+      region,
       queryShape: url.replace(encodeURIComponent(key), '<KEY>').slice(0, 300),
       status: res.status,
       contentType: res.headers.get('content-type'),
       elapsedMs: Date.now() - started,
       bodyLength: text.length,
-      bodyHead: text.slice(0, 900),
+      shape,
+      bodyHead: text.slice(0, 400),
     });
   } catch (error) {
     return NextResponse.json({
       keyInfo,
       seed,
+      rows,
       elapsedMs: Date.now() - started,
       fetchError: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
     });
