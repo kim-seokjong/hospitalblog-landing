@@ -238,10 +238,15 @@ export default function ClinicCheckClient() {
           <div ref={resultRef} className="mt-10">
             <DiagnosisReportView report={report} />
 
-            {/* 블로그 특정 실패 시 — 후보를 직접 고르게 한다 (결과 카드의 안내와 짝) */}
-            {report.blog.resolution.kind === 'uncertain' && (
+            {/*
+              블로그 후보 목록.
+              · uncertain : 특정하지 못했다 → 골라 달라고 한다(진단은 나머지 축으로만 나갔다)
+              · assumed   : 1위로 이미 진단했다 → **교체용**으로만 띄운다(흐름을 막지 않는다)
+            */}
+            {(report.blog.resolution.kind === 'uncertain' || report.blog.resolution.kind === 'assumed') && (
               <BlogGuessPicker
                 guesses={report.blog.resolution.guesses}
+                currentBlogId={report.blog.resolution.kind === 'assumed' ? report.blog.blogId : null}
                 busy={busyMngNo !== null}
                 onPick={(blogId) => void runDiagnosis(report.clinic, { blogId, siteUrl: '', body: '' })}
               />

@@ -198,9 +198,23 @@ async function measureBlog(
   const manual = (options.manualBlogId ?? '').trim();
   const resolution = manual
     ? ({ kind: 'confident' as const, guess: { blogId: manual, bloggerName: '', hits: 0, nameInBloggerName: false, titleMentions: 0, confidence: 100 } })
-    : await discoverClinicBlog(clinic.name, clinic.specialty, { env, fetchImpl });
+    : await discoverClinicBlog(
+        {
+          name: clinic.name,
+          specialty: clinic.specialty,
+          // 병원을 이미 특정했으므로 지역·진료과를 블로그 판정에 그대로 쓴다.
+          region: clinic.region,
+          province: clinic.province,
+        },
+        { env, fetchImpl },
+      );
 
-  if (resolution.kind !== 'confident') {
+  /**
+   * confident 뿐 아니라 assumed(1위 후보로 일단 진행)도 측정한다.
+   * 사용자는 이미 병원을 골랐다 — 여기서 또 고르라고 멈추면 진단을 못 보고 이탈한다.
+   * 어느 블로그를 썼는지는 결과 화면 맨 위에서 밝히고 바꿀 수 있게 한다.
+   */
+  if (resolution.kind !== 'confident' && resolution.kind !== 'assumed') {
     return { axis: { ...EMPTY_BLOG_AXIS, checked: true, source: manual ? 'manual' : 'auto', resolution }, sources: [] };
   }
 

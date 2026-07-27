@@ -94,14 +94,36 @@ export interface BlogGuess {
   readonly nameInBloggerName: boolean;
   /** 병원명이 글 제목에 등장한 글 수. */
   readonly titleMentions: number;
+  /**
+   * 병원이 등록된 지역(구·군 또는 시)이 글 제목·본문 앞부분에 등장한 글 수.
+   * ⚠️ 이 필드가 생기기 전에 발급된 공유 리포트에는 없다 — 항상 `?? 0` 으로 읽는다.
+   */
+  readonly regionMentions?: number;
+  /** 병원 진료과가 글 제목·본문 앞부분에 등장한 글 수. (구 리포트에는 없음) */
+  readonly specialtyMentions?: number;
   /** 0~100. 확신도. */
   readonly confidence: number;
 }
 
 export type BlogResolution =
-  /** 확신 임계값을 넘은 단일 후보. */
+  /** 확신 임계값을 넘은 단일 후보 — 블로거명에 병원명이 들어 있는 강한 신호까지 있다. */
   | { readonly kind: 'confident'; readonly guess: BlogGuess }
-  /** 후보는 있으나 확신 부족 — 사용자가 고르거나 직접 입력. */
+  /**
+   * 확신까지는 아니지만 **1위 후보로 일단 진단을 진행**한 상태.
+   *
+   * ★ 왜 만들었나. 사용자는 이미 병원을 한 번 골랐다. 거기서 블로그까지 또 고르라고
+   *   흐름을 끊으면 진단을 못 본 채 이탈한다("왜 또 고르지?" — 대표 실사용 지적).
+   *   대신 **어느 블로그를 썼는지 결과 맨 위에 눈에 띄게 표시**하고 언제든 바꾸게 한다.
+   */
+  | {
+      readonly kind: 'assumed';
+      readonly guess: BlogGuess;
+      /** 바꿔 고를 수 있는 후보 전체(1위 포함). */
+      readonly guesses: readonly BlogGuess[];
+      /** 2위와 점수 차가 작았는가 — "비슷한 후보가 하나 더 있었습니다" 표기용. */
+      readonly close: boolean;
+    }
+  /** 후보는 있으나 이름 신호가 아예 없다 — 사용자가 고르거나 직접 입력. */
   | { readonly kind: 'uncertain'; readonly guesses: readonly BlogGuess[] }
   /** 후보 없음. */
   | { readonly kind: 'none' }
@@ -279,6 +301,22 @@ export interface AiAxis {
 
 /* ── 2단계 ④: 의료광고법 ─────────────────────────────────── */
 
+/**
+ * 검출 1건의 위험 등급 — **모든 지적을 같은 무게로 늘어놓지 않기 위한 구분**.
+ *
+ * prohibited : 의료법이 광고에서 **명시적으로 금지한 유형**에 해당하는 표현.
+ *              (환자 후기·치료경험담 / 치료 전후 비교 사진 / 치료효과 보장·부작용 없음 단정 /
+ *               다른 의료기관과의 비교·비방)
+ *              → 화면에서 빨간 "위험" 배지로 앞세운다.
+ * caution    : 심의에서 자주 지적되지만 **문맥에 따라 갈리는** 표현.
+ *              (최상급 표현, "최신" 주장, 유명인 언급, 이벤트·가격 유인 등)
+ *              → 기존 톤 그대로.
+ *
+ * ⚠️ prohibited 라 해도 **"위반입니다"라고 단정하지 않는다.** 우리는 심의기관이 아니다.
+ *    "의료법이 명시적으로 금지한 유형입니다"까지가 우리가 말할 수 있는 한계다.
+ */
+export type ComplianceRisk = 'prohibited' | 'caution';
+
 export interface ComplianceHit {
   readonly postTitle: string;
   readonly postLink: string;
@@ -287,6 +325,13 @@ export interface ComplianceHit {
   /** 심의에서 자주 지적되는 이유. */
   readonly note: string;
   readonly level: 'review' | 'caution';
+  /**
+   * 위험 등급. ⚠️ 이 필드가 생기기 전에 발급된 공유 리포트에는 없다 —
+   * 읽을 때는 반드시 `hit.risk ?? 'caution'` 로 폴백한다(없는 것을 위험으로 올리지 않는다).
+   */
+  readonly risk?: ComplianceRisk;
+  /** 어떤 금지 유형인가 (prohibited 일 때만). 예: '환자 후기·치료경험담'. */
+  readonly riskLabel?: string;
 }
 
 export interface ComplianceAxis {
@@ -300,6 +345,15 @@ export interface ComplianceAxis {
   readonly hits: readonly ComplianceHit[];
   /** 검출된 글 수. */
   readonly postsWithHits: number;
+  /**
+   * 위험(명시적 금지 유형) 검출 건수 — **표시 상한(MAX_HITS)에 잘리기 전 전체 수**.
+   * 구 리포트에는 없으므로 화면·판정에서는 hits 로 폴백한다.
+   */
+  readonly prohibitedCount?: number;
+  /** 주의 검출 건수 (상한 이전 전체 수). 구 리포트에는 없음. */
+  readonly cautionCount?: number;
+  /** 위험 검출이 있는 글 수. 구 리포트에는 없음. */
+  readonly postsWithProhibited?: number;
 }
 
 /* ── 3단계: 결과 카드 ────────────────────────────────────── */
@@ -309,10 +363,13 @@ export type FindingTone = 'good' | 'warn' | 'unknown';
 /**
  * 결과 화면의 3분류 — 축(블로그/홈페이지/AI/의료광고법)이 아니라 **원장이 할 판단**으로 나눈다.
  *
- * bad     : 못된 점 — 지금 손해를 보고 있는 것 (맨 위, 가장 크게)
- * improve : 개선할 점 — 해두면 나아지는 것
- * good    : 잘된 점 — 이미 되고 있는 것 (짧게, 접어도 됨)
- * unknown : 확인 못 한 것
+ * bad     : 지금 고쳐야 할 것 — 지금 손해를 보고 있거나 리스크를 지고 있는 것 (맨 위, 가장 크게)
+ * improve : 챙기면 좋을 것 — 해두면 나아지는 것
+ * good    : 잘하고 있는 것 — 이미 되고 있는 것 (짧게, 접어도 됨)
+ * unknown : 확인하지 못한 것
+ *
+ * ⚠️ 화면 문구는 `FINDING_GROUP_LABEL`(findings.ts) 한 곳에서만 정한다.
+ *    내부 식별자(bad/improve/good)는 저장된 리포트 호환을 위해 그대로 둔다.
  */
 export type FindingGroup = 'bad' | 'improve' | 'good' | 'unknown';
 

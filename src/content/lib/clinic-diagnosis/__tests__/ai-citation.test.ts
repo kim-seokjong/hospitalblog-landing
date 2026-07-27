@@ -14,7 +14,16 @@ import {
   isEngineSplit,
 } from '../ai-citation.ts';
 import type { CitationProbe } from '../types.ts';
-import { buildComplianceAxis, softenRule, type ComplianceCheckShape } from '../compliance-scan.ts';
+import {
+  buildComplianceAxis,
+  classifyComplianceRisk,
+  complianceRiskCounts,
+  EMPTY_COMPLIANCE_AXIS,
+  prohibitedNote,
+  riskOf,
+  softenRule,
+  type ComplianceCheckShape,
+} from '../compliance-scan.ts';
 
 const OWNED = { blogId: 'vbps_official', siteHost: 'vb.vbeauty.co.kr' };
 
@@ -276,11 +285,84 @@ test('buildComplianceAxis 는 검출 결과를 그대로 옮기되 게이트를 
 test('buildComplianceAxis 는 경고 패턴도 빠뜨리지 않는다', () => {
   const axis = buildComplianceAxis(
     [{ title: 't', link: 'l', text: 'x', hasBody: true }],
-    () => ({ violations: [], warnings: ['환자 후기·체험담 형식은 의료법 제56조 심의 대상입니다.'] }),
+    () => ({ violations: [], warnings: ['즉각적 효과 표현은 과장 광고로 해석될 수 있습니다.'] }),
   );
   assert.equal(axis.hits.length, 1);
   assert.equal(axis.hits[0].level, 'caution');
+  assert.equal(axis.hits[0].risk, 'caution');
   assert.match(axis.hits[0].note, /확인이 필요합니다/);
+});
+
+/* ── 위험 / 주의 2단 구분 ───────────────────────────────── */
+
+test('의료법이 명시적으로 금지한 유형은 위험(prohibited)으로 분류된다', () => {
+  const cases: readonly [string, string][] = [
+    ['후기 환자 후기·경험담 광고 금지', '환자 후기·치료경험담'],
+    ['(문장 패턴) 치료 전후 비교 광고 금지', '치료 전후 비교'],
+    ['무조건 치료 결과 보장 금지', '치료효과 보장·부작용 없음 단정'],
+    ['부작용 없음 허위 부작용 표현 금지', '치료효과 보장·부작용 없음 단정'],
+    ['타 병원 대비 비교 광고 금지', '다른 병원과의 비교·비방'],
+  ];
+  for (const [signal, label] of cases) {
+    const result = classifyComplianceRisk(signal);
+    assert.equal(result.risk, 'prohibited', `${signal} 는 위험이어야 한다`);
+    assert.equal(result.label, label);
+  }
+});
+
+test('문맥에 따라 갈리는 표현은 주의(caution)로 남는다 — 빨간색을 흔하게 만들지 않는다', () => {
+  for (const signal of [
+    '최신 검증되지 않은 최신 주장 금지',
+    '제일 최상급 표현 금지 (의료법 제56조 제2항)',
+    '유명인·인플루언서 언급 광고는 별도 심의가 필요합니다.',
+    '이벤트 환자 유인·알선 금지 (의료법 제27조 제3항)',
+    '안전한 시술 허위 안전성 주장 금지',
+    '구체적인 수치 표현은 근거 자료가 필요합니다.',
+  ]) {
+    assert.equal(classifyComplianceRisk(signal).risk, 'caution', `${signal} 가 위험으로 올라가면 안 된다`);
+  }
+});
+
+test('위험 문구도 "위반"이라고 단정하지 않는다', () => {
+  const note = prohibitedNote('환자 후기·치료경험담');
+  assert.match(note, /명시적으로 금지한 유형/);
+  for (const forbidden of ['위반입니다', '처분', '불법', '고발']) {
+    assert.ok(!note.includes(forbidden), `단정 표현 "${forbidden}" 이 들어갔다`);
+  }
+});
+
+test('위험 검출은 목록 맨 앞으로 오고 건수가 따로 집계된다 (표시 상한에 잘려도 수는 남는다)', () => {
+  const axis = buildComplianceAxis(
+    [{ title: 't', link: 'https://blog.naver.com/a/1', text: 'x', hasBody: true }],
+    () => ({
+      violations: [
+        { word: '최신', rule: '검증되지 않은 최신 주장 금지', severity: 'MEDIUM' },
+        { word: '후기', rule: '환자 후기·경험담 광고 금지', severity: 'MEDIUM' },
+      ],
+      warnings: [],
+    }),
+  );
+  assert.equal(axis.hits[0].phrase, '후기', '위험이 먼저 나와야 한다');
+  assert.equal(axis.hits[0].risk, 'prohibited');
+  assert.equal(axis.hits[1].risk, 'caution');
+  assert.equal(axis.prohibitedCount, 1);
+  assert.equal(axis.cautionCount, 1);
+  assert.equal(axis.postsWithProhibited, 1);
+});
+
+test('risk 가 없던 시절 리포트는 전부 주의로 읽는다 (없는 것을 위험으로 올리지 않는다)', () => {
+  const legacy = {
+    ...EMPTY_COMPLIANCE_AXIS,
+    checked: true,
+    postsScanned: 3,
+    hits: [{ postTitle: 't', postLink: 'l', phrase: '후기', note: 'n', level: 'caution' as const }],
+    postsWithHits: 1,
+    prohibitedCount: undefined,
+    cautionCount: undefined,
+    postsWithProhibited: undefined,
+  };
+  assert.equal(riskOf(legacy.hits[0]), 'caution');
+  assert.deepEqual(complianceRiskCounts(legacy), { prohibited: 0, caution: 1, postsWithProhibited: 0 });
 });
 
 test('검사할 글이 없으면 checked=false — "문제 없음"으로 오독되지 않는다', () => {

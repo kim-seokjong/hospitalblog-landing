@@ -1,3 +1,4 @@
+import { complianceRiskCounts } from './compliance-scan.ts';
 import type { PostSeoResult } from './post-seo.ts';
 import type {
   AiAxis,
@@ -106,7 +107,7 @@ export function buildBlogFindings(blog: BlogAxis): readonly Finding[] {
       axis: 'blog',
       label: '병원 블로그',
       tone: 'unknown',
-      state: `비슷한 이름의 블로그가 ${blog.resolution.guesses.length}개 나와 어느 것이 병원 블로그인지 특정하지 못했습니다. (${names})`,
+      state: `병원 이름이 블로그 이름에도 글 제목에도 나오지 않아 어느 것이 병원 블로그인지 특정하지 못했습니다. (후보 ${blog.resolution.guesses.length}개: ${names})`,
       why: null,
       action: '아래 후보에서 직접 고르시거나 블로그 주소를 넣어 주세요. 잘못 짚은 블로그로 진단해 드리지 않으려고 여기서 멈췄어요.',
       ourScope: false,
@@ -114,15 +115,30 @@ export function buildBlogFindings(blog: BlogAxis): readonly Finding[] {
     return out;
   }
 
+  const assumed = blog.resolution.kind === 'assumed';
   const guess = blog.resolution.guess;
+  /**
+   * 확신까지는 아닌 채로 진행한 경우, 그 사실을 카드에 그대로 적는다.
+   * (화면 맨 위에도 같은 내용이 크게 나간다 — DiagnosisReportView)
+   */
+  const closeNote =
+    blog.resolution.kind === 'assumed' && blog.resolution.close
+      ? ' 비슷한 후보가 하나 더 있었어요.'
+      : '';
   out.push({
     id: 'blog.exists',
     axis: 'blog',
     label: '병원 블로그',
     tone: 'good',
-    state: `블로그를 확인했습니다.${blog.postCount !== null ? ` (최근 글 ${blog.postCount}편 수집)` : ''}`,
+    state: assumed
+      ? `이 블로그를 병원 블로그로 보고 진단했습니다.${
+          blog.postCount !== null ? ` (최근 글 ${blog.postCount}편 수집)` : ''
+        }${closeNote}`
+      : `블로그를 확인했습니다.${blog.postCount !== null ? ` (최근 글 ${blog.postCount}편 수집)` : ''}`,
     why: null,
-    action: '이 블로그를 기준으로 아래 항목을 진단했어요. 주소를 눌러 맞는 블로그인지 확인해 보세요.',
+    action: assumed
+      ? '주소를 눌러 맞는 블로그인지 확인해 주세요. 다른 블로그라면 바로 아래에서 바꿔 다시 진단할 수 있어요.'
+      : '이 블로그를 기준으로 아래 항목을 진단했어요. 주소를 눌러 맞는 블로그인지 확인해 보세요.',
     ourScope: false,
     // 눌러서 바로 열 수 있어야 "우리 블로그가 맞나"를 그 자리에서 확인한다.
     link: {
@@ -776,6 +792,37 @@ export function buildComplianceFindings(compliance: ComplianceAxis): readonly Fi
     ];
   }
 
+  /**
+   * 위험(명시적 금지 유형)과 주의(문맥에 따라 갈리는 표현)를 나눠 말한다.
+   * 하나라도 위험이 있으면 카드 자체가 'compliance.prohibited'(지금 고쳐야 할 것)로,
+   * 주의만 있으면 'compliance.risk'(챙기면 좋을 것)로 내려간다 — FINDING_WEIGHT 참조.
+   */
+  const counts = complianceRiskCounts(compliance);
+  const total = counts.prohibited + counts.caution;
+
+  if (counts.prohibited > 0) {
+    const types = Array.from(
+      new Set(compliance.hits.filter((h) => h.risk === 'prohibited' && h.riskLabel).map((h) => h.riskLabel as string)),
+    );
+    const typePhrase = types.length > 0 ? ` (${types.join(' · ')})` : '';
+    return [
+      {
+        id: 'compliance.prohibited',
+        axis: 'compliance',
+        label: '의료광고법 표현',
+        tone: 'warn',
+        state: `${scope} ${
+          counts.postsWithProhibited > 0 ? `${counts.postsWithProhibited}편에서 ` : ''
+        }의료법이 광고에서 명시적으로 금지한 유형에 해당하는 표현이 ${counts.prohibited}건 확인됐습니다${typePhrase}.${
+          counts.caution > 0 ? ` 문맥에 따라 갈리는 표현도 ${counts.caution}건 함께 나왔어요.` : ''
+        }`,
+        why: '환자 후기·치료 전후 비교·효과 보장처럼 의료법이 광고에서 유형 자체를 금지한 항목이에요. 저희가 위반 여부를 판단한 것은 아니지만, 민원·심의가 들어왔을 때 가장 먼저 문제가 되는 자리입니다.',
+        action: `아래 "위험" 표시가 붙은 표현부터 먼저 보세요. 해당 유형이 맞다면 문장을 바꾸거나 내리는 편이 안전하고, 애매하면 심의 담당자에게 확인해 보시는 것이 좋습니다.${caveat}`,
+        ourScope: true,
+      },
+    ];
+  }
+
   const review = compliance.hits.filter((h) => h.level === 'review').length;
   return [
     {
@@ -783,9 +830,9 @@ export function buildComplianceFindings(compliance: ComplianceAxis): readonly Fi
       axis: 'compliance',
       label: '의료광고법 표현',
       tone: 'warn',
-      state: `${scope} ${compliance.postsWithHits}편에서 심의에서 자주 지적되는 표현이 ${compliance.hits.length}건 확인됐습니다${
+      state: `${scope} ${compliance.postsWithHits}편에서 심의에서 자주 지적되는 표현이 ${total}건 확인됐습니다${
         review > 0 ? ` (그중 ${review}건은 우선 확인이 필요한 유형)` : ''
-      }.`,
+      }. 의료법이 명시적으로 금지한 유형에 해당하는 표현은 없었어요.`,
       why: '지적 사례가 많은 표현들이라 민원이나 심의가 들어왔을 때 다시 설명해야 할 소지가 있습니다. 지금 위반이라는 판단은 아닙니다.',
       action: `아래 문구들을 한 번 읽어보시고, 단정적인 표현만 완곡하게 바꾸면 대부분 정리됩니다. 앞으로 쓰는 글은 발행 전 점검을 습관으로 두시는 것이 안전해요.${caveat}`,
       ourScope: true,
@@ -813,11 +860,37 @@ export function collectUnchecked(input: {
 /* ── 3분류 · 중요도 ─────────────────────────────────────── */
 
 /**
+ * 덩어리 화면 문구 — **여기 한 곳에서만 정한다**(결과 화면·공유 리포트 공용).
+ *
+ * ⚠️ "못된 점"은 병원을 흉보는 말로 읽힌다(대표 실사용 지적). 읽는 사람은 원장이고,
+ *    진단은 훈수가 아니라 할 일 목록이어야 한다 — 그래서 전부 "무엇을 할지"로 쓴다.
+ *    내부 식별자(bad/improve/good)는 저장된 리포트 호환 때문에 그대로 둔다.
+ */
+export const FINDING_GROUP_LABEL: Readonly<Record<FindingGroup, { readonly title: string; readonly subtitle: string }>> = {
+  bad: {
+    title: '지금 고쳐야 할 것',
+    subtitle: '지금 이 순간 환자를 놓치고 있거나 리스크를 지고 있는 항목이에요.',
+  },
+  improve: {
+    title: '챙기면 좋을 것',
+    subtitle: '당장 손해는 아니지만 해두면 확실히 나아지는 항목이에요.',
+  },
+  good: {
+    title: '잘하고 있는 것',
+    subtitle: '이미 잘 되고 있는 항목이에요.',
+  },
+  unknown: {
+    title: '확인하지 못한 것',
+    subtitle: '추정으로 채우지 않고 그대로 비워 뒀어요.',
+  },
+};
+
+/**
  * 항목별 무게 — **화면 정렬의 유일한 근거**다. 여기 없는 id 는 맨 뒤로 간다.
  *
  * severity (경고일 때 어느 덩어리로 갈지)
- *   losing    : 지금 이 순간 환자를 놓치고 있거나 리스크를 지고 있다  → "못된 점"
- *   improving : 당장 손해는 아니지만 해두면 나아진다                 → "개선할 점"
+ *   losing    : 지금 이 순간 환자를 놓치고 있거나 리스크를 지고 있다  → "지금 고쳐야 할 것"
+ *   improving : 당장 손해는 아니지만 해두면 나아진다                 → "챙기면 좋을 것"
  *
  * rank (덩어리 안에서의 순서 — 낮을수록 위)
  *   10~19 : 환자 유입·이탈에 직접 영향한다 (들어온 환자가 나가거나, 아예 후보에 못 든다)
@@ -839,8 +912,14 @@ export const FINDING_WEIGHT: Readonly<
   // 일부 표현에서만 보인다 — 그 표현으로 검색하는 환자는 놓치지만 접점 자체는 있다.
   // 전무(losing)와 같은 칸에 두면 "전부 빨간불"이 되어 신뢰를 잃으므로 개선 대역에 둔다.
   'ai.presence.partial': { severity: 'improving', rank: 22 },
-  // 심의·민원 리스크를 지금 지고 있다
-  'compliance.risk': { severity: 'losing', rank: 16 },
+  // 의료법이 광고에서 명시적으로 금지한 유형(후기·전후사진·효과보장·비교)이 실제로 실려 있다
+  'compliance.prohibited': { severity: 'losing', rank: 16 },
+  /**
+   * 문맥에 따라 갈리는 표현만 나온 상태 — 최상급·"최신"·유명인 언급 등.
+   * 명시적 금지 유형과 같은 칸에 두면 빨간색이 흔해져 정작 위험한 건이 묻힌다.
+   * 그래서 '챙기면 좋을 것'으로 내리되, 순서는 검색 노출 항목보다 앞에 둔다.
+   */
+  'compliance.risk': { severity: 'improving', rank: 21 },
   // 환자와 만날 접점이 아예 없다
   'blog.exists': { severity: 'losing', rank: 20 },
   // 글은 쓰는데 검색에서 안 보인다 — 노력이 성과로 안 이어지는 상태
@@ -874,13 +953,13 @@ export function findingGroupOf(finding: Finding): FindingGroup {
 }
 
 export interface GroupedFindings {
-  /** 못된 점 — 지금 손해 보고 있는 것. */
+  /** 지금 고쳐야 할 것 — 지금 손해 보고 있거나 리스크를 지고 있는 것. */
   readonly bad: readonly Finding[];
-  /** 개선할 점 — 해두면 나아지는 것. */
+  /** 챙기면 좋을 것 — 해두면 나아지는 것. */
   readonly improve: readonly Finding[];
-  /** 잘된 점 — 이미 되고 있는 것. */
+  /** 잘하고 있는 것 — 이미 되고 있는 것. */
   readonly good: readonly Finding[];
-  /** 확인 못 한 것. */
+  /** 확인하지 못한 것. */
   readonly unknown: readonly Finding[];
 }
 

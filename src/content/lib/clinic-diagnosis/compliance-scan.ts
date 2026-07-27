@@ -1,5 +1,5 @@
 import type { PostBodyKind } from './post-seo.ts';
-import type { ComplianceAxis, ComplianceHit } from './types.ts';
+import type { ComplianceAxis, ComplianceHit, ComplianceRisk } from './types.ts';
 
 /**
  * 2단계 ④ — 의료광고법 위험 신호 점검.
@@ -40,6 +40,68 @@ export function softenRule(rule: string): string {
   return `${base} 관련 표현이라 의료광고 심의에서 자주 지적돼요. 확인이 필요합니다.`;
 }
 
+/* ── 위험 등급 분류 ─────────────────────────────────────── */
+
+/**
+ * **의료법이 광고에서 명시적으로 금지한 유형**만 여기에 넣는다.
+ *
+ * 왜 나누나: 실측(리팅성형외과)에서 11건이 전부 같은 무게로 나열됐는데,
+ * 그 안에는 "후기"(환자 경험담)처럼 법이 유형 자체를 금지한 것과
+ * "최신"·"제일"처럼 문맥에 따라 갈리는 것이 섞여 있었다. 같은 색으로 늘어놓으면
+ * 원장은 어느 것부터 손대야 할지 알 수 없고, 전부 무시하게 된다.
+ *
+ * ⚠️ 등재 기준(느슨하게 만들지 말 것):
+ *   · 의료법이 **광고 유형 자체를 금지**한다고 말할 수 있는 것만 넣는다.
+ *   · 조문 번호·항·호는 적지 않는다. 유형만 서술한다(우리는 심의기관이 아니다).
+ *   · 최상급("제일"·"최고")·"최신"·유명인 언급·이벤트/할인 유인처럼 **문맥에 따라
+ *     갈리거나 광역 탐색(recall 우선)으로 오탐이 섞이는 것**은 절대 넣지 않는다.
+ *     빨간 등급이 흔해지면 빨간색이 아무 의미도 없어진다.
+ *
+ * 매칭 대상 문자열은 검출 단어 + 규칙명(또는 경고 문구)을 합친 것이다.
+ */
+const PROHIBITED_TYPES: readonly { readonly label: string; readonly pattern: RegExp }[] = [
+  // 환자 후기·치료경험담 — 의료법이 광고에서 금지한 대표 유형.
+  // ('사례'는 단독으로 쓰면 규칙 설명문의 "시정명령 사례"까지 걸리므로 환자·개인에 붙을 때만)
+  { label: '환자 후기·치료경험담', pattern: /후기|경험담|체험담|내돈내산|직접\s*받아\s*보니|환자\s*사례|개인\s*사례/ },
+  // 치료 전후 비교 사진·표현.
+  { label: '치료 전후 비교', pattern: /전후\s*사진|전후\s*비교|비포애프터|before\s*.?\s*after/i },
+  // 치료효과·결과 보장, 부작용 없음·완전 안전 단정.
+  {
+    label: '치료효과 보장·부작용 없음 단정',
+    pattern: /결과\s*보장|효과\s*보장|치료\s*결과\s*보장|완치|100%|무조건|확실한\s*효과|부작용\s*없|부작용이\s*없|완전히\s*안전|위험\s*없/,
+  },
+  // 다른 의료기관·의료인과의 비교, 비방.
+  { label: '다른 병원과의 비교·비방', pattern: /비교\s*광고|타\s*병원|다른\s*병원|경쟁병원|비방/ },
+];
+
+/**
+ * 검출 1건의 위험 등급을 매긴다 (순수 함수).
+ * signal 은 "검출 단어 + 규칙명"(위반) 또는 경고 문구(패턴 경고)를 합친 문자열.
+ */
+export function classifyComplianceRisk(signal: string): {
+  readonly risk: ComplianceRisk;
+  readonly label: string | null;
+} {
+  const text = signal ?? '';
+  for (const type of PROHIBITED_TYPES) {
+    if (type.pattern.test(text)) return { risk: 'prohibited', label: type.label };
+  }
+  return { risk: 'caution', label: null };
+}
+
+/**
+ * 위험 등급 검출의 근거 문구.
+ * ⚠️ "위반입니다"라고 쓰지 않는다 — "명시적으로 금지한 유형"까지가 한계다.
+ */
+export function prohibitedNote(label: string): string {
+  return `${label} — 의료법이 광고에서 명시적으로 금지한 유형이에요. 이 표현이 실제로 그 유형에 해당하는지 먼저 확인해 보세요.`;
+}
+
+/** 저장된 리포트 호환 — risk 가 없던 시절 리포트는 전부 '주의'로 읽는다. */
+export function riskOf(hit: Pick<ComplianceHit, 'risk'>): ComplianceRisk {
+  return hit.risk ?? 'caution';
+}
+
 export interface ComplianceSource {
   readonly title: string;
   readonly link: string;
@@ -71,37 +133,58 @@ export function buildComplianceAxis(
 ): ComplianceAxis {
   const hits: ComplianceHit[] = [];
   const postsWithHits = new Set<string>();
+  const postsWithProhibited = new Set<string>();
+
+  const push = (hit: ComplianceHit): void => {
+    hits.push(hit);
+    postsWithHits.add(hit.postLink);
+    if (hit.risk === 'prohibited') postsWithProhibited.add(hit.postLink);
+  };
 
   for (const source of sources) {
     const result = checkFn(source.text);
     for (const violation of result.violations) {
       const severity = String(violation.severity).toUpperCase();
-      hits.push({
+      const { risk, label } = classifyComplianceRisk(`${violation.word} ${violation.rule}`);
+      push({
         postTitle: source.title || '(제목 없음)',
         postLink: source.link,
         phrase: violation.word,
-        note: softenRule(violation.rule),
+        note: risk === 'prohibited' && label ? prohibitedNote(label) : softenRule(violation.rule),
         level: severity === 'CRITICAL' || severity === 'HIGH' ? 'review' : 'caution',
+        risk,
+        ...(risk === 'prohibited' && label ? { riskLabel: label } : {}),
       });
-      postsWithHits.add(source.link);
     }
     for (const warning of result.warnings) {
-      hits.push({
+      const { risk, label } = classifyComplianceRisk(warning);
+      push({
         postTitle: source.title || '(제목 없음)',
         postLink: source.link,
         phrase: '(문장 패턴)',
-        note: `${warning.replace(/입니다\.$/, '어요.')} 확인이 필요합니다.`,
+        note:
+          risk === 'prohibited' && label
+            ? prohibitedNote(label)
+            : `${warning.replace(/입니다\.$/, '어요.')} 확인이 필요합니다.`,
         level: 'caution',
+        risk,
+        ...(risk === 'prohibited' && label ? { riskLabel: label } : {}),
       });
-      postsWithHits.add(source.link);
     }
   }
 
-  // review 를 먼저 보여준다 — 다만 정렬만 바꿀 뿐 항목을 버리지 않는다(상한 제외).
-  const sorted = [...hits].sort((a, b) => (a.level === b.level ? 0 : a.level === 'review' ? -1 : 1));
+  /**
+   * 위험(명시적 금지 유형) → 그다음 review → 나머지 순.
+   * 정렬만 바꿀 뿐 항목을 버리지 않는다(표시 상한 MAX_HITS 제외).
+   * ⚠️ 상한에 잘려도 위험 건수는 아래 prohibitedCount 로 정확히 남는다.
+   */
+  const weight = (hit: ComplianceHit): number =>
+    (riskOf(hit) === 'prohibited' ? 0 : 2) + (hit.level === 'review' ? 0 : 1);
+  const sorted = [...hits].sort((a, b) => weight(a) - weight(b));
 
   const kindOf = (source: ComplianceSource): PostBodyKind =>
     source.bodyKind ?? (source.hasBody ? 'full' : 'none');
+  const prohibitedCount = hits.filter((h) => riskOf(h) === 'prohibited').length;
 
   return {
     checked: sources.length > 0,
@@ -110,6 +193,9 @@ export function buildComplianceAxis(
     summariesScanned: sources.filter((s) => kindOf(s) === 'summary').length,
     hits: sorted.slice(0, MAX_HITS),
     postsWithHits: postsWithHits.size,
+    prohibitedCount,
+    cautionCount: hits.length - prohibitedCount,
+    postsWithProhibited: postsWithProhibited.size,
   };
 }
 
@@ -120,4 +206,31 @@ export const EMPTY_COMPLIANCE_AXIS: ComplianceAxis = {
   summariesScanned: 0,
   hits: [],
   postsWithHits: 0,
+  prohibitedCount: 0,
+  cautionCount: 0,
+  postsWithProhibited: 0,
 };
+
+/**
+ * 위험·주의 건수 (저장된 구 리포트 호환).
+ * prohibitedCount 가 없던 시절 리포트는 표시된 hits 로 세어 폴백한다.
+ */
+export function complianceRiskCounts(axis: ComplianceAxis): {
+  readonly prohibited: number;
+  readonly caution: number;
+  readonly postsWithProhibited: number;
+} {
+  if (typeof axis.prohibitedCount === 'number') {
+    return {
+      prohibited: axis.prohibitedCount,
+      caution: axis.cautionCount ?? Math.max(0, axis.hits.length - axis.prohibitedCount),
+      postsWithProhibited: axis.postsWithProhibited ?? 0,
+    };
+  }
+  const prohibited = axis.hits.filter((h) => riskOf(h) === 'prohibited').length;
+  return {
+    prohibited,
+    caution: axis.hits.length - prohibited,
+    postsWithProhibited: new Set(axis.hits.filter((h) => riskOf(h) === 'prohibited').map((h) => h.postLink)).size,
+  };
+}

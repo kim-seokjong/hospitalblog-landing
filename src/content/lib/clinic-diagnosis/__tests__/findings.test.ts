@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  FINDING_GROUP_LABEL,
   FINDING_WEIGHT,
   RANK_CAVEAT,
   buildAiFindings,
@@ -139,7 +140,20 @@ test('잘하고 있는 항목은 그대로 칭찬한다', () => {
 
 /* ── 3분류: 초짜가 봐도 뭐부터 볼지 알아야 한다 ─────────── */
 
-test('groupFindings 는 못된 점 / 개선할 점 / 잘된 점 / 미확인으로 나눈다', () => {
+test('덩어리 이름은 사람을 흉보는 말이 아니라 할 일로 쓴다', () => {
+  assert.equal(FINDING_GROUP_LABEL.bad.title, '지금 고쳐야 할 것');
+  assert.equal(FINDING_GROUP_LABEL.improve.title, '챙기면 좋을 것');
+  assert.equal(FINDING_GROUP_LABEL.good.title, '잘하고 있는 것');
+  assert.equal(FINDING_GROUP_LABEL.unknown.title, '확인하지 못한 것');
+  for (const group of ['bad', 'improve', 'good', 'unknown'] as const) {
+    assert.ok(FINDING_GROUP_LABEL[group].subtitle.trim().length > 0, `${group}: 부제가 비었다`);
+    for (const forbidden of ['못된', '잘된', '개선할 점']) {
+      assert.ok(!FINDING_GROUP_LABEL[group].title.includes(forbidden), `${group}: 옛 문구가 남아 있다`);
+    }
+  }
+});
+
+test('groupFindings 는 지금 고쳐야 할 것 / 챙기면 좋을 것 / 잘하고 있는 것 / 미확인으로 나눈다', () => {
   const findings = buildFindings({
     blog: { ...BLOG_OK, daysSinceLatest: 120, postsPerWeek: 0.2 },
     site: { ...SITE_OK, https: 'fail', httpsNote: '인증서 만료', viewport: 'fail', jsonLd: 'fail', jsonLdTypes: [] },
@@ -210,6 +224,20 @@ test('collectUnchecked 는 확인 못 한 축 이름을 그대로 돌려준다',
 });
 
 /* ── 블로그 축 ──────────────────────────────────────────── */
+
+test('1위 후보로 진행한 경우(assumed) 그 사실과 바꾸는 법을 카드에 적는다', () => {
+  const guess = { blogId: 'night140160', bloggerName: '리팅 이야기', hits: 3, nameInBloggerName: false, titleMentions: 3, confidence: 62 };
+  const card = buildBlogFindings({
+    ...BLOG_OK,
+    blogId: 'night140160',
+    resolution: { kind: 'assumed', guess, guesses: [guess], close: true },
+  })[0];
+  assert.equal(card.id, 'blog.exists');
+  assert.match(card.state, /이 블로그를 병원 블로그로 보고 진단했습니다/);
+  assert.match(card.state, /비슷한 후보가 하나 더 있었어요/);
+  assert.match(card.action, /바꿔 다시 진단할 수 있어요/);
+  assert.equal(card.link?.href, 'https://blog.naver.com/night140160');
+});
 
 test('블로그 추정이 애매하면 진단을 이어가지 않고 사용자 선택으로 넘긴다', () => {
   const findings = buildFindings({
@@ -476,6 +504,58 @@ test('의료광고법 카드는 위반·처분으로 단정하지 않는다', ()
   for (const forbidden of ['위반입니다', '처분 대상', '불법', '고발']) {
     assert.ok(!`${card.state}${card.why}${card.action}`.includes(forbidden), `단정 표현 "${forbidden}" 이 들어갔다`);
   }
+});
+
+test('위험(명시적 금지 유형)이 하나라도 있으면 "지금 고쳐야 할 것"으로 올라간다', () => {
+  const axis = complianceAxis({
+    hits: [
+      { postTitle: '글', postLink: 'l', phrase: '후기', note: 'n', level: 'caution', risk: 'prohibited', riskLabel: '환자 후기·치료경험담' },
+      { postTitle: '글', postLink: 'l', phrase: '최신', note: 'n', level: 'caution', risk: 'caution' },
+    ],
+    postsWithHits: 1,
+    prohibitedCount: 1,
+    cautionCount: 1,
+    postsWithProhibited: 1,
+  });
+  const card = buildComplianceFindings(axis)[0];
+  assert.equal(card.id, 'compliance.prohibited');
+  assert.equal(FINDING_WEIGHT['compliance.prohibited'].severity, 'losing');
+  assert.match(card.state, /명시적으로 금지한 유형/);
+  assert.match(card.state, /환자 후기·치료경험담/);
+  assert.match(card.state, /문맥에 따라 갈리는 표현도 1건/);
+  // 단정 금지 규칙은 그대로다
+  for (const forbidden of ['위반입니다', '처분 대상', '불법', '고발']) {
+    assert.ok(!`${card.state}${card.why}${card.action}`.includes(forbidden), `단정 표현 "${forbidden}" 이 들어갔다`);
+  }
+  assert.ok(groupFindings([card]).bad.includes(card));
+});
+
+test('주의만 있으면 "챙기면 좋을 것"으로 내려간다 (빨간색을 흔하게 만들지 않는다)', () => {
+  const axis = complianceAxis({
+    hits: [{ postTitle: '글', postLink: 'l', phrase: '최신', note: 'n', level: 'caution', risk: 'caution' }],
+    postsWithHits: 1,
+    prohibitedCount: 0,
+    cautionCount: 1,
+    postsWithProhibited: 0,
+  });
+  const card = buildComplianceFindings(axis)[0];
+  assert.equal(card.id, 'compliance.risk');
+  assert.equal(FINDING_WEIGHT['compliance.risk'].severity, 'improving');
+  assert.match(card.state, /명시적으로 금지한 유형에 해당하는 표현은 없었어요/);
+  assert.ok(groupFindings([card]).improve.includes(card));
+});
+
+test('risk 가 없던 시절 리포트는 위험으로 올리지 않는다 (구 공유 리포트 호환)', () => {
+  const card = buildComplianceFindings(
+    complianceAxis({
+      hits: [{ postTitle: '글', postLink: 'l', phrase: '후기', note: 'n', level: 'review' }],
+      postsWithHits: 1,
+      prohibitedCount: undefined,
+      cautionCount: undefined,
+      postsWithProhibited: undefined,
+    }),
+  )[0];
+  assert.equal(card.id, 'compliance.risk');
 });
 
 test('검출이 없으면 칭찬하되 검사 범위의 한계를 함께 밝힌다', () => {

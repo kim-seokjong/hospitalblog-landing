@@ -1,5 +1,6 @@
 import type { DiagnosisReport, Finding, FindingDetail, FindingTone } from '@/content/lib/clinic-diagnosis/types';
-import { groupFindings } from '@/content/lib/clinic-diagnosis/findings';
+import { FINDING_GROUP_LABEL, groupFindings } from '@/content/lib/clinic-diagnosis/findings';
+import { riskOf } from '@/content/lib/clinic-diagnosis/compliance-scan';
 import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-questions';
 
 /**
@@ -8,8 +9,9 @@ import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-ques
  *
  * ★ 화면은 축(블로그/홈페이지/AI/의료광고법)이 아니라 **원장이 할 판단**으로 나눈다.
  *   축별로 나열하면 뭐가 중요한지 보이지 않는다. 위에서부터
- *     ① 못된 점(지금 손해) ② 개선할 점 ③ 잘된 점 ④ 확인 못 한 것
+ *     ① 지금 고쳐야 할 것 ② 챙기면 좋을 것 ③ 잘하고 있는 것 ④ 확인하지 못한 것
  *   순서이고, 축 이름은 각 항목의 작은 꼬리표로만 남는다.
+ *   (덩어리 문구는 FINDING_GROUP_LABEL 한 곳에서만 정한다)
  *
  * 화면 규칙:
  *  · 항목마다 "지금 상태 / 왜 문제인가 / 그래서 뭘 해야 하나" 3단을 그대로 보여준다.
@@ -194,6 +196,9 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
    */
   const aiQuestions =
     report.ai.questions?.length ? report.ai.questions : summarizeQuestions(report.ai.probes ?? []);
+  /** 확신까지는 아닌 채로 1위 후보로 진행한 상태인가 (구 리포트에는 없는 종류 → false). */
+  const blogAssumed = report.blog.resolution?.kind === 'assumed';
+  const blogClose = report.blog.resolution?.kind === 'assumed' && report.blog.resolution.close;
 
   return (
     <div className="bg-white text-[#202020]">
@@ -211,13 +216,45 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
         </p>
       </div>
 
+      {/*
+        진단에 쓴 블로그 — **결과 맨 위에 눈에 띄게**.
+        블로그 자동 특정은 남의 블로그를 짚을 위험이 늘 있다. 그래서 흐름은 끊지 않되
+        어느 블로그로 진단했는지 먼저 보여주고, 주소를 눌러 확인·교체할 수 있게 한다.
+      */}
+      {report.blog.blogId && (
+        <div
+          className={`mt-3 rounded-2xl border p-4 ${
+            blogAssumed ? 'bg-[#fffaf3] border-[#f5d9ac]' : 'bg-[#f7f9fb] border-[#dbe2ea]'
+          }`}
+        >
+          <p className="text-[11px] font-extrabold tracking-[1.5px] text-[#5b6573]">진단한 블로그</p>
+          <a
+            href={`https://blog.naver.com/${report.blog.blogId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[14px] sm:text-[15px] font-extrabold text-[#ff4628] underline underline-offset-2 break-all min-h-[44px] py-2"
+          >
+            blog.naver.com/{report.blog.blogId}
+            <span aria-hidden="true">↗</span>
+          </a>
+          <p className="text-[12.5px] text-[#4a4f55] leading-relaxed">
+            {report.blog.source === 'manual'
+              ? '직접 넣어 주신 주소로 진단했어요.'
+              : blogAssumed
+                ? '이 블로그를 병원 블로그로 보고 진단했습니다. 아니면 아래에서 바꿔 주세요.'
+                : '병원 이름과 맞는 블로그를 찾아 이 블로그로 진단했어요. 주소를 눌러 확인해 보세요.'}
+            {blogClose && ' 비슷한 후보가 하나 더 있었어요.'}
+          </p>
+        </div>
+      )}
+
       {/* 요약 — 점수 하나로 뭉개지 않는다 */}
       <div className="grid grid-cols-3 gap-2.5 mt-4">
         {(
           [
-            { key: 'bad', tone: 'warn' as const, count: groups.bad.length, label: '못된 점' },
-            { key: 'improve', tone: 'warn' as const, count: groups.improve.length, label: '개선할 점' },
-            { key: 'good', tone: 'good' as const, count: groups.good.length, label: '잘된 점' },
+            { key: 'bad', tone: 'warn' as const, count: groups.bad.length, label: FINDING_GROUP_LABEL.bad.title },
+            { key: 'improve', tone: 'warn' as const, count: groups.improve.length, label: FINDING_GROUP_LABEL.improve.title },
+            { key: 'good', tone: 'good' as const, count: groups.good.length, label: FINDING_GROUP_LABEL.good.title },
           ]
         ).map((item) => (
           <div key={item.key} className={`rounded-2xl border p-3 sm:p-4 text-center ${TONE_STYLE[item.tone].badge}`}>
@@ -227,35 +264,35 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
         ))}
       </div>
 
-      {/* ① 못된 점 — 가장 위, 가장 크게 */}
+      {/* ① 지금 고쳐야 할 것 — 가장 위, 가장 크게 */}
       <GroupSection
-        title="못된 점"
-        subtitle="지금 이 순간 환자를 놓치고 있거나 리스크를 지고 있는 항목이에요."
+        title={FINDING_GROUP_LABEL.bad.title}
+        subtitle={FINDING_GROUP_LABEL.bad.subtitle}
         findings={groups.bad}
         accent="text-[#c3341a]"
       />
 
-      {/* ② 개선할 점 */}
+      {/* ② 챙기면 좋을 것 */}
       <GroupSection
-        title="개선할 점"
-        subtitle="당장 손해는 아니지만 해두면 확실히 나아지는 항목이에요."
+        title={FINDING_GROUP_LABEL.improve.title}
+        subtitle={FINDING_GROUP_LABEL.improve.subtitle}
         findings={groups.improve}
         accent="text-[#b45309]"
       />
 
-      {/* ③ 잘된 점 — 짧게, 접어 둔다 */}
+      {/* ③ 잘하고 있는 것 — 짧게, 접어 둔다 */}
       <GroupSection
-        title="잘된 점"
-        subtitle={hasIssues ? '이미 잘 되고 있어요. 눌러서 확인해 보세요.' : '이미 잘 되고 있는 항목이에요.'}
+        title={FINDING_GROUP_LABEL.good.title}
+        subtitle={hasIssues ? '이미 잘 되고 있어요. 눌러서 확인해 보세요.' : FINDING_GROUP_LABEL.good.subtitle}
         findings={groups.good}
         accent="text-emerald-700"
         collapsed={hasIssues}
       />
 
-      {/* ④ 확인 못 한 것 — 숨기지 않는다 */}
+      {/* ④ 확인하지 못한 것 — 숨기지 않는다 */}
       <GroupSection
-        title="확인하지 못한 것"
-        subtitle="추정으로 채우지 않고 그대로 비워 뒀어요."
+        title={FINDING_GROUP_LABEL.unknown.title}
+        subtitle={FINDING_GROUP_LABEL.unknown.subtitle}
         findings={groups.unknown}
         accent="text-[#5b6573]"
         collapsed
@@ -268,24 +305,48 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
         </p>
       )}
 
-      {/* 검출 문구 원문 — 겁주지 않는 톤으로 */}
+      {/*
+        검출 문구 원문.
+        ★ 위험(의료법이 명시적으로 금지한 유형)과 주의(문맥에 따라 갈리는 표현)를 색으로 나눈다.
+          전부 같은 무게로 늘어놓으면 "후기"(경험담)와 "최신"이 같은 것으로 보인다.
+        ⚠️ 위험이어도 "위반입니다"라고 쓰지 않는다 — "명시적으로 금지한 유형"까지가 한계다.
+      */}
       {report.compliance.hits.length > 0 && (
         <section className="mt-8">
           <h3 className="text-[13px] font-extrabold text-[#5b6573] tracking-[1px] mb-2.5">확인해 보시면 좋을 표현</h3>
           <ul className="space-y-2">
-            {report.compliance.hits.map((hit, i) => (
-              <li key={`${hit.postLink}-${i}`} className="bg-white border border-[#dbe2ea] rounded-xl px-4 py-3">
-                <p className="text-[13px] font-bold">
-                  <span className="text-[#c3341a]">“{hit.phrase}”</span>
-                  <span className="text-[11px] font-normal text-[#8a93a0] ml-2">{hit.postTitle}</span>
-                </p>
-                <p className="text-[12px] text-[#4a4f55] mt-1 leading-relaxed">{hit.note}</p>
-              </li>
-            ))}
+            {report.compliance.hits.map((hit, i) => {
+              const danger = riskOf(hit) === 'prohibited';
+              return (
+                <li
+                  key={`${hit.postLink}-${i}`}
+                  className={`rounded-xl px-4 py-3 border ${
+                    danger ? 'bg-[#fff2ee] border-[#f0a494] border-l-4 border-l-[#d92d0b]' : 'bg-white border-[#dbe2ea]'
+                  }`}
+                >
+                  <p className="text-[13px] font-bold flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {danger && (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#d92d0b] text-white tracking-[0.5px] whitespace-nowrap">
+                        위험
+                      </span>
+                    )}
+                    <span className={danger ? 'text-[#a3220a]' : 'text-[#c3341a]'}>“{hit.phrase}”</span>
+                    {danger && hit.riskLabel && (
+                      <span className="text-[11px] font-bold text-[#a3220a]">{hit.riskLabel}</span>
+                    )}
+                    <span className="text-[11px] font-normal text-[#8a93a0]">{hit.postTitle}</span>
+                  </p>
+                  <p className={`text-[12px] mt-1 leading-relaxed ${danger ? 'text-[#7a2f1c]' : 'text-[#4a4f55]'}`}>
+                    {hit.note}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
           <p className="text-[11px] text-[#8a93a0] mt-2.5 leading-relaxed">
-            이 목록은 심의에서 자주 지적되는 표현을 기계적으로 찾아 표시한 것이며, 위반 여부를 판단한 결과가 아니에요.
-            최종 판단은 심의기관과 담당 변호사의 몫입니다.
+            “위험”은 의료법이 광고에서 명시적으로 금지한 유형(환자 후기·치료 전후 비교·효과 보장·다른 병원과의 비교)에
+            해당할 수 있는 표현을 표시한 것이고, 나머지는 심의에서 자주 지적되는 표현이에요. 둘 다 기계적으로 찾아 표시한
+            것이며 위반 여부를 판단한 결과가 아닙니다. 최종 판단은 심의기관과 담당 변호사의 몫입니다.
           </p>
         </section>
       )}
