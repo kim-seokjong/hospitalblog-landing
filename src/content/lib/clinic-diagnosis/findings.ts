@@ -56,6 +56,14 @@ function quoteQuestions(questions: readonly string[]): string {
   return questions.map((q) => `“${q}”`).join(', ');
 }
 
+/**
+ * "N 가지 질문" 표기. 하나뿐이면 수를 세지 않는다 —
+ * "한 가지 질문 모두에서"는 어색하고, 표본이 하나라는 사실도 흐린다.
+ */
+function questionsPhrase(count: number): string {
+  return count === 1 ? '질문' : `${koCount(count)} 가지 질문`;
+}
+
 /* ── ① 네이버 블로그 ─────────────────────────────────────── */
 
 export function buildBlogFindings(blog: BlogAxis): readonly Finding[] {
@@ -543,9 +551,12 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
       axis: 'ai',
       label: 'AI 검색 노출',
       tone: 'warn',
-      state: `환자가 병원 이름 없이 "지역 + 진료과"로 물어본 ${koCount(
-        recommend.length,
-      )} 가지 질문 어느 것에서도 병원이 나오지 않았습니다.`,
+      state:
+        recommend.length === 1
+          ? '환자가 병원 이름 없이 "지역 + 진료과"로 물었을 때 병원이 나오지 않았습니다.'
+          : `환자가 병원 이름 없이 "지역 + 진료과"로 물어본 ${questionsPhrase(
+              recommend.length,
+            )} 어느 것에서도 병원이 나오지 않았습니다.`,
       why: '환자는 병원 이름을 모르는 상태에서 물어봅니다. 그 답변에 없으면 후보에도 못 듭니다. 이름을 알고 찾아오는 환자만 남는다는 뜻이에요.',
       action:
         'AI는 웹에 있는 글을 근거로 답합니다. 지역·진료과·증상을 정면으로 다룬 글이 병원 이름으로 쌓여 있어야 추천 후보에 들어갑니다.',
@@ -559,7 +570,7 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
       axis: 'ai',
       label: 'AI 검색 노출',
       tone: 'warn',
-      state: `${koCount(recommend.length)} 가지 질문 중 ${koCount(
+      state: `${questionsPhrase(recommend.length)} 중 ${koCount(
         shown.length,
       )} 가지에서는 병원이 나왔지만, ${quoteQuestions(
         missing.map((q) => q.question),
@@ -576,9 +587,12 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
       axis: 'ai',
       label: 'AI 검색 노출',
       tone: 'good',
-      state: `환자가 병원 이름 없이 물어본 ${koCount(
-        recommend.length,
-      )} 가지 질문 모두에서 병원이 추천에 올랐습니다.${splitNote}`,
+      state:
+        recommend.length === 1
+          ? `환자가 병원 이름 없이 물어본 질문에서 병원이 추천에 올랐습니다.${splitNote}`
+          : `환자가 병원 이름 없이 물어본 ${questionsPhrase(
+              recommend.length,
+            )} 모두에서 병원이 추천에 올랐습니다.${splitNote}`,
       why: null,
       action: '이름을 모르는 환자에게도 후보로 잡히고 있습니다. 다음 문제는 "무엇을 근거로 그렇게 답했는가"예요.',
       ourScope: false,
@@ -641,9 +655,12 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
       axis: 'ai',
       label: 'AI가 참고한 근거',
       tone: 'good',
-      state: `병원이 나온 ${koCount(
-        answered.length,
-      )} 가지 질문 모두에서, AI는 병원이 직접 만든 글(블로그·홈페이지)을 근거로 삼았습니다.`,
+      state:
+        answered.length === 1
+          ? 'AI는 병원이 직접 만든 글(블로그·홈페이지)을 근거로 삼았습니다.'
+          : `병원이 나온 ${questionsPhrase(
+              answered.length,
+            )} 모두에서, AI는 병원이 직접 만든 글(블로그·홈페이지)을 근거로 삼았습니다.`,
       why: null,
       action: '병원 콘텐츠가 AI 답변의 근거로 쓰이고 있습니다. 이 상태를 유지하는 것이 목표예요.',
       ourScope: false,
@@ -655,7 +672,7 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
       axis: 'ai',
       label: 'AI가 참고한 근거',
       tone: 'warn',
-      state: `병원이 나온 ${koCount(answered.length)} 가지 질문 중 ${koCount(
+      state: `병원이 나온 ${questionsPhrase(answered.length)} 중 ${koCount(
         ownedQuestions.length,
       )} 가지만 병원이 직접 만든 글을 근거로 삼았고, 나머지 ${koCount(
         answered.length - ownedQuestions.length,
@@ -672,10 +689,12 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
       label: 'AI가 참고한 근거',
       tone: 'warn',
       state: allDirectory
-        ? `병원 이름이 나온 ${koCount(
-            answered.length,
-          )} 가지 질문 모두, AI가 참고한 근거는 병원이 만든 글이 아니라 외부 디렉터리·목록이었습니다. 병원 블로그나 홈페이지가 근거로 잡힌 질문은 하나도 없습니다.`
-        : `병원 이름이 나온 ${koCount(answered.length)} 가지 질문 중 ${koCount(
+        ? `${
+            answered.length === 1
+              ? '병원 이름이 나온 질문에서 AI가 참고한'
+              : `병원 이름이 나온 ${questionsPhrase(answered.length)} 모두, AI가 참고한`
+          } 근거는 병원이 만든 글이 아니라 외부 디렉터리·목록이었습니다. 병원 블로그나 홈페이지가 근거로 잡힌 질문은 하나도 없습니다.`
+        : `병원 이름이 나온 ${questionsPhrase(answered.length)} 중 ${koCount(
             directoryQuestions.length,
           )} 가지는 외부 디렉터리·목록이 근거였고, 나머지 ${koCount(
             unsourcedQuestions.length,

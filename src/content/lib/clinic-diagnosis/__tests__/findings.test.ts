@@ -295,6 +295,7 @@ test('이름을 넣은 질의만 나온 상태를 절대 "잘하고 있어요"�
   assert.equal(presence?.tone, 'warn', '추천 질의 전패인데 good 이 나오면 결론이 뒤집힌다');
   assert.match(presence?.state ?? '', /이름 없이/);
   assert.match(presence?.state ?? '', /두 가지 질문 어느 것에서도 병원이 나오지 않았습니다/);
+  assert.ok(!/\d+번/.test(presence?.state ?? ''), '엔진 호출 수를 분모로 다시 쓰면 안 된다');
   // 전무는 "못된 점" 대역
   assert.equal(FINDING_WEIGHT['ai.presence'].severity, 'losing');
 
@@ -386,14 +387,15 @@ test('모든 질문에서 나오면 그때 칭찬한다 (전부 빨간불로 만
   );
   const presence = findings.find((f) => f.id === 'ai.presence');
   assert.equal(presence?.tone, 'good');
-  assert.match(presence?.state ?? '', /두 가지 질문 모두에서/);
+  assert.match(presence?.state ?? '', /두 가지 질문 모두에서 병원이 추천에 올랐습니다/);
   assert.ok(!presence?.state.includes('AI 서비스에 따라'), '편차가 없으면 불필요한 단서를 달지 않는다');
 });
 
 test('질의가 하나뿐이어도 질문 단위로 판정한다', () => {
   const shown = buildAiFindings(aiAxis([p(Q1, 'recommend', 'openai', true, 'owned')]), true);
   assert.equal(shown.find((f) => f.id === 'ai.presence')?.tone, 'good');
-  assert.match(shown.find((f) => f.id === 'ai.presence')?.state ?? '', /한 가지 질문 모두에서/);
+  // "한 가지 질문 모두에서"는 어색하고 표본이 하나라는 사실도 흐린다
+  assert.match(shown.find((f) => f.id === 'ai.presence')?.state ?? '', /물어본 질문에서 병원이 추천에 올랐습니다/);
 
   const missing = buildAiFindings(aiAxis([p(Q1, 'recommend', 'openai', false)]), true);
   const card = missing.find((f) => f.id === 'ai.presence');
