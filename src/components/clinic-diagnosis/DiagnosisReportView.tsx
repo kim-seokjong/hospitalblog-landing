@@ -1,5 +1,6 @@
 import type { DiagnosisReport, Finding, FindingDetail, FindingTone } from '@/content/lib/clinic-diagnosis/types';
 import { groupFindings } from '@/content/lib/clinic-diagnosis/findings';
+import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-questions';
 
 /**
  * 진단 결과 화면 (서버·클라이언트 공용 프레젠테이션).
@@ -186,6 +187,13 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
    * 전부 잘하고 있는 병원에서 화면이 텅 비어 보이면 진단이 안 돌았다고 오해한다.
    */
   const hasIssues = groups.bad.length + groups.improve.length > 0;
+  /**
+   * AI 질문 목록 — 질문 단위가 정본.
+   * 이 기능 이전에 발급된 공유 리포트에는 questions 가 없으므로 probes 로 그때 만든다
+   * (같은 함수를 쓰므로 판정과 화면이 어긋나지 않는다).
+   */
+  const aiQuestions =
+    report.ai.questions?.length ? report.ai.questions : summarizeQuestions(report.ai.probes ?? []);
 
   return (
     <div className="bg-white text-[#202020]">
@@ -282,31 +290,45 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
         </section>
       )}
 
-      {/* AI 인용 근거 — 어디서 물었고 무엇이 근거였는지 그대로 (접어 둔다) */}
-      {report.ai.checked && report.ai.probes.length > 0 && (
+      {/*
+        AI 인용 근거 — 어디서 물었고 무엇이 근거였는지 그대로 (접어 둔다).
+
+        ★ 목록의 단위는 **질문**이다. 같은 질문을 AI 여러 곳에 돌린 결과는 한 줄로 묶고,
+          엔진에 따라 갈렸으면 "AI 2곳 중 1곳에서 등장"처럼 그 사실을 그대로 적는다.
+          엔진 호출을 한 줄씩 늘어놓으면 질문 3개가 6줄이 되어 실제보다 많이 물어본 것처럼
+          보이고, 판정(질문 단위)과 화면(호출 단위)이 어긋난다.
+        · 예전에 발급된 공유 리포트에는 questions 가 없으므로 probes 로 폴백한다.
+      */}
+      {report.ai.checked && aiQuestions.length > 0 && (
         <section className="mt-8">
           <details>
             <summary className="text-[13px] font-extrabold text-[#5b6573] tracking-[1px] cursor-pointer list-none min-h-[44px] flex items-center">
-              ▸ AI에 실제로 물어본 질문 {report.ai.probes.length}개 보기
+              ▸ AI에 실제로 물어본 질문 {aiQuestions.length}개 보기
             </summary>
             <ul className="space-y-2 mt-2.5">
-              {report.ai.probes.map((probe, i) => (
-                <li key={`${probe.engine}-${i}`} className="bg-white border border-[#dbe2ea] rounded-xl px-4 py-3">
+              {aiQuestions.map((q, i) => (
+                <li key={`${q.kind}-${i}`} className="bg-white border border-[#dbe2ea] rounded-xl px-4 py-3">
                   <p className="text-[13px] font-bold">
-                    “{probe.question}”
+                    “{q.question}”
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#dbe2ea] bg-[#f7f9fb] text-[#5b6573] ml-2 whitespace-nowrap">
-                      {probe.kind === 'named' ? '이름 넣고 물음' : '이름 없이 물음'}
+                      {q.kind === 'named' ? '이름 넣고 물음' : '이름 없이 물음'}
                     </span>
                   </p>
-                  <p className="text-[12px] text-[#4a4f55] mt-1">
-                    {probe.mentioned ? '병원 이름 등장' : '병원 이름 없음'}
-                    {probe.path === 'owned' && ' · 근거: 병원이 만든 글'}
-                    {probe.path === 'directory' && ` · 근거: 외부 목록(${probe.thirdPartyHosts.join(', ') || '출처 미상'})`}
-                    {probe.path === 'name_only' && ' · 출처 표시 없음'}
+                  <p className={`text-[12px] mt-1 ${q.mentioned ? 'text-[#4a4f55]' : 'text-[#c3341a] font-bold'}`}>
+                    {q.mentioned
+                      ? q.engineTotal > 1 && q.engineMentioned < q.engineTotal
+                        ? `AI ${q.engineTotal}곳 중 ${q.engineMentioned}곳에서만 병원 이름 등장`
+                        : '병원 이름 등장'
+                      : q.engineTotal > 1
+                        ? `AI ${q.engineTotal}곳 모두에서 병원 이름 없음`
+                        : '병원 이름 없음'}
+                    {q.path === 'owned' && ' · 근거: 병원이 만든 글'}
+                    {q.path === 'directory' && ` · 근거: 외부 목록(${q.thirdPartyHosts.join(', ') || '출처 미상'})`}
+                    {q.path === 'name_only' && ' · 출처 표시 없음'}
                   </p>
-                  {probe.evidence && (
+                  {q.evidence && (
                     <p className="text-[11.5px] text-[#5b6573] mt-1.5 bg-[#f7f9fb] rounded-lg px-3 py-2 leading-relaxed">
-                      {probe.evidence}
+                      {q.evidence}
                     </p>
                   )}
                 </li>

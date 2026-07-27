@@ -41,8 +41,19 @@ import type {
 export const RANK_CAVEAT =
   '순위는 네이버 검색 API 기준이라 실제 검색 화면 순위와 다를 수 있어요(실측에서 몇 계단 차이가 났어요). 추세 참고용으로만 봐 주세요.';
 
-function pct(part: number, total: number): number {
-  return total > 0 ? Math.round((part / total) * 100) : 0;
+/**
+ * 작은 수는 우리말 수관형사로 쓴다 — "3가지 중 2가지"보다 "세 가지 중 두 가지"가
+ * 원장이 읽는 문장이다. 범위를 벗어나면 숫자로 떨어진다(질의 상한이 3이라 실사용은 1~3).
+ */
+const KO_COUNT: readonly string[] = ['0', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
+
+export function koCount(n: number): string {
+  return KO_COUNT[n] ?? String(n);
+}
+
+/** 질문 원문을 그대로 인용한다 — 원장이 자기 눈으로 확인할 수 있어야 한다. */
+function quoteQuestions(questions: readonly string[]): string {
+  return questions.map((q) => `“${q}”`).join(', ');
 }
 
 /* ── ① 네이버 블로그 ─────────────────────────────────────── */
@@ -447,14 +458,27 @@ export function buildSiteFindings(site: SiteAxis): readonly Finding[] {
 /**
  * AI 축 결과 카드.
  *
- * ★ 판정 규칙 (실측 오판 회귀 방지):
- *   · 종합 판정은 **추천 질의(이름 없이 지역+진료과)** 로만 한다.
- *   · 이름 확인 질의는 나오는 게 기본이라 **칭찬 대상이 아니다.** 배경 사실로만 쓴다.
- *     대신 이름을 넣었는데도 안 나오면 그건 심각한 문제로 올린다.
+ * ★ 판정 규칙 (실측 오판 회귀 방지 — 사고 2건이 이 주석의 근거다):
  *
- *   이 구분이 없던 판에서는 "질문 6개 중 2개 등장 → 잘하고 있어요"가 나갔다.
- *   그 2개는 전부 병원 이름을 넣은 질의였고, 정작 환자가 하는 추천 질의 4개는
- *   전부 미등장이었다. 결론이 정반대로 뒤집혀 나간 사고다.
+ *   ① 종합 판정은 **추천 질의(이름 없이 지역+진료과)** 로만 한다.
+ *      이름 확인 질의는 나오는 게 기본이라 **칭찬 대상이 아니다.** 배경 사실로만 쓴다.
+ *      대신 이름을 넣었는데도 안 나오면 그건 심각한 문제로 올린다.
+ *      이 구분이 없던 판에서는 "질문 6개 중 2개 등장 → 잘하고 있어요"가 나갔다.
+ *      그 2개는 전부 병원 이름을 넣은 질의였고 추천 질의 4개는 전부 미등장이었다.
+ *
+ *   ② 분모는 **질문 수**다. 엔진 호출 수가 아니다.
+ *      브이성형외과 진단에서 "6번 중 4번(67%) → 잘된 점"이 나갔는데, 그 6은
+ *      질문 3개 × 엔진 2곳이었다. 질문별로 보면 한 표현("대구 중구에서 성형외과
+ *      어디로 가는 게 좋을까?")은 두 엔진 모두에서 미등장이었다. 엔진 호출을 분모로
+ *      쓰면 "한 표현으로 물으면 아예 안 나온다"는 사실이 백분율에 묻힌다.
+ *
+ *   ③ 3단계 판정. **절반만 나와도 good 이던 것을 막는다.**
+ *        모든 질문 등장   → good
+ *        일부 질문만 등장 → warn (ai.presence.partial · 개선할 점)
+ *        어느 질문에서도 미등장 → warn (ai.presence · severity losing · 못된 점)
+ *
+ *   ④ 문구에 백분율을 앞세우지 않는다. 6분의 4 같은 숫자는 실제보다 좋게 들린다.
+ *      **안 나온 질문의 원문을 그대로 인용**해 원장이 직접 확인할 수 있게 한다.
  */
 export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Finding[] {
   if (!ai.checked) {
@@ -474,8 +498,34 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
 
   const out: Finding[] = [];
 
-  /* ① 종합 판정 — 추천 질의만으로 낸다 */
-  if (ai.recommendTotal === 0) {
+  /* ① 종합 판정 — 추천 질의를 **질문 단위**로 본다 */
+  const questions = ai.questions ?? [];
+  const recommend = questions.filter((q) => q.kind === 'recommend');
+  const shown = recommend.filter((q) => q.mentioned);
+  const missing = recommend.filter((q) => !q.mentioned);
+  // 한쪽 엔진에서만 나오는 질문 — "나오긴 나온다"로 넘기지 않고 사실로 적는다.
+  const split = recommend.filter(
+    (q) => q.engineTotal > 1 && q.engineMentioned > 0 && q.engineMentioned < q.engineTotal,
+  );
+  const splitNote =
+    split.length > 0
+      ? ` 다만 그중 ${koCount(split.length)} 가지는 AI 서비스에 따라 나오기도 하고 나오지 않기도 했습니다 — 아직 안정적으로 자리 잡은 상태는 아니에요.`
+      : '';
+
+  /** 질문별 등장 여부를 그대로 펼쳐 둔다 — 백분율 대신 원문으로 확인하게 한다. */
+  const questionDetails: readonly FindingDetail[] = recommend.map((q) => ({
+    label: q.question,
+    ok: q.mentioned,
+    hint: q.mentioned
+      ? q.engineTotal > 1 && q.engineMentioned < q.engineTotal
+        ? `물어본 AI ${q.engineTotal}곳 중 ${q.engineMentioned}곳에서만 병원 이름이 나왔어요.`
+        : '물어본 AI 모두에서 병원 이름이 나왔어요.'
+      : q.engineTotal > 1
+        ? `물어본 AI ${q.engineTotal}곳 모두에서 병원 이름이 나오지 않았어요.`
+        : '이 표현으로 물었을 때 병원 이름이 나오지 않았어요.',
+  }));
+
+  if (recommend.length === 0) {
     out.push({
       id: 'ai.presence',
       axis: 'ai',
@@ -486,17 +536,39 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
       action: '잠시 후 다시 진단하시면 이 항목까지 확인해 드릴 수 있어요.',
       ourScope: false,
     });
-  } else if (ai.recommendMentioned === 0) {
+  } else if (shown.length === 0) {
+    // 전무 — 못된 점 대역(FINDING_WEIGHT: ai.presence = losing)
     out.push({
       id: 'ai.presence',
       axis: 'ai',
       label: 'AI 검색 노출',
       tone: 'warn',
-      state: `환자가 병원 이름 없이 "지역 + 진료과"로 물었을 때는 ${ai.recommendTotal}번 모두 나오지 않았습니다.`,
+      state: `환자가 병원 이름 없이 "지역 + 진료과"로 물어본 ${koCount(
+        recommend.length,
+      )} 가지 질문 어느 것에서도 병원이 나오지 않았습니다.`,
       why: '환자는 병원 이름을 모르는 상태에서 물어봅니다. 그 답변에 없으면 후보에도 못 듭니다. 이름을 알고 찾아오는 환자만 남는다는 뜻이에요.',
       action:
         'AI는 웹에 있는 글을 근거로 답합니다. 지역·진료과·증상을 정면으로 다룬 글이 병원 이름으로 쌓여 있어야 추천 후보에 들어갑니다.',
       ourScope: true,
+      details: questionDetails,
+    });
+  } else if (missing.length > 0) {
+    // 일부만 등장 — 개선할 점 대역(FINDING_WEIGHT: ai.presence.partial = improving)
+    out.push({
+      id: 'ai.presence.partial',
+      axis: 'ai',
+      label: 'AI 검색 노출',
+      tone: 'warn',
+      state: `${koCount(recommend.length)} 가지 질문 중 ${koCount(
+        shown.length,
+      )} 가지에서는 병원이 나왔지만, ${quoteQuestions(
+        missing.map((q) => q.question),
+      )}로 물었을 때는 나오지 않았습니다.${splitNote}`,
+      why: '환자마다 묻는 표현이 다릅니다. 나오지 않은 표현으로 검색한 환자에게는 이 병원이 아예 보이지 않습니다 — 그 환자들은 통째로 놓치고 있는 셈이에요.',
+      action:
+        '나오지 않은 질문이 어떤 표현인지 보시고, 그 표현을 제목으로 잡아 정면으로 답하는 글을 병원 이름과 함께 쌓아야 합니다.',
+      ourScope: true,
+      details: questionDetails,
     });
   } else {
     out.push({
@@ -504,13 +576,13 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
       axis: 'ai',
       label: 'AI 검색 노출',
       tone: 'good',
-      state: `환자가 병원 이름 없이 "지역 + 진료과"로 물은 ${ai.recommendTotal}번 중 ${ai.recommendMentioned}번(${pct(
-        ai.recommendMentioned,
-        ai.recommendTotal,
-      )}%)에서 병원이 추천에 올랐습니다.`,
+      state: `환자가 병원 이름 없이 물어본 ${koCount(
+        recommend.length,
+      )} 가지 질문 모두에서 병원이 추천에 올랐습니다.${splitNote}`,
       why: null,
       action: '이름을 모르는 환자에게도 후보로 잡히고 있습니다. 다음 문제는 "무엇을 근거로 그렇게 답했는가"예요.',
       ourScope: false,
+      details: questionDetails,
     });
   }
 
@@ -543,32 +615,73 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
     );
   }
 
-  if (ai.mentionedCount === 0) return out;
+  /*
+   * ② 인용 경로 — 이 진단에서 가장 설득력 있는 항목.
+   *
+   * 여기도 분모는 **질문 수**다. 엔진 호출 단위로 세면 "3건 중 1건이 병원 글" 같은
+   * 상태가 ownedCount > 0 하나로 '잘된 점'이 돼 버린다(실측에서 그렇게 나갔다).
+   * 자기 콘텐츠가 근거로 잡힌 질문이 전부가 아니면 칭찬하지 않는다.
+   */
+  const answered = questions.filter((q) => q.mentioned);
+  if (answered.length === 0) return out;
 
-  // 인용 경로 — 이 진단에서 가장 설득력 있는 항목
-  if (ai.ownedCount > 0) {
+  const ownedQuestions = answered.filter((q) => q.path === 'owned');
+  const directoryQuestions = answered.filter((q) => q.path === 'directory');
+  const unsourcedQuestions = answered.filter((q) => q.path === 'name_only');
+
+  const pathAction = hasOwnBlog
+    ? '지금 쓰는 글이 AI가 인용할 형태가 아닙니다. 질문을 제목으로 잡고 첫 문단에서 바로 답하는 구조로 바꿔야 근거로 잡힙니다.'
+    : '병원 이름으로 된 설명 문서가 웹에 없습니다. 진료과·지역 질문에 정면으로 답하는 글부터 쌓아야 합니다.';
+  const pathWhy =
+    '병원이 설명을 못 하고 남이 만든 한 줄 정보로 소개되고 있다는 뜻입니다. 목록에서 빠지면 그대로 사라지고, 어떤 병원인지도 병원이 정하지 못합니다.';
+
+  if (ownedQuestions.length === answered.length) {
     out.push({
       id: 'ai.path',
       axis: 'ai',
       label: 'AI가 참고한 근거',
       tone: 'good',
-      state: `${ai.ownedCount}건은 병원이 직접 만든 글(블로그·홈페이지)을 근거로 인용했습니다.`,
+      state: `병원이 나온 ${koCount(
+        answered.length,
+      )} 가지 질문 모두에서, AI는 병원이 직접 만든 글(블로그·홈페이지)을 근거로 삼았습니다.`,
       why: null,
       action: '병원 콘텐츠가 AI 답변의 근거로 쓰이고 있습니다. 이 상태를 유지하는 것이 목표예요.',
       ourScope: false,
     });
-  } else if (ai.directoryCount > 0) {
+  } else if (ownedQuestions.length > 0) {
+    // 일부만 자기 글 — 여기서 칭찬하면 실제보다 좋게 읽힌다.
     out.push({
       id: 'ai.path',
       axis: 'ai',
       label: 'AI가 참고한 근거',
       tone: 'warn',
-      state: `병원 이름이 나온 ${ai.mentionedCount}건 모두, AI가 참고한 근거는 병원이 만든 글이 아니라 외부 디렉터리·목록이었습니다. 병원 블로그나 홈페이지가 근거로 잡힌 건 0건입니다.`,
-      why:
-        '병원이 설명을 못 하고 남이 만든 한 줄 정보로 소개되고 있다는 뜻입니다. 목록에서 빠지면 그대로 사라지고, 어떤 병원인지도 병원이 정하지 못합니다.',
-      action: hasOwnBlog
-        ? '지금 쓰는 글이 AI가 인용할 형태가 아닙니다. 질문을 제목으로 잡고 첫 문단에서 바로 답하는 구조로 바꿔야 근거로 잡힙니다.'
-        : '병원 이름으로 된 설명 문서가 웹에 없습니다. 진료과·지역 질문에 정면으로 답하는 글부터 쌓아야 합니다.',
+      state: `병원이 나온 ${koCount(answered.length)} 가지 질문 중 ${koCount(
+        ownedQuestions.length,
+      )} 가지만 병원이 직접 만든 글을 근거로 삼았고, 나머지 ${koCount(
+        answered.length - ownedQuestions.length,
+      )} 가지는 외부 디렉터리·목록이거나 출처가 표시되지 않았습니다.`,
+      why: pathWhy,
+      action: pathAction,
+      ourScope: true,
+    });
+  } else if (directoryQuestions.length > 0) {
+    const allDirectory = directoryQuestions.length === answered.length;
+    out.push({
+      id: 'ai.path',
+      axis: 'ai',
+      label: 'AI가 참고한 근거',
+      tone: 'warn',
+      state: allDirectory
+        ? `병원 이름이 나온 ${koCount(
+            answered.length,
+          )} 가지 질문 모두, AI가 참고한 근거는 병원이 만든 글이 아니라 외부 디렉터리·목록이었습니다. 병원 블로그나 홈페이지가 근거로 잡힌 질문은 하나도 없습니다.`
+        : `병원 이름이 나온 ${koCount(answered.length)} 가지 질문 중 ${koCount(
+            directoryQuestions.length,
+          )} 가지는 외부 디렉터리·목록이 근거였고, 나머지 ${koCount(
+            unsourcedQuestions.length,
+          )} 가지는 AI가 출처를 밝히지 않았습니다. 병원 블로그나 홈페이지가 근거로 잡힌 질문은 하나도 없습니다.`,
+      why: pathWhy,
+      action: pathAction,
       ourScope: true,
     });
   } else {
@@ -700,10 +813,13 @@ export const FINDING_WEIGHT: Readonly<
 > = {
   // 들어온 환자가 그 자리에서 이탈한다 — 가장 직접적인 손해
   'site.https': { severity: 'losing', rank: 10 },
-  // 이름을 모르는 환자에게 아예 안 보인다
+  // 이름을 모르는 환자에게 **아예** 안 보인다 (추천 질문 전부 미등장)
   'ai.presence': { severity: 'losing', rank: 12 },
   // AI가 병원 존재 자체를 모른다
   'ai.known': { severity: 'losing', rank: 14 },
+  // 일부 표현에서만 보인다 — 그 표현으로 검색하는 환자는 놓치지만 접점 자체는 있다.
+  // 전무(losing)와 같은 칸에 두면 "전부 빨간불"이 되어 신뢰를 잃으므로 개선 대역에 둔다.
+  'ai.presence.partial': { severity: 'improving', rank: 22 },
   // 심의·민원 리스크를 지금 지고 있다
   'compliance.risk': { severity: 'losing', rank: 16 },
   // 환자와 만날 접점이 아예 없다

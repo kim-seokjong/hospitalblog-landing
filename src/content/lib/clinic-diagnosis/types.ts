@@ -217,17 +217,58 @@ export interface CitationProbe {
   readonly thirdPartyHosts: readonly string[];
 }
 
+/**
+ * 같은 질문을 여러 엔진에 돌린 결과를 **질문 하나로 묶은** 것 — 판정의 정본 단위.
+ *
+ * ★ 왜 질문 단위인가.
+ *   질의 3개를 엔진 2곳에 돌리면 프로브는 6건이 된다. 그 6건을 그대로 분모로 쓰면
+ *   "6번 중 4번(67%) 등장 → 잘하고 있어요"가 나오는데, 질문별로 보면 한 표현에서는
+ *   아예 안 나오는 상태였다. 원장에게 의미 있는 단위는 "환자가 하는 질문"이지
+ *   "우리가 돌린 엔진 호출"이 아니다. 엔진 호출 수를 분모로 쓰면 실제보다 좋게 보인다.
+ *
+ * 환자는 엔진을 가려 쓰지 않으므로 **어느 엔진에서든 나오면 그 질문은 등장**으로 본다.
+ * 다만 한쪽 엔진에서만 나오는 상태는 불안정하므로 그 사실을 따로 드러낸다.
+ */
+export interface CitationQuestionResult {
+  readonly question: string;
+  readonly kind: CitationQueryKind;
+  /** 이 질문을 실제로 물어본 엔진 수. */
+  readonly engineTotal: number;
+  /** 그중 병원 이름이 나온 엔진 수. */
+  readonly engineMentioned: number;
+  /** 어느 엔진에서든 나왔는가 — **질문 단위 판정값**. */
+  readonly mentioned: boolean;
+  /** 이 질문에서 AI가 참고한 근거 (자기 자산 > 디렉터리 > 출처없음 순으로 대표값). */
+  readonly path: CitationPath;
+  /** 병원이 나온 엔진 목록. */
+  readonly mentionedEngines: readonly string[];
+  /** 병원이 나오지 않은 엔진 목록 — 엔진 편차 설명용. */
+  readonly missingEngines: readonly string[];
+  /** 이 질문에서 근거로 잡힌 제3자 출처 호스트(합집합). */
+  readonly thirdPartyHosts: readonly string[];
+  /** 근거 발췌 하나 (새니타이즈 완료). 없으면 null. */
+  readonly evidence: string | null;
+}
+
 export interface AiAxis {
   readonly checked: boolean;
   /** 미측정 사유. */
   readonly skippedReason: 'not_configured' | 'budget' | null;
   readonly probes: readonly CitationProbe[];
+  /** 프로브를 질문 단위로 묶은 결과 — **판정과 문구는 전부 여기서 나온다**. */
+  readonly questions: readonly CitationQuestionResult[];
+  /** 추천 질문 수 — **종합 판정의 분모**(엔진 호출 수가 아니다). */
+  readonly recommendQuestionTotal: number;
+  /** 그중 어느 엔진에서든 병원이 등장한 질문 수 — **종합 판정의 분자**. */
+  readonly recommendQuestionMentioned: number;
+  /** 엔진에 따라 결과가 갈린 질문 수 (한쪽에서만 등장) — 불안정 신호. */
+  readonly recommendQuestionSplit: number;
   readonly mentionedCount: number;
   readonly ownedCount: number;
   readonly directoryCount: number;
-  /** 추천 질의(이름 없이 지역+진료과) 수 — **종합 판정의 분모**. */
+  /** 추천 질의 엔진 호출 수 — 원자료. **판정에 쓰지 않는다.** */
   readonly recommendTotal: number;
-  /** 그중 병원 이름이 등장한 수 — **종합 판정의 분자**. */
+  /** 그중 병원 이름이 등장한 호출 수 — 원자료. **판정에 쓰지 않는다.** */
   readonly recommendMentioned: number;
   /** 이름 확인 질의 수 — 배경 사실용(성과 지표 아님). */
   readonly namedTotal: number;

@@ -10,6 +10,8 @@ import {
   isOwnedSource,
   runAiCitation,
   summarizeProbes,
+  summarizeQuestions,
+  isEngineSplit,
 } from '../ai-citation.ts';
 import type { CitationProbe } from '../types.ts';
 import { buildComplianceAxis, softenRule, type ComplianceCheckShape } from '../compliance-scan.ts';
@@ -113,6 +115,93 @@ test('summarizeProbes 는 추천 질의와 이름 질의를 따로 센다 (실�
   assert.equal(summary.namedTotal, 2);
   assert.equal(summary.namedMentioned, 2);
   assert.equal(summary.mentionedCount, 2);
+});
+
+/* ── 질문 단위 집계 (브이성형외과 오판 회귀 방지) ────────── */
+
+function enginedProbe(question: string, engine: string, mentioned: boolean): CitationProbe {
+  return {
+    question,
+    kind: 'recommend',
+    engine,
+    mentioned,
+    path: mentioned ? 'directory' : 'none',
+    evidence: mentioned ? '…' : null,
+    ownedSources: [],
+    thirdPartyHosts: mentioned ? ['goodoc.co.kr'] : [],
+  };
+}
+
+const RQ1 = '대구 중구 성형외과 추천해줘';
+const RQ2 = '대구 중구 성형외과 중에 잘하는 곳 세 군데만 알려줘';
+const RQ3 = '대구 중구에서 성형외과 어디로 가는 게 좋을까?';
+
+test('summarizeQuestions 는 엔진 호출을 질문 하나로 묶는다 (분모는 질문 수)', () => {
+  // 실측 재현: 질의 3개 × 엔진 2곳 = 6건. 6을 분모로 쓰면 실제보다 좋아 보인다.
+  const questions = summarizeQuestions([
+    enginedProbe(RQ1, 'openai', true),
+    enginedProbe(RQ1, 'perplexity', false),
+    enginedProbe(RQ2, 'openai', true),
+    enginedProbe(RQ2, 'perplexity', true),
+    enginedProbe(RQ3, 'openai', false),
+    enginedProbe(RQ3, 'perplexity', false),
+  ]);
+
+  assert.equal(questions.length, 3, '질문 단위로 묶여야 한다');
+  assert.deepEqual(questions.map((q) => q.question), [RQ1, RQ2, RQ3], '입력 순서를 보존한다');
+  // 환자는 엔진을 가려 쓰지 않는다 — 어느 엔진에서든 나오면 등장
+  assert.deepEqual(questions.map((q) => q.mentioned), [true, true, false]);
+  assert.deepEqual(questions.map((q) => q.engineMentioned), [1, 2, 0]);
+
+  const summary = summarizeProbes([
+    enginedProbe(RQ1, 'openai', true),
+    enginedProbe(RQ1, 'perplexity', false),
+    enginedProbe(RQ2, 'openai', true),
+    enginedProbe(RQ2, 'perplexity', true),
+    enginedProbe(RQ3, 'openai', false),
+    enginedProbe(RQ3, 'perplexity', false),
+  ]);
+  assert.equal(summary.recommendQuestionTotal, 3);
+  assert.equal(summary.recommendQuestionMentioned, 2);
+  assert.equal(summary.recommendQuestionSplit, 1);
+  // 원자료(엔진 호출 수)는 남기되 판정에는 쓰지 않는다
+  assert.equal(summary.recommendTotal, 6);
+  assert.equal(summary.recommendMentioned, 3);
+});
+
+test('isEngineSplit: 한쪽 엔진에서만 나오는 질문만 불안정으로 본다', () => {
+  const [split, both, none, single] = summarizeQuestions([
+    enginedProbe('a', 'openai', true),
+    enginedProbe('a', 'perplexity', false),
+    enginedProbe('b', 'openai', true),
+    enginedProbe('b', 'perplexity', true),
+    enginedProbe('c', 'openai', false),
+    enginedProbe('c', 'perplexity', false),
+    enginedProbe('d', 'openai', true),
+  ]);
+  assert.equal(isEngineSplit(split), true);
+  assert.equal(isEngineSplit(both), false);
+  assert.equal(isEngineSplit(none), false);
+  assert.equal(isEngineSplit(single), false, '엔진이 하나면 편차를 말할 수 없다');
+});
+
+test('질문 단위 인용 경로: 한 엔진에서라도 자기 글이 근거면 owned 로 본다', () => {
+  const probes: CitationProbe[] = [
+    { question: RQ1, kind: 'recommend', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: ['goodoc.co.kr'] },
+    { question: RQ1, kind: 'recommend', engine: 'perplexity', mentioned: true, path: 'owned', evidence: 'e', ownedSources: ['https://blog.naver.com/vbps_official/1'], thirdPartyHosts: [] },
+  ];
+  const [q] = summarizeQuestions(probes);
+  assert.equal(q.path, 'owned');
+  assert.deepEqual(q.thirdPartyHosts, ['goodoc.co.kr']);
+});
+
+test('같은 문장이라도 이름을 넣은 질의와 안 넣은 질의는 다른 질문이다', () => {
+  const questions = summarizeQuestions([
+    { question: '같은 문장', kind: 'recommend', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
+    { question: '같은 문장', kind: 'named', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: [] },
+  ]);
+  assert.equal(questions.length, 2);
+  assert.deepEqual(questions.map((q) => q.kind), ['recommend', 'named']);
 });
 
 /* ── 실행 계층 ──────────────────────────────────────────── */

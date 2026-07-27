@@ -3,7 +3,11 @@ import { createAttemptBudget } from '../geo-engines/attempts.ts';
 import { createGeoQueryCache } from '../geo-engines/cache.ts';
 import { executeGeoQueries, getEnabledEngines } from '../geo-engines/index.ts';
 import type { GeoEngineEnv } from '../geo-engines/types.ts';
+import { isEngineSplit, summarizeQuestions } from './citation-questions.ts';
 import type { AiAxis, CitationPath, CitationProbe, CitationQueryKind } from './types.ts';
+
+// 질문 단위 집계는 화면(리포트 렌더)도 그대로 써야 해서 순수 모듈로 떼어 뒀다.
+export { isEngineSplit, summarizeQuestions };
 
 /**
  * 2단계 ③ — AI 검색 인용 진단.
@@ -19,6 +23,13 @@ import type { AiAxis, CitationPath, CitationProbe, CitationQueryKind } from './t
  *   · recommend — 전 엔진에 돌린다. 종합 판정은 오직 이것으로만 한다.
  *   · named     — **엔진 1곳에만** 돌린다. "AI 가 병원 존재를 아는가"라는
  *                 배경 사실 하나를 확인하는 용도라 중복 호출할 이유가 없다.
+ *
+ * ★ 집계 단위는 **질문**이다. 엔진 호출이 아니다.
+ *   질의 3개를 엔진 2곳에 돌리면 프로브는 6건이 되는데, 그 6을 분모로 쓰면
+ *   "6번 중 4번(67%) → 잘하고 있어요"가 나온다. 질문별로 보면 한 표현에서는
+ *   두 엔진 모두 미등장이었는데도 그렇다. 환자는 엔진을 가려 쓰지 않으므로
+ *   **어느 엔진에서든 나오면 그 질문은 등장**이고, 판정 분모는 질문 수다.
+ *   (summarizeQuestions / summarizeProbes 참고)
  *
  * 이 축의 두 번째 논지는 **인용 경로**다.
  * 우리 실측에서 AI 인용 2건은 전부 디렉터리 경유였고 병원 블로그는 0건이었다.
@@ -160,6 +171,10 @@ export const EMPTY_AI_AXIS: AiAxis = {
   checked: false,
   skippedReason: null,
   probes: [],
+  questions: [],
+  recommendQuestionTotal: 0,
+  recommendQuestionMentioned: 0,
+  recommendQuestionSplit: 0,
   mentionedCount: 0,
   ownedCount: 0,
   directoryCount: 0,
@@ -170,11 +185,23 @@ export const EMPTY_AI_AXIS: AiAxis = {
   httpAttempts: 0,
 };
 
-/** 프로브 목록 → AiAxis 집계 (순수 함수). 판정 분모/분자를 한 곳에서 만든다. */
+
+/**
+ * 프로브 목록 → AiAxis 집계 (순수 함수). 판정 분모/분자를 한 곳에서 만든다.
+ *
+ * ★ 판정 분모는 **질문 수**(recommendQuestionTotal)다. 엔진 호출 수(recommendTotal)는
+ *   비용·원자료로만 남기고 판정·문구에 쓰지 않는다 — 실제보다 좋게 들리기 때문이다.
+ */
 export function summarizeProbes(probes: readonly CitationProbe[]): Omit<AiAxis, 'checked' | 'skippedReason' | 'probes' | 'httpAttempts'> {
   const recommend = probes.filter((p) => p.kind === 'recommend');
   const named = probes.filter((p) => p.kind === 'named');
+  const questions = summarizeQuestions(probes);
+  const recommendQuestions = questions.filter((q) => q.kind === 'recommend');
   return {
+    questions,
+    recommendQuestionTotal: recommendQuestions.length,
+    recommendQuestionMentioned: recommendQuestions.filter((q) => q.mentioned).length,
+    recommendQuestionSplit: recommendQuestions.filter(isEngineSplit).length,
     mentionedCount: probes.filter((p) => p.mentioned).length,
     ownedCount: probes.filter((p) => p.path === 'owned').length,
     directoryCount: probes.filter((p) => p.path === 'directory').length,

@@ -14,10 +14,18 @@ import {
   summarizeFindings,
 } from '../findings.ts';
 import { EMPTY_SITE_AXIS } from '../site-audit.ts';
-import { EMPTY_AI_AXIS } from '../ai-citation.ts';
+import { EMPTY_AI_AXIS, summarizeProbes } from '../ai-citation.ts';
 import { EMPTY_COMPLIANCE_AXIS } from '../compliance-scan.ts';
 import type { PostSeoResult } from '../post-seo.ts';
-import type { AiAxis, BlogAxis, ComplianceAxis, Finding, SiteAxis } from '../types.ts';
+import type {
+  AiAxis,
+  BlogAxis,
+  CitationPath,
+  CitationProbe,
+  ComplianceAxis,
+  Finding,
+  SiteAxis,
+} from '../types.ts';
 
 const BLOG_OK: BlogAxis = {
   checked: true,
@@ -233,9 +241,38 @@ test('순위 항목에는 API·화면 순위 차이 경고가 항상 붙는다',
 
 /* ── AI 축 (이 진단의 핵심 논지) ────────────────────────── */
 
-function aiAxis(over: Partial<AiAxis>): AiAxis {
-  return { ...EMPTY_AI_AXIS, checked: true, ...over };
+/**
+ * 프로브(엔진 호출)에서 축을 만든다 — 집계까지 실제 함수를 통과시킨다.
+ * 카운트를 손으로 적어 넣으면 집계 버그가 테스트를 통과해 버린다(실측 오판이 그랬다).
+ */
+function aiAxis(probes: readonly CitationProbe[]): AiAxis {
+  return { ...EMPTY_AI_AXIS, checked: true, probes, ...summarizeProbes(probes) };
 }
+
+function p(
+  question: string,
+  kind: CitationProbe['kind'],
+  engine: string,
+  mentioned: boolean,
+  path: CitationPath = mentioned ? 'directory' : 'none',
+  thirdPartyHosts: readonly string[] = mentioned && path === 'directory' ? ['goodoc.co.kr'] : [],
+): CitationProbe {
+  return {
+    question,
+    kind,
+    engine,
+    mentioned,
+    path,
+    evidence: mentioned ? '…추천 목록…' : null,
+    ownedSources: path === 'owned' ? ['https://blog.naver.com/vbps_official/1'] : [],
+    thirdPartyHosts,
+  };
+}
+
+/* 브이성형외과 실측 질의 3종 — 문구 검증에 원문을 그대로 쓴다. */
+const Q1 = '대구 중구 성형외과 추천해줘';
+const Q2 = '대구 중구 성형외과 중에 잘하는 곳 세 군데만 알려줘';
+const Q3 = '대구 중구에서 성형외과 어디로 가는 게 좋을까?';
 
 /**
  * ★ 실측 사고 회귀 방지.
@@ -244,24 +281,22 @@ function aiAxis(over: Partial<AiAxis>): AiAxis {
  */
 test('이름을 넣은 질의만 나온 상태를 절대 "잘하고 있어요"로 판정하지 않는다', () => {
   const findings = buildAiFindings(
-    aiAxis({
-      probes: [
-        { question: '대구 수성구 성형외과 추천해줘', kind: 'recommend', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
-        { question: '대구 수성구 성형외과 추천해줘', kind: 'recommend', engine: 'perplexity', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
-        { question: '대구 수성구 성형외과 중에 잘하는 곳 세 군데만 알려줘', kind: 'recommend', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
-        { question: '대구 수성구 성형외과 중에 잘하는 곳 세 군데만 알려줘', kind: 'recommend', engine: 'perplexity', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
-        { question: '대구 수성구 하이업성형외과의원 어떤 병원이야?', kind: 'named', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: ['goodoc.co.kr'] },
-      ],
-      mentionedCount: 1, directoryCount: 1,
-      recommendTotal: 4, recommendMentioned: 0, namedTotal: 1, namedMentioned: 1,
-    }),
+    aiAxis([
+      p(Q1, 'recommend', 'openai', false),
+      p(Q1, 'recommend', 'perplexity', false),
+      p(Q2, 'recommend', 'openai', false),
+      p(Q2, 'recommend', 'perplexity', false),
+      p('대구 수성구 하이업성형외과의원 어떤 병원이야?', 'named', 'openai', true),
+    ]),
     true,
   );
 
   const presence = findings.find((f) => f.id === 'ai.presence');
   assert.equal(presence?.tone, 'warn', '추천 질의 전패인데 good 이 나오면 결론이 뒤집힌다');
   assert.match(presence?.state ?? '', /이름 없이/);
-  assert.match(presence?.state ?? '', /4번 모두 나오지 않았습니다/);
+  assert.match(presence?.state ?? '', /두 가지 질문 어느 것에서도 병원이 나오지 않았습니다/);
+  // 전무는 "못된 점" 대역
+  assert.equal(FINDING_WEIGHT['ai.presence'].severity, 'losing');
 
   // 이름 질의는 배경 사실로만 — 성과로 포장하지 않는다
   const known = findings.find((f) => f.id === 'ai.known');
@@ -272,13 +307,7 @@ test('이름을 넣은 질의만 나온 상태를 절대 "잘하고 있어요"�
 
 test('이름을 넣었는데도 AI가 모르면 심각한 문제로 올린다', () => {
   const findings = buildAiFindings(
-    aiAxis({
-      probes: [
-        { question: 'r', kind: 'recommend', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
-        { question: 'n', kind: 'named', engine: 'openai', mentioned: false, path: 'none', evidence: null, ownedSources: [], thirdPartyHosts: [] },
-      ],
-      recommendTotal: 1, recommendMentioned: 0, namedTotal: 1, namedMentioned: 0,
-    }),
+    aiAxis([p(Q1, 'recommend', 'openai', false), p('n', 'named', 'openai', false)]),
     false,
   );
   const known = findings.find((f) => f.id === 'ai.known');
@@ -286,42 +315,134 @@ test('이름을 넣었는데도 AI가 모르면 심각한 문제로 올린다', 
   assert.match(known?.why ?? '', /병원 존재 자체를 모르는/);
 });
 
-test('추천 질의에서 실제로 나오면 그때 칭찬한다', () => {
+/* ── ★ 질문 단위 집계 (브이성형외과 오판 회귀 방지) ──────── */
+
+test('일부 질문에서만 나오면 "잘된 점"이 아니라 "개선할 점"이다 (브이성형외과 실측)', () => {
+  // 질문 3개 × 엔진 2곳 = 프로브 6건. 엔진 호출을 분모로 쓰면 "6번 중 3번"이 되지만,
+  // 질문 단위로 보면 Q3 은 두 엔진 모두에서 미등장이다.
+  const axis = aiAxis([
+    p(Q1, 'recommend', 'openai', true),
+    p(Q1, 'recommend', 'perplexity', false),
+    p(Q2, 'recommend', 'openai', true),
+    p(Q2, 'recommend', 'perplexity', true),
+    p(Q3, 'recommend', 'openai', false),
+    p(Q3, 'recommend', 'perplexity', false),
+  ]);
+  assert.equal(axis.recommendQuestionTotal, 3);
+  assert.equal(axis.recommendQuestionMentioned, 2);
+  assert.equal(axis.recommendQuestionSplit, 1, 'Q1 은 한쪽 엔진에서만 나왔다');
+
+  const findings = buildAiFindings(axis, true);
+  const presence = findings.find((f) => f.id.startsWith('ai.presence'));
+  assert.equal(presence?.id, 'ai.presence.partial');
+  assert.equal(presence?.tone, 'warn', '한 질문에서 아예 안 나오는데 good 이면 안 된다');
+  assert.equal(FINDING_WEIGHT['ai.presence.partial'].severity, 'improving', '전무가 아니므로 개선할 점 대역');
+
+  // 안 나온 질문 원문을 그대로 인용한다 — 원장이 눈으로 확인할 수 있어야 한다
+  assert.ok(presence?.state.includes(Q3), '미등장 질문 원문이 문구에 없다');
+  assert.ok(!presence?.state.includes(Q2), '나온 질문까지 인용하면 초점이 흐려진다');
+  // 백분율을 앞세우지 않는다 — 6분의 4 같은 숫자는 실제보다 좋게 들린다
+  assert.ok(!/\d+%/.test(presence?.state ?? ''), '백분율이 다시 들어갔다');
+  assert.match(presence?.state ?? '', /세 가지 질문 중 두 가지/);
+  // 엔진 편차도 사실대로 드러낸다
+  assert.match(presence?.state ?? '', /AI 서비스에 따라 나오기도 하고/);
+  assert.match(presence?.why ?? '', /보이지 않습니다/);
+  assert.equal(presence?.ourScope, true);
+
+  // 질문별 등장 여부를 접어두기로 그대로 펼친다
+  assert.equal(presence?.details?.length, 3);
+  assert.equal(presence?.details?.find((d) => d.label === Q3)?.ok, false);
+  assert.match(presence?.details?.find((d) => d.label === Q1)?.hint ?? '', /2곳 중 1곳/);
+});
+
+test('그룹 분류: 일부 등장은 개선할 점, 전무는 못된 점으로 간다', () => {
+  const partial = groupFindings(
+    buildAiFindings(
+      aiAxis([
+        p(Q1, 'recommend', 'openai', true),
+        p(Q2, 'recommend', 'openai', false),
+      ]),
+      true,
+    ),
+  );
+  assert.ok(partial.improve.some((f) => f.id === 'ai.presence.partial'));
+  assert.equal(partial.bad.length, 0);
+
+  const none = groupFindings(
+    buildAiFindings(aiAxis([p(Q1, 'recommend', 'openai', false), p(Q2, 'recommend', 'openai', false)]), true),
+  );
+  assert.ok(none.bad.some((f) => f.id === 'ai.presence'));
+});
+
+test('모든 질문에서 나오면 그때 칭찬한다 (전부 빨간불로 만들지 않는다)', () => {
   const findings = buildAiFindings(
-    aiAxis({
-      probes: [{ question: 'r', kind: 'recommend', engine: 'openai', mentioned: true, path: 'owned', evidence: 'e', ownedSources: ['https://blog.naver.com/vbps_official/1'], thirdPartyHosts: [] }],
-      mentionedCount: 1, ownedCount: 1, recommendTotal: 2, recommendMentioned: 1,
-    }),
+    aiAxis([
+      p(Q1, 'recommend', 'openai', true, 'owned'),
+      p(Q1, 'recommend', 'perplexity', true, 'owned'),
+      p(Q2, 'recommend', 'openai', true, 'owned'),
+      p(Q2, 'recommend', 'perplexity', true, 'owned'),
+    ]),
     true,
   );
-  assert.equal(findings.find((f) => f.id === 'ai.presence')?.tone, 'good');
+  const presence = findings.find((f) => f.id === 'ai.presence');
+  assert.equal(presence?.tone, 'good');
+  assert.match(presence?.state ?? '', /두 가지 질문 모두에서/);
+  assert.ok(!presence?.state.includes('AI 서비스에 따라'), '편차가 없으면 불필요한 단서를 달지 않는다');
+});
+
+test('질의가 하나뿐이어도 질문 단위로 판정한다', () => {
+  const shown = buildAiFindings(aiAxis([p(Q1, 'recommend', 'openai', true, 'owned')]), true);
+  assert.equal(shown.find((f) => f.id === 'ai.presence')?.tone, 'good');
+  assert.match(shown.find((f) => f.id === 'ai.presence')?.state ?? '', /한 가지 질문 모두에서/);
+
+  const missing = buildAiFindings(aiAxis([p(Q1, 'recommend', 'openai', false)]), true);
+  const card = missing.find((f) => f.id === 'ai.presence');
+  assert.equal(card?.tone, 'warn');
+  assert.match(card?.details?.[0].hint ?? '', /이 표현으로 물었을 때/);
+});
+
+test('엔진 편차: 한쪽에서만 나와도 질문은 등장으로 보되 불안정하다고 적는다', () => {
+  const findings = buildAiFindings(
+    aiAxis([
+      p(Q1, 'recommend', 'openai', true, 'owned'),
+      p(Q1, 'recommend', 'perplexity', false),
+    ]),
+    true,
+  );
+  const presence = findings.find((f) => f.id === 'ai.presence');
+  assert.equal(presence?.tone, 'good', '환자는 엔진을 가려 쓰지 않는다');
+  assert.match(presence?.state ?? '', /안정적으로 자리 잡은 상태는 아니에요/);
 });
 
 test('AI가 언급했지만 근거가 전부 디렉터리면 그 사실을 정면으로 말한다', () => {
   const findings = buildAiFindings(
-    aiAxis({
-      probes: [
-        { question: 'q1', kind: 'recommend', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: ['goodoc.co.kr'] },
-        { question: 'q2', kind: 'recommend', engine: 'openai', mentioned: true, path: 'directory', evidence: 'e', ownedSources: [], thirdPartyHosts: ['modoodoc.com'] },
-      ],
-      mentionedCount: 2, directoryCount: 2, ownedCount: 0, recommendTotal: 2, recommendMentioned: 2,
-    }),
+    aiAxis([p(Q1, 'recommend', 'openai', true), p(Q2, 'recommend', 'openai', true)]),
     true,
   );
   const path = findings.find((f) => f.id === 'ai.path');
   assert.equal(path?.tone, 'warn');
-  assert.match(path?.state ?? '', /병원 블로그나 홈페이지가 근거로 잡힌 건 0건/);
+  assert.match(path?.state ?? '', /병원 블로그나 홈페이지가 근거로 잡힌 질문은 하나도 없습니다/);
   assert.equal(path?.ourScope, true);
 });
 
-test('자기 자산이 근거로 잡혔으면 칭찬하고 팔지 않는다', () => {
+test('자기 글이 근거인 질문이 일부뿐이면 칭찬하지 않는다 (ai.path 오판 회귀 방지)', () => {
+  // 실측: 등장 3건 중 2건이 외부 디렉터리, 1건만 병원 자기 글이었는데 "잘된 점"이었다.
   const findings = buildAiFindings(
-    aiAxis({
-      probes: [{ question: 'q', kind: 'recommend', engine: 'openai', mentioned: true, path: 'owned', evidence: 'e', ownedSources: ['https://blog.naver.com/vbps_official/1'], thirdPartyHosts: [] }],
-      mentionedCount: 1, ownedCount: 1, recommendTotal: 1, recommendMentioned: 1,
-    }),
+    aiAxis([
+      p(Q1, 'recommend', 'openai', true, 'owned'),
+      p(Q2, 'recommend', 'openai', true, 'directory'),
+      p('대구 중구 브이성형외과의원 어떤 병원이야?', 'named', 'openai', true, 'directory'),
+    ]),
     true,
   );
+  const path = findings.find((f) => f.id === 'ai.path');
+  assert.equal(path?.tone, 'warn', '자기 콘텐츠 비율이 낮은데 good 이면 실제보다 좋게 읽힌다');
+  assert.match(path?.state ?? '', /세 가지 질문 중 한 가지만/);
+  assert.equal(path?.ourScope, true);
+});
+
+test('자기 자산이 모든 질문의 근거면 칭찬하고 팔지 않는다', () => {
+  const findings = buildAiFindings(aiAxis([p(Q1, 'recommend', 'openai', true, 'owned')]), true);
   const path = findings.find((f) => f.id === 'ai.path');
   assert.equal(path?.tone, 'good');
   assert.equal(path?.ourScope, false);
