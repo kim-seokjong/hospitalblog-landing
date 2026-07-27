@@ -12,6 +12,7 @@ import {
   type RegistryHealthStatus,
 } from '@/content/lib/clinic-diagnosis/registry-health';
 import { sendEmail } from '@/payment/email/client';
+import { sendTelegram } from '@/dev/lib/telegram';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -128,17 +129,51 @@ function adminRecipients(): readonly string[] {
     .filter((v) => v.includes('@'));
 }
 
+/**
+ * 장애 알림 — **메일과 텔레그램 양쪽으로 보낸다.**
+ *
+ * ⚠️ 메일 하나만 쓰면 안 되는 이유(2026-07-27 실측):
+ *   Resend 도메인이 미검증 상태로 방치돼 모든 발송이 막혔던 적이 있고, 그 사실을
+ *   **아무도 몰랐다.** 병원 조회 장애를 메일로만 알리면 "메일이 죽은 날"에는
+ *   조회 장애 알림도 함께 죽는다 — 가장 알아야 할 때 가장 조용해지는 구조다.
+ *   그래서 경로가 다른 텔레그램을 병행한다. 둘 중 하나만 살아 있어도 알림은 도착한다.
+ */
 async function notifyAdmins(status: RegistryHealthStatus, html: string): Promise<boolean> {
+  let sent = false;
+
+  // 1) 텔레그램 — 메일 인프라와 독립된 경로. 환경변수가 없으면 조용히 skip 된다.
+  try {
+    const result = await sendTelegram(`${alertSubject(status)}\n\n${stripTags(html)}`);
+    if (result === 'sent') sent = true;
+  } catch (e) {
+    console.error('[cron/registry-health] 텔레그램 알림 실패(무시):', e instanceof Error ? e.message : e);
+  }
+
+  // 2) 메일
   const recipients = adminRecipients();
   if (recipients.length === 0) {
-    console.error('[cron/registry-health] ADMIN_EMAILS 미설정 — 알림을 보낼 곳이 없습니다.');
-    return false;
+    console.error('[cron/registry-health] ADMIN_EMAILS 미설정 — 메일 알림을 보낼 곳이 없습니다.');
+    return sent;
   }
-  let sent = false;
   for (const to of recipients) {
-    const result = await sendEmail({ to, subject: alertSubject(status), html });
+    const result = await sendEmail({ to, subject: alertSubject(status), html, feature: 'registry-health' });
     if (result.success) sent = true;
     else console.error('[cron/registry-health] 알림 발송 실패:', result.error);
   }
   return sent;
+}
+
+/** 텔레그램은 평문이라 태그를 걷어낸다. 줄바꿈은 살린다. */
+function stripTags(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 1500);
 }
