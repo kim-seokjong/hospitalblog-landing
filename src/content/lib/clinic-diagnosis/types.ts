@@ -317,6 +317,40 @@ export interface AiAxis {
  */
 export type ComplianceRisk = 'prohibited' | 'caution';
 
+/** 검출 단어가 어디에 있었는가 — 제목인지 본문인지에 따라 원장의 판단이 달라진다. */
+export type ComplianceExcerptWhere = 'title' | 'lead' | 'body';
+
+/**
+ * 검출 단어가 **실제로 걸린 문장** — 진단 신뢰의 핵심.
+ *
+ * ★ 왜 필요한가(실측 근거).
+ *   프라이브성형외과 진단에서 "위험 — 환자 후기·치료경험담" 9편이 떴는데, 열어 보니
+ *   "후기가 많으면 믿을 만한 걸까?"·"'후기'를 그대로 믿고 병원을 고르시는 일입니다"처럼
+ *   **후기를 믿지 말라는 정보성 문장**이었다. 화면에는 글 제목과 단어만 있었으니
+ *   원장은 "제목엔 후기가 없는데 왜 위험이냐"고 물을 수밖에 없었고, 글을 열어보는
+ *   순간 오탐임을 알게 된다 — 진단 전체의 신뢰가 거기서 무너진다.
+ *
+ * 그래서 **걸린 문장을 그대로 보여준다.** 원장이 스스로 판단할 수 있어야 한다.
+ *
+ * ⚠️ 개인정보·본문 유출 방지: before/after 는 각각 상한 길이로 자르고
+ *    이메일·전화번호 형태는 마스킹한다(compliance-scan.ts).
+ * ⚠️ 이 필드가 생기기 전에 저장된 리포트에는 없다 — 화면은 반드시 제목만 보여주는
+ *    폴백을 유지한다(없다고 깨지면 안 된다).
+ */
+export interface ComplianceExcerpt {
+  /** 검출 단어 앞 문맥 (상한 길이로 자름). */
+  readonly before: string;
+  /** 검출 단어 원문 그대로 — 화면에서 강조한다. */
+  readonly match: string;
+  /** 검출 단어 뒤 문맥 (상한 길이로 자름). */
+  readonly after: string;
+  readonly where: ComplianceExcerptWhere;
+  /** 앞이 잘렸는가 — 화면에서 말줄임표를 붙인다. */
+  readonly clippedBefore: boolean;
+  /** 뒤가 잘렸는가. */
+  readonly clippedAfter: boolean;
+}
+
 export interface ComplianceHit {
   readonly postTitle: string;
   readonly postLink: string;
@@ -325,6 +359,8 @@ export interface ComplianceHit {
   /** 심의에서 자주 지적되는 이유. */
   readonly note: string;
   readonly level: 'review' | 'caution';
+  /** 실제로 걸린 문장. 구 리포트·문장 패턴 검출에는 없다(제목만 보여주는 폴백). */
+  readonly excerpt?: ComplianceExcerpt;
   /**
    * 위험 등급. ⚠️ 이 필드가 생기기 전에 발급된 공유 리포트에는 없다 —
    * 읽을 때는 반드시 `hit.risk ?? 'caution'` 로 폴백한다(없는 것을 위험으로 올리지 않는다).

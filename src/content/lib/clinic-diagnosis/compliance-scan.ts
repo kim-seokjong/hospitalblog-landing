@@ -1,5 +1,11 @@
 import type { PostBodyKind } from './post-seo.ts';
-import type { ComplianceAxis, ComplianceHit, ComplianceRisk } from './types.ts';
+import type {
+  ComplianceAxis,
+  ComplianceExcerpt,
+  ComplianceExcerptWhere,
+  ComplianceHit,
+  ComplianceRisk,
+} from './types.ts';
 
 /**
  * 2단계 ④ — 의료광고법 위험 신호 점검.
@@ -74,19 +80,110 @@ const PROHIBITED_TYPES: readonly { readonly label: string; readonly pattern: Reg
   { label: '다른 병원과의 비교·비방', pattern: /비교\s*광고|타\s*병원|다른\s*병원|경쟁병원|비방/ },
 ];
 
+/* ── 문맥 판정: "단어가 있다"와 "그 유형이다"는 다르다 ─────── */
+
+/**
+ * ★ 실측 근거 (프라이브성형외과 blog.naver.com/newprive, RSS 50편).
+ *   "위험 — 환자 후기·치료경험담"으로 뜬 글의 실제 문장은 이랬다:
+ *     · "실제 후기를 찾아보시면, 같은 온다리프팅인데도 만족도가 제각각입니다"
+ *     · "'추천'과 '후기'를 그대로 믿고 병원을 고르시는 일입니다"
+ *     · "후기가 많으면 믿을 만한 걸까?"
+ *     · "블로그나 SNS에서 접하는 시술 후기들을 보다 보면"
+ *     · "비싸다고 무조건 좋은 건가? 리뷰만으론 믿기 어렵고..."
+ *     · "저희가 100% 예약제로 하루 인원을 제한하고"
+ *   전부 환자 치료경험담이 아니다. 오히려 후기를 믿지 말라는 정보성 글이고,
+ *   "무조건"·"100%"는 부정문·의문문 안이거나 효과와 무관한 말("100% 예약제")이었다.
+ *
+ * 그래서 **문맥 신호가 있으면 위험(prohibited)에서 주의(caution)로 내린다.**
+ *
+ * ⚠️ 왜 빼지 않고 '주의'로 내리는가.
+ *   의료광고법은 recall 우선이 회사 원칙이다(feedback_compliance_strictness_moat).
+ *   아예 빼면 원장은 그 표현을 영영 못 본다. "빨간 위험"만 보수적으로 좁히고,
+ *   표현 자체는 목록에 남겨 원장이 문장을 읽고 직접 판단하게 한다.
+ *
+ * ⚠️ 여기서 바꾸는 것은 **진단 화면의 표시 등급뿐**이다.
+ *   고객 글 발행을 막는 medical-compliance 의 검수 게이트(A층/B층)는 손대지 않는다.
+ */
+
+/** ① 의문형 — 묻는 문장은 주장이 아니다. */
+const QUESTION_MARK = /[?？]/;
+const QUESTION_ENDING = /(인가|일까|걸까|건가|을까|는가|나요|까요|습니까|ㅂ니까)\s*요?\s*[”"'’」』)\]]*\s*$/;
+
+/** ② 부정·반박 — "무조건 좋은 건 아닙니다"는 오히려 정직한 서술이다. */
+const REFUTATION_CUES =
+  /아닙니다|아니라|아니에요|아녜요|아니죠|아니었|아닌\s|은\s*아니|는\s*아니|가\s*아니|이\s*아니|그렇지는\s*않|그런\s*건\s*아|꼭\s*그렇|믿을\s*수\s*없|믿기\s*어렵|믿기가\s*어렵|그대로\s*믿|어디까지\s*믿|뭘\s*믿|무엇을\s*믿|만으론|만으로는|만\s*믿|착각|오해|잘못\s*알/;
+
+/** ③ 일반론·타인 지칭 — 남들의 후기를 가리키는 말이지 우리 환자의 경험담이 아니다. */
+const THIRD_PARTY_CUES =
+  /블로그나?\s*SNS|인터넷|온라인|커뮤니티|검색해\s*보|검색하다\s*보면|찾아보시면|찾아보면|보다\s*보면|접하는|수많은|다들|주변에서|남들|다른\s*사람|후기들|후기도\s*많|후기가\s*많|리뷰|고\s*생각하시는|라고\s*생각|고\s*여기|고들|라는\s*말|고\s*하는데|고\s*알고/;
+
+/**
+ * ④ 진짜 경험담 확증 — 이게 있으면 위에서 무엇이 걸리든 **위험을 유지한다**.
+ *   "직접 받아본 후기입니다" · "3개월 지난 제 경험담" · "저는 이 시술 받고 좋아졌어요"
+ *   1인칭 표현은 보수적으로 잡는다 — "제가 직접 진단해 드립니다"(원장 서술)를
+ *   경험담으로 오인하면 반대 방향 오탐이 된다.
+ */
+const TESTIMONIAL_CUES =
+  /내돈내산|직접\s*받아\s*보|직접\s*받아본|직접\s*맞아\s*보|직접\s*맞아본|받아본\s*후기|받은\s*후기|맞은\s*후기|후기입니다|후기예요|후기에요|후기\s*남기|후기\s*공유|경험담입니다|제\s*경험담|저의\s*경험담|생생한?\s*후기|리얼\s*후기|솔직\s*후기|실제\s*환자|환자\s*후기|고객\s*후기|\d+\s*(?:일|주|주차|개월|달|년)\s*(?:후기|경험담)|(?:저는|제가|저도|나는|내가)[^.!?\n]{0,40}(?:받아|맞아|받고|맞고|받은|맞은|해보니|받아보니)[^.!?\n]{0,40}(?:좋아졌|나았|호전|효과|만족|달라졌|후기|경험담)/;
+
+/**
+ * ⑤ '치료효과 보장' 유형 전용 — 효과·결과를 말하는 문장일 때만 위험이다.
+ *   "100% 예약제"·"무조건 예약 후 방문"은 보장 표현이 아니다.
+ */
+const OUTCOME_TERMS = /효과|결과|치료|시술|수술|개선|만족|성공|낫|호전|안전|부작용|보장|완치|좋아|해결|재발/;
+const GUARANTEE_LABEL = '치료효과 보장·부작용 없음 단정';
+
+/** 위험에서 내린 이유 — 화면에 그대로 쓴다(원장이 왜 안 걸렸는지 알 수 있게). */
+export type DemotionReason = 'question' | 'refutation' | 'third_party' | 'no_outcome';
+
+export const DEMOTION_LABEL: Readonly<Record<DemotionReason, string>> = {
+  question: '묻는 문장',
+  refutation: '부정하거나 반박하는 문장',
+  third_party: '남들의 이야기·일반적인 통념을 가리키는 문장',
+  no_outcome: '치료 효과·결과와는 무관한 문장',
+};
+
+/**
+ * 문맥이 이 유형에 **해당하지 않는다고 볼 신호**를 찾는다. 없으면 null.
+ * context 는 검출 단어가 들어 있던 문장(앞뒤 문맥 포함).
+ */
+export function demotionReasonFor(label: string, context: string): DemotionReason | null {
+  const text = (context ?? '').trim();
+  if (!text) return null;
+  // 진짜 경험담이면 무엇이 걸리든 위험을 유지한다 (recall 을 깎지 않는다).
+  if (TESTIMONIAL_CUES.test(text)) return null;
+
+  if (QUESTION_MARK.test(text) || QUESTION_ENDING.test(text)) return 'question';
+  if (REFUTATION_CUES.test(text)) return 'refutation';
+  if (THIRD_PARTY_CUES.test(text)) return 'third_party';
+  if (label === GUARANTEE_LABEL && !OUTCOME_TERMS.test(text)) return 'no_outcome';
+  return null;
+}
+
 /**
  * 검출 1건의 위험 등급을 매긴다 (순수 함수).
- * signal 은 "검출 단어 + 규칙명"(위반) 또는 경고 문구(패턴 경고)를 합친 문자열.
+ *
+ * signal  : "검출 단어 + 규칙명"(위반) 또는 경고 문구(패턴 경고)를 합친 문자열.
+ * context : 검출 단어가 실제로 들어 있던 문장. 주면 문맥까지 보고 판단한다.
+ *           (없으면 예전처럼 signal 만으로 판단 — 저장된 리포트·단순 호출 호환)
  */
-export function classifyComplianceRisk(signal: string): {
+export function classifyComplianceRisk(
+  signal: string,
+  context?: string,
+): {
   readonly risk: ComplianceRisk;
   readonly label: string | null;
+  /** 위험에서 내렸다면 그 이유. 유지했으면 null. */
+  readonly demoted: DemotionReason | null;
 } {
   const text = signal ?? '';
   for (const type of PROHIBITED_TYPES) {
-    if (type.pattern.test(text)) return { risk: 'prohibited', label: type.label };
+    if (!type.pattern.test(text)) continue;
+    const demoted = context ? demotionReasonFor(type.label, context) : null;
+    if (demoted) return { risk: 'caution', label: null, demoted };
+    return { risk: 'prohibited', label: type.label, demoted: null };
   }
-  return { risk: 'caution', label: null };
+  return { risk: 'caution', label: null, demoted: null };
 }
 
 /**
@@ -97,9 +194,169 @@ export function prohibitedNote(label: string): string {
   return `${label} — 의료법이 광고에서 명시적으로 금지한 유형이에요. 이 표현이 실제로 그 유형에 해당하는지 먼저 확인해 보세요.`;
 }
 
+/**
+ * 위험에서 내린 검출의 근거 문구.
+ * 왜 빨간색이 아닌지 원장이 알 수 있어야 목록 전체가 믿을 만해진다.
+ */
+export function demotedNote(rule: string, reason: DemotionReason): string {
+  return `${softenRule(rule)} 다만 위 문장은 ${DEMOTION_LABEL[reason]}이라 "위험"으로 올리지 않았어요.`;
+}
+
 /** 저장된 리포트 호환 — risk 가 없던 시절 리포트는 전부 '주의'로 읽는다. */
 export function riskOf(hit: Pick<ComplianceHit, 'risk'>): ComplianceRisk {
   return hit.risk ?? 'caution';
+}
+
+/* ── 문맥 발췌 ─────────────────────────────────────────── */
+
+/**
+ * 발췌 상한 — **개인정보·본문이 통째로 새지 않게** 길이를 묶는다.
+ * 넉넉히 보여주되 한 문장 남짓을 넘지 않는다.
+ */
+export const EXCERPT_BEFORE_MAX = 60;
+export const EXCERPT_AFTER_MAX = 60;
+export const EXCERPT_MATCH_MAX = 40;
+/** 문맥 판정에 쓸 창 — 문장이 아주 길 때 판정이 느슨해지지 않게 앞뒤로 제한한다. */
+export const CUE_WINDOW = 140;
+/** 같은 단어를 몇 번까지 훑어볼지 (본문 전체를 도는 것을 막는 상한). */
+export const MAX_OCCURRENCES = 20;
+
+const SENTENCE_END = new Set(['.', '!', '?', '\n', '。', '？', '！']);
+
+/** index 를 포함하는 문장의 [시작, 끝) — 끝은 문장부호를 포함하지 않는다. */
+export function sentenceBoundsAt(text: string, index: number): readonly [number, number] {
+  let start = index;
+  while (start > 0 && !SENTENCE_END.has(text[start - 1])) start -= 1;
+  let end = index;
+  while (end < text.length && !SENTENCE_END.has(text[end])) end += 1;
+  return [start, end];
+}
+
+/** 문맥 판정용 문장 — 문장부호까지 포함하고(의문부호 판정) 창 길이로 자른다. */
+export function cueContextAt(text: string, start: number, end: number): string {
+  const [sentStart, sentEnd] = sentenceBoundsAt(text, start);
+  const from = Math.max(sentStart, start - CUE_WINDOW);
+  // 문장 종결부호 1자를 포함해야 "~걸까?" 의 물음표를 볼 수 있다.
+  const to = Math.min(sentEnd + 1, Math.max(end, start) + CUE_WINDOW, text.length);
+  return normalizeExcerpt(text.slice(from, to));
+}
+
+const ENTITIES: Readonly<Record<string, string>> = {
+  '&quot;': '"',
+  '&apos;': "'",
+  '&nbsp;': ' ',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&amp;': '&',
+};
+
+/** 네이버 본문에 남는 HTML 엔티티를 사람이 읽는 글자로 되돌린다(표시 전용). */
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&#x([0-9a-fA-F]{1,6});/g, (whole, hex: string) => codePoint(parseInt(hex, 16), whole))
+    .replace(/&#(\d{1,7});/g, (whole, dec: string) => codePoint(parseInt(dec, 10), whole))
+    .replace(/&(?:quot|apos|nbsp|lt|gt|amp);/g, (entity) => ENTITIES[entity] ?? entity);
+}
+
+function codePoint(value: number, fallback: string): string {
+  if (!Number.isFinite(value) || value < 0x20 || value > 0x10ffff) return fallback;
+  try {
+    return String.fromCodePoint(value);
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * 개인정보로 보이는 조각은 가린다.
+ * 공개 블로그 글이라도 발췌를 그대로 저장·공유하므로 최소한의 마스킹은 건다.
+ */
+const PII_PATTERNS: readonly (readonly [RegExp, string])[] = [
+  [/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '(메일주소)'],
+  [/\b\d{6}\s*[-–]\s*\d{7}\b/g, '(개인정보)'],
+  [/\b0\d{1,2}\s*[-–.]\s*\d{3,4}\s*[-–.]\s*\d{4}\b/g, '(전화번호)'],
+];
+
+function maskPii(value: string): string {
+  let out = value;
+  for (const [pattern, replacement] of PII_PATTERNS) out = out.replace(pattern, replacement);
+  return out;
+}
+
+/** 공백·제로폭 문자를 눌러 한 줄로 만든다 (네이버 본문은 ​·개행이 많다). */
+export function normalizeExcerpt(value: string): string {
+  return (value ?? '')
+    .replace(/[​‌‍﻿ ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 검출 단어가 제목에 있었는지 / 글 앞부분인지 / 본문인지. */
+function whereOf(source: ComplianceSource, index: number): ComplianceExcerptWhere {
+  const title = source.title ?? '';
+  const titlePrefixed = title.length > 0 && source.text.startsWith(title);
+  if (titlePrefixed && index < title.length) return 'title';
+  const kind = source.bodyKind ?? (source.hasBody ? 'full' : 'none');
+  return kind === 'summary' ? 'lead' : 'body';
+}
+
+/** 검출 위치 → 화면에 보여줄 발췌 (순수 함수). */
+export function buildExcerpt(source: ComplianceSource, word: string, index: number): ComplianceExcerpt | null {
+  const text = source.text ?? '';
+  if (!word || index < 0 || index >= text.length) return null;
+
+  const matchEnd = Math.min(text.length, index + word.length);
+  const [sentStart, sentEnd] = sentenceBoundsAt(text, index);
+  const from = Math.max(sentStart, index - EXCERPT_BEFORE_MAX);
+  const to = Math.min(Math.max(sentEnd, matchEnd), matchEnd + EXCERPT_AFTER_MAX, text.length);
+
+  const before = maskPii(normalizeExcerpt(decodeEntities(text.slice(from, index))));
+  const after = maskPii(normalizeExcerpt(decodeEntities(text.slice(matchEnd, to))));
+  const match = normalizeExcerpt(decodeEntities(text.slice(index, matchEnd))).slice(0, EXCERPT_MATCH_MAX);
+  if (!match) return null;
+
+  return {
+    before: before.slice(-EXCERPT_BEFORE_MAX),
+    match,
+    after: after.slice(0, EXCERPT_AFTER_MAX),
+    where: whereOf(source, index),
+    clippedBefore: from > sentStart || before.length > EXCERPT_BEFORE_MAX,
+    clippedAfter: to < sentEnd,
+  };
+}
+
+/**
+ * 같은 단어가 여러 번 나오면 **하나라도 진짜면 위험**이다.
+ *
+ * ⚠️ checkCompliance 는 단어별 첫 매칭만 돌려준다. 첫 매칭이 우연히 의문문이라고
+ *    뒤쪽의 진짜 경험담까지 함께 내려가면 recall 이 깎인다 — 그래서 이 모듈에서
+ *    같은 단어의 나머지 등장 위치도 훑어 **문맥 신호가 없는 자리**를 우선 채택한다.
+ */
+export function pickOccurrence(
+  source: ComplianceSource,
+  word: string,
+  firstIndex: number,
+  label: string,
+): { readonly index: number; readonly demoted: DemotionReason | null } | null {
+  const text = source.text ?? '';
+  if (!word) return null;
+
+  const start = firstIndex >= 0 && text.startsWith(word, firstIndex) ? firstIndex : text.indexOf(word);
+  if (start < 0) return null;
+
+  let fallback: { index: number; demoted: DemotionReason } | null = null;
+  let cursor = start;
+  for (let seen = 0; cursor >= 0 && seen < MAX_OCCURRENCES; seen += 1) {
+    // medical-compliance 와 같은 한글 좌측 경계 — "정기적"의 "기적" 같은 부분 매칭 제외.
+    const prev = cursor > 0 ? text[cursor - 1] : '';
+    if (!(cursor !== start && /[가-힣]/.test(prev))) {
+      const demoted = demotionReasonFor(label, cueContextAt(text, cursor, cursor + word.length));
+      if (!demoted) return { index: cursor, demoted: null };
+      if (!fallback) fallback = { index: cursor, demoted };
+    }
+    cursor = text.indexOf(word, cursor + word.length);
+  }
+  return fallback ?? { index: start, demoted: null };
 }
 
 export interface ComplianceSource {
@@ -119,6 +376,8 @@ export interface ComplianceCheckShape {
     readonly word: string;
     readonly rule: string;
     readonly severity: SourceSeverity | string;
+    /** 검사 대상 텍스트에서의 위치. 없으면 문자열 검색으로 찾는다. */
+    readonly index?: number;
   }>;
   readonly warnings: readonly string[];
 }
@@ -145,30 +404,51 @@ export function buildComplianceAxis(
     const result = checkFn(source.text);
     for (const violation of result.violations) {
       const severity = String(violation.severity).toUpperCase();
-      const { risk, label } = classifyComplianceRisk(`${violation.word} ${violation.rule}`);
+      const signal = `${violation.word} ${violation.rule}`;
+
+      /**
+       * 문맥까지 보고 판단한다 — 단어가 있다고 그 유형인 것은 아니다.
+       * 유형에 걸린 뒤에야 위치를 훑는다(주의 등급은 위치가 등급을 바꾸지 않는다).
+       */
+      const typed = classifyComplianceRisk(signal);
+      const picked =
+        typed.label !== null
+          ? pickOccurrence(source, violation.word, violation.index ?? -1, typed.label)
+          : { index: violation.index ?? source.text.indexOf(violation.word), demoted: null as DemotionReason | null };
+
+      const demoted = picked?.demoted ?? null;
+      const risk: ComplianceRisk = typed.risk === 'prohibited' && !demoted ? 'prohibited' : 'caution';
+      const label = risk === 'prohibited' ? typed.label : null;
+      const excerpt = picked ? buildExcerpt(source, violation.word, picked.index) : null;
+
       push({
         postTitle: source.title || '(제목 없음)',
         postLink: source.link,
         phrase: violation.word,
-        note: risk === 'prohibited' && label ? prohibitedNote(label) : softenRule(violation.rule),
+        note: label
+          ? prohibitedNote(label)
+          : demoted
+            ? demotedNote(violation.rule, demoted)
+            : softenRule(violation.rule),
         level: severity === 'CRITICAL' || severity === 'HIGH' ? 'review' : 'caution',
         risk,
-        ...(risk === 'prohibited' && label ? { riskLabel: label } : {}),
+        ...(label ? { riskLabel: label } : {}),
+        ...(excerpt ? { excerpt } : {}),
       });
     }
     for (const warning of result.warnings) {
-      const { risk, label } = classifyComplianceRisk(warning);
+      /**
+       * 경고는 어떤 문자열이 걸렸는지 알 수 없어(패턴 메시지만 돌아온다) 발췌를 만들 수 없다.
+       * 현재 경고 문구 중 금지 유형에 해당하는 것은 없지만, 문맥을 못 보는 이상
+       * 위험으로 올리지 않는다 — 근거를 못 보여줄 것을 빨간색으로 세우지 않는다.
+       */
       push({
         postTitle: source.title || '(제목 없음)',
         postLink: source.link,
         phrase: '(문장 패턴)',
-        note:
-          risk === 'prohibited' && label
-            ? prohibitedNote(label)
-            : `${warning.replace(/입니다\.$/, '어요.')} 확인이 필요합니다.`,
+        note: `${warning.replace(/입니다\.$/, '어요.')} 확인이 필요합니다.`,
         level: 'caution',
-        risk,
-        ...(risk === 'prohibited' && label ? { riskLabel: label } : {}),
+        risk: 'caution',
       });
     }
   }

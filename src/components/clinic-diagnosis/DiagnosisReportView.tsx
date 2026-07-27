@@ -1,4 +1,10 @@
-import type { DiagnosisReport, Finding, FindingDetail, FindingTone } from '@/content/lib/clinic-diagnosis/types';
+import type {
+  ComplianceExcerptWhere,
+  DiagnosisReport,
+  Finding,
+  FindingDetail,
+  FindingTone,
+} from '@/content/lib/clinic-diagnosis/types';
 import { FINDING_GROUP_LABEL, groupFindings } from '@/content/lib/clinic-diagnosis/findings';
 import { riskOf } from '@/content/lib/clinic-diagnosis/compliance-scan';
 import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-questions';
@@ -28,6 +34,13 @@ const AXIS_LABEL: Readonly<Record<Finding['axis'], string>> = {
   site: '홈페이지',
   ai: 'AI 검색',
   compliance: '의료광고법',
+};
+
+/** 검출 표현이 어디에 있었는지 — 원장이 글을 열지 않고도 위치를 알 수 있게. */
+const EXCERPT_WHERE_LABEL: Readonly<Record<ComplianceExcerptWhere, string>> = {
+  title: '제목',
+  lead: '글 앞부분',
+  body: '본문',
 };
 
 const TONE_STYLE: Readonly<Record<FindingTone, { badge: string; text: string; mark: string; border: string }>> = {
@@ -336,7 +349,27 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
                     )}
                     <span className="text-[11px] font-normal text-[#8a93a0]">{hit.postTitle}</span>
                   </p>
-                  <p className={`text-[12px] mt-1 leading-relaxed ${danger ? 'text-[#7a2f1c]' : 'text-[#4a4f55]'}`}>
+                  {/*
+                    ★ 걸린 문장 자체 — 이 목록에서 가장 중요한 부분이다.
+                      단어와 글 제목만 보여주면 원장은 "제목엔 후기가 없는데 왜 위험이냐"고 묻게 되고,
+                      글을 열어보는 순간 오탐이면 진단 전체를 못 믿게 된다.
+                    · 예전에 발급된 리포트에는 excerpt 가 없다 → 그때는 제목만 보여주던 대로 둔다.
+                  */}
+                  {hit.excerpt && (
+                    <p className="mt-1.5 rounded-lg bg-white/70 border border-[#dbe2ea] px-3 py-2 text-[12.5px] leading-relaxed text-[#2f3640] break-keep">
+                      <span className="text-[10px] font-bold text-[#5b6573] bg-[#eef2f6] rounded px-1.5 py-0.5 mr-1.5 align-middle whitespace-nowrap">
+                        {EXCERPT_WHERE_LABEL[hit.excerpt.where]}
+                      </span>
+                      {hit.excerpt.clippedBefore && '… '}
+                      {hit.excerpt.before}
+                      <mark className={`rounded px-1 font-bold ${danger ? 'bg-[#ffd9cf] text-[#a3220a]' : 'bg-[#fdeec2] text-[#7a5a00]'}`}>
+                        {hit.excerpt.match}
+                      </mark>
+                      {hit.excerpt.after}
+                      {hit.excerpt.clippedAfter && ' …'}
+                    </p>
+                  )}
+                  <p className={`text-[12px] mt-1.5 leading-relaxed ${danger ? 'text-[#7a2f1c]' : 'text-[#4a4f55]'}`}>
                     {hit.note}
                   </p>
                 </li>
@@ -344,9 +377,11 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
             })}
           </ul>
           <p className="text-[11px] text-[#8a93a0] mt-2.5 leading-relaxed">
-            “위험”은 의료법이 광고에서 명시적으로 금지한 유형(환자 후기·치료 전후 비교·효과 보장·다른 병원과의 비교)에
-            해당할 수 있는 표현을 표시한 것이고, 나머지는 심의에서 자주 지적되는 표현이에요. 둘 다 기계적으로 찾아 표시한
-            것이며 위반 여부를 판단한 결과가 아닙니다. 최종 판단은 심의기관과 담당 변호사의 몫입니다.
+            표현이 실제로 쓰인 문장을 그대로 붙여 두었으니 직접 읽고 판단해 보세요. “위험”은 의료법이 광고에서 명시적으로
+            금지한 유형(환자 후기·치료 전후 비교·효과 보장·다른 병원과의 비교)에 해당할 수 있는 표현이고, 나머지는 심의에서
+            자주 지적되는 표현이에요. 묻거나 부정하는 문장, 남들의 후기를 가리키는 문장은 “위험”에서 뺐습니다. 둘 다
+            기계적으로 찾아 표시한 것이며 <b className="font-bold">저희가 위반 여부를 판단한 것은 아닙니다.</b> 최종 판단은
+            심의기관과 담당 변호사의 몫입니다.
           </p>
         </section>
       )}
