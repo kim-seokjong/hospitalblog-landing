@@ -58,10 +58,23 @@ function isCustomerSendEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'on';
 }
 
-/** 대표 다이제스트 수신 이메일 — env 미설정이면 null (발송 생략, 하드코딩 금지). */
+/**
+ * 대표 다이제스트 수신 이메일.
+ *
+ * ⚠️ 전용 변수(TRIAL_REPORT_ADMIN_EMAIL)만 보던 것을 ADMIN_EMAILS 폴백까지 넓힌다 —
+ *   2026-07-27 점검에서 **전용 변수가 운영에 아예 없어** 다이제스트가 매일 조용히
+ *   건너뛰어지고 있었다. 관리자 주소는 이미 ADMIN_EMAILS 로 관리되고 있으므로
+ *   변수를 하나 더 늘리는 대신 그것을 재사용한다(환경변수가 늘수록 빠뜨릴 자리도 는다).
+ *   전용 변수가 있으면 그쪽이 우선이다. 둘 다 없으면 null — 하드코딩 수신 주소는 두지 않는다.
+ */
 function adminEmail(): string | null {
-  const v = (process.env.TRIAL_REPORT_ADMIN_EMAIL ?? '').trim();
-  return v.length > 0 ? v : null;
+  const dedicated = (process.env.TRIAL_REPORT_ADMIN_EMAIL ?? '').trim();
+  if (dedicated.length > 0) return dedicated;
+  const first = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .find((v) => v.includes('@'));
+  return first ?? null;
 }
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -472,7 +485,9 @@ export async function GET(req: NextRequest) {
     // 대표 다이제스트 발송 (게이트 무관) — 단 수신 주소(env) 미설정이면 발송 없이 로그만
     const digestTo = adminEmail();
     let digestSent = false;
-    if (digestTo) {
+    // ⚠️ 보낼 내용이 없으면 보내지 않는다 — 매일 "0건" 메일이 오면 그게 소음이 되고,
+    //   소음이 쌓이면 진짜 알림까지 함께 무시된다. 대상이 생긴 날에만 알린다.
+    if (digestTo && digestRows.length > 0) {
       const digest = buildTrialReportAdminDigest(digestRows);
       const sent = await sendEmail({ to: digestTo, subject: digest.subject, html: digest.html, feature: 'trial-digest' });
       digestSent = sent.success;
