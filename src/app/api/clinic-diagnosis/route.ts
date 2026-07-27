@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/dev/lib/supabase/server';
-import { findClinicByMngNo } from '@/content/lib/clinic-diagnosis/registry';
+import { resolveClinicForDiagnosis } from '@/content/lib/clinic-diagnosis/lookup-service';
 import { runClinicDiagnosis } from '@/content/lib/clinic-diagnosis/run';
 import { parseBlogCheckInput } from '@/content/lib/blog-check-input';
 import { normalizeSiteUrl } from '@/content/lib/clinic-diagnosis/site-audit';
@@ -31,7 +31,7 @@ const MAX_PASTED_BODY = 20_000;
  * POST /api/clinic-diagnosis — 확정된 병원 1곳의 네 축 진단 (비회원 공개).
  *
  * body: {
- *   mngNo: string,            // /lookup 에서 고른 행안부 관리번호
+ *   mngNo: string,            // /lookup 에서 고른 병원 식별자 (행안부 MNG_NO 또는 'hira:…' 폴백)
  *   name: string,             // 같은 후보를 다시 찾기 위한 이름
  *   region?: string,
  *   blogId?: string,          // 상세 진단 — 자동 탐색 대신 직접 지정
@@ -46,8 +46,9 @@ const MAX_PASTED_BODY = 20_000;
  * - single-flight: 같은 병원 동시 요청은 리더 1회만 실행(팔로워 무과금)
  * - 붙여넣은 본문이 있으면 캐시하지 않는다(매번 다른 입력)
  *
- * ⚠️ mngNo 는 클라이언트가 보내는 값이므로 **서버에서 행안부로 재확인**한 뒤
+ * ⚠️ mngNo 는 클라이언트가 보내는 값이므로 **서버에서 원천에 재확인**한 뒤
  *    그 결과로만 진단한다. 클라이언트가 조작한 병원 정보로 리포트가 만들어지지 않는다.
+ *    (행안부 관리번호 → 행안부 / 'hira:…' → 폴백 명부. 접두사로 키 공간이 갈린다.)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -101,7 +102,8 @@ export async function POST(req: NextRequest) {
       () => consumeDiagnosisQuota(extractClientIp(req.headers)),
       async () => {
         // 서버에서 병원을 재확인한다 — 클라이언트가 준 mngNo 를 그대로 믿지 않는다.
-        const clinic = await findClinicByMngNo(mngNo, name, { region });
+        // 식별자 접두사('hira:')로 원천을 갈라 행안부 또는 폴백 명부에서 다시 읽는다.
+        const clinic = await resolveClinicForDiagnosis(mngNo, name, region);
         if (!clinic) return null;
         return runClinicDiagnosis(clinic, { manualBlogId: blogId, manualSiteUrl: siteUrl, pastedBody });
       },

@@ -64,6 +64,9 @@
     },
     "app/api/cron/trial-report/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/cron/registry-health/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [
@@ -106,6 +109,10 @@
     {
       "path": "/api/cron/trial-report",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/registry-health",
+      "schedule": "0 * * * *"
     }
   ]
 }

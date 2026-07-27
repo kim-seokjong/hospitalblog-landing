@@ -50,3 +50,7 @@ next-env.d.ts
 scripts/verify_proofread.mjs
 scripts/verify_proofread_google.mjs
 scripts/out/
+
+# 폴백 병원 명부 중간 산출물 (NDJSON 수십 MB) — 데이터라 커밋하지 않는다.
+# 재생성: python scripts/export-clinic-directory.py ...
+scripts/.cache/

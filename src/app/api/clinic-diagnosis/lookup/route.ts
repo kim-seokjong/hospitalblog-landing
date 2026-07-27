@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { lookupClinics } from '@/content/lib/clinic-diagnosis/registry';
+import { lookupClinicWithFallback } from '@/content/lib/clinic-diagnosis/lookup-service';
 import {
   consumeLookupQuota,
   extractClientIp,
   limitMessage,
   lookupCacheKey,
   lookupCacheTtlMs,
+  LOOKUP_DIRECTORY_CACHE_TTL_MS,
 } from '@/content/lib/clinic-diagnosis/limits';
 import { cacheGet, cacheSet } from '@/content/lib/scoreboard/cache';
 import type { ClinicLookupOutcome } from '@/content/lib/clinic-diagnosis/types';
@@ -21,6 +22,13 @@ export const maxDuration = 60;
  * 이 라우트는 **아직 진단을 돌리지 않는다.** 병원 특정만 한다.
  * 이름만으로는 병원을 특정할 수 없어서(실측: "미소치과의원" LIKE 기준 1,230곳),
  * 후보가 여러 개면 주소를 붙여 사용자가 고르게 하고 그 다음에 진단으로 넘어간다.
+ *
+ * 조회 경로(2026-07-27 이후):
+ *   ① 행정안전부 '건강_의원 조회서비스' — 정본
+ *   ② 0건이거나 호출 자체가 실패하면 → 폴백 명부(clinic_directory, 심평원 공개자료)
+ *   ③ 폴백도 못 찾으면 **행안부의 판정을 그대로** 돌려준다
+ *      (조회 실패를 "그런 병원 없음"으로 바꾸지 않는다)
+ *   첫 화면 전체가 외부 API 하나에 걸려 있으면 그 API가 죽는 날 서비스가 죽는다.
  *
  * 가드:
  * - 입력 길이 제한, IP당 일 30회
@@ -57,7 +65,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: limitMessage(decision.reason) }, { status: 429 });
     }
 
-    const outcome = await lookupClinics(name, { region });
+    // 행안부(정본) → 안 되면 폴백 명부(심평원 공개자료). 폴백이 못 찾으면
+    // 행안부의 판정을 그대로 유지한다 — "조회 실패"를 "그런 병원 없음"으로 바꾸지 않는다.
+    const { outcome, usedDirectory } = await lookupClinicWithFallback(name, region);
 
     if (outcome.kind === 'unavailable') {
       // ⚠️ 셋을 구분해서 알린다. "설정 문제"를 "그런 병원 없음"처럼 보이게 하면
@@ -78,9 +88,11 @@ export async function POST(req: NextRequest) {
 
     // 성공(찾은 결과)은 1일, not_found 는 5분. 하나의 TTL 로 뭉뚱그리면
     // 행안부의 5분짜리 장애가 하루짜리 장애로 증폭된다.
-    const ttlMs = lookupCacheTtlMs(outcome.kind);
+    // 폴백으로 찾은 결과는 상한을 따로 둔다 — 정본(행안부)이 복구되면 곧 되돌아가야 한다.
+    const baseTtlMs = lookupCacheTtlMs(outcome.kind);
+    const ttlMs = usedDirectory ? Math.min(baseTtlMs, LOOKUP_DIRECTORY_CACHE_TTL_MS) : baseTtlMs;
     if (ttlMs > 0) cacheSet(key, outcome, ttlMs);
-    return NextResponse.json({ outcome, cached: false });
+    return NextResponse.json({ outcome, cached: false, source: usedDirectory ? 'directory' : 'registry' });
   } catch (err) {
     console.error('[clinic-diagnosis/lookup]', err instanceof Error ? err.message : err);
     return NextResponse.json(

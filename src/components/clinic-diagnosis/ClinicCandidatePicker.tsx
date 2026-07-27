@@ -57,6 +57,25 @@ function CandidateRow({
   );
 }
 
+/**
+ * 폴백 명부에서 찾은 결과라는 사실을 숨기지 않는다.
+ *
+ * 행안부가 죽어 있는 동안에도 화면은 계속 돌아가지만, 원장이 보는 자료의 출처가
+ * 달라졌다는 것은 밝혀야 한다. 특히 **영업상태(폐업 여부)는 폴백 자료로 알 수 없다** —
+ * 그걸 말하지 않으면 "행안부가 영업 중이라고 했다"로 오해할 수 있다.
+ */
+function SourceNote({ candidates }: { candidates: readonly ClinicCandidate[] }) {
+  const fallback = candidates.find((c) => c.source === 'directory');
+  if (!fallback) return null;
+  const version = fallback.sourceVersion ? ` ${fallback.sourceVersion} 기준` : '';
+  return (
+    <p className="text-[11.5px] text-[#8a93a0] mt-3 leading-relaxed break-keep">
+      행정안전부 병원 조회가 원활하지 않아, 건강보험심사평가원 공개자료{version}로 찾은 결과예요.
+      최근 개원·이전한 병원은 빠져 있을 수 있어요.
+    </p>
+  );
+}
+
 export default function ClinicCandidatePicker({ outcome, onPick, onNeedRegion, busyMngNo }: Props) {
   if (outcome.kind === 'resolved') return null;
 
@@ -67,6 +86,9 @@ export default function ClinicCandidatePicker({ outcome, onPick, onNeedRegion, b
         <p className="text-[12.5px] text-[#4a4f55] mt-1.5 leading-relaxed">
           간판 이름과 정식 등록 상호가 다른 경우가 많아요(예: 간판 “플로르”, 등록 “플로르 성형외과 의원”).
           지역을 함께 넣거나 정식 상호로 다시 검색해 주세요.
+        </p>
+        <p className="text-[11.5px] text-[#8a93a0] mt-2.5 leading-relaxed">
+          행정안전부 자료와 건강보험심사평가원 공개자료 두 곳을 모두 찾아본 결과예요.
         </p>
       </div>
     );
@@ -84,6 +106,7 @@ export default function ClinicCandidatePicker({ outcome, onPick, onNeedRegion, b
             <CandidateRow key={c.mngNo} clinic={c} onPick={onPick} busy={busyMngNo !== null} />
           ))}
         </ul>
+        <SourceNote candidates={outcome.candidates} />
       </div>
     );
   }
@@ -103,6 +126,7 @@ export default function ClinicCandidatePicker({ outcome, onPick, onNeedRegion, b
             <CandidateRow key={c.mngNo} clinic={c} onPick={onPick} busy={busyMngNo !== null} />
           ))}
         </ul>
+        <SourceNote candidates={outcome.candidates} />
       </div>
     );
   }
@@ -130,6 +154,7 @@ export default function ClinicCandidatePicker({ outcome, onPick, onNeedRegion, b
                 <CandidateRow key={c.mngNo} clinic={c} onPick={onPick} busy={busyMngNo !== null} />
               ))}
             </ul>
+            <SourceNote candidates={outcome.candidates} />
           </>
         )}
       </div>
@@ -169,6 +194,7 @@ export default function ClinicCandidatePicker({ outcome, onPick, onNeedRegion, b
           후보가 더 있을 수 있어요. 목록에 없으면 지역을 함께 넣어 다시 검색해 주세요.
         </p>
       )}
+      <SourceNote candidates={outcome.candidates} />
     </div>
   );
 }

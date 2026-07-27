@@ -14,9 +14,25 @@ export type { PostSeoResult };
 
 /* ── 1단계: 병원 특정 ─────────────────────────────────────── */
 
-/** 행안부 '건강_의원 조회서비스' 1건을 우리 도메인 형태로 정규화한 값. */
+/**
+ * 이 후보를 어디서 찾았는가.
+ *
+ *  · registry  : 행정안전부 '건강_의원 조회서비스' (정본)
+ *  · directory : 심평원 공개자료 기반 자체 명부 (행안부가 죽었을 때의 폴백)
+ *
+ * ⚠️ 이 필드가 생기기 전에 저장된 리포트에는 없다 — 읽을 때는 항상 `?? 'registry'` 로 폴백한다.
+ *    화면에서 출처를 밝히는 데만 쓰고, 판정 로직을 이 값으로 가르지 않는다.
+ */
+export type ClinicSource = 'registry' | 'directory';
+
+/** 병원 등록자료 1건을 우리 도메인 형태로 정규화한 값 (행안부 또는 폴백 명부). */
 export interface ClinicCandidate {
-  /** 행안부 관리번호(MNG_NO) — 후보 확정 키. */
+  /**
+   * 병원 식별 정본.
+   *  · 행안부 관리번호(MNG_NO) — 원천이 registry 일 때
+   *  · 'hira:<16hex>'          — 원천이 directory 일 때 (키 공간이 겹치지 않는다)
+   * 서버는 접두사만 보고 어느 원천으로 재검증할지 정한다.
+   */
   readonly mngNo: string;
   readonly name: string;
   readonly roadAddress: string;
@@ -41,6 +57,10 @@ export interface ClinicCandidate {
   readonly openedOn: string;
   /** 폐업일 (YYYY-MM-DD). 없으면 ''. */
   readonly closedOn: string;
+  /** 이 후보를 찾은 원천. 구 리포트에는 없다 → 읽을 때 `?? 'registry'`. */
+  readonly source?: ClinicSource;
+  /** 폴백 명부일 때 자료 기준 시점 (예: '2026Q1'). 화면에 그대로 밝힌다. */
+  readonly sourceVersion?: string;
 }
 
 export type ClinicLookupOutcome =
