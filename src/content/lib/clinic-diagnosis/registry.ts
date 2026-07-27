@@ -149,10 +149,6 @@ export function normalizeRegionHint(region: string): string {
  * 검색 시드 목록 (순서대로 시도, 첫 히트에서 중단).
  * 중복·2자 미만은 제거한다.
  */
-export function buildRegistrySeedsForProbe(name: string): readonly string[] {
-  return buildRegistrySeeds(name);
-}
-
 export function buildRegistrySeeds(name: string): readonly string[] {
   const trimmed = (name ?? '').trim().replace(/\s+/g, ' ');
   const seeds = [trimmed, trimmed.replace(/\s+/g, ''), deriveBrandCore(trimmed), stripInstitutionSuffix(trimmed)];
