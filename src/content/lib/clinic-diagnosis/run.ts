@@ -12,19 +12,21 @@ import {
   type ComplianceSource,
 } from './compliance-scan.ts';
 import { buildFindings, collectUnchecked } from './findings.ts';
+import { buildSocialAxis, EMPTY_SOCIAL_AXIS, extractSocialLinks } from './social-detect.ts';
 import {
   analyzePostSeo,
   classifyBodyKind,
   SEO_POST_LIMIT,
   type SeoPostInput,
 } from './post-seo.ts';
-import { normalizeSiteUrl } from './site-audit.ts';
+import { normalizeSiteUrl, siteBodyFetched } from './site-audit.ts';
 import type {
   BlogAxis,
   ClinicCandidate,
   DiagnosisReport,
   KeywordRank,
   SiteAxis,
+  SocialLink,
 } from './types.ts';
 
 /**
@@ -186,12 +188,37 @@ export function buildSeoPosts(
   });
 }
 
+/**
+ * 블로그에서 모은 자료로 인스타·유튜브 링크를 찾는다 (순수 함수, 요청 없음).
+ *
+ * 새 요청을 만들지 않는다 — 이미 받아 둔 RSS 요약과 본문 수집분만 이어 붙여 훑는다.
+ * 네이버 블로그 본문은 링크가 텍스트로만 남는 경우가 흔해 href 만 보면 놓친다.
+ */
+export function collectBlogSocialLinks(
+  items: readonly { summary: string; link: string }[],
+  bodyByLink: ReadonlyMap<string, string>,
+): readonly SocialLink[] {
+  const parts: string[] = [];
+  for (const item of items) {
+    const full = bodyByLink.get(item.link) ?? '';
+    if (full) parts.push(full);
+    else if (item.summary) parts.push(item.summary);
+  }
+  if (parts.length === 0) return [];
+  return extractSocialLinks(parts.join('\n'));
+}
+
 /** 블로그 축 측정 — 탐색 결과가 확정일 때만 RSS 이후 단계로 간다. */
 async function measureBlog(
   clinic: ClinicCandidate,
   options: RunDiagnosisOptions,
   now: number,
-): Promise<{ axis: BlogAxis; sources: readonly ComplianceSource[] }> {
+): Promise<{
+  axis: BlogAxis;
+  sources: readonly ComplianceSource[];
+  socialLinks: readonly SocialLink[];
+  scanned: boolean;
+}> {
   const env = options.env ?? (process.env as DiagnosisEnv);
   const fetchImpl = options.fetchImpl ?? fetch;
 
@@ -215,7 +242,12 @@ async function measureBlog(
    * 어느 블로그를 썼는지는 결과 화면 맨 위에서 밝히고 바꿀 수 있게 한다.
    */
   if (resolution.kind !== 'confident' && resolution.kind !== 'assumed') {
-    return { axis: { ...EMPTY_BLOG_AXIS, checked: true, source: manual ? 'manual' : 'auto', resolution }, sources: [] };
+    return {
+      axis: { ...EMPTY_BLOG_AXIS, checked: true, source: manual ? 'manual' : 'auto', resolution },
+      sources: [],
+      socialLinks: [],
+      scanned: false,
+    };
   }
 
   const blogId = resolution.guess.blogId;
@@ -230,7 +262,7 @@ async function measureBlog(
   const rss = await fetchBlogCheckFeed(blogId, { fetchImpl, timeoutMs: RSS_TIMEOUT_MS });
   if (!rss.ok) {
     // 블로그는 특정했지만 RSS 가 비공개·없음 — 측정만 실패한 것으로 남긴다.
-    return { axis: base, sources: [] };
+    return { axis: base, sources: [], socialLinks: [], scanned: false };
   }
 
   const feed = rss.feed;
@@ -299,6 +331,9 @@ async function measureBlog(
       postSeo: postSeo.checked ? postSeo : null,
     },
     sources,
+    socialLinks: collectBlogSocialLinks(feed.items, bodyByLink),
+    // 글을 한 편이라도 실제로 봤을 때만 "블로그를 봤다"고 말한다.
+    scanned: feed.items.length > 0,
   };
 }
 
@@ -325,7 +360,7 @@ async function measureSite(clinic: ClinicCandidate, options: RunDiagnosisOptions
  *   실패 원인이 어디에도 기록되지 않아 추적이 불가능했다. 축 이름을 접두어로 고정해
  *   로그만 보고 "어느 축이 몇 번 죽었는지" 셀 수 있게 한다.
  */
-function logAxisFailure(axis: 'blog' | 'site' | 'ai' | 'compliance', error: unknown): void {
+function logAxisFailure(axis: 'blog' | 'site' | 'ai' | 'compliance' | 'social', error: unknown): void {
   console.error(
     `[clinic-diagnosis] axis=${axis} 실패:`,
     error instanceof Error ? `${error.name}: ${error.message}` : error,
@@ -347,7 +382,12 @@ export async function runClinicDiagnosis(
   const [blogResult, site] = await Promise.all([
     measureBlog(clinic, options, now).catch((error: unknown) => {
       logAxisFailure('blog', error);
-      return { axis: EMPTY_BLOG_AXIS, sources: [] as readonly ComplianceSource[] };
+      return {
+        axis: EMPTY_BLOG_AXIS,
+        sources: [] as readonly ComplianceSource[],
+        socialLinks: [] as readonly SocialLink[],
+        scanned: false,
+      };
     }),
     measureSite(clinic, options).catch((error: unknown) => {
       logAxisFailure('site', error);
@@ -411,7 +451,25 @@ export async function runClinicDiagnosis(
     }
   }
 
-  const axes = { blog: blogResult.axis, site, ai, compliance };
+  /**
+   * 인스타·유튜브 — **새 요청이 하나도 없다.** 홈페이지는 auditSite 가 이미 받아 둔
+   * HTML 에서, 블로그는 이미 받아 둔 RSS 요약·본문에서 링크만 뽑아 합친다.
+   * 순수 함수지만 다른 축과 같은 방식으로 감싼다 — 여기서 던지면 네 축을 다 측정해
+   * 놓고 진단 전체가 실패한다.
+   */
+  let social = EMPTY_SOCIAL_AXIS;
+  try {
+    social = buildSocialAxis({
+      scannedSite: siteBodyFetched(site),
+      siteLinks: site.socialLinks ?? [],
+      scannedBlog: blogResult.scanned,
+      blogLinks: blogResult.socialLinks,
+    });
+  } catch (error: unknown) {
+    logAxisFailure('social', error);
+  }
+
+  const axes = { blog: blogResult.axis, site, ai, compliance, social };
   return {
     version: 1,
     runAt: new Date(now).toISOString(),

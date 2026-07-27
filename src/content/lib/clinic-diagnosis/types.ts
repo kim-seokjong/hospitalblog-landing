@@ -216,6 +216,52 @@ export interface SiteAxis {
   readonly aiCrawler: 'allowed' | 'blocked' | 'unknown';
   /** 차단된 AI 크롤러 UA 목록. */
   readonly blockedAiBots: readonly string[];
+  /**
+   * 홈페이지 HTML 에서 찾은 인스타·유튜브 링크.
+   *
+   * ★ 이미 받아 둔 그 HTML 에서 뽑는다 — **추가 요청을 만들지 않는다.**
+   * ⚠️ 이 필드가 생기기 전에 저장된 리포트에는 없다 → 항상 `?? []` 로 읽는다.
+   */
+  readonly socialLinks?: readonly SocialLink[];
+}
+
+/* ── 2단계 ⑤: 인스타 · 유튜브 (링크 탐지) ─────────────────── */
+
+export type SocialPlatform = 'instagram' | 'youtube';
+
+/**
+ * 판정 3값 — **not_found 를 '없음'으로 읽지 않는다.**
+ *
+ *  found     : 계정·채널 링크를 실제로 찾았다
+ *  not_found : 우리가 본 범위(홈페이지·블로그)에서 **확인되지 않았다**
+ *              → 운영 중인데 링크만 없을 수 있다. 화면 문구는 언제나 '확인되지 않음'.
+ *  unknown   : 볼 자료 자체를 못 구했다(홈페이지도 블로그도 확보 실패)
+ */
+export type SocialPresence = 'found' | 'not_found' | 'unknown';
+
+export interface SocialLink {
+  readonly platform: SocialPlatform;
+  /**
+   * channel : 계정·채널 주소 (instagram.com/handle, youtube.com/@handle 등)
+   * content : 게시물·영상 주소 (instagram.com/p/…, youtu.be/… )
+   *           → 남의 영상이 임베드된 것일 수 있어 **운영 근거로 쓰지 않는다**.
+   */
+  readonly kind: 'channel' | 'content';
+  /** 계정 이름. content 링크에는 없다(''). */
+  readonly handle: string;
+  readonly url: string;
+}
+
+export interface SocialAxis {
+  /** 링크를 찾아볼 자료를 실제로 확보했는가. false 면 아래 판정은 전부 unknown. */
+  readonly checked: boolean;
+  readonly instagram: SocialPresence;
+  readonly youtube: SocialPresence;
+  readonly links: readonly SocialLink[];
+  /** 홈페이지 HTML 을 실제로 봤는가 — "어디까지 봤는지" 문구의 근거. */
+  readonly scannedSite: boolean;
+  /** 블로그 글 본문·요약을 실제로 봤는가. */
+  readonly scannedBlog: boolean;
 }
 
 /* ── 2단계 ③: AI 인용 ────────────────────────────────────── */
@@ -456,7 +502,11 @@ export interface FindingLink {
  */
 export interface Finding {
   readonly id: string;
-  readonly axis: 'blog' | 'site' | 'ai' | 'compliance';
+  /**
+   * ⚠️ 'social' 은 나중에 추가된 축이다. 저장된 옛 리포트에는 없고, 화면은 모르는
+   *    축이 섞여 있어도 버리지 않고 맨 뒤에 붙인다(groupFindingsByChannel).
+   */
+  readonly axis: 'blog' | 'site' | 'ai' | 'compliance' | 'social';
   readonly label: string;
   readonly tone: FindingTone;
   /** ① 지금 상태 — 사실·수치만. */
@@ -484,6 +534,11 @@ export interface DiagnosisReport {
   readonly site: SiteAxis;
   readonly ai: AiAxis;
   readonly compliance: ComplianceAxis;
+  /**
+   * 인스타·유튜브 링크 탐지.
+   * ⚠️ 나중에 추가된 축이라 **저장된 옛 리포트에는 없다** — 읽을 때 항상 옵셔널로 다룬다.
+   */
+  readonly social?: SocialAxis;
   readonly findings: readonly Finding[];
   /** 확인하지 못한 축 이름 목록 — 화면에 그대로 표기한다. */
   readonly unchecked: readonly string[];

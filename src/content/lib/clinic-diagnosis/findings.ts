@@ -1,5 +1,6 @@
 import { complianceRiskCounts } from './compliance-scan.ts';
 import type { PostSeoResult } from './post-seo.ts';
+import { channelLinks, contentLinks, scanScopeText } from './social-detect.ts';
 import type {
   AiAxis,
   BlogAxis,
@@ -10,6 +11,8 @@ import type {
   FindingGroup,
   SiteAxis,
   SiteCheckState,
+  SocialAxis,
+  SocialLink,
 } from './types.ts';
 
 /**
@@ -865,6 +868,123 @@ export function buildComplianceFindings(compliance: ComplianceAxis): readonly Fi
   ];
 }
 
+/* ── ⑤ 인스타 · 유튜브 ──────────────────────────────────── */
+
+/**
+ * 블로그가 사실상 멈춘 것으로 보는 기준(일).
+ * blog.freshness 의 '사실상 멈춰 있는 상태' 문구와 같은 90일을 쓴다 — 화면 두 곳이
+ * 서로 다른 기준으로 말하면 원장이 어느 쪽을 믿어야 할지 알 수 없다.
+ */
+export const SOCIAL_BLOG_STALE_DAYS = 90;
+
+/** 링크 목록 → "@handle, @handle2" 표기. content 링크는 계정명이 없어 제외된다. */
+function handleList(links: readonly SocialLink[]): string {
+  return links
+    .map((l) => (l.platform === 'instagram' ? `@${l.handle}` : l.handle))
+    .filter((h) => h.length > 1)
+    .slice(0, 3)
+    .join(', ');
+}
+
+/**
+ * 인스타·유튜브 결과 카드.
+ *
+ * ★ 이 카드의 존재 이유는 **다른 카드가 틀리지 않게 하는 것**이다.
+ *   성형외과·피부과의 주 채널은 블로그가 아니라 인스타다. 인스타를 매일 올리는
+ *   원장에게 "블로그가 멈췄습니다"만 말하면 진단이 헛다리를 짚은 것으로 읽힌다.
+ *   반대로 인스타를 하고 있다는 사실을 함께 말하면 문장이 정확해진다 —
+ *   "인스타는 운영하시는데 블로그는 비어 있습니다. 검색으로 찾는 환자는 못 만나고 계십니다."
+ *
+ * ⚠️ 문구 규칙(절대):
+ *   · 링크가 없다고 "인스타를 안 하신다"고 **단정하지 않는다**. 링크가 없을 뿐일 수 있다.
+ *     우리가 말할 수 있는 한계는 "홈페이지·블로그에서 확인되지 않았습니다"까지다.
+ *   · 그래서 not_found 는 tone:'warn' 이 아니라 tone:'unknown'(확인하지 못한 것)이다.
+ *     확인 못 한 것을 문제로 세면 "지금 고쳐야 할 것" 개수가 거짓으로 부푼다.
+ */
+export function buildSocialFindings(
+  social: SocialAxis | null | undefined,
+  blog: Pick<BlogAxis, 'daysSinceLatest' | 'blogId'>,
+): readonly Finding[] {
+  if (!social || !social.checked) return [];
+
+  const scope = scanScopeText(social);
+  const channels = channelLinks(social);
+  const instagram = channels.filter((l) => l.platform === 'instagram');
+  const youtube = channels.filter((l) => l.platform === 'youtube');
+  const contents = contentLinks(social);
+  const found = channels.length > 0;
+
+  if (!found) {
+    const hint =
+      contents.length > 0
+        ? ' 게시물·영상 링크는 걸려 있었지만 계정 주소는 찾지 못했어요.'
+        : '';
+    return [
+      {
+        id: 'social.presence',
+        axis: 'social',
+        label: '인스타·유튜브',
+        tone: 'unknown',
+        state: `${scope}에서 인스타그램·유튜브 계정 링크를 확인하지 못했습니다.${hint}`,
+        // ⚠️ "안 하신다"가 아니다 — 왜 문제인지 쓸 자리가 아니라 한계를 밝히는 자리다.
+        why: null,
+        action:
+          '운영 중이신데 여기서 안 잡혔다면, 홈페이지와 블로그에 계정 링크를 걸어 두시는 것만으로도 환자가 찾아가는 길이 하나 늘어납니다.',
+        ourScope: false,
+      },
+    ];
+  }
+
+  const names: string[] = [];
+  if (instagram.length > 0) names.push('인스타그램 운영 중');
+  if (youtube.length > 0) names.push('유튜브 채널 있음');
+  const primary = instagram[0] ?? youtube[0];
+  const detail = handleList(channels);
+
+  /**
+   * ★ 영업·진단 양쪽에서 가장 쓸모 있는 문장이 여기서 나온다.
+   *   "인스타는 하고 계신데, 검색에서 만나는 환자는 놓치고 있다."
+   *   블로그가 멈춰 있을 때만 말한다 — 둘 다 잘 돌고 있으면 훈수가 된다.
+   */
+  const blogStale =
+    blog.daysSinceLatest !== null && blog.daysSinceLatest >= SOCIAL_BLOG_STALE_DAYS;
+  const blogMissing = blog.blogId === null;
+
+  const gapNote = blogStale
+    ? ` 다만 블로그는 마지막 글이 ${blog.daysSinceLatest}일 전입니다.`
+    : blogMissing
+      ? ' 다만 병원이 운영하는 블로그는 찾지 못했습니다.'
+      : '';
+
+  return [
+    {
+      id: blogStale || blogMissing ? 'social.gap' : 'social.presence',
+      axis: 'social',
+      label: '인스타·유튜브',
+      tone: blogStale || blogMissing ? 'warn' : 'good',
+      state: `${scope}에서 ${names.join(' · ')}${detail ? ` (${detail})` : ''}을 확인했습니다.${gapNote}`,
+      why:
+        blogStale || blogMissing
+          ? 'SNS는 이미 병원을 아는 사람에게 닿고, 검색은 아직 병원을 모르는 사람에게 닿습니다. 지금은 뒤쪽 통로가 비어 있어서, 증상·시술명으로 검색해 병원을 고르는 환자는 만나지 못하고 계십니다.'
+          : null,
+      action:
+        blogStale || blogMissing
+          ? 'SNS에 이미 쓰고 계신 내용을 검색용 글 형태로 옮기는 것부터가 가장 빠릅니다. 소재를 새로 만들 필요가 없어요.'
+          : '두 통로가 같이 돌고 있습니다. SNS 글과 블로그 글이 서로를 가리키게 링크만 걸어 두시면 됩니다.',
+      ourScope: blogStale || blogMissing,
+      ...(primary
+        ? {
+            link: {
+              href: primary.url,
+              label: primary.url.replace(/^https?:\/\//, '').replace(/\/$/, ''),
+              insecure: false,
+            },
+          }
+        : {}),
+    },
+  ];
+}
+
 /* ── 종합 ───────────────────────────────────────────────── */
 
 /** 확인하지 못한 축 이름 목록. */
@@ -1013,6 +1133,14 @@ export const FINDING_WEIGHT: Readonly<
   'blog.postSeo': { severity: 'improving', rank: 26 },
   // 방치되면 기존 글 노출까지 함께 내려간다
   'blog.freshness': { severity: 'losing', rank: 28 },
+  /**
+   * SNS 는 도는데 검색 통로가 비어 있다 — 콘텐츠를 이미 만들고 계신데 그 노력이
+   * 검색 유입으로 전혀 이어지지 않는 상태다. 발행 정체(28)와 같은 원인을 다른
+   * 각도에서 보는 항목이라 바로 뒤에 둔다.
+   */
+  'social.gap': { severity: 'losing', rank: 29 },
+  // 두 통로가 다 도는 상태 — 경고가 아니므로 severity 는 표시상 의미가 없다.
+  'social.presence': { severity: 'improving', rank: 48 },
   // 남의 목록으로 소개되고 있다 — 당장 손해는 아니나 통제권이 없다
   'ai.path': { severity: 'improving', rank: 42 },
   // 쌓이는 속도 문제
@@ -1090,10 +1218,11 @@ export const CHANNEL_LABEL: Readonly<Record<Finding['axis'], string>> = {
   ai: 'AI 검색',
   blog: '네이버 블로그',
   site: '홈페이지',
+  social: '인스타·유튜브',
 };
 
 /** 점수가 같을 때만 쓰는 최후 순서(표시 안정용). 화면 순서를 여기서 정하지 않는다. */
-export const CHANNEL_ORDER: readonly Finding['axis'][] = ['compliance', 'ai', 'blog', 'site'];
+export const CHANNEL_ORDER: readonly Finding['axis'][] = ['compliance', 'ai', 'blog', 'social', 'site'];
 
 /**
  * 분류 자체의 무게 — 채널 정렬의 1차 기준.
@@ -1195,20 +1324,25 @@ export function channelBadges(
 }
 
 /**
- * 4축 결과 → 결과 카드 전체.
- * 순서는 화면 순서와 동일하다 (블로그 → 홈페이지 → AI → 의료광고법).
+ * 축별 결과 → 결과 카드 전체.
+ * 순서는 화면 순서와 동일하다 (블로그 → 홈페이지 → AI → 의료광고법 → 인스타·유튜브).
+ *
+ * ⚠️ social 은 옵셔널이다 — 이 축이 생기기 전에 만들어진 호출부·테스트를 깨지 않는다.
+ *    없으면 카드도 만들어지지 않는다(빈 자리를 추정으로 채우지 않는다).
  */
 export function buildFindings(input: {
   readonly blog: BlogAxis;
   readonly site: SiteAxis;
   readonly ai: AiAxis;
   readonly compliance: ComplianceAxis;
+  readonly social?: SocialAxis;
 }): readonly Finding[] {
   return [
     ...buildBlogFindings(input.blog),
     ...buildSiteFindings(input.site),
     ...buildAiFindings(input.ai, input.blog.blogId !== null),
     ...buildComplianceFindings(input.compliance),
+    ...buildSocialFindings(input.social, input.blog),
   ];
 }
 

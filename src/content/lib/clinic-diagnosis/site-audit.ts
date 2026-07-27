@@ -1,3 +1,4 @@
+import { extractSocialLinks } from './social-detect.ts';
 import type { SiteAxis, SiteCheckState } from './types.ts';
 
 /**
@@ -347,7 +348,23 @@ export const EMPTY_SITE_AXIS: SiteAxis = {
   sitemapXml: 'unknown',
   aiCrawler: 'unknown',
   blockedAiBots: [],
+  socialLinks: [],
 };
+
+/**
+ * 홈페이지 **HTML 본문을 실제로 받아 봤는가**.
+ *
+ * ★ 왜 별도 함수인가. `socialLinks` 가 빈 배열인 상태는 두 가지다 —
+ *   "봤는데 링크가 없었다"와 "아예 못 봤다". 이 둘을 구분하지 못하면
+ *   응답조차 못 받은 사이트를 두고 "홈페이지에서 확인되지 않았습니다"라고
+ *   말하게 된다(우리가 본 적이 없는데 봤다고 말하는 셈).
+ *
+ * 판정 근거: 본문 판정값(metaDescription 등)은 본문을 받았을 때만 pass/fail 이 되고,
+ * 못 받았으면 전부 'unknown' 이다(auditSite 의 state()). 그 규칙을 그대로 읽는다.
+ */
+export function siteBodyFetched(site: SiteAxis): boolean {
+  return site.checked && site.metaDescription !== 'unknown';
+}
 
 export interface AuditSiteOptions {
   readonly fetchImpl?: typeof fetch;
@@ -447,5 +464,10 @@ export async function auditSite(rawUrl: string, options: AuditSiteOptions): Prom
     sitemapXml,
     aiCrawler,
     blockedAiBots,
+    /**
+     * 인스타·유튜브 링크 — **이미 받아 둔 홈 HTML 에서만** 뽑는다.
+     * 추가 GET 은 없다(대상 1건당 최대 3회 GET 규칙 그대로).
+     */
+    socialLinks: reachable ? extractSocialLinks(page.body) : [],
   };
 }
