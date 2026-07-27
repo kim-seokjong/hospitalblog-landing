@@ -1,6 +1,6 @@
 import { complianceRiskCounts } from './compliance-scan.ts';
-import { groupFindings, LEGACY_COMPLIANCE_RISK_ID } from './findings.ts';
-import type { DiagnosisReport, Finding } from './types.ts';
+import { groupFindings, LEGACY_COMPLIANCE_RISK_ID, normalizeStoredFindings } from './findings.ts';
+import type { ComplianceAxis, DiagnosisReport, Finding } from './types.ts';
 
 /**
  * 진단 결과 → 닥터포스트 전환 동선 (규칙 기반 순수 함수, LLM 호출 없음).
@@ -108,6 +108,23 @@ function numberOf(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+/**
+ * 이 리포트의 결과 카드 — **화면이 그리는 것과 같은 목록**.
+ *
+ * ★ 저장된 리포트를 그냥 읽으면 화면과 개수가 어긋난다. 화면(DiagnosisReportView)은
+ *   normalizeStoredFindings 로 보정한 목록을 그리는데(옛 의료광고법 등급 복원 ·
+ *   중복 blog.exists 카드 제거), 전환 문구와 메일 요약은 보정 전 목록을 세고 있었다.
+ *   그러면 **같은 리포트가 화면에서는 "지금 고쳐야 할 것 2건", 메일에서는 1건**이 된다.
+ *   숫자를 말하는 곳은 전부 이 함수를 거친다.
+ */
+function readFindings(report: DiagnosisReport): readonly Finding[] {
+  return normalizeStoredFindings({
+    blog: { blogId: report?.blog?.blogId ?? null },
+    compliance: (report?.compliance ?? {}) as ComplianceAxis,
+    findings: arrayOf(report?.findings),
+  });
+}
+
 /** 값이 없어 숫자를 못 넣을 때의 무난한 기본 문구 — 과장 없이. */
 export const FALLBACK_CTA_HEADLINE = '무료 2편으로 먼저 만들어 보기';
 const FALLBACK_CTA_SUB = '가입하면 글 2편을 무료로 만들어 볼 수 있어요. 결제 정보는 받지 않습니다.';
@@ -170,7 +187,7 @@ function headlineFor(finding: Finding, report: DiagnosisReport): string | null {
  *   머문 것과 버튼 문구가 어긋나지 않게.
  */
 export function buildConversionCta(report: DiagnosisReport): ConversionCta {
-  const groups = groupFindings(arrayOf(report?.findings));
+  const groups = groupFindings(readFindings(report));
   const badScope = groups.bad.filter((f) => doctorpostLine(f) !== null);
   const improveScope = groups.improve.filter((f) => doctorpostLine(f) !== null);
 
@@ -216,7 +233,21 @@ export interface DiagnosisLeadSummary {
   readonly improveCount: number;
   readonly goodCount: number;
   readonly unknownCount: number;
-  /** 경고 항목 중 닥터포스트가 대신할 수 있는 건수. */
+  /**
+   * ★ **badCount 의 부분집합** — "지금 고쳐야 할 것" 중 닥터포스트가 대신할 수 있는 건수.
+   *
+   *   메일·화면에서 "N건 중 M건"이라고 쓸 때의 M 은 **반드시 이 값**이다.
+   *   ourScopeCount 를 M 자리에 쓰면 분모(badCount)보다 분자가 커진다 —
+   *   실제로 "지금 고쳐야 할 것 2건 중 5건" 이 발송됐다(2026-07-27).
+   */
+  readonly badScopeCount: number;
+  /** "챙기면 좋을 것" 중 닥터포스트가 대신할 수 있는 건수(improveCount 의 부분집합). */
+  readonly improveScopeCount: number;
+  /**
+   * 경고 항목 **전체**(지금 고쳐야 할 것 + 챙기면 좋을 것) 중 우리 범위 건수.
+   * = badScopeCount + improveScopeCount. 영업이 "총 몇 건을 우리가 하나"를 볼 때만 쓴다.
+   * ⚠️ badCount 와 짝지어 쓰지 말 것 — 세는 집합이 다르다.
+   */
   readonly ourScopeCount: number;
   /** 지금 고쳐야 할 것 항목 이름 (최대 5개) — 통화 첫 문장 재료. */
   readonly topIssues: readonly string[];
@@ -243,19 +274,26 @@ const TOP_RANK = 10;
 const MAX_TOP_ISSUES = 5;
 
 export function buildDiagnosisLeadSummary(report: DiagnosisReport): DiagnosisLeadSummary {
-  const findings = arrayOf(report?.findings);
+  // 화면과 같은 목록으로 센다 — 그래야 메일의 숫자와 화면의 숫자가 어긋나지 않는다.
+  const findings = readFindings(report);
   const groups = groupFindings(findings);
   const compliance = report?.compliance?.checked ? complianceRiskCounts(report.compliance) : null;
   const keywords = arrayOf(report?.blog?.keywords);
   const keywordsChecked = report?.blog?.rankChecked ? keywords.length : null;
   const ai = report?.ai;
 
+  // 분모별로 따로 센다. 한 숫자를 두 분모에 돌려 쓰면 "2건 중 5건"이 나온다.
+  const badScopeCount = countDoctorpostScope(groups.bad);
+  const improveScopeCount = countDoctorpostScope(groups.improve);
+
   return {
     badCount: groups.bad.length,
     improveCount: groups.improve.length,
     goodCount: groups.good.length,
     unknownCount: groups.unknown.length,
-    ourScopeCount: countDoctorpostScope(findings),
+    badScopeCount,
+    improveScopeCount,
+    ourScopeCount: badScopeCount + improveScopeCount,
     topIssues: groups.bad.slice(0, MAX_TOP_ISSUES).map((f) => f.label),
     daysSinceLatestPost: numberOf(report?.blog?.daysSinceLatest),
     postsPerWeek: numberOf(report?.blog?.postsPerWeek),

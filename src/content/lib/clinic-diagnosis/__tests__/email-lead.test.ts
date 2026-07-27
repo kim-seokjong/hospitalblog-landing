@@ -8,6 +8,9 @@ import {
   DEFAULT_EMAIL_TOKEN_DAILY_LIMIT,
   buildDiagnosisEmail,
   buildEmailFactLines,
+  buildEmailFacts,
+  buildEmailHeadline,
+  formatElapsedKo,
   emailLimitMessage,
   escapeHtml,
   evaluateEmailLeadQuota,
@@ -30,6 +33,8 @@ const SUMMARY: DiagnosisLeadSummary = {
   improveCount: 2,
   goodCount: 4,
   unknownCount: 1,
+  badScopeCount: 2,
+  improveScopeCount: 0,
   ourScopeCount: 2,
   topIssues: ['최근 발행', '의료광고법 표현'],
   daysSinceLatestPost: 208,
@@ -272,12 +277,13 @@ test('buildEmailFactLines: 확인하지 못한 값은 줄 자체를 만들지 �
 
 test('buildEmailFactLines: 확인한 값만 사실 그대로 적는다', () => {
   const lines = buildEmailFactLines(SUMMARY);
-  assert.ok(lines.some((l) => l.includes('208일 전')));
+  // 경과일은 읽는 단위로 환산하되 원본 일수를 괄호로 남긴다.
+  assert.ok(lines.some((l) => l.includes('6개월 전') && l.includes('208일')));
   assert.ok(lines.some((l) => l.includes('11건')));
-  assert.ok(lines.some((l) => l.includes('상위권 0개')));
+  assert.ok(lines.some((l) => l.includes('상위권에서 확인되지 않았습니다')));
 });
 
-test('buildDiagnosisEmail: 제목에 병원명과 고쳐야 할 건수가 들어간다', () => {
+test('buildDiagnosisEmail: 제목에 병원명과 그 병원 고유의 사실이 들어간다', () => {
   const { subject } = buildDiagnosisEmail({
     clinicName: '테스트의원',
     summary: SUMMARY,
@@ -285,7 +291,8 @@ test('buildDiagnosisEmail: 제목에 병원명과 고쳐야 할 건수가 들어
     runAt: '2026-07-27T00:00:00.000Z',
   });
   assert.ok(subject.includes('테스트의원'));
-  assert.ok(subject.includes('3건'));
+  // 208일 정체가 이 병원에서 제일 센 사실 — 건수가 아니라 이것이 제목에 선다.
+  assert.ok(subject.includes('6개월째'), subject);
 });
 
 test('buildDiagnosisEmail: 병원명·주소를 이스케이프해 본문에 싣는다', () => {
@@ -386,6 +393,198 @@ test('buildDiagnosisEmail: 병원명을 못 읽어도 어색한 빈자리 없이
     reportUrl: 'https://www.hospitalblog.kr/clinic-check/r/abc',
     runAt: '2026-07-27T00:00:00.000Z',
   });
-  assert.ok(subject.startsWith('[닥터포스트] 온라인 노출 진단'));
+  // 이름이 없으면 줄표가 덩그러니 남지 않는다.
+  assert.ok(subject.startsWith('[닥터포스트] 블로그에'), subject);
+  assert.ok(!subject.includes('] —'));
   assert.ok(html.includes('>온라인 노출 진단 결과<'));
+});
+
+/* ── 분자 > 분모 회귀 방어 ────────────────────────────────
+ *
+ * ★ 실제 발송 사고(2026-07-27, 엣지성형외과의원):
+ *     "지금 고쳐야 할 것 2건 중 5건은 닥터포스트가 대신할 수 있는 항목입니다."
+ *   원인은 분모(badCount = 지금 고쳐야 할 것)와 분자(ourScopeCount = 경고 전체 중
+ *   우리 범위)가 **다른 집합**을 세고 있었던 것. 분자는 반드시 분모의 부분집합이다.
+ */
+
+test('메일: "N건 중 M건"의 M 은 절대 N 을 넘지 않는다', () => {
+  // 옛 사고 재현값 — badCount 2 인데 경고 전체 기준으로는 5건이 우리 범위였다.
+  const { html } = buildDiagnosisEmail({
+    clinicName: '엣지성형외과의원',
+    summary: { ...SUMMARY, badCount: 2, badScopeCount: 2, improveScopeCount: 3, ourScopeCount: 5 },
+    reportUrl: 'https://www.hospitalblog.kr/clinic-check/r/abc',
+    runAt: '2026-07-27T00:00:00.000Z',
+  });
+  assert.ok(html.includes('<b>2건</b> 중 <b>2건</b>'), html.slice(0, 400));
+  assert.ok(!html.includes('중 <b>5건</b>'));
+});
+
+test('메일: 저장된 요약이 망가져 M > N 이어도 M 을 N 으로 눌러 내보낸다', () => {
+  const { html } = buildDiagnosisEmail({
+    clinicName: '테스트의원',
+    summary: { ...SUMMARY, badCount: 1, badScopeCount: 9 },
+    reportUrl: 'https://www.hospitalblog.kr/clinic-check/r/abc',
+    runAt: '2026-07-27T00:00:00.000Z',
+  });
+  assert.ok(html.includes('<b>1건</b> 중 <b>1건</b>'));
+});
+
+test('메일: M 이 0이면 그 문장을 아예 빼고, 옛 요약(필드 없음)도 마찬가지다', () => {
+  const zero = buildDiagnosisEmail({
+    clinicName: '테스트의원',
+    summary: { ...SUMMARY, badCount: 3, badScopeCount: 0 },
+    reportUrl: 'https://www.hospitalblog.kr/clinic-check/r/abc',
+    runAt: '2026-07-27T00:00:00.000Z',
+  });
+  assert.ok(!zero.html.includes('닥터포스트가 대신할 수 있는'));
+
+  // badScopeCount 가 없던 시절에 저장된 요약 — 0건 문장을 지어내지 않는다.
+  const legacy = { ...SUMMARY, badCount: 3 } as Partial<DiagnosisLeadSummary>;
+  delete (legacy as Record<string, unknown>).badScopeCount;
+  const old = buildDiagnosisEmail({
+    clinicName: '테스트의원',
+    summary: legacy as DiagnosisLeadSummary,
+    reportUrl: 'https://www.hospitalblog.kr/clinic-check/r/abc',
+    runAt: '2026-07-27T00:00:00.000Z',
+  });
+  assert.ok(!old.html.includes('닥터포스트가 대신할 수 있는'));
+});
+
+/* ── 경과일 단위 ─────────────────────────────────────────── */
+
+test('formatElapsedKo: 원장이 읽는 단위로 바꾼다', () => {
+  assert.equal(formatElapsedKo(0), '0일');
+  assert.equal(formatElapsedKo(19), '19일');
+  assert.equal(formatElapsedKo(29), '29일');
+  assert.equal(formatElapsedKo(30), '1개월');
+  assert.equal(formatElapsedKo(208), '6개월');
+  assert.equal(formatElapsedKo(359), '11개월');
+  assert.equal(formatElapsedKo(360), '1년'); // 30일 × 12
+  assert.equal(formatElapsedKo(469), '1년 3개월'); // 실제 발송 사고의 그 값
+  assert.equal(formatElapsedKo(1100), '3년');
+  // 깨진 값에도 문자열을 만든다(메일이 죽으면 안 된다).
+  assert.equal(formatElapsedKo(Number.NaN), '');
+  assert.equal(formatElapsedKo(-5), '0일');
+});
+
+/* ── 제목·첫 문장 ────────────────────────────────────────── */
+
+test('buildEmailHeadline: 값에 따라 가장 센 사실 하나를 고른다', () => {
+  const base: DiagnosisLeadSummary = {
+    ...SUMMARY,
+    daysSinceLatestPost: null,
+    prohibitedCount: null,
+    cautionCount: null,
+    keywordsChecked: null,
+    keywordsTop10: null,
+    aiRecommendTotal: null,
+    aiRecommendMentioned: null,
+  };
+
+  assert.equal(buildEmailHeadline({ ...base, daysSinceLatestPost: 469 })?.kind, 'stale');
+  assert.equal(buildEmailHeadline({ ...base, prohibitedCount: 12 })?.kind, 'prohibited');
+  assert.equal(
+    buildEmailHeadline({ ...base, aiRecommendTotal: 3, aiRecommendMentioned: 0 })?.kind,
+    'aiAbsent',
+  );
+  assert.equal(buildEmailHeadline({ ...base, keywordsChecked: 2, keywordsTop10: 0 })?.kind, 'noTopRank');
+  assert.equal(buildEmailHeadline({ ...base, daysSinceLatestPost: 40 })?.kind, 'staleMild');
+  assert.equal(buildEmailHeadline({ ...base, cautionCount: 81 })?.kind, 'caution');
+
+  // 장기 정체가 의료광고법보다 앞선다(1년 넘게 글이 없다는 사실이 제일 세다).
+  assert.equal(
+    buildEmailHeadline({ ...base, daysSinceLatestPost: 469, prohibitedCount: 3 })?.kind,
+    'stale',
+  );
+  // 발행이 살아 있고(4일) 다른 값도 정상이면 세울 사실이 없다 → 폴백.
+  assert.equal(
+    buildEmailHeadline({
+      ...base,
+      daysSinceLatestPost: 4,
+      prohibitedCount: 0,
+      cautionCount: 0,
+      keywordsChecked: 2,
+      keywordsTop10: 2,
+      aiRecommendTotal: 3,
+      aiRecommendMentioned: 3,
+    }),
+    null,
+  );
+});
+
+test('buildEmailHeadline: 경과일을 읽는 단위로 제목에 세운다', () => {
+  const headline = buildEmailHeadline({ ...SUMMARY, daysSinceLatestPost: 469 });
+  assert.ok(headline?.subject.includes('1년 3개월째'), headline?.subject);
+  assert.ok(headline?.lead.includes('1년 3개월 전'));
+  assert.ok(!headline?.subject.includes('469'));
+});
+
+test('buildDiagnosisEmail: 세울 사실이 없으면 무난한 기본 제목으로 폴백한다', () => {
+  const healthy: DiagnosisLeadSummary = {
+    ...SUMMARY,
+    badCount: 0,
+    badScopeCount: 0,
+    daysSinceLatestPost: 3,
+    prohibitedCount: 0,
+    cautionCount: 0,
+    keywordsChecked: 2,
+    keywordsTop10: 2,
+    aiRecommendTotal: 3,
+    aiRecommendMentioned: 3,
+  };
+  const { subject } = buildDiagnosisEmail({
+    clinicName: '테스트의원',
+    summary: healthy,
+    reportUrl: 'https://www.hospitalblog.kr/clinic-check/r/abc',
+    runAt: '2026-07-27T00:00:00.000Z',
+  });
+  assert.equal(subject, '[닥터포스트] 테스트의원 온라인 노출 진단 결과');
+});
+
+/* ── 잘하고 있는 항목 분리 ───────────────────────────────── */
+
+test('buildEmailFacts: 잘 되고 있는 항목을 문제 목록에 섞지 않는다', () => {
+  const facts = buildEmailFacts({
+    ...SUMMARY,
+    daysSinceLatestPost: 4,
+    prohibitedCount: 0,
+    cautionCount: 0,
+    keywordsChecked: 4,
+    keywordsTop10: 2,
+    aiRecommendTotal: 3,
+    aiRecommendMentioned: 3,
+  });
+  assert.deepEqual(facts.issues, []);
+  assert.equal(facts.keeps.length, 4);
+});
+
+test('buildEmailFacts: 일부만 등장한 AI 는 안 나온 쪽을 적는다(좋은 소식으로 읽히지 않게)', () => {
+  const facts = buildEmailFacts({ ...SUMMARY, aiRecommendTotal: 3, aiRecommendMentioned: 2 });
+  const line = facts.issues.find((l) => l.includes('AI 추천 질문'));
+  assert.ok(line?.includes('3개 중 1개에서 병원 이름이 나오지 않았습니다'), line);
+  assert.ok(!facts.keeps.some((l) => l.includes('AI 추천 질문')));
+});
+
+test('buildDiagnosisEmail: 의료광고법 건수가 있으면 요약에 넣고, 없으면 넣지 않는다', () => {
+  const withRisk = buildDiagnosisEmail({
+    clinicName: '테스트의원',
+    // 발행은 살아 있고 표현 점검만 걸린 상태 = 의료광고법이 제목·첫 문장에 선다.
+    summary: { ...SUMMARY, daysSinceLatestPost: 4, prohibitedCount: 12, cautionCount: 81 },
+    reportUrl: 'https://www.hospitalblog.kr/clinic-check/r/abc',
+    runAt: '2026-07-27T00:00:00.000Z',
+  });
+  assert.ok(withRisk.html.includes('12건'));
+  assert.ok(withRisk.html.includes('81건'));
+  // 단정하지 않는다 — 면책을 각주로 미루지 않고 첫 문장 안에서 함께 말한다.
+  assert.ok(!withRisk.html.includes('위반입니다'));
+  assert.ok(!withRisk.subject.includes('위반'));
+  assert.ok(withRisk.html.includes('위반 여부를 저희가 판단한 것은 아닙니다'));
+
+  const notChecked = buildDiagnosisEmail({
+    clinicName: '테스트의원',
+    summary: { ...SUMMARY, prohibitedCount: null, cautionCount: null },
+    reportUrl: 'https://www.hospitalblog.kr/clinic-check/r/abc',
+    runAt: '2026-07-27T00:00:00.000Z',
+  });
+  assert.ok(!notChecked.html.includes('심의에서 자주 지적되는 표현'));
 });

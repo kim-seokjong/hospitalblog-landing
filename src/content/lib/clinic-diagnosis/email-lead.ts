@@ -290,29 +290,182 @@ export interface DiagnosisEmailContent {
 }
 
 /**
- * 본문에 넣을 사실 줄 — **진단이 실제로 확인한 값만**. null 인 항목은 아예 빼고,
- * 추정으로 메우지 않는다(화면과 같은 원칙).
+ * 경과일을 **원장이 읽는 단위**로. 469일을 그대로 적으면 아무도 1년 3개월로 환산하지 못한다.
+ *
+ * 규칙(단위를 섞지 않는다):
+ *   30일 미만  → 일       ("19일")
+ *   12개월 미만 → 개월     ("7개월")
+ *   그 이상    → 년 + 개월 ("1년 3개월", 나머지 개월이 0이면 "1년")
+ *
+ * 개월은 30일로 끊는다(달력 개월이 아니다) — 진단이 세는 값 자체가 일수라
+ * 달력으로 환산하면 없는 정밀도를 만든 것처럼 보인다.
+ */
+export function formatElapsedKo(days: number): string {
+  if (!Number.isFinite(days)) return '';
+  const d = Math.max(0, Math.floor(days));
+  if (d < 30) return `${d}일`;
+  const months = Math.floor(d / 30);
+  if (months < 12) return `${months}개월`;
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  return rest === 0 ? `${years}년` : `${years}년 ${rest}개월`;
+}
+
+/** "사실상 멈춰 있다"로 볼 경과일 — findings.ts 의 blog.freshness 판정과 같은 90일. */
+const STALE_DAYS = 90;
+/** 발행이 살아 있다고 보는 경과일 — findings.ts 와 같은 14일. */
+const FRESH_DAYS = 14;
+
+/**
+ * 제목·첫 문장에 세울 **그 병원에서 가장 센 사실 하나**.
+ *
+ * ★ 왜 필요한가. 제목이 "지금 고쳐야 할 것 2건"이면 어느 병원에 보내도 같은 제목이라
+ *   열어볼 이유가 없다. 원장이 자기 병원 이야기라고 알아보는 건 건수가 아니라 사실이다.
+ *
+ * ★ 고르는 순서 (값이 있는 첫 항목이 이긴다)
+ *   ① 장기 정체 — 1년 넘게 글이 없다는 사실은 원장이 즉시 수긍하고 자기 눈으로 확인한다.
+ *   ② 의료광고법 — 우리 USP 이고 원장이 가장 크게 반응하는 항목.
+ *   ③ AI 전무 → ④ 키워드 상위권 0 → ⑤ 단기 정체 → ⑥ 심의 지적 표현
+ *   값이 하나도 없으면 null → 무난한 기본 제목으로 폴백한다.
+ *
+ * ⚠️ 의료광고법 문안은 단정하지 않는다. "위반"이라 쓰지 않고 조문을 인용하지 않으며,
+ *    첫 문장 안에서 곧바로 "저희가 판단한 것은 아니다"를 함께 말한다 —
+ *    면책을 맨 아래 각주로 미루면 그 사이에 원장이 겁을 먹는다.
+ * ⚠️ 키워드 원문(예: "수성구 코성형")은 제목에 넣지 않는다. 상세 진단에서 원장이 직접
+ *    입력한 문자열일 수 있고, 이 메일은 사용자 입력을 본문에 싣지 않는다.
+ */
+export interface DiagnosisEmailHeadline {
+  /** 어떤 사실을 세웠는지 — 테스트·로그용 식별자. */
+  readonly kind: 'stale' | 'prohibited' | 'aiAbsent' | 'noTopRank' | 'staleMild' | 'caution';
+  /** 제목의 "— " 뒤에 붙는 부분. */
+  readonly subject: string;
+  /** 요약 목록 위에 오는 첫 문장. */
+  readonly lead: string;
+}
+
+export function buildEmailHeadline(summary: DiagnosisLeadSummary): DiagnosisEmailHeadline | null {
+  const days = typeof summary.daysSinceLatestPost === 'number' ? summary.daysSinceLatestPost : null;
+  const prohibited = typeof summary.prohibitedCount === 'number' ? summary.prohibitedCount : 0;
+  const caution = typeof summary.cautionCount === 'number' ? summary.cautionCount : 0;
+  const aiTotal = typeof summary.aiRecommendTotal === 'number' ? summary.aiRecommendTotal : 0;
+  const aiShown = typeof summary.aiRecommendMentioned === 'number' ? summary.aiRecommendMentioned : 0;
+  const checked = typeof summary.keywordsChecked === 'number' ? summary.keywordsChecked : 0;
+  const top = typeof summary.keywordsTop10 === 'number' ? summary.keywordsTop10 : 0;
+
+  if (days !== null && days >= STALE_DAYS) {
+    const elapsed = formatElapsedKo(days);
+    return {
+      kind: 'stale',
+      subject: `블로그에 ${elapsed}째 새 글이 없습니다`,
+      lead: `이번 진단에서 가장 먼저 보실 것은 발행 간격입니다. 마지막 글이 ${elapsed} 전입니다.`,
+    };
+  }
+  if (prohibited > 0) {
+    return {
+      kind: 'prohibited',
+      subject: `의료광고법 점검 대상 표현 ${prohibited}건`,
+      lead: `표현 점검에서 ${prohibited}건이 나왔습니다. 의료법이 광고에서 금지한 유형과 같은 형태의 표현을 기계적으로 찾아 표시한 것이고, 위반 여부를 저희가 판단한 것은 아닙니다.`,
+    };
+  }
+  if (aiTotal > 0 && aiShown === 0) {
+    return {
+      kind: 'aiAbsent',
+      subject: '이름 빼고 물으면 AI 답변에 나오지 않습니다',
+      lead:
+        aiTotal === 1
+          ? '환자가 병원 이름을 모르는 상태에서 AI에게 묻는 상황을 만들어 봤습니다. 그 답변에 병원이 등장하지 않았습니다.'
+          : `환자가 병원 이름을 모르는 상태에서 AI에게 묻는 상황을 ${aiTotal}번 만들어 봤습니다. 답변에 병원이 등장한 경우는 없었습니다.`,
+    };
+  }
+  if (checked > 0 && top === 0) {
+    return {
+      kind: 'noTopRank',
+      subject: `실측한 키워드 ${checked}개 모두 상위권 밖`,
+      lead: `진단 시점 기준으로 실측한 키워드 ${checked}개 모두, 검색 상위권에서 병원 이름을 확인하지 못했습니다.`,
+    };
+  }
+  if (days !== null && days > FRESH_DAYS) {
+    const elapsed = formatElapsedKo(days);
+    return {
+      kind: 'staleMild',
+      subject: `블로그에 ${elapsed}째 새 글이 없습니다`,
+      lead: `이번 진단에서 가장 먼저 보실 것은 발행 간격입니다. 마지막 글이 ${elapsed} 전입니다.`,
+    };
+  }
+  if (caution > 0) {
+    return {
+      kind: 'caution',
+      subject: `심의에서 자주 지적되는 표현 ${caution}건`,
+      lead: `표현 점검에서 심의에서 자주 지적되는 표현 ${caution}건이 표시됐습니다. 기계적으로 찾아 표시한 것이고, 위반 여부를 저희가 판단한 것은 아닙니다.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * 요약 목록 — **진단이 실제로 확인한 값만**. null 인 항목은 아예 빼고 추정으로 메우지 않는다.
+ *
+ * ★ 잘 되고 있는 항목을 문제와 같은 목록에 섞지 않는다. "AI 추천 질문 3개 중 이름이
+ *   나온 질문 2개"가 문제 목록 셋째 줄에 있으면 좋은 소식처럼 읽히고, 그게 좋은 건지
+ *   나쁜 건지 판단을 원장에게 떠넘기게 된다. 분류는 화면(findings.ts)과 같은 기준이다.
+ */
+export interface DiagnosisEmailFacts {
+  /** 지금 손댈 수 있는 항목. */
+  readonly issues: readonly string[];
+  /** 유지하면 되는 항목. */
+  readonly keeps: readonly string[];
+}
+
+export function buildEmailFacts(summary: DiagnosisLeadSummary): DiagnosisEmailFacts {
+  const issues: string[] = [];
+  const keeps: string[] = [];
+
+  const days = typeof summary.daysSinceLatestPost === 'number' ? summary.daysSinceLatestPost : null;
+  if (days !== null) {
+    // 환산값을 앞에 두되 원본 일수를 괄호로 남긴다 — 전화 후속에서 그대로 인용해야 한다.
+    if (days > FRESH_DAYS) issues.push(`마지막 블로그 글: ${formatElapsedKo(days)} 전 (${days}일)`);
+    else keeps.push(`마지막 블로그 글: ${days}일 전 — 발행이 살아 있습니다`);
+  }
+
+  const prohibited = summary.prohibitedCount;
+  const caution = summary.cautionCount;
+  if (typeof prohibited === 'number' && prohibited > 0) {
+    issues.push(`의료법이 광고에서 명시적으로 금지한 유형에 해당할 수 있는 표현: ${prohibited}건`);
+  }
+  if (typeof caution === 'number' && caution > 0) {
+    issues.push(`심의에서 자주 지적되는 표현: ${caution}건`);
+  }
+  if (typeof prohibited === 'number' && prohibited === 0 && typeof caution === 'number' && caution === 0) {
+    keeps.push('심의에서 자주 지적되는 표현은 발견되지 않았습니다');
+  }
+
+  const checked = typeof summary.keywordsChecked === 'number' ? summary.keywordsChecked : 0;
+  if (checked > 0) {
+    const top = typeof summary.keywordsTop10 === 'number' ? summary.keywordsTop10 : 0;
+    if (top === 0) issues.push(`실측한 키워드 ${checked}개, 상위권에서 확인되지 않았습니다`);
+    else keeps.push(`실측한 키워드 ${checked}개 중 ${top}개가 상위권에 있습니다`);
+  }
+
+  const aiTotal = typeof summary.aiRecommendTotal === 'number' ? summary.aiRecommendTotal : 0;
+  if (aiTotal > 0) {
+    const shown = typeof summary.aiRecommendMentioned === 'number' ? summary.aiRecommendMentioned : 0;
+    // 일부만 등장한 상태는 **안 나온 쪽**을 적는다. "3개 중 2개 등장"은 좋은 소식으로 읽힌다.
+    if (shown === 0) issues.push(`AI 추천 질문 ${aiTotal}개 모두에서 병원 이름이 나오지 않았습니다`);
+    else if (shown < aiTotal) {
+      issues.push(`AI 추천 질문 ${aiTotal}개 중 ${aiTotal - shown}개에서 병원 이름이 나오지 않았습니다`);
+    } else keeps.push(`AI 추천 질문 ${aiTotal}개 모두에서 병원 이름이 나왔습니다`);
+  }
+
+  return { issues, keeps };
+}
+
+/**
+ * (구) 평면 요약 목록 — 문제·유지 구분 없이 한 줄씩. 호출부는 buildEmailFacts 를 쓴다.
+ * 저장된 요약을 다른 곳에서 한 줄 목록으로 읽어야 할 때를 위해 남긴다.
  */
 export function buildEmailFactLines(summary: DiagnosisLeadSummary): readonly string[] {
-  const lines: string[] = [];
-  if (typeof summary.daysSinceLatestPost === 'number') {
-    lines.push(`마지막 블로그 글: ${summary.daysSinceLatestPost}일 전`);
-  }
-  if (typeof summary.prohibitedCount === 'number' && summary.prohibitedCount > 0) {
-    lines.push(`의료법이 광고에서 명시적으로 금지한 유형에 해당할 수 있는 표현: ${summary.prohibitedCount}건`);
-  }
-  if (typeof summary.cautionCount === 'number' && summary.cautionCount > 0) {
-    lines.push(`심의에서 자주 지적되는 표현: ${summary.cautionCount}건`);
-  }
-  if (typeof summary.keywordsChecked === 'number' && summary.keywordsChecked > 0) {
-    lines.push(`실측한 키워드 ${summary.keywordsChecked}개 중 상위권 ${summary.keywordsTop10 ?? 0}개`);
-  }
-  if (typeof summary.aiRecommendTotal === 'number' && summary.aiRecommendTotal > 0) {
-    lines.push(
-      `AI 추천 질문 ${summary.aiRecommendTotal}개 중 병원 이름이 나온 질문 ${summary.aiRecommendMentioned ?? 0}개`,
-    );
-  }
-  return lines;
+  const facts = buildEmailFacts(summary);
+  return [...facts.issues, ...facts.keeps];
 }
 
 /**
@@ -328,27 +481,60 @@ export function buildDiagnosisEmail(input: DiagnosisEmailInput): DiagnosisEmailC
   const url = escapeHtml(input.reportUrl);
   const summary = input.summary;
   const badCount = summary?.badCount ?? 0;
-  const facts = summary ? buildEmailFactLines(summary) : [];
+  const facts = summary ? buildEmailFacts(summary) : { issues: [], keeps: [] };
+  const headline = summary ? buildEmailHeadline(summary) : null;
   const runAtText = formatKstDate(input.runAt);
 
+  /**
+   * 제목 — **그 병원 고유의 사실**을 세운다. 값이 없으면 건수로, 건수도 없으면 무난하게.
+   * (건수 제목은 어느 병원에 보내도 같은 문장이라 열어볼 이유가 약하다 — 폴백일 뿐이다.)
+   */
   // 이름을 못 읽은 리포트면 이름 자리를 비운다(빈 자리에 '' 를 넣어 어색해지지 않게).
   const subjectName = safeName.length > 0 ? `${safeName} ` : '';
   const subject =
-    badCount > 0
-      ? `[닥터포스트] ${subjectName}온라인 노출 진단 — 지금 고쳐야 할 것 ${badCount}건`
-      : `[닥터포스트] ${subjectName}온라인 노출 진단 결과`;
+    headline !== null
+      ? // 이름을 못 읽었으면 줄표만 덩그러니 남지 않게 뗀다.
+        `[닥터포스트] ${safeName.length > 0 ? `${safeName} — ` : ''}${headline.subject}`
+      : badCount > 0
+        ? `[닥터포스트] ${subjectName}온라인 노출 진단 — 지금 고쳐야 할 것 ${badCount}건`
+        : `[닥터포스트] ${subjectName}온라인 노출 진단 결과`;
   const headingName = name.length > 0 ? `${name} ` : '';
 
-  const factHtml =
-    facts.length > 0
-      ? `<ul style="margin:0 0 20px;padding-left:20px;color:#3c4653;font-size:14px;line-height:1.9">${facts
-          .map((line) => `<li>${escapeHtml(line)}</li>`)
-          .join('')}</ul>`
+  const leadHtml =
+    headline !== null
+      ? `<p style="margin:0 0 18px;font-size:15px;line-height:1.75;font-weight:700;color:#202020">${escapeHtml(
+          headline.lead,
+        )}</p>`
       : '';
 
+  /** 목록 한 덩어리 — 머리말 + 줄. 비어 있으면 머리말도 만들지 않는다. */
+  const factGroupHtml = (title: string, lines: readonly string[]): string =>
+    lines.length === 0
+      ? ''
+      : `<p style="margin:0 0 6px;font-size:12px;font-weight:800;letter-spacing:0.5px;color:#5b6573">${escapeHtml(
+          title,
+        )}</p><ul style="margin:0 0 18px;padding-left:20px;color:#3c4653;font-size:14px;line-height:1.9">${lines
+          .map((line) => `<li>${escapeHtml(line)}</li>`)
+          .join('')}</ul>`;
+
+  const factHtml = `${factGroupHtml('지금 손댈 수 있는 항목', facts.issues)}${factGroupHtml(
+    '유지하면 되는 항목',
+    facts.keeps,
+  )}`;
+
+  /**
+   * ★ 분자는 반드시 분모의 부분집합이어야 한다 — badScopeCount 는 badCount 안에서 센 값이다.
+   *   ourScopeCount(경고 전체 기준)를 여기 쓰면 "2건 중 5건"이 나간다(실제 발생, 2026-07-27).
+   *   0건이면 문장을 아예 빼고, 저장된 옛 요약(badScopeCount 없음)도 같은 이유로 뺀다.
+   */
+  const badScopeCount =
+    summary && typeof summary.badScopeCount === 'number' ? summary.badScopeCount : 0;
   const scopeHtml =
-    summary && badCount > 0
-      ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.8;color:#3c4653">지금 고쳐야 할 것 <b>${badCount}건</b> 중 <b>${summary.ourScopeCount}건</b>은 닥터포스트가 대신할 수 있는 항목입니다.</p>`
+    badCount > 0 && badScopeCount > 0
+      ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.8;color:#3c4653">지금 고쳐야 할 것 <b>${badCount}건</b> 중 <b>${Math.min(
+          badScopeCount,
+          badCount,
+        )}건</b>은 닥터포스트가 대신할 수 있는 항목입니다.</p>`
       : '';
 
   const html = `<!doctype html>
@@ -357,6 +543,7 @@ export function buildDiagnosisEmail(input: DiagnosisEmailInput): DiagnosisEmailC
   <p style="margin:0 0 6px;font-size:12px;font-weight:800;letter-spacing:2px;color:#ff4628">FREE CHECK</p>
   <h1 style="margin:0 0 6px;font-size:22px;line-height:1.35;font-weight:800">${headingName}온라인 노출 진단 결과</h1>
   <p style="margin:0 0 24px;font-size:12px;color:#8a93a0">${escapeHtml(runAtText)} 진단(한국 시간 기준) · 요청하신 주소로 보내드립니다</p>
+  ${leadHtml}
   ${factHtml}
   ${scopeHtml}
   <p style="margin:0 0 28px">

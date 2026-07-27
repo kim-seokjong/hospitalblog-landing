@@ -38,6 +38,8 @@ const SUMMARY: DiagnosisLeadSummary = {
   improveCount: 2,
   goodCount: 4,
   unknownCount: 1,
+  badScopeCount: 2,
+  improveScopeCount: 0,
   ourScopeCount: 2,
   topIssues: ['최근 발행'],
   daysSinceLatestPost: 208,

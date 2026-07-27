@@ -8,6 +8,7 @@ import {
   countDoctorpostScope,
   doctorpostLine,
 } from '../conversion.ts';
+import { groupFindings, normalizeStoredFindings } from '../findings.ts';
 import { EMPTY_SITE_AXIS } from '../site-audit.ts';
 import { EMPTY_AI_AXIS } from '../ai-citation.ts';
 import { EMPTY_COMPLIANCE_AXIS } from '../compliance-scan.ts';
@@ -314,4 +315,75 @@ test('값이 하나도 없으면 무난한 기본 문구로 떨어진다', () =>
   const cta = buildConversionCta({} as DiagnosisReport);
   assert.equal(cta.headline, FALLBACK_CTA_HEADLINE);
   assert.equal(cta.basis, null);
+});
+
+/* ── 분자 ≤ 분모 · 화면과 메일의 숫자 일치 ────────────────
+ *
+ * ★ 실제 발송 사고(2026-07-27): 메일이 "지금 고쳐야 할 것 2건 중 5건" 이라고 썼다.
+ *   분모는 groups.bad 를, 분자는 **경고 전체**를 세고 있었다. 분자는 반드시 분모의
+ *   부분집합이어야 하고, 화면 CTA 와 메일이 같은 값을 써야 한다.
+ */
+
+/** 사고 재현 리포트 — 지금 고쳐야 할 것 2건 / 챙기면 좋을 것에도 우리 범위 3건. */
+function mixedScopeReport(): DiagnosisReport {
+  return report({
+    blog: { ...EMPTY_BLOG, daysSinceLatest: 469 },
+    findings: [
+      // 지금 고쳐야 할 것(losing) + 우리 범위 = 2건
+      finding({ id: 'blog.freshness', tone: 'warn', ourScope: true }),
+      finding({ id: 'blog.rank', tone: 'warn', ourScope: true }),
+      // 챙기면 좋을 것(improving) + 우리 범위 = 3건 — 분자에 섞이면 안 되는 항목들
+      finding({ id: 'blog.cadence', tone: 'warn', ourScope: true }),
+      finding({ id: 'blog.postSeo', tone: 'warn', ourScope: true }),
+      finding({ id: 'ai.path', axis: 'ai', tone: 'warn', ourScope: true }),
+    ],
+  });
+}
+
+test('요약: badScopeCount 는 badCount 의 부분집합이다 (2건 중 5건 사고 재현)', () => {
+  const summary = buildDiagnosisLeadSummary(mixedScopeReport());
+  assert.equal(summary.badCount, 2);
+  assert.equal(summary.badScopeCount, 2);
+  assert.equal(summary.improveScopeCount, 3);
+  // 경고 전체 기준 값은 따로 남긴다 — 여기가 예전에 분자로 새어 나가던 자리다.
+  assert.equal(summary.ourScopeCount, 5);
+  assert.ok(summary.badScopeCount <= summary.badCount);
+  assert.ok(summary.improveScopeCount <= summary.improveCount);
+});
+
+test('화면 CTA 와 메일 요약이 같은 숫자를 쓴다', () => {
+  const r = mixedScopeReport();
+  const cta = buildConversionCta(r);
+  const summary = buildDiagnosisLeadSummary(r);
+  assert.equal(cta.badCount, summary.badCount);
+  assert.equal(cta.badScopeCount, summary.badScopeCount);
+  assert.equal(cta.sub, '지금 고쳐야 할 것 2건 중 2건은 닥터포스트가 대신합니다.');
+});
+
+test('옛 리포트도 화면 목록·CTA·메일 요약이 같은 집합을 센다', () => {
+  /**
+   * 화면 목록은 normalizeStoredFindings 를 거치는데 CTA·요약은 거치지 않아,
+   * 옛 의료광고법 항목이 화면에서는 "지금 고쳐야 할 것", 메일에서는 "챙기면 좋을 것"
+   * 으로 갈렸다. 두 곳 다 보정된 목록을 세야 한다.
+   */
+  const legacy = report({
+    // prohibitedCount 가 없는 = 위험/주의 2단 등급 이전에 저장된 리포트.
+    compliance: { checked: true, hits: [], postsScanned: 10 } as unknown as ComplianceAxis,
+    blog: { ...EMPTY_BLOG, blogId: 'myclinic' },
+    findings: [
+      finding({ id: 'compliance.risk', axis: 'compliance', tone: 'warn', ourScope: true }),
+      // 화면 맨 위 "진단한 블로그" 블록과 중복돼 화면에서 빠지는 카드.
+      finding({ id: 'blog.exists', tone: 'good', ourScope: false }),
+    ],
+  });
+
+  const screen = groupFindings(normalizeStoredFindings(legacy));
+  const summary = buildDiagnosisLeadSummary(legacy);
+  const cta = buildConversionCta(legacy);
+
+  assert.equal(screen.bad.length, 1, '화면에서는 옛 등급대로 지금 고쳐야 할 것');
+  assert.equal(summary.badCount, screen.bad.length);
+  assert.equal(cta.badCount, screen.bad.length);
+  assert.equal(summary.goodCount, screen.good.length, '중복 카드가 개수에 남으면 안 된다');
+  assert.equal(summary.goodCount, 0);
 });
