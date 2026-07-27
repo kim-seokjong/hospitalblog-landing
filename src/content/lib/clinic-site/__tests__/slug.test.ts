@@ -10,6 +10,7 @@ import {
   buildClinicSitePath,
   resolveClinicSiteRewrite,
   isClinicSitePathname,
+  isClinicSiteBrowserContext,
   CLINIC_SITE_PATH_PREFIX,
   CLINIC_SITE_REQUEST_HEADER,
 } from '../slug.ts';
@@ -227,4 +228,40 @@ test('isClinicSitePathname: /clinic-site 경로만 true (SaaS JSON-LD 제외 대
 test('JSON-LD 분기용 상수가 고정되어 있다 (미들웨어 ↔ 루트 레이아웃 계약)', () => {
   assert.equal(CLINIC_SITE_PATH_PREFIX, '/clinic-site');
   assert.equal(CLINIC_SITE_REQUEST_HEADER, 'x-clinic-site');
+});
+
+// ---------------------------------------------------------------------------
+// 브라우저 문맥 판정 — 서드파티 태그(특히 메타 픽셀) 차단의 입력값
+// ---------------------------------------------------------------------------
+
+test('★ isClinicSiteBrowserContext: 서브도메인이면 경로가 "/" 여도 병원 블로그다', () => {
+  // rewrite 는 브라우저 URL 을 바꾸지 않는다 — usePathname() 은 여기서 "/" 를 준다.
+  assert.equal(isClinicSiteBrowserContext('myclinic.hospitalblog.kr', '/'), true);
+  assert.equal(isClinicSiteBrowserContext('myclinic.hospitalblog.kr', '/posts/abc'), true);
+  assert.equal(isClinicSiteBrowserContext('myclinic.hospitalblog.kr', '/about'), true);
+  // 로컬 개발 서브도메인도 동일하게 잡는다.
+  assert.equal(isClinicSiteBrowserContext('myclinic.localhost', '/'), true);
+});
+
+test('★ isClinicSiteBrowserContext: 메인 도메인에서 /clinic-site/* 직접 접근도 잡는다', () => {
+  assert.equal(isClinicSiteBrowserContext('hospitalblog.kr', '/clinic-site/myclinic'), true);
+  assert.equal(isClinicSiteBrowserContext('localhost', '/clinic-site/myclinic/posts/abc'), true);
+});
+
+test('isClinicSiteBrowserContext: 메인 사이트는 false (기존 동작 100% 유지)', () => {
+  assert.equal(isClinicSiteBrowserContext('hospitalblog.kr', '/'), false);
+  assert.equal(isClinicSiteBrowserContext('www.hospitalblog.kr', '/pricing'), false);
+  assert.equal(isClinicSiteBrowserContext('localhost', '/app'), false);
+  // Vercel 미리보기 배포 — 메인 사이트로 본다.
+  assert.equal(isClinicSiteBrowserContext('hospitalblog-landing.vercel.app', '/'), false);
+  // 예약 서브도메인(app·admin 등)은 병원 블로그가 아니다.
+  assert.equal(isClinicSiteBrowserContext('app.hospitalblog.kr', '/'), false);
+  // 접두사만 같은 경로에 오탐하지 않는다.
+  assert.equal(isClinicSiteBrowserContext('hospitalblog.kr', '/clinic-sites'), false);
+});
+
+test('isClinicSiteBrowserContext: 입력이 없거나 깨져도 안전하게 false', () => {
+  assert.equal(isClinicSiteBrowserContext(null, null), false);
+  assert.equal(isClinicSiteBrowserContext(undefined, undefined), false);
+  assert.equal(isClinicSiteBrowserContext('', ''), false);
 });

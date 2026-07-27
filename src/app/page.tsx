@@ -19,7 +19,7 @@ import BlindTestSection from '@/components/landing/BlindTestSection';
 import WhyDoctorPostSection from '@/components/landing/WhyDoctorPostSection';
 import EbookLeadSection from '@/components/landing/EbookLeadSection';
 import JsonLd from '@/dev/lib/seo/JsonLd';
-import { buildFaqPageJsonLd } from '@/dev/lib/seo/schemas';
+import { buildFaqPageJsonLd, buildOrganizationJsonLd, buildSoftwareApplicationJsonLd } from '@/dev/lib/seo/schemas';
 import { HOME_FAQS } from '@/dev/lib/seo/homeFaq';
 
 /**
@@ -159,6 +159,13 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white text-[#202020]">
       {/* 홈 FAQ FAQPage JSON-LD (GEO/AEO) — 화면 FAQ(HomeFaqSection)와 동일 데이터 사용 */}
       <JsonLd data={buildFaqPageJsonLd(HOME_FAQS)} />
+
+      {/* 회사·제품 구조화 데이터 — 예전에는 루트 레이아웃이 전 페이지에 뿌렸다.
+          ① 레이아웃이 병원 블로그 판정(headers())을 하느라 ISR 이 죽었고
+          ② Organization·SoftwareApplication 은 사이트에 한 번(홈)이면 충분하다.
+          홈으로 내리면서 고객 병원 블로그로 우리 회사 스키마가 샐 경로도 사라졌다. */}
+      <JsonLd data={buildOrganizationJsonLd()} />
+      <JsonLd data={buildSoftwareApplicationJsonLd()} />
 
       {/* 스크롤 리빌 자동 장착 (섹션 진입 모션 — 고급화) */}
       <RevealInit />

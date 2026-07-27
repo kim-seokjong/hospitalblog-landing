@@ -35,7 +35,10 @@ const POLICY: Readonly<Record<RootLayoutTag, RootLayoutTagPolicy>> = {
     allowedOnClinicSite: false,
     reason:
       '닥터포스트 SaaS 의 Organization·SoftwareApplication 구조화 데이터(회사명·상품·가격). ' +
-      '병원 블로그에는 그 병원의 MedicalClinic·Article 스키마만 있어야 한다.',
+      '병원 블로그에는 그 병원의 MedicalClinic·Article 스키마만 있어야 한다. ' +
+      '★ 이 태그는 이제 조건 분기가 아니라 **구조**로 지켜진다 — 스키마 출력을 ' +
+      '루트 레이아웃에서 홈(app/page.tsx)으로 옮겨, 병원 블로그 트리에는 애초에 ' +
+      '들어가지 않는다(회귀 테스트가 레이아웃·병원 페이지에 없음을 검사한다).',
   },
   'meta-pixel': {
     allowedOnClinicSite: false,

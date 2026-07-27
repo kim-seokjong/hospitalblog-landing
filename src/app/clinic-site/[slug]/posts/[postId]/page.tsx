@@ -41,6 +41,14 @@ import AiReferralBeacon from '../../ai-referral-beacon';
 
 export const revalidate = 3600;
 
+/**
+ * ★ ISR 스위치 — 빈 배열이 핵심이다(근거·실측은 ../../page.tsx 주석 참조).
+ * 이게 없으면 위의 revalidate 가 조용히 무시되고 매 요청 서버 렌더가 된다.
+ */
+export async function generateStaticParams(): Promise<{ slug: string; postId: string }[]> {
+  return [];
+}
+
 interface PageProps {
   params: Promise<{ slug: string; postId: string }>;
 }

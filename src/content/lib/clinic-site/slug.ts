@@ -179,10 +179,13 @@ export function buildClinicSitePath(slug: string, pathname: string): string | nu
 export const CLINIC_SITE_PATH_PREFIX = '/clinic-site';
 
 /**
- * 미들웨어가 병원 블로그 렌더링임을 앱(루트 레이아웃)에 알릴 때 쓰는 요청 헤더.
- * 이 헤더가 붙은 요청에서는 닥터포스트 SaaS 판매 정보(Organization·
- * SoftwareApplication JSON-LD)를 출력하지 않는다 — 고객 병원 블로그에
- * 우리 상품·가격 구조화 데이터가 새어나가면 안 된다.
+ * 미들웨어가 병원 블로그 렌더링임을 앱에 알릴 때 쓰는 요청 헤더.
+ *
+ * ⚠️ **루트 레이아웃은 더 이상 이 헤더를 읽지 않는다.** 레이아웃에서 headers() 를
+ *    읽으면 하위 세그먼트 전체가 동적으로 내려가 /clinic-site/* 의 ISR 이 죽기
+ *    때문이다. 서드파티 태그 판정은 isClinicSiteBrowserContext(브라우저 문맥)로,
+ *    회사 JSON-LD 는 홈에만 두는 구조로 각각 대체했다.
+ *    헤더는 서버 컴포넌트가 아닌 곳(라우트 핸들러 등)에서 쓸 수 있도록 남겨 둔다.
  *
  * ⚠️ 외부에서 위조해 보낼 수 있으므로 미들웨어가 항상 set 또는 delete 로
  *    덮어쓴다(신뢰 경계는 미들웨어 한 곳).
@@ -195,6 +198,37 @@ export function isClinicSitePathname(pathname: string): boolean {
     pathname === CLINIC_SITE_PATH_PREFIX ||
     pathname.startsWith(`${CLINIC_SITE_PATH_PREFIX}/`)
   );
+}
+
+/**
+ * 브라우저 문맥이 고객 병원 블로그인지 판정한다 (클라이언트 전용 순수 함수).
+ *
+ * ★ 왜 헤더가 아니라 이걸로 판정하는가:
+ *   루트 레이아웃에서 headers() 를 읽으면 하위 세그먼트 전체가 동적 렌더로 내려가
+ *   /clinic-site/* 의 `revalidate = 3600`(ISR)이 무력화된다. 판정 입력을
+ *   요청 헤더 → 브라우저 문맥으로 옮겨 레이아웃을 정적으로 유지한다.
+ *   **어떤 태그를 빼는지의 정책은 third-party.ts 그대로다** — 입력만 바뀐다.
+ *
+ * ★ 왜 경로(usePathname)만으로는 안 되는가 (Next 14.2.5 소스 실측):
+ *   미들웨어 rewrite 는 브라우저 URL 을 바꾸지 않는다. 클라이언트 라우터는
+ *   canonicalUrl 을 window.location 에서 만들기 때문에
+ *   (create-initial-router-state.js —
+ *    `location ? createHrefFromUrl(location) : initialCanonicalUrl`,
+ *    app-router.js — `location: !isServer ? window.location : null`)
+ *   {slug}.hospitalblog.kr/ 에서 usePathname() 은 '/clinic-site/{slug}' 가 아니라 '/' 다.
+ *   그래서 **호스트명(서브도메인) 판정이 1차**이고, 경로 판정은 메인 도메인에서
+ *   /clinic-site/* 로 직접 들어온 경우를 잡는 2차 게이트다 —
+ *   미들웨어가 헤더를 붙이던 두 경로(서브도메인 rewrite · 직접 접근)를 그대로 덮는다.
+ *
+ * 어느 한쪽만 걸려도 병원 블로그로 본다(recall 우선) — 오판의 비용이
+ * "메인 사이트에서 태그가 안 뜬다"보다 "환자 브라우저에 픽셀이 심긴다" 쪽이 훨씬 크다.
+ */
+export function isClinicSiteBrowserContext(
+  hostname: string | null | undefined,
+  pathname: string | null | undefined,
+): boolean {
+  if (extractClinicSlugFromHost(hostname) !== null) return true;
+  return typeof pathname === 'string' && isClinicSitePathname(pathname);
 }
 
 /**

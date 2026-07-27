@@ -23,6 +23,26 @@ import AiReferralBeacon from './ai-referral-beacon';
 
 export const revalidate = 3600;
 
+/**
+ * ★ ISR 을 실제로 켜는 스위치 — **빈 배열인 것이 핵심**이다.
+ *
+ * 동적 세그먼트([slug])에 generateStaticParams 가 없으면 Next 는 이 라우트를
+ * "요청마다 서버 렌더"로 확정하고 prerender-manifest 에 아예 넣지 않는다 —
+ * 위의 revalidate 선언이 조용히 무시된다(2026-07 실측: dynamicRoutes 가 비어 있었고
+ * 빌드 표에 ƒ 로 찍혔다). 빈 배열을 돌려주면 "빌드 때 미리 만들 페이지는 없지만
+ * 요청이 오면 만들어 캐시한다"(fallback: blocking)가 되어 revalidate 가 살아난다
+ * (실측: x-nextjs-cache MISS → HIT, Cache-Control s-maxage=3600).
+ *
+ * 여기서 병원 목록을 DB 로 읽지 않는 이유: 빌드가 DB 에 의존하게 되는데,
+ * 빌드 이후 가입한 병원은 어차피 온디맨드로 생성되므로 얻는 게 없다.
+ *
+ * ⚠️ 루트 레이아웃이 동적 API(headers/cookies)를 쓰면 이 설정과 무관하게 ISR 이
+ *    다시 죽는다 — layout.tsx 주석과 회귀 테스트 참조.
+ */
+export async function generateStaticParams(): Promise<{ slug: string }[]> {
+  return [];
+}
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
