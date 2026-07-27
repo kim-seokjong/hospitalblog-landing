@@ -9,6 +9,9 @@ import {
   joinOrStartSingleFlight,
   limitMessage,
   lookupCacheKey,
+  lookupCacheTtlMs,
+  LOOKUP_CACHE_TTL_MS,
+  LOOKUP_NOT_FOUND_CACHE_TTL_MS,
   readDiagnosisLimits,
   readLookupLimits,
   getDiagnosisInflight,
@@ -55,6 +58,30 @@ test('캐시는 저장한 값을 그대로 돌려주고 TTL 이 지나면 버린
   // 이미 만료된 TTL 로 덮어쓰면 즉시 미스
   cacheSet(key, { v: 2 }, -1);
   assert.equal(cacheGet(key), null);
+});
+
+/* ── ★ 성공/실패 캐시 수명 분리 (2026-07-27 장애 회귀) ──── */
+
+/**
+ * 행안부가 15분간 정상 응답에 0건을 실어 보냈다. 그 not_found 가 24시간 캐시에
+ * 눌러앉아, 복구 뒤에도 하루 종일 "등록된 병원을 찾지 못했어요"가 나갔다.
+ * 실패 결과는 절대 장기 캐시되면 안 된다.
+ */
+test('찾은 결과는 길게, 실패는 짧게 — 하나의 TTL 로 뭉뚱그리지 않는다', () => {
+  for (const kind of ['resolved', 'ambiguous', 'needs_region', 'region_miss', 'closed_only'] as const) {
+    assert.equal(lookupCacheTtlMs(kind), LOOKUP_CACHE_TTL_MS, `${kind} 는 1일 캐시`);
+  }
+  // not_found 는 짧게 — 장애 노출 상한이 곧 이 값이다.
+  assert.equal(lookupCacheTtlMs('not_found'), LOOKUP_NOT_FOUND_CACHE_TTL_MS);
+  assert.ok(
+    lookupCacheTtlMs('not_found') <= 10 * 60 * 1000,
+    '못 찾음 캐시가 10분을 넘으면 일시 장애가 그대로 굳는다',
+  );
+  assert.ok(lookupCacheTtlMs('not_found') < LOOKUP_CACHE_TTL_MS / 100);
+});
+
+test('조회 실패(unavailable)는 아예 캐시하지 않는다', () => {
+  assert.equal(lookupCacheTtlMs('unavailable'), 0, '아무것도 확인하지 못한 결과를 캐시하면 장애가 지속된다');
 });
 
 /* ── 실행 캡 ───────────────────────────────────────────── */

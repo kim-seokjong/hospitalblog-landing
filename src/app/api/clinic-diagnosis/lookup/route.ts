@@ -5,7 +5,7 @@ import {
   extractClientIp,
   limitMessage,
   lookupCacheKey,
-  LOOKUP_CACHE_TTL_MS,
+  lookupCacheTtlMs,
 } from '@/content/lib/clinic-diagnosis/limits';
 import { cacheGet, cacheSet } from '@/content/lib/scoreboard/cache';
 import type { ClinicLookupOutcome } from '@/content/lib/clinic-diagnosis/types';
@@ -23,8 +23,11 @@ export const maxDuration = 60;
  * 후보가 여러 개면 주소를 붙여 사용자가 고르게 하고 그 다음에 진단으로 넘어간다.
  *
  * 가드:
- * - 입력 길이 제한, 캐시 1일(행안부 데이터는 일간 갱신), IP당 일 30회
+ * - 입력 길이 제한, IP당 일 30회
  * - 캐시 히트는 캡을 소비하지 않는다
+ * - ★캐시 수명은 성공/실패를 분리한다 — 찾은 결과 1일, not_found 5분, 조회 실패는 캐시 없음.
+ *   (행안부가 정상 응답에 0건을 실어 보내던 15분 동안 not_found 가 24시간 캐시돼,
+ *    복구 뒤에도 하루 종일 "그런 병원 없음"이 나갔다. 2026-07-27 실측.)
  *
  * 반환하는 것은 전부 **행안부가 공표한 공개 정보**다(상호·주소·대표번호·진료과목·영업상태).
  */
@@ -64,15 +67,19 @@ export async function POST(req: NextRequest) {
           ? '병원 조회 서비스가 아직 연결되지 않았어요. 블로그 주소로 진단하는 방법을 이용해 주세요.'
           : outcome.reason === 'key_rejected'
             ? '병원 조회 서비스 연결에 문제가 생겼어요(담당자 확인 중). 병원이 없는 것이 아니니, 아래에서 블로그·홈페이지 주소로 진단해 주세요.'
-            : '병원 정보를 조회하지 못했어요. 잠시 후 다시 시도해 주세요.';
+            : '지금 병원 조회가 원활하지 않아요. 잠시 후 다시 시도해 주세요.';
       if (outcome.reason === 'key_rejected') {
         console.error('[clinic-diagnosis/lookup] 행안부 조회 키 거부 — 운영 확인 필요');
       }
       // 실패는 캐시하지 않는다 — 일시 장애를 하루 동안 굳히지 않기 위해.
+      // (수명은 lookupCacheTtlMs 한 곳에서만 정한다. 여기서 cacheSet 을 부르지 않는 것도 그 정책의 일부다.)
       return NextResponse.json({ error: message, outcome }, { status: 503 });
     }
 
-    cacheSet(key, outcome, LOOKUP_CACHE_TTL_MS);
+    // 성공(찾은 결과)은 1일, not_found 는 5분. 하나의 TTL 로 뭉뚱그리면
+    // 행안부의 5분짜리 장애가 하루짜리 장애로 증폭된다.
+    const ttlMs = lookupCacheTtlMs(outcome.kind);
+    if (ttlMs > 0) cacheSet(key, outcome, ttlMs);
     return NextResponse.json({ outcome, cached: false });
   } catch (err) {
     console.error('[clinic-diagnosis/lookup]', err instanceof Error ? err.message : err);

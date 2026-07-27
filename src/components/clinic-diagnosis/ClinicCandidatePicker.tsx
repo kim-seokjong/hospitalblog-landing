@@ -144,7 +144,7 @@ export default function ClinicCandidatePicker({ outcome, onPick, onNeedRegion, b
         ? '병원 조회 서비스가 아직 연결되지 않았어요. 아래 상세 진단에서 블로그·홈페이지 주소를 직접 넣어 주시면 진단해 드릴게요.'
         : outcome.reason === 'key_rejected'
           ? '병원 조회 서비스에 일시적인 문제가 생겼어요. 병원이 등록되지 않은 것이 아니라 저희 쪽 조회 문제입니다 — 아래 상세 진단에서 블로그·홈페이지 주소를 넣어 주시면 그대로 진단해 드릴게요.'
-          : '병원 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
+          : '지금 병원 조회가 원활하지 않아요. 병원이 등록되지 않은 것이 아니라 조회가 일시적으로 안 되는 상태예요. 잠시 후 다시 시도해 주세요.';
     return (
       <div className="mt-6 bg-yellow-50 border border-yellow-500/30 rounded-2xl px-4 py-4">
         <p className="text-[13px] text-yellow-800 leading-relaxed">{message}</p>

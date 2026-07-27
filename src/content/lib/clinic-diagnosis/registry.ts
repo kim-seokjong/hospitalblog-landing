@@ -521,6 +521,64 @@ export interface LookupOptions {
   readonly region?: string;
 }
 
+/* ── 조회 흔적 (사후 장애 판정용) ────────────────────────── */
+
+/**
+ * 조회 1콜의 흔적.
+ *
+ * ★ 왜 남기나. 2026-07-27 오전, 실존 병원 12곳이 전부 "그런 병원 없음"으로 나왔다.
+ *   행안부가 정상 엔벨로프에 0건을 실어 보내던 시간대였는데, 로그에는 아무것도
+ *   남지 않아서 **사람이 12건을 직접 쏴 보고 나서야** 장애를 알았다.
+ *   어떤 시드로 몇 건을 받았는지가 남아야 사후에 "그 시간대에 행안부가 죽었다"를
+ *   판정할 수 있다.
+ */
+export interface RegistryCallTrace {
+  readonly seed: string;
+  /** 이 콜에 건 지역 필터. 없으면 ''. */
+  readonly region: string;
+  readonly ok: boolean;
+  /** 성공 시 응답의 totalCount. 실패면 -1. */
+  readonly totalCount: number;
+  /** 성공 시 파싱된 건수. 실패면 0. */
+  readonly items: number;
+  /** 실패 사유 요약. 성공이면 null. */
+  readonly failure: string | null;
+}
+
+export interface LookupTrace {
+  /** 지역 힌트를 뗀 조회명. */
+  readonly name: string;
+  readonly region: string;
+  readonly calls: readonly RegistryCallTrace[];
+  /** 정상 응답을 한 번이라도 받았는가. */
+  readonly anySuccess: boolean;
+  /** 실패한 콜 수 — 0 이 아니면 "그 병원은 없다"를 단정할 수 없다. */
+  readonly failedCalls: number;
+}
+
+export interface LookupResult {
+  readonly outcome: ClinicLookupOutcome;
+  readonly trace: LookupTrace;
+}
+
+/** 로그 한 줄 — 시드별 수신 건수까지 담아 사후 판정이 가능하게 한다. */
+export function formatLookupTrace(outcome: ClinicLookupOutcome, trace: LookupTrace): string {
+  const kind = outcome.kind === 'unavailable' ? `unavailable:${outcome.reason}` : outcome.kind;
+  const calls = trace.calls
+    .map((c) => {
+      const seed = `${c.seed}${c.region ? `+${c.region}` : ''}`;
+      return c.ok ? `${seed}=${c.items}/${c.totalCount}` : `${seed}=FAIL(${c.failure ?? '원인 미상'})`;
+    })
+    .join(' | ');
+  return `outcome=${kind} name="${trace.name}" region="${trace.region}" calls=${trace.calls.length} failed=${trace.failedCalls} [${calls}]`;
+}
+
+/** 실패 메시지는 원문이 길다(최대 200자) — 로그 한 줄을 유지하려고 줄인다. */
+function shortFailure(reason: string, message: string): string {
+  const text = message.replace(/\s+/g, ' ').trim();
+  return text ? `${reason}: ${text.slice(0, 60)}` : reason;
+}
+
 /**
  * 병원명(+선택 지역)으로 후보를 찾는다.
  * 시드를 순서대로 시도하고 첫 히트에서 멈춘다. 전 시드 0건이고 지역을 걸었다면
@@ -530,11 +588,32 @@ export async function lookupClinics(
   rawName: string,
   options: LookupOptions = {},
 ): Promise<ClinicLookupOutcome> {
-  const env = options.env ?? (process.env as RegistryEnv);
-  if (!isRegistryConfigured(env)) return { kind: 'unavailable', reason: 'not_configured' };
+  const { outcome } = await lookupClinicsDetailed(rawName, options);
+  return outcome;
+}
 
+/** lookupClinics + 조회 흔적. 라우트가 로그·계측에 쓴다. */
+export async function lookupClinicsDetailed(
+  rawName: string,
+  options: LookupOptions = {},
+): Promise<LookupResult> {
+  const env = options.env ?? (process.env as RegistryEnv);
   const parsed = splitRegionHint(rawName, options.region);
-  if (normalizeClinicName(parsed.name).length < 2) return { kind: 'not_found' };
+  const calls: RegistryCallTrace[] = [];
+  const finish = (outcome: ClinicLookupOutcome, anySuccess: boolean): LookupResult => {
+    const failedCalls = calls.filter((c) => !c.ok).length;
+    const trace: LookupTrace = { name: parsed.name, region: parsed.region, calls, anySuccess, failedCalls };
+    // 병원을 못 찾은 경우에만, 그리고 실제로 API 를 호출한 경우에만 흔적을 남긴다.
+    if (calls.length > 0 && (outcome.kind === 'not_found' || outcome.kind === 'unavailable')) {
+      const line = `[clinic-diagnosis/registry] ${formatLookupTrace(outcome, trace)}`;
+      if (outcome.kind === 'unavailable') console.error(line);
+      else console.warn(line);
+    }
+    return { outcome, trace };
+  };
+
+  if (!isRegistryConfigured(env)) return finish({ kind: 'unavailable', reason: 'not_configured' }, false);
+  if (normalizeClinicName(parsed.name).length < 2) return finish({ kind: 'not_found' }, false);
 
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? REGISTRY_TIMEOUT_MS;
@@ -552,20 +631,34 @@ export async function lookupClinics(
    * "그런 병원 없음"으로 표시되고 아무도 눈치채지 못한다.
    */
   let anySuccess = false;
-  let keyRejected: string | null = null;
-  let lastFailure: string | null = null;
+  let keyRejected = false;
 
   for (const attempt of attempts.slice(0, MAX_REGISTRY_CALLS)) {
     const result = await fetchRegistryPage(attempt.seed, attempt.region, { env, fetchImpl, timeoutMs });
 
     if (!result.ok) {
-      if (result.reason === 'key_rejected' && keyRejected === null) keyRejected = result.message;
-      lastFailure = `${result.reason}: ${result.message}`;
+      if (result.reason === 'key_rejected') keyRejected = true;
+      calls.push({
+        seed: attempt.seed,
+        region: attempt.region,
+        ok: false,
+        totalCount: -1,
+        items: 0,
+        failure: shortFailure(result.reason, result.message),
+      });
       continue;
     }
 
     anySuccess = true;
     const page = result.page;
+    calls.push({
+      seed: attempt.seed,
+      region: attempt.region,
+      ok: true,
+      totalCount: page.totalCount,
+      items: page.items.length,
+      failure: null,
+    });
     if (page.items.length === 0) continue;
 
     const outcome = decideLookup(page.items, parsed.name, {
@@ -577,21 +670,21 @@ export async function lookupClinics(
     // 사용자가 지역을 넣었는데 지역 필터를 뺀 폴백에서 결과가 나왔다면,
     // 그건 **입력한 지역의 병원이 아니다.** 자동 확정하지 않고 그 사실을 명시한다.
     if (parsed.region && attempt.region === '') {
-      return relaxToRegionMiss(outcome, parsed.region, page.totalCount > page.items.length);
+      return finish(relaxToRegionMiss(outcome, parsed.region, page.totalCount > page.items.length), anySuccess);
     }
-    return outcome;
+    return finish(outcome, anySuccess);
   }
 
-  if (keyRejected !== null) {
-    // 운영자가 봐야 하는 유일한 사건 — 조용히 넘기지 않는다.
-    console.error('[clinic-diagnosis/registry] 행안부 서비스 키가 거부됐습니다(만료·한도·IP 확인 필요):', keyRejected);
-    return { kind: 'unavailable', reason: 'key_rejected' };
-  }
-  if (!anySuccess) {
-    console.error('[clinic-diagnosis/registry] 행안부 조회 전건 실패:', lastFailure ?? '원인 미상');
-    return { kind: 'unavailable', reason: 'fetch_failed' };
-  }
-  return { kind: 'not_found' };
+  // 운영자가 봐야 하는 사건 — 조용히 넘기지 않는다.
+  if (keyRejected) return finish({ kind: 'unavailable', reason: 'key_rejected' }, anySuccess);
+  /**
+   * ★ 콜이 하나라도 실패했으면 not_found 를 돌려주지 않는다.
+   *   시드 A 가 0건이고 시드 B 가 타임아웃이면 우리는 **검색을 끝내지 못한 것**이지
+   *   "그런 병원이 없다"를 확인한 것이 아니다. 여기서 not_found 를 돌려주면
+   *   그 응답이 캐시에 눌러앉아 장애가 끝난 뒤에도 계속 "없음"으로 보인다.
+   */
+  if (!anySuccess || calls.some((c) => !c.ok)) return finish({ kind: 'unavailable', reason: 'fetch_failed' }, anySuccess);
+  return finish({ kind: 'not_found' }, anySuccess);
 }
 
 /** 지역 필터를 뺀 폴백 결과를 region_miss 로 강등한다 (자동 확정 금지). */

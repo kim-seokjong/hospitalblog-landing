@@ -5,6 +5,7 @@ import {
   type RateLimitDecision,
   type SingleFlightJoin,
 } from '../blog-check-limits.ts';
+import type { ClinicLookupOutcome } from './types.ts';
 
 /**
  * 병원명 무료진단 — 캐시 키·실행 캡 (순수 로직).
@@ -37,8 +38,60 @@ export const DEFAULT_LOOKUP_GLOBAL_LIMIT = 1_000;
 
 /** 진단 결과 캐시 TTL — 7일 (blog-check 와 동일 정책). */
 export const DIAGNOSIS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-/** 후보 검색 캐시 TTL — 1일 (행안부 데이터는 일간 갱신). */
+/**
+ * 후보 검색 캐시 TTL — **찾은 결과만** 1일 (행안부 데이터는 일간 갱신).
+ * 실패 결과에는 절대 쓰지 않는다 — lookupCacheTtlMs 참조.
+ */
 export const LOOKUP_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * "그 이름으로 못 찾았다"(not_found) 캐시 TTL — 5분.
+ *
+ * ★ 왜 1일에서 5분으로 내렸나 (2026-07-27 장애).
+ *   행안부가 09:10~09:25Z 사이 정상 엔벨로프에 0건을 실어 보냈다. 그동안 자기 병원을
+ *   검색한 원장은 not_found 를 받았고, 그 응답이 **24시간 캐시에 눌러앉아** 행안부가
+ *   복구된 뒤에도 하루 종일 "등록된 병원을 찾지 못했어요"를 봤다. 홈페이지 첫 화면이
+ *   이 검색이라 여기서 막히면 진단도 이메일도 전부 도달하지 못한다.
+ *
+ * 5분인 이유:
+ *   · 장애 노출 상한이 곧 이 값이다. 실측 장애 구간이 약 15분이었으므로,
+ *     이보다 짧아야 "장애가 끝나면 곧바로 정상"이 성립한다.
+ *   · 0 (캐시 없음)으로 두지 않는 이유 — 오타를 고쳐 가며 연타하는 사용자가
+ *     같은 문자열을 반복 제출하는 경우가 흔하고, 그때마다 행안부에 최대 3콜이 나간다.
+ *     5분이면 그 연타는 흡수하면서 장애 잔상은 남기지 않는다.
+ *   · 캐시 히트는 실행 캡을 소비하지 않으므로 캡 방어와는 무관하다.
+ */
+export const LOOKUP_NOT_FOUND_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * outcome 종류별 캐시 수명(ms). **0 이면 캐시하지 않는다.**
+ *
+ * 성공(찾은 결과)과 실패의 수명을 반드시 분리한다. 하나의 TTL 로 뭉뚱그리면
+ * 외부 API 의 5분짜리 장애가 하루짜리 장애로 증폭된다.
+ */
+export function lookupCacheTtlMs(kind: ClinicLookupOutcome['kind']): number {
+  switch (kind) {
+    // 실제로 등록 자료를 받아 본 결과 — 행안부 데이터가 일간 갱신이므로 1일.
+    case 'resolved':
+    case 'ambiguous':
+    case 'needs_region':
+    case 'region_miss':
+    case 'closed_only':
+      return LOOKUP_CACHE_TTL_MS;
+    // 정상 응답으로 0건 — 진짜 없을 수도, 행안부가 일시적으로 0건을 뿜는 중일 수도 있다.
+    case 'not_found':
+      return LOOKUP_NOT_FOUND_CACHE_TTL_MS;
+    // 호출 자체가 실패·타임아웃·정체불명 — 아무것도 확인하지 못했으므로 캐시 금지.
+    case 'unavailable':
+      return 0;
+    default: {
+      // 새 종류가 생기면 컴파일이 깨진다 — 실패 결과가 조용히 장기 캐시되지 않도록.
+      const exhaustive: never = kind;
+      void exhaustive;
+      return 0; // 모르는 종류는 캐시하지 않는다(안전한 쪽으로 넘어진다).
+    }
+  }
+}
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   const n = Number(raw);

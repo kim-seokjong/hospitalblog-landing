@@ -4,7 +4,9 @@ import {
   buildRegistrySeeds,
   decideLookup,
   deriveBrandCore,
+  formatLookupTrace,
   lookupClinics,
+  lookupClinicsDetailed,
   normalizeClinicName,
   parseRegistryResponse,
   rankCandidates,
@@ -395,4 +397,76 @@ test('lookupClinics: 이름이 2자 미만이면 호출 없이 not_found', async
   const outcome = await lookupClinics('가', { env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl });
   assert.equal(outcome.kind, 'not_found');
   assert.equal(called, 0);
+});
+
+/* ── ★ 일시 장애를 "그런 병원 없음"으로 뭉개지 않는다 (2026-07-27) ── */
+
+/**
+ * 실측 배경. 09:10~09:25Z 사이 실존 병원 12곳이 12/12 전부 not_found 로 나왔다.
+ * 5초 내 응답이라 타임아웃이 아니라 행안부가 0건을 반환하던 상태였다.
+ * 그 응답이 24시간 캐시에 눌러앉아, 복구 뒤에도 하루 종일 "그런 병원 없음"이 나갔다.
+ */
+
+test('lookupClinics: 시드 하나라도 실패했으면 not_found 로 단정하지 않는다 (부분 장애)', async () => {
+  // 첫 시드는 정상 0건, 두 번째 시드는 타임아웃 — 검색을 "끝낸" 것이 아니다.
+  let n = 0;
+  const fetchImpl = (async () => {
+    n += 1;
+    if (n === 1) return new Response(JSON.stringify(envelope([])), { headers: { 'content-type': 'application/json' } });
+    throw new Error('network down');
+  }) as unknown as typeof fetch;
+
+  const outcome = await lookupClinics('플로르 성형외과 의원', { env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl });
+  assert.deepEqual(
+    outcome,
+    { kind: 'unavailable', reason: 'fetch_failed' },
+    '일부 시드가 실패했는데 not_found 를 주면 그 응답이 캐시에 굳는다',
+  );
+});
+
+test('lookupClinics: 전 시드가 정상 응답으로 0건일 때만 not_found (뭉개기 금지의 반대편)', async () => {
+  const fetchImpl = (async () =>
+    new Response(JSON.stringify(envelope([])), { headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch;
+  const outcome = await lookupClinics('없는병원의원', { env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl });
+  assert.deepEqual(outcome, { kind: 'not_found' });
+});
+
+test('lookupClinicsDetailed: 시드별로 몇 건을 받았는지 흔적이 남는다 (사후 장애 판정)', async () => {
+  const fetchImpl = (async (url: string) => {
+    const seed = new URL(url).searchParams.get('cond[BPLC_NM::LIKE]') ?? '';
+    if (seed === '플로르') throw new Error('socket hang up');
+    return new Response(JSON.stringify(envelope([], 0)), { headers: { 'content-type': 'application/json' } });
+  }) as unknown as typeof fetch;
+
+  const { outcome, trace } = await lookupClinicsDetailed('플로르 성형외과 의원', {
+    env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl,
+  });
+
+  assert.ok(trace.calls.length >= 2, '시도한 시드가 전부 기록돼야 한다');
+  assert.equal(trace.anySuccess, true);
+  assert.equal(trace.failedCalls, 1);
+  assert.ok(trace.calls.some((c) => c.ok && c.items === 0 && c.totalCount === 0), '0건 수신도 기록돼야 한다');
+  assert.ok(trace.calls.some((c) => !c.ok && (c.failure ?? '').includes('network')), '실패 사유가 남아야 한다');
+
+  // 로그 한 줄로 "어떤 시드로 몇 건을 받았는지"가 읽혀야 한다.
+  const line = formatLookupTrace(outcome, trace);
+  assert.match(line, /outcome=unavailable:fetch_failed/);
+  assert.match(line, /name="플로르 성형외과 의원"/);
+  assert.match(line, /failed=1/);
+  assert.match(line, /플로르=FAIL/);
+});
+
+test('lookupClinicsDetailed: 성공 조회에도 시드별 수신 건수가 남는다', async () => {
+  const fetchImpl = (async () =>
+    new Response(JSON.stringify(envelope([{ ...ROW_VB }], 1)), { headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch;
+  const { outcome, trace } = await lookupClinicsDetailed('브이비성형외과의원', {
+    env: { DATA_GO_SERVICE_KEY: 'k' }, fetchImpl,
+  });
+  assert.equal(outcome.kind, 'resolved');
+  assert.equal(trace.failedCalls, 0);
+  assert.deepEqual(
+    trace.calls.map((c) => [c.seed, c.ok, c.items]),
+    [['브이비성형외과의원', true, 1]],
+    '히트하면 그 시드에서 멈춘다',
+  );
 });
