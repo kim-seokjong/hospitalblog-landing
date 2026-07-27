@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { lookupClinics, buildRegistrySeedsForProbe, REGISTRY_TIMEOUT_MS, MAX_REGISTRY_CALLS } from '@/content/lib/clinic-diagnosis/registry';
 
 /**
  * ⚠️ 임시 진단 전용 라우트 — 원인 파악 후 삭제한다.
@@ -85,11 +86,24 @@ export async function GET(req: NextRequest) {
       shape = { parseError: e instanceof Error ? e.message : String(e) };
     }
 
+    // ★실제 파이프라인 함수를 서버에서 그대로 돌려본다
+    const lookupStarted = Date.now();
+    let lookupOutcome: unknown;
+    let lookupError: string | null = null;
+    try {
+      lookupOutcome = await lookupClinics(seed, region ? { region } : {});
+    } catch (e) {
+      lookupError = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    }
+
     return NextResponse.json({
       keyInfo,
       seed,
       rows,
       region,
+      config: { timeoutMs: REGISTRY_TIMEOUT_MS, maxCalls: MAX_REGISTRY_CALLS },
+      seeds: buildRegistrySeedsForProbe(seed),
+      lookup: { outcome: lookupOutcome, error: lookupError, elapsedMs: Date.now() - lookupStarted },
       queryShape: url.replace(encodeURIComponent(key), '<KEY>').slice(0, 300),
       status: res.status,
       contentType: res.headers.get('content-type'),
