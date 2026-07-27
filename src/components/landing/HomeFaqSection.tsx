@@ -41,6 +41,7 @@ export default function HomeFaqSection() {
               >
                 <button
                   type="button"
+                  id={`home-faq-trigger-${index}`}
                   onClick={() => toggle(index)}
                   aria-expanded={isOpen}
                   aria-controls={`home-faq-panel-${index}`}
@@ -58,14 +59,23 @@ export default function HomeFaqSection() {
                     ▼
                   </span>
                 </button>
-                {isOpen && (
-                  <div
-                    id={`home-faq-panel-${index}`}
-                    className="px-5 sm:px-6 pb-5 text-sm sm:text-[15px] leading-relaxed text-[#4a4f55] border-t border-[#dbe2ea] pt-3.5"
-                  >
-                    {faq.answer}
-                  </div>
-                )}
+                {/*
+                  답변은 항상 DOM 에 둔다 — 조건부 렌더(`isOpen && …`)면 열린 1번을 뺀
+                  나머지 답변이 HTML 에 아예 없어 검색·AI 크롤러가 읽지 못한다.
+                  숨김은 HTML `hidden` 속성으로 한다: display:none 이라 접근성 트리·
+                  탭 순서에서도 함께 빠지므로 아코디언의 키보드 동작이 그대로 유지된다.
+                  ⚠️ 이 div 에 Tailwind display 클래스(block/flex 등)를 추가하면
+                     [hidden] 을 덮어써 항상 열린 것처럼 보이게 된다 — 넣지 말 것.
+                */}
+                <div
+                  id={`home-faq-panel-${index}`}
+                  role="region"
+                  aria-labelledby={`home-faq-trigger-${index}`}
+                  hidden={!isOpen}
+                  className="px-5 sm:px-6 pb-5 text-sm sm:text-[15px] leading-relaxed text-[#4a4f55] border-t border-[#dbe2ea] pt-3.5"
+                >
+                  {faq.answer}
+                </div>
               </div>
             );
           })}

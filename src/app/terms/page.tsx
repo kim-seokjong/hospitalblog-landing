@@ -1,7 +1,8 @@
 import Link from 'next/link';
 
+// 제목 접미사는 루트 layout 의 title.template('%s | 닥터포스트')이 붙인다 — 직접 붙이면 중복된다.
 export const metadata = {
-  title: '이용약관 | 닥터포스트',
+  title: '이용약관',
   description: '닥터포스트 이용약관',
 };
 

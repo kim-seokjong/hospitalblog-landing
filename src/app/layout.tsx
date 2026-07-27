@@ -37,7 +37,12 @@ export const metadata: Metadata = {
   openGraph: {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    url: SITE_URL,
+    // ⚠️ 절대 URL(SITE_URL)로 고정하면 자체 openGraph 가 없는 모든 페이지의 og:url 이 홈이 된다.
+    //    canonical 과 같은 상대경로 규칙을 태워 페이지별 자기 URL 로 해석되게 한다.
+    //    (Next: openGraph.url 도 alternates.canonical 과 동일하게 pathname 기준으로 해석된다.)
+    //    자체 openGraph 를 선언한 페이지(/clinic-check, /clinic-site/*)는 이 블록 전체를
+    //    대체하므로 서브도메인 절대 URL 동작은 영향을 받지 않는다.
+    url: './',
     siteName: SITE_NAME,
     locale: 'ko_KR',
     type: 'website',

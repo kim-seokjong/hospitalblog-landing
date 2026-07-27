@@ -16,8 +16,9 @@ import type { DiagnosisReport } from '@/content/lib/clinic-diagnosis/types';
 
 export const dynamic = 'force-dynamic';
 
+// 제목 접미사('| 닥터포스트')는 붙이지 않는다 — 루트 layout 의 title.template 이 붙인다.
 export const metadata: Metadata = {
-  title: '병원 온라인 노출 진단 결과 | 닥터포스트',
+  title: '병원 온라인 노출 진단 결과',
   robots: { index: false, follow: false },
 };
 

@@ -343,6 +343,17 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-center gap-10 lg:gap-12">
             <div className="text-center lg:text-left">
               <p className="text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">Product</p>
+              {/*
+                구 히어로 배지 복원 — 첫 화면을 진단으로 교체하면서 랜딩 전체에서
+                '네이버·구글·SEO·GEO' 표기가 함께 사라졌다(검색 문맥 손실). 히어로 구조는
+                그대로 두고 제품 섹션 소제목 위에 한 줄로 되살린다.
+              */}
+              <p className="mt-2.5 flex justify-center lg:justify-start">
+                <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#3f5468] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] text-center leading-relaxed">
+                  <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628] flex-none" />
+                  Claude AI 작성 · 네이버·구글 SEO · AI 검색(GEO) 최적화
+                </span>
+              </p>
               <h2
                 className="text-[28px] sm:text-[42px] font-black text-[#202020] mt-2.5 leading-tight"
                 style={{ letterSpacing: '-0.5px' }}
