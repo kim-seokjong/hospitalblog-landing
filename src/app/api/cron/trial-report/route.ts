@@ -424,7 +424,7 @@ export async function GET(req: NextRequest) {
           if (wantSend && email) {
             if (await alreadyNotified(admin, target.userId, now)) return outcome;
             const { subject, html } = buildTrialReportEmail(summary);
-            const sent = await sendEmail({ to: email, subject, html });
+            const sent = await sendEmail({ to: email, subject, html, feature: 'trial-report' });
             if (!sent.success) {
               // 미기록으로 남긴다 → 다음날(D-2·D-1) 배치가 재시도
               outcome.failure = { userId: target.userId, reason: '리포트 이메일 발송 실패' };
@@ -474,7 +474,7 @@ export async function GET(req: NextRequest) {
     let digestSent = false;
     if (digestTo) {
       const digest = buildTrialReportAdminDigest(digestRows);
-      const sent = await sendEmail({ to: digestTo, subject: digest.subject, html: digest.html });
+      const sent = await sendEmail({ to: digestTo, subject: digest.subject, html: digest.html, feature: 'trial-digest' });
       digestSent = sent.success;
       if (!sent.success) console.error('[trial-report] 대표 다이제스트 발송 실패:', digestTo);
     } else {

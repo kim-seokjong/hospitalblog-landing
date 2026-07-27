@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
           cardLast4: bk.card_last4,
         })
 
-        const result = await sendEmail({ to: profile.email, subject, html })
+        const result = await sendEmail({ to: profile.email, subject, html, feature: 'billing-notify' })
         if (!result.success) {
           failures.push({ billingKeyId: bk.id, reason: result.error ?? 'send_failed' })
           continue

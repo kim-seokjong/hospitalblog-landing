@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
               planName: plan.name,
               reason: 'PAYMENT_FAILED',
             })
-            await sendEmail({ to: profile.email, subject, html })
+            await sendEmail({ to: profile.email, subject, html, feature: 'billing-cancel' })
           }
         }
       } catch (e) {

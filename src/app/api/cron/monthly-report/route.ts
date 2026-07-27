@@ -304,7 +304,7 @@ async function processUser(
       complianceChecked: data.compliance.checked,
       top10Count: data.rankings.top10Count,
     });
-    const result = await sendEmail({ to: profile.email, subject, html });
+    const result = await sendEmail({ to: profile.email, subject, html, feature: 'monthly-report' });
     emailed = result.success;
   }
 

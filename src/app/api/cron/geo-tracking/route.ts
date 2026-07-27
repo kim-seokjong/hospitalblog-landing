@@ -1,4 +1,6 @@
 // 매주 월요일 1회 실행 — AI 검색(GEO) 인용 추적 샘플링. (주기는 주 1회 유지)
+// ★ 겸업: 같은 주간 슬롯에 **Resend 발송 도메인 점검**을 얹었다(src/payment/email/domain-health.ts).
+//    "메일 도메인 점검이 어디서 도는가"를 찾는 사람은 여기다.
 // 유료 플랜 회원별로 프로필(지역·진료과·키워드) 기반 질문 최대 5개를 생성해
 // 설정된 AI 검색 엔진(OpenAI · Perplexity)에 각각 질의하고,
 // 병원명/블로그 URL 인용 여부를 geo_citations 에 기록한다(engine 컬럼에 엔진 식별자).
@@ -33,6 +35,7 @@ import type {
 } from '@/content/lib/geo-engines/run-tracking';
 import type { DbErrorLike } from '@/content/lib/geo-engines/run-lock';
 import { mondayOfWeek } from '@/content/lib/geo-tracking';
+import { runResendDomainCheck } from '@/payment/email/domain-health';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -144,6 +147,13 @@ export async function GET(req: NextRequest) {
   if (!isAuthorizedCron(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // ★ 주간 점검 편승 (2026-07-27) — 이 크론이 코드베이스에서 유일한 "매주 월요일" 파이프라인이라
+  //   추가 인프라 없이 여기 얹는다. Resend 발송 도메인이 미검증이면 메일이 전건 실패하는데,
+  //   그 주에 메일이 한 통도 안 나가면 발송 실패 알림조차 울리지 않는다(그래서 못 잡았다).
+  //   계약: 최대 8초, throw 없음, 문제일 때만 텔레그램. GEO 시간 예산을 건드리지 않도록
+  //   모든 절대 마감의 기준점(startedAt)을 잡기 **전에** 끝낸다.
+  await runResendDomainCheck();
 
   // 요청 진입 시각을 고정한다 — 모든 절대 마감의 기준점
   const startedAt = Date.now();

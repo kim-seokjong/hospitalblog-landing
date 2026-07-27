@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
       loadReport: (token) => loadReport(admin, token),
       countLeads: (input) => countLeads(admin, input),
       saveLead: (row) => saveLead(admin, row),
-      sendEmail: (message) => sendEmail(message),
+      sendEmail: (message) => sendEmail({ ...message, feature: 'clinic-diagnosis' }),
       markSendResult: async (id, sent, sendError) => {
         const { error } = await admin
           .from(LEADS_TABLE)

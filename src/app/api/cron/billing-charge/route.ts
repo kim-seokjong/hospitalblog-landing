@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
             paidAt,
             expiresAt,
           })
-          await sendEmail({ to: profile.email, subject, html }).catch(() => {})
+          await sendEmail({ to: profile.email, subject, html, feature: 'billing-charge' }).catch(() => {})
         }
 
         succeeded++
@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
             reason,
             retryDate: addDays(now.toISOString(), 3),
           })
-          await sendEmail({ to: profile.email, subject, html }).catch(() => {})
+          await sendEmail({ to: profile.email, subject, html, feature: 'billing-charge' }).catch(() => {})
         }
 
         failures.push({ billingKeyId: bk.id, reason })
