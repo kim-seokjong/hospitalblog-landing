@@ -9,6 +9,7 @@ import {
   buildSeoPosts,
   computeBlogRhythm,
   displayRegion,
+  measureSocial,
   runClinicDiagnosis,
   shortProvinceOf,
 } from '../run.ts';
@@ -179,4 +180,178 @@ test('진단은 절대 reject 하지 않는다 (팔로워까지 함께 실패하
     includeAi: false,
   });
   assert.equal(report.version, 1);
+});
+
+/* ── 인스타·유튜브 탐지 (링크 → 검색 우회로) ─────────────── */
+
+const NAVER_ENV = { NAVER_CLIENT_ID: 'id', NAVER_CLIENT_SECRET: 'secret' };
+
+const IG_SITE_LINK = {
+  platform: 'instagram' as const,
+  kind: 'channel' as const,
+  handle: 'edge__ps',
+  url: 'https://www.instagram.com/edge__ps/',
+  source: 'site' as const,
+};
+
+const SOCIAL_INPUT = {
+  clinicName: '엣지성형외과의원',
+  siteLinks: [],
+  scannedSite: true,
+  blogLinks: [],
+  scannedBlog: true,
+  siteHost: 'edge1.co.kr',
+  blogId: null,
+};
+
+test('★홈페이지에 인스타 링크가 있으면 네이버 검색을 아예 부르지 않는다', async () => {
+  let calls = 0;
+  const fetchImpl = (async () => {
+    calls += 1;
+    return new Response('{}', { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const axis = await measureSocial(
+    { ...SOCIAL_INPUT, siteLinks: [IG_SITE_LINK] },
+    { env: NAVER_ENV, fetchImpl, now: NOW },
+  );
+  assert.equal(calls, 0, '이미 찾았으면 호출 1회도 쓰지 않는다');
+  assert.equal(axis.instagram, 'found');
+  assert.equal(axis.searchedNaver, false);
+  assert.equal(axis.links[0].source, 'site');
+});
+
+test('★링크가 없을 때만 네이버 검색을 1회 부른다', async () => {
+  const seen: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    seen.push(String(url));
+    return new Response(
+      JSON.stringify({
+        items: [{ title: '@edge__ps - Instagram', description: '', link: 'https://www.instagram.com/edge__ps/' }],
+      }),
+      { status: 200 },
+    );
+  }) as unknown as typeof fetch;
+
+  const axis = await measureSocial(SOCIAL_INPUT, { env: NAVER_ENV, fetchImpl, now: NOW });
+  assert.equal(seen.length, 1, '외부 호출 추가는 인스타 검색 1회뿐이다');
+  assert.ok(seen[0].includes('webkr.json'));
+  assert.equal(axis.instagram, 'found');
+  assert.equal(axis.searchedNaver, true);
+  assert.equal(axis.links[0].source, 'naver_search');
+});
+
+test('★검색에서 병원 계정을 못 고르면 "확인되지 않음"으로 남는다 (틀린 계정보다 낫다)', async () => {
+  const fetchImpl = (async () =>
+    new Response(
+      JSON.stringify({
+        items: [{ title: '@oaro_skyl65 - Instagram', description: '', link: 'https://www.instagram.com/oaro_skyl65/' }],
+      }),
+      { status: 200 },
+    )) as unknown as typeof fetch;
+
+  const axis = await measureSocial(SOCIAL_INPUT, { env: NAVER_ENV, fetchImpl, now: NOW });
+  assert.equal(axis.instagram, 'not_found');
+  assert.equal(axis.links.length, 0);
+  assert.equal(axis.searchedNaver, true);
+});
+
+test('★검색이 실패해도 소셜 축은 살아 있다 (다른 축과 같은 방식)', async () => {
+  const boom = (async () => {
+    throw new Error('네이버 폭발');
+  }) as unknown as typeof fetch;
+  const axis = await measureSocial(
+    { ...SOCIAL_INPUT, blogLinks: [IG_SITE_LINK] },
+    { env: NAVER_ENV, fetchImpl: boom, now: NOW },
+  );
+  assert.equal(axis.checked, true);
+  assert.equal(axis.instagram, 'found');
+});
+
+test('★유튜브 키가 없으면 유튜브 API 를 부르지 않는다 (진단은 그대로 돈다)', async () => {
+  const seen: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    seen.push(String(url));
+    return new Response(JSON.stringify({ items: [] }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const axis = await measureSocial(SOCIAL_INPUT, { env: NAVER_ENV, fetchImpl, now: NOW });
+  assert.ok(seen.every((url) => !url.includes('googleapis.com')));
+  assert.equal(axis.searchedYoutube, false);
+  assert.equal(axis.youtube, 'not_found', '못 찾은 것은 "없다"가 아니라 "확인되지 않음"이다');
+});
+
+test('유튜브 키가 있으면 채널을 찾고 최근 업로드 시점을 붙인다', async () => {
+  const channelId = 'UCabcdefghijklmnopqrstuv';
+  const fetchImpl = (async (url: string) => {
+    const target = String(url);
+    if (target.includes('webkr.json')) return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    if (target.includes('/search')) {
+      return new Response(
+        JSON.stringify({ items: [{ id: { channelId }, snippet: { channelTitle: '엣지성형외과 공식' } }] }),
+        { status: 200 },
+      );
+    }
+    if (target.includes('/channels')) {
+      return new Response(
+        JSON.stringify({ items: [{ contentDetails: { relatedPlaylists: { uploads: 'UUabc' } } }] }),
+        { status: 200 },
+      );
+    }
+    return new Response(
+      JSON.stringify({ items: [{ contentDetails: { videoPublishedAt: new Date(NOW - 3 * DAY).toISOString() } }] }),
+      { status: 200 },
+    );
+  }) as unknown as typeof fetch;
+
+  const axis = await measureSocial(SOCIAL_INPUT, {
+    env: { ...NAVER_ENV, YOUTUBE_API_KEY: 'yt-key' },
+    fetchImpl,
+    now: NOW,
+  });
+  assert.equal(axis.searchedYoutube, true);
+  assert.equal(axis.youtube, 'found');
+  const channel = axis.links.find((l) => l.platform === 'youtube');
+  assert.equal(channel?.daysSinceUpload, 3);
+  assert.equal(channel?.source, 'youtube_api');
+});
+
+test('유튜브 채널을 이미 알면 검색 대신 최근 업로드만 보강한다', async () => {
+  const channelId = 'UCabcdefghijklmnopqrstuv';
+  const seen: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    const target = String(url);
+    seen.push(target);
+    if (target.includes('/channels')) {
+      return new Response(
+        JSON.stringify({ items: [{ contentDetails: { relatedPlaylists: { uploads: 'UUabc' } } }] }),
+        { status: 200 },
+      );
+    }
+    return new Response(
+      JSON.stringify({ items: [{ contentDetails: { videoPublishedAt: new Date(NOW - 900 * DAY).toISOString() } }] }),
+      { status: 200 },
+    );
+  }) as unknown as typeof fetch;
+
+  const axis = await measureSocial(
+    {
+      ...SOCIAL_INPUT,
+      siteLinks: [
+        IG_SITE_LINK,
+        {
+          platform: 'youtube' as const,
+          kind: 'channel' as const,
+          handle: channelId,
+          url: `https://www.youtube.com/channel/${channelId}`,
+          source: 'site' as const,
+        },
+      ],
+    },
+    { env: { ...NAVER_ENV, YOUTUBE_API_KEY: 'yt-key' }, fetchImpl, now: NOW },
+  );
+  assert.ok(seen.every((url) => !url.includes('/youtube/v3/search')), '검색 쿼터(100)를 쓰지 않는다');
+  const channel = axis.links.find((l) => l.platform === 'youtube');
+  assert.equal(channel?.daysSinceUpload, 900, '3년째 안 올린 채널은 그렇게 말해야 한다');
+  assert.equal(channel?.source, 'site');
 });

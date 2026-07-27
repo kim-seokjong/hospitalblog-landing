@@ -5,12 +5,15 @@ import {
   channelLinks,
   classifySocialUrl,
   contentLinks,
+  daysSince,
   EMPTY_SOCIAL_AXIS,
+  evidenceText,
   extractSocialLinks,
   MAX_SOCIAL_LINKS,
   mergeSocialLinks,
   scanScopeText,
   SOCIAL_PRESENCE_LABEL,
+  youtubePresenceText,
 } from '../social-detect.ts';
 import { buildSocialFindings, CHANNEL_LABEL, CHANNEL_ORDER, groupFindingsByChannel } from '../findings.ts';
 import type { BlogAxis, SocialLink } from '../types.ts';
@@ -203,12 +206,161 @@ test('블로그가 아예 없을 때도 간극으로 본다', () => {
   assert.match(card.state, /블로그는 찾지 못했습니다|블로그는 마지막 글/);
 });
 
+test('★어디서 찾았는지 카드에 남긴다 (네이버 검색으로 찾은 계정은 그렇게 밝힌다)', () => {
+  const axis = buildSocialAxis({
+    scannedSite: true,
+    siteLinks: [],
+    scannedBlog: false,
+    blogLinks: [],
+    searchLinks: [
+      { platform: 'instagram', kind: 'channel', handle: 'edge__ps', url: 'https://www.instagram.com/edge__ps/', source: 'naver_search' },
+    ],
+    searchedNaver: true,
+  });
+  const [card] = buildSocialFindings(axis, BLOG_FRESH);
+  assert.match(card.state, /인스타그램 운영 중/);
+  assert.match(card.state, /확인 경로: 네이버 검색/);
+});
+
+test('★유튜브 카드에 최근 업로드 시점이 들어간다 ("채널만 있고 3년째 안 올림"과 구분)', () => {
+  const axis = buildSocialAxis({
+    scannedSite: true,
+    siteLinks: [
+      {
+        platform: 'youtube',
+        kind: 'channel',
+        handle: 'UC1',
+        url: 'https://www.youtube.com/channel/UC1',
+        source: 'site',
+        lastUploadAt: '2023-01-01T00:00:00.000Z',
+        daysSinceUpload: 1100,
+      },
+    ],
+    scannedBlog: false,
+    blogLinks: [],
+  });
+  const [card] = buildSocialFindings(axis, BLOG_FRESH);
+  assert.match(card.state, /유튜브 채널 있음 \(최근 업로드 1100일 전\)/);
+  assert.match(card.state, /확인 경로: 홈페이지 링크/);
+});
+
+test('검색까지 돌리고도 못 찾으면 그 사실을 문구에 밝힌다 (여전히 unknown)', () => {
+  const axis = buildSocialAxis({
+    scannedSite: true,
+    siteLinks: [],
+    scannedBlog: true,
+    blogLinks: [],
+    searchLinks: [],
+    searchedNaver: true,
+  });
+  const [card] = buildSocialFindings(axis, BLOG_FRESH);
+  assert.equal(card.tone, 'unknown');
+  assert.match(card.state, /네이버 검색/);
+  assert.match(card.state, /확인하지 못했습니다/);
+  assert.doesNotMatch(card.state, /안 하|운영하지 않/);
+});
+
 test('둘 다 잘 돌면 훈수하지 않는다 (good)', () => {
   const [card] = buildSocialFindings(IG_AXIS, BLOG_FRESH);
   assert.equal(card.id, 'social.presence');
   assert.equal(card.tone, 'good');
   assert.equal(card.why, null);
   assert.equal(card.ourScope, false);
+});
+
+/* ── 출처(근거) · 최근 업로드 ───────────────────────────── */
+
+test('찾은 링크에 출처를 새긴다 — 오탐 추적의 유일한 단서', () => {
+  const [link] = extractSocialLinks('<a href="https://instagram.com/vb_clinic">인스타</a>', 'site');
+  assert.equal(link.source, 'site');
+  const [plain] = extractSocialLinks('<a href="https://instagram.com/vb_clinic">인스타</a>');
+  assert.equal(plain.source, undefined, '출처를 안 주면 붙이지 않는다(옛 리포트 호환)');
+});
+
+test('같은 계정이 여러 출처에서 나오면 먼저 온 출처를 남긴다 (링크 > 검색)', () => {
+  const merged = mergeSocialLinks(
+    [{ platform: 'instagram', kind: 'channel', handle: 'vb', url: 'https://www.instagram.com/vb/', source: 'site' }],
+    [{ platform: 'instagram', kind: 'channel', handle: 'vb', url: 'https://www.instagram.com/vb/', source: 'naver_search' }],
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].source, 'site');
+});
+
+test('★뒤에서만 얻은 최근 업로드 시점은 앞선 링크에 채워 넣는다 (정보를 버리지 않는다)', () => {
+  const merged = mergeSocialLinks(
+    [{ platform: 'youtube', kind: 'channel', handle: 'UC1', url: 'https://www.youtube.com/channel/UC1', source: 'site' }],
+    [
+      {
+        platform: 'youtube',
+        kind: 'channel',
+        handle: 'UC1',
+        url: 'https://www.youtube.com/channel/UC1',
+        source: 'youtube_api',
+        lastUploadAt: '2026-07-01T00:00:00.000Z',
+        daysSinceUpload: 26,
+      },
+    ],
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].source, 'site');
+  assert.equal(merged[0].daysSinceUpload, 26);
+});
+
+test('어디까지 봤는지에 검색 경로도 함께 밝힌다', () => {
+  const axis = buildSocialAxis({
+    scannedSite: true,
+    siteLinks: [],
+    scannedBlog: true,
+    blogLinks: [],
+    searchLinks: [],
+    searchedNaver: true,
+  });
+  assert.equal(scanScopeText(axis), '홈페이지, 블로그 글과 네이버 검색');
+  assert.equal(axis.searchedNaver, true);
+});
+
+test('★자료를 하나도 못 봤어도 검색을 돌렸으면 확인한 것이다', () => {
+  const axis = buildSocialAxis({
+    scannedSite: false,
+    siteLinks: [],
+    scannedBlog: false,
+    blogLinks: [],
+    searchLinks: [
+      { platform: 'instagram', kind: 'channel', handle: 'vb', url: 'https://www.instagram.com/vb/', source: 'naver_search' },
+    ],
+    searchedNaver: true,
+  });
+  assert.equal(axis.checked, true);
+  assert.equal(axis.instagram, 'found');
+  assert.equal(scanScopeText(axis), '네이버 검색');
+});
+
+test('출처 표기는 중복 없이 홈페이지→블로그→검색 순이다', () => {
+  assert.equal(
+    evidenceText([
+      { platform: 'instagram', kind: 'channel', handle: 'a', url: 'u', source: 'naver_search' },
+      { platform: 'youtube', kind: 'channel', handle: 'b', url: 'u', source: 'site' },
+      { platform: 'instagram', kind: 'channel', handle: 'c', url: 'u', source: 'site' },
+    ]),
+    '홈페이지 링크와 네이버 검색',
+  );
+  assert.equal(evidenceText([]), '');
+});
+
+test('★유튜브는 최근 업로드 시점까지 말한다 (모르면 아무 말도 안 붙인다)', () => {
+  const base = { platform: 'youtube' as const, kind: 'channel' as const, handle: 'UC1', url: 'u' };
+  assert.equal(youtubePresenceText([{ ...base, daysSinceUpload: 1200 }]), '유튜브 채널 있음 (최근 업로드 1200일 전)');
+  assert.equal(youtubePresenceText([{ ...base, daysSinceUpload: 0 }]), '유튜브 채널 있음 (오늘 업로드)');
+  assert.equal(youtubePresenceText([base]), '유튜브 채널 있음');
+  assert.equal(youtubePresenceText([]), '유튜브 채널 있음');
+});
+
+test('daysSince 는 못 읽는 값을 null 로 돌린다 (0으로 속이지 않는다)', () => {
+  const now = Date.parse('2026-07-27T00:00:00.000Z');
+  assert.equal(daysSince('2026-07-20T00:00:00.000Z', now), 7);
+  assert.equal(daysSince('없는날짜', now), null);
+  assert.equal(daysSince(null, now), null);
+  assert.equal(daysSince('2026-08-01T00:00:00.000Z', now), 0, '미래여도 음수를 내지 않는다');
 });
 
 test('social 카드가 채널 묶기에서 제 이름으로 잡힌다', () => {

@@ -468,6 +468,6 @@ export async function auditSite(rawUrl: string, options: AuditSiteOptions): Prom
      * 인스타·유튜브 링크 — **이미 받아 둔 홈 HTML 에서만** 뽑는다.
      * 추가 GET 은 없다(대상 1건당 최대 3회 GET 규칙 그대로).
      */
-    socialLinks: reachable ? extractSocialLinks(page.body) : [],
+    socialLinks: reachable ? extractSocialLinks(page.body, 'site') : [],
   };
 }

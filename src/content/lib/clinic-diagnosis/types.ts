@@ -239,6 +239,18 @@ export type SocialPlatform = 'instagram' | 'youtube';
  */
 export type SocialPresence = 'found' | 'not_found' | 'unknown';
 
+/**
+ * 이 계정을 **어디서 찾았는가** — 오탐 추적의 유일한 단서다.
+ *
+ * site         : 홈페이지 HTML 에 걸린 링크
+ * blog         : 블로그 글 본문·요약에 적힌 주소
+ * naver_search : 네이버 웹문서 검색에서 찾음 (링크가 안 걸린 병원용 우회로)
+ * youtube_api  : 유튜브 공식 검색 API(search.list)에서 찾음
+ *
+ * ⚠️ 이 필드가 생기기 전에 저장된 리포트에는 없다 → 항상 옵셔널로 읽는다.
+ */
+export type SocialSource = 'site' | 'blog' | 'naver_search' | 'youtube_api';
+
 export interface SocialLink {
   readonly platform: SocialPlatform;
   /**
@@ -250,6 +262,15 @@ export interface SocialLink {
   /** 계정 이름. content 링크에는 없다(''). */
   readonly handle: string;
   readonly url: string;
+  /** 근거 출처. 옛 리포트에는 없다. */
+  readonly source?: SocialSource;
+  /**
+   * 유튜브 채널의 최근 업로드 시각(ISO). 확인 못 했으면 null·없음.
+   * ★ "채널만 있고 3년째 안 올림"과 "주 1회 올림"은 영업에서 완전히 다른 말이다.
+   */
+  readonly lastUploadAt?: string | null;
+  /** 진단 시점 기준 최근 업로드 경과일. 확인 못 했으면 null·없음. */
+  readonly daysSinceUpload?: number | null;
 }
 
 export interface SocialAxis {
@@ -262,6 +283,14 @@ export interface SocialAxis {
   readonly scannedSite: boolean;
   /** 블로그 글 본문·요약을 실제로 봤는가. */
   readonly scannedBlog: boolean;
+  /**
+   * 네이버 웹문서 검색까지 돌려 봤는가.
+   * 홈페이지·블로그에서 인스타 계정을 못 찾았을 때만 true 다(1회 한정).
+   * ⚠️ 옵셔널 — 이 경로가 생기기 전 리포트에는 없다.
+   */
+  readonly searchedNaver?: boolean;
+  /** 유튜브 공식 API 를 실제로 호출했는가(키가 있을 때만 true). */
+  readonly searchedYoutube?: boolean;
 }
 
 /* ── 2단계 ③: AI 인용 ────────────────────────────────────── */

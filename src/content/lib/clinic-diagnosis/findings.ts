@@ -1,6 +1,13 @@
 import { complianceRiskCounts } from './compliance-scan.ts';
 import type { PostSeoResult } from './post-seo.ts';
-import { channelLinks, contentLinks, scanScopeText } from './social-detect.ts';
+import {
+  channelLinks,
+  contentLinks,
+  evidenceText,
+  scanScopeText,
+  SOCIAL_PRESENCE_LABEL,
+  youtubePresenceText,
+} from './social-detect.ts';
 import type {
   AiAxis,
   BlogAxis,
@@ -925,7 +932,7 @@ export function buildSocialFindings(
         axis: 'social',
         label: '인스타·유튜브',
         tone: 'unknown',
-        state: `${scope}에서 인스타그램·유튜브 계정 링크를 확인하지 못했습니다.${hint}`,
+        state: `${scope}에서 인스타그램·유튜브 계정을 확인하지 못했습니다.${hint}`,
         // ⚠️ "안 하신다"가 아니다 — 왜 문제인지 쓸 자리가 아니라 한계를 밝히는 자리다.
         why: null,
         action:
@@ -936,10 +943,18 @@ export function buildSocialFindings(
   }
 
   const names: string[] = [];
-  if (instagram.length > 0) names.push('인스타그램 운영 중');
-  if (youtube.length > 0) names.push('유튜브 채널 있음');
+  if (instagram.length > 0) names.push(SOCIAL_PRESENCE_LABEL.instagram.found);
+  // 유튜브는 최근 업로드 시점까지 붙는다 — 있고 없고보다 "언제까지 했나"가 더 중요하다.
+  if (youtube.length > 0) names.push(youtubePresenceText(youtube));
   const primary = instagram[0] ?? youtube[0];
   const detail = handleList(channels);
+  /**
+   * 어디서 찾았는지 — **오탐 추적에 필요하다.**
+   * 네이버 검색으로 찾은 계정은 홈페이지 링크만큼 확실하지 않다. 원장이 화면에서
+   * 바로 "이건 우리 계정이 아닌데"를 알아챌 수 있어야 오탐이 신뢰 손상으로 안 번진다.
+   */
+  const evidence = evidenceText(channels);
+  const evidenceNote = evidence ? ` (확인 경로: ${evidence})` : '';
 
   /**
    * ★ 영업·진단 양쪽에서 가장 쓸모 있는 문장이 여기서 나온다.
@@ -962,7 +977,7 @@ export function buildSocialFindings(
       axis: 'social',
       label: '인스타·유튜브',
       tone: blogStale || blogMissing ? 'warn' : 'good',
-      state: `${scope}에서 ${names.join(' · ')}${detail ? ` (${detail})` : ''}을 확인했습니다.${gapNote}`,
+      state: `${names.join(' · ')}${detail ? ` (${detail})` : ''}을 확인했습니다.${evidenceNote}${gapNote}`,
       why:
         blogStale || blogMissing
           ? 'SNS는 이미 병원을 아는 사람에게 닿고, 검색은 아직 병원을 모르는 사람에게 닿습니다. 지금은 뒤쪽 통로가 비어 있어서, 증상·시술명으로 검색해 병원을 고르는 환자는 만나지 못하고 계십니다.'

@@ -12,7 +12,20 @@ import {
   type ComplianceSource,
 } from './compliance-scan.ts';
 import { buildFindings, collectUnchecked } from './findings.ts';
-import { buildSocialAxis, EMPTY_SOCIAL_AXIS, extractSocialLinks } from './social-detect.ts';
+import {
+  buildSocialAxis,
+  EMPTY_SOCIAL_AXIS,
+  extractSocialLinks,
+  mergeSocialLinks,
+} from './social-detect.ts';
+import { searchSocialAccounts } from './social-search.ts';
+import {
+  enrichYoutubeRecency,
+  findYoutubeChannel,
+  isYoutubeConfigured,
+  YOUTUBE_BUDGET_MS,
+  type YoutubeEnv,
+} from './youtube-api.ts';
 import {
   analyzePostSeo,
   classifyBodyKind,
@@ -26,6 +39,7 @@ import type {
   DiagnosisReport,
   KeywordRank,
   SiteAxis,
+  SocialAxis,
   SocialLink,
 } from './types.ts';
 
@@ -205,7 +219,83 @@ export function collectBlogSocialLinks(
     else if (item.summary) parts.push(item.summary);
   }
   if (parts.length === 0) return [];
-  return extractSocialLinks(parts.join('\n'));
+  return extractSocialLinks(parts.join('\n'), 'blog');
+}
+
+export interface MeasureSocialInput {
+  readonly clinicName: string;
+  /** 홈페이지 HTML 에서 찾은 링크. */
+  readonly siteLinks: readonly SocialLink[];
+  readonly scannedSite: boolean;
+  /** 블로그 글에서 찾은 링크. */
+  readonly blogLinks: readonly SocialLink[];
+  readonly scannedBlog: boolean;
+  /** 확인된 병원 홈페이지 호스트 — 검색 결과 검증(계정 아이디 대조)에 쓴다. */
+  readonly siteHost: string | null;
+  /** 확인된 병원 블로그 id — 검색 결과가 병원 소유인지 판단에 쓴다. */
+  readonly blogId: string | null;
+}
+
+/**
+ * 인스타 · 유튜브 축 측정.
+ *
+ * 순서와 호출 수가 이 함수의 전부다:
+ *   ① 홈페이지·블로그에서 이미 찾은 링크를 본다 (추가 요청 0)
+ *   ② 인스타 계정을 **못 찾았을 때만** 네이버 웹문서 검색 1회
+ *      → 링크를 안 걸어 둔 병원을 놓치지 않기 위한 유일한 우회로
+ *   ③ YOUTUBE_API_KEY 가 있을 때만 유튜브 공식 API
+ *      → 채널을 이미 알면 최근 업로드 시점만 보강(검색 쿼터 100 을 안 쓴다)
+ *
+ * 어떤 단계가 실패해도 앞 단계 결과는 그대로 살아 있다. throw 하지 않는다.
+ */
+export async function measureSocial(
+  input: MeasureSocialInput,
+  options: { env: DiagnosisEnv; fetchImpl: typeof fetch; now: number },
+): Promise<SocialAxis> {
+  const direct = mergeSocialLinks(input.siteLinks ?? [], input.blogLinks ?? []);
+  const hasInstagram = direct.some((l) => l.platform === 'instagram' && l.kind === 'channel');
+
+  let searchLinks: readonly SocialLink[] = [];
+  let searchedNaver = false;
+
+  // ② 링크로 이미 찾았으면 검색하지 않는다 — 호출 1회는 못 찾은 병원에만 쓴다.
+  if (!hasInstagram) {
+    const found = await searchSocialAccounts(
+      { name: input.clinicName, siteHost: input.siteHost, blogId: input.blogId },
+      { env: options.env, fetchImpl: options.fetchImpl },
+    );
+    searchedNaver = found.called;
+    searchLinks = found.links;
+  }
+
+  // ③ 유튜브 — 키가 없으면 이 블록은 통째로 건너뛴다(링크 탐지 결과만 남는다).
+  let searchedYoutube = false;
+  if (isYoutubeConfigured(options.env as YoutubeEnv)) {
+    const known = mergeSocialLinks(direct, searchLinks).find(
+      (l) => l.platform === 'youtube' && l.kind === 'channel',
+    );
+    const lookupOptions = {
+      env: options.env as YoutubeEnv,
+      fetchImpl: options.fetchImpl,
+      now: options.now,
+      deadline: Date.now() + YOUTUBE_BUDGET_MS,
+    };
+    const result = known
+      ? await enrichYoutubeRecency(known, lookupOptions)
+      : await findYoutubeChannel(input.clinicName, lookupOptions);
+    searchedYoutube = result.called;
+    if (result.link) searchLinks = [...searchLinks, result.link];
+  }
+
+  return buildSocialAxis({
+    scannedSite: input.scannedSite,
+    siteLinks: input.siteLinks ?? [],
+    scannedBlog: input.scannedBlog,
+    blogLinks: input.blogLinks ?? [],
+    searchLinks,
+    searchedNaver,
+    searchedYoutube,
+  });
 }
 
 /** 블로그 축 측정 — 탐색 결과가 확정일 때만 RSS 이후 단계로 간다. */
@@ -452,19 +542,27 @@ export async function runClinicDiagnosis(
   }
 
   /**
-   * 인스타·유튜브 — **새 요청이 하나도 없다.** 홈페이지는 auditSite 가 이미 받아 둔
-   * HTML 에서, 블로그는 이미 받아 둔 RSS 요약·본문에서 링크만 뽑아 합친다.
-   * 순수 함수지만 다른 축과 같은 방식으로 감싼다 — 여기서 던지면 네 축을 다 측정해
-   * 놓고 진단 전체가 실패한다.
+   * 인스타·유튜브 — 홈페이지·블로그에서 이미 받아 둔 자료의 링크가 1순위다.
+   * 거기서 인스타 계정을 못 찾았을 때만 네이버 검색 1회를 더한다(링크를 안 걸어 둔
+   * 병원을 놓치지 않기 위해). 유튜브 공식 API 는 키가 있을 때만 돈다.
+   *
+   * 다른 축과 **같은 방식으로** 감싼다 — 여기서 던지면 네 축을 다 측정해 놓고
+   * 진단 전체가 실패한다(single-flight 팔로워까지 함께).
    */
   let social = EMPTY_SOCIAL_AXIS;
   try {
-    social = buildSocialAxis({
-      scannedSite: siteBodyFetched(site),
-      siteLinks: site.socialLinks ?? [],
-      scannedBlog: blogResult.scanned,
-      blogLinks: blogResult.socialLinks,
-    });
+    social = await measureSocial(
+      {
+        clinicName: clinic.name,
+        siteLinks: site.socialLinks ?? [],
+        scannedSite: siteBodyFetched(site),
+        blogLinks: blogResult.socialLinks,
+        scannedBlog: blogResult.scanned,
+        siteHost: owned.siteHost,
+        blogId: owned.blogId,
+      },
+      { env, fetchImpl, now },
+    );
   } catch (error: unknown) {
     logAxisFailure('social', error);
   }
