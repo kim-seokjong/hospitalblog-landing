@@ -53,6 +53,20 @@ export default async function SharedDiagnosisPage({ params }: PageProps) {
   const report = data.results as DiagnosisReport;
 
   return (
+    <Shell>
+      {/*
+        이 화면의 토큰이 그대로 메일 발송의 열쇠다 — 링크를 받은 사람도 다시 보낼 수 있다.
+        shared=true : 여기에는 블로그 후보 선택기도 상세 진단 폼도 없다. 문구가 "아래에서
+        바꿔 주세요"라고 말하면 고칠 수 없는 안내가 된다.
+      */}
+      <ReportBody report={report} token={token} />
+    </Shell>
+  );
+}
+
+/** 공유 화면 껍데기 — 정상·오류 화면이 같은 틀을 쓴다. */
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
     <div className="min-h-screen bg-white text-[#202020]">
       <div className="flex h-2">
         <i className="flex-1 bg-[#ff4628]" />
@@ -64,10 +78,7 @@ export default async function SharedDiagnosisPage({ params }: PageProps) {
         <h1 className="text-[22px] sm:text-[32px] font-black leading-tight mt-2 mb-6" style={{ letterSpacing: '-0.5px' }}>
           병원 온라인 노출 진단 결과
         </h1>
-
-        {/* 이 화면의 토큰이 그대로 메일 발송의 열쇠다 — 링크를 받은 사람도 다시 보낼 수 있다. */}
-        <DiagnosisReportView report={report} shareToken={token} />
-
+        {children}
         <div className="mt-8 text-center">
           <Link
             href="/clinic-check"
@@ -77,6 +88,49 @@ export default async function SharedDiagnosisPage({ params }: PageProps) {
           </Link>
         </div>
       </main>
+    </div>
+  );
+}
+
+/**
+ * 화면이 최소한으로 기대하는 형태인가 (저장된 옛 행 방어).
+ *
+ * ★ 이 링크는 이미 메일·전화로 원장에게 나갔다. 저장 형태가 지금 화면 기대와
+ *   어긋나는 옛 행이 하나만 있어도 그 링크가 통째로 500 이 되고, 그건 그대로
+ *   신뢰 문제가 된다. 형태부터 확인하고, 그래도 새는 것은 error.tsx 가 받는다.
+ *   (만료·없는 토큰의 404 처리는 위에서 그대로 유지된다 — 여기는 '깨진 데이터' 경로다.)
+ */
+function isRenderableReport(value: unknown): value is DiagnosisReport {
+  if (!value || typeof value !== 'object') return false;
+  const report = value as Partial<DiagnosisReport>;
+  return (
+    Boolean(report.clinic) &&
+    typeof report.runAt === 'string' &&
+    Array.isArray(report.findings) &&
+    Array.isArray(report.unchecked) &&
+    Boolean(report.blog) &&
+    Boolean(report.site) &&
+    Boolean(report.ai) &&
+    Boolean(report.compliance)
+  );
+}
+
+function ReportBody({ report, token }: { report: DiagnosisReport; token: string }) {
+  if (!isRenderableReport(report)) {
+    console.error('[clinic-check/share] 저장된 리포트 형태가 화면 기대와 다릅니다.');
+    return <ReportUnavailable />;
+  }
+  return <DiagnosisReportView report={report} shareToken={token} shared />;
+}
+
+function ReportUnavailable() {
+  return (
+    <div className="bg-[#f7f9fb] border border-[#dbe2ea] rounded-2xl p-5 sm:p-6">
+      <p className="text-[15px] font-extrabold">이 진단 결과를 불러오지 못했습니다.</p>
+      <p className="text-[13px] text-[#4a4f55] leading-relaxed mt-2">
+        결과가 저장된 형식이 지금 화면과 맞지 않아 그대로 보여드릴 수 없었어요. 아래에서 병원 이름으로 다시 진단하시면
+        최신 결과를 확인하실 수 있습니다.
+      </p>
     </div>
   );
 }

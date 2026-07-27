@@ -65,20 +65,81 @@ export function softenRule(rule: string): string {
  *
  * 매칭 대상 문자열은 검출 단어 + 규칙명(또는 경고 문구)을 합친 것이다.
  */
-const PROHIBITED_TYPES: readonly { readonly label: string; readonly pattern: RegExp }[] = [
+/**
+ * 문맥 완화를 허용할지 — **유형별로 다르다**.
+ *
+ *   'contextual' : 묻는 문장·부정문·남의 이야기면 위험에서 내린다.
+ *   'strict'     : 문맥과 무관하게 위험을 유지한다.
+ *                  (부정문·의문문 안에 있어도 광고 문구로 읽힐 여지가 크다)
+ *   'phrase'     : 원칙은 strict 이되, **검출어 자체가 일반어**인 것만 문맥을 본다.
+ *                  (AMBIGUOUS_GUARANTEE_PHRASE 참조)
+ */
+type DemotionPolicy = 'contextual' | 'strict' | 'phrase';
+
+const PROHIBITED_TYPES: readonly {
+  readonly label: string;
+  readonly pattern: RegExp;
+  readonly demotion: DemotionPolicy;
+}[] = [
   // 환자 후기·치료경험담 — 의료법이 광고에서 금지한 대표 유형.
   // ('사례'는 단독으로 쓰면 규칙 설명문의 "시정명령 사례"까지 걸리므로 환자·개인에 붙을 때만)
-  { label: '환자 후기·치료경험담', pattern: /후기|경험담|체험담|내돈내산|직접\s*받아\s*보니|환자\s*사례|개인\s*사례/ },
-  // 치료 전후 비교 사진·표현.
-  { label: '치료 전후 비교', pattern: /전후\s*사진|전후\s*비교|비포애프터|before\s*.?\s*after/i },
-  // 치료효과·결과 보장, 부작용 없음·완전 안전 단정.
+  //
+  // ★ 문맥 완화가 원래 겨냥한 유형이 바로 이것이다 — "후기를 믿지 말라"는 정보성 글이
+  //   전부 위험으로 뜨던 실측 오탐(프라이브성형외과)이 근거다.
+  {
+    label: '환자 후기·치료경험담',
+    pattern: /후기|경험담|체험담|내돈내산|직접\s*받아\s*보니|환자\s*사례|개인\s*사례/,
+    demotion: 'contextual',
+  },
+  // 치료 전후 비교 사진·표현. — 완화 대상 아님.
+  {
+    label: '치료 전후 비교',
+    pattern: /전후\s*사진|전후\s*비교|비포애프터|before\s*.?\s*after/i,
+    demotion: 'strict',
+  },
+  // 치료효과·결과 보장, 부작용 없음·완전 안전 단정. — 원칙 완화 금지(검출어가 일반어일 때만 예외).
   {
     label: '치료효과 보장·부작용 없음 단정',
     pattern: /결과\s*보장|효과\s*보장|치료\s*결과\s*보장|완치|100%|무조건|확실한\s*효과|부작용\s*없|부작용이\s*없|완전히\s*안전|위험\s*없/,
+    demotion: 'phrase',
   },
-  // 다른 의료기관·의료인과의 비교, 비방.
-  { label: '다른 병원과의 비교·비방', pattern: /비교\s*광고|타\s*병원|다른\s*병원|경쟁병원|비방/ },
+  // 다른 의료기관·의료인과의 비교, 비방. — 완화 대상 아님.
+  {
+    label: '다른 병원과의 비교·비방',
+    pattern: /비교\s*광고|타\s*병원|다른\s*병원|경쟁병원|비방/,
+    demotion: 'strict',
+  },
 ];
+
+const POLICY_BY_LABEL: Readonly<Record<string, DemotionPolicy>> = Object.fromEntries(
+  PROHIBITED_TYPES.map((type) => [type.label, type.demotion]),
+);
+
+/**
+ * '치료효과 보장' 유형 안에서 **문맥을 봐야 하는 검출어**.
+ *
+ * ★ 왜 유형 전체가 아니라 검출어 단위인가.
+ *   유형 판정은 "검출어 + 규칙명"을 합친 문자열로 한다. 그런데 규칙명 자체가
+ *   "치료 결과 보장 금지"라서, 그 규칙에 걸린 단어는 무엇이든 이 유형이 된다 —
+ *   `확실한 효과`(광고 문구)와 `무조건`·`100%`(일상어)가 같은 칸에 들어온다.
+ *   실측(프라이브성형외과)에서 위험으로 잘못 뜬 것은 전부 후자였다:
+ *     "무조건 좋은 시술이 아니라" · "100% 예약제로 하루 인원을 제한하고"
+ *   반대로 전자는 부정문·의문문 안에 있어도 광고로 읽힌다:
+ *     "단순 시술이 아니라 확실한 효과를 보장합니다"
+ *   그래서 **일상어인 검출어만** 문맥을 보고, 나머지는 문맥과 무관하게 위험을 유지한다.
+ *
+ * ⚠️ 여기에 단어를 추가하면 그만큼 recall 이 깎인다. 실측 오탐 근거 없이는 넣지 않는다.
+ */
+const AMBIGUOUS_GUARANTEE_PHRASE = /^(?:무조건|100\s*%|위험\s*없)/;
+
+/** 이 검출 1건이 문맥 완화 대상인가 (순수 함수). */
+export function isDemotable(label: string, phrase?: string): boolean {
+  const policy = POLICY_BY_LABEL[label];
+  if (policy === 'contextual') return true;
+  if (policy !== 'phrase') return false;
+  // 검출어를 모르면(옛 호출·저장 리포트) 완화하지 않는다 — recall 우선.
+  return typeof phrase === 'string' && AMBIGUOUS_GUARANTEE_PHRASE.test(phrase.trim());
+}
 
 /* ── 문맥 판정: "단어가 있다"와 "그 유형이다"는 다르다 ─────── */
 
@@ -145,11 +206,16 @@ export const DEMOTION_LABEL: Readonly<Record<DemotionReason, string>> = {
 
 /**
  * 문맥이 이 유형에 **해당하지 않는다고 볼 신호**를 찾는다. 없으면 null.
- * context 는 검출 단어가 들어 있던 문장(앞뒤 문맥 포함).
+ *
+ * context : 검출 단어가 들어 있던 문장(앞뒤 문맥 포함).
+ * phrase  : 실제로 검출된 단어. 완화 대상 여부가 단어에 따라 갈리는 유형이 있어
+ *           반드시 함께 넘긴다. 없으면 완화하지 않는다(recall 우선).
  */
-export function demotionReasonFor(label: string, context: string): DemotionReason | null {
+export function demotionReasonFor(label: string, context: string, phrase?: string): DemotionReason | null {
   const text = (context ?? '').trim();
   if (!text) return null;
+  // 유형·검출어가 문맥 완화 대상이 아니면 문맥을 보지 않는다.
+  if (!isDemotable(label, phrase)) return null;
   // 진짜 경험담이면 무엇이 걸리든 위험을 유지한다 (recall 을 깎지 않는다).
   if (TESTIMONIAL_CUES.test(text)) return null;
 
@@ -170,6 +236,7 @@ export function demotionReasonFor(label: string, context: string): DemotionReaso
 export function classifyComplianceRisk(
   signal: string,
   context?: string,
+  phrase?: string,
 ): {
   readonly risk: ComplianceRisk;
   readonly label: string | null;
@@ -179,7 +246,7 @@ export function classifyComplianceRisk(
   const text = signal ?? '';
   for (const type of PROHIBITED_TYPES) {
     if (!type.pattern.test(text)) continue;
-    const demoted = context ? demotionReasonFor(type.label, context) : null;
+    const demoted = context ? demotionReasonFor(type.label, context, phrase) : null;
     if (demoted) return { risk: 'caution', label: null, demoted };
     return { risk: 'prohibited', label: type.label, demoted: null };
   }
@@ -350,7 +417,7 @@ export function pickOccurrence(
     // medical-compliance 와 같은 한글 좌측 경계 — "정기적"의 "기적" 같은 부분 매칭 제외.
     const prev = cursor > 0 ? text[cursor - 1] : '';
     if (!(cursor !== start && /[가-힣]/.test(prev))) {
-      const demoted = demotionReasonFor(label, cueContextAt(text, cursor, cursor + word.length));
+      const demoted = demotionReasonFor(label, cueContextAt(text, cursor, cursor + word.length), word);
       if (!demoted) return { index: cursor, demoted: null };
       if (!fallback) fallback = { index: cursor, demoted };
     }
@@ -500,17 +567,19 @@ export function complianceRiskCounts(axis: ComplianceAxis): {
   readonly caution: number;
   readonly postsWithProhibited: number;
 } {
-  if (typeof axis.prohibitedCount === 'number') {
+  // 저장된 옛 리포트는 hits 가 아예 없을 수 있다 — 여기서 죽으면 공유 링크가 500 이 된다.
+  const hits = Array.isArray(axis?.hits) ? axis.hits : [];
+  if (typeof axis?.prohibitedCount === 'number') {
     return {
       prohibited: axis.prohibitedCount,
-      caution: axis.cautionCount ?? Math.max(0, axis.hits.length - axis.prohibitedCount),
+      caution: axis.cautionCount ?? Math.max(0, hits.length - axis.prohibitedCount),
       postsWithProhibited: axis.postsWithProhibited ?? 0,
     };
   }
-  const prohibited = axis.hits.filter((h) => riskOf(h) === 'prohibited').length;
+  const prohibitedHits = hits.filter((h) => riskOf(h) === 'prohibited');
   return {
-    prohibited,
-    caution: axis.hits.length - prohibited,
-    postsWithProhibited: new Set(axis.hits.filter((h) => riskOf(h) === 'prohibited').map((h) => h.postLink)).size,
+    prohibited: prohibitedHits.length,
+    caution: hits.length - prohibitedHits.length,
+    postsWithProhibited: new Set(prohibitedHits.map((h) => h.postLink)).size,
   };
 }

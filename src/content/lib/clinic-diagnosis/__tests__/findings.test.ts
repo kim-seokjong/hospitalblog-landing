@@ -13,10 +13,13 @@ import {
   channelBadges,
   channelStatusText,
   collectUnchecked,
+  findingGroupOf,
   groupFindings,
   groupFindingsByChannel,
+  normalizeStoredFindings,
   summarizeFindings,
 } from '../findings.ts';
+import { LEGACY_COMPLIANCE_RISK_ID } from '../findings.ts';
 import type { ChannelSection } from '../findings.ts';
 import { EMPTY_SITE_AXIS } from '../site-audit.ts';
 import { EMPTY_AI_AXIS, summarizeProbes } from '../ai-citation.ts';
@@ -256,7 +259,10 @@ test('블로그를 특정하지 못한 예외 상황에서는 카드가 남는�
   assert.equal(card.id, 'blog.exists');
   assert.match(card.state, /이 블로그를 병원 블로그로 보고 진단했습니다/);
   assert.match(card.state, /비슷한 후보가 하나 더 있었어요/);
-  assert.match(card.action, /바꿔 다시 진단할 수 있어요/);
+  assert.match(card.action, /진단 페이지에서 주소를 직접 넣어 다시 진단할 수 있어요/);
+  // ⚠️ 저장돼 공유 화면에서도 그대로 나오는 문구다 — 화면 위치("아래")를 가리키면 안 된다.
+  //    공유 화면에는 후보 선택기도 상세 진단 폼도 없다.
+  assert.ok(!/아래/.test(card.action), '공유 화면에 없는 UI 를 가리키면 안 된다');
   assert.equal(card.link?.href, 'https://blog.naver.com/night140160');
 });
 
@@ -926,4 +932,112 @@ test('최근 글 SEO 는 검색 노출 대역의 "개선할 점"으로 분류된
 
   const grouped = groupFindings(buildBlogFindings({ ...BLOG_OK, postSeo: postSeo() }));
   assert.ok(grouped.improve.some((f) => f.id === 'blog.postSeo'));
+});
+
+/* ── 저장된 옛 리포트 보정 ──────────────────────────────── */
+
+/**
+ * ★ 2026-07-27 주간 점검 지적.
+ *   `compliance.risk` 의 등급이 losing/16 → improving 으로 바뀌었는데, **저장된 옛
+ *   리포트는 전부 id 가 `compliance.risk` 이고 hits 에 risk 필드가 없다.** 그래서 같은
+ *   공유 링크가 어제까지 "지금 고쳐야 할 것"이던 항목을 "챙기면 좋을 것"으로 내려 보였다.
+ *   대표가 전화로 말한 등급과 원장이 보는 화면이 어긋난다.
+ */
+const LEGACY_COMPLIANCE_AXIS = {
+  checked: true,
+  postsScanned: 10,
+  bodiesScanned: 2,
+  summariesScanned: 8,
+  postsWithHits: 3,
+  // prohibitedCount 없음 = 위험/주의 2단 등급 이전에 저장된 리포트
+  hits: [
+    { postTitle: '글', postLink: 'https://blog.naver.com/x/1', phrase: '후기', note: 'n', level: 'review' as const },
+  ],
+} as ComplianceAxis;
+
+const LEGACY_RISK_FINDING: Finding = {
+  id: 'compliance.risk',
+  axis: 'compliance',
+  label: '의료광고법 표현',
+  tone: 'warn',
+  state: '표현이 3건 확인됐습니다.',
+  why: 'w',
+  action: 'a',
+  ourScope: true,
+};
+
+test('옛 리포트의 의료광고법 항목은 그때 등급("지금 고쳐야 할 것")으로 읽는다', () => {
+  const findings = normalizeStoredFindings({
+    blog: { blogId: null },
+    compliance: LEGACY_COMPLIANCE_AXIS,
+    findings: [LEGACY_RISK_FINDING],
+  });
+  assert.equal(findings[0].id, LEGACY_COMPLIANCE_RISK_ID);
+  assert.equal(findingGroupOf(findings[0]), 'bad', '조용히 한 단계 내려가면 안 된다');
+  assert.equal(FINDING_WEIGHT[LEGACY_COMPLIANCE_RISK_ID].severity, 'losing');
+  assert.equal(FINDING_WEIGHT[LEGACY_COMPLIANCE_RISK_ID].rank, 16);
+});
+
+test('오늘 만들어진 리포트는 손대지 않는다 (주의만 나온 상태는 "챙기면 좋을 것")', () => {
+  const findings = normalizeStoredFindings({
+    blog: { blogId: null },
+    compliance: { ...LEGACY_COMPLIANCE_AXIS, prohibitedCount: 0, cautionCount: 1, postsWithProhibited: 0 },
+    findings: [LEGACY_RISK_FINDING],
+  });
+  assert.equal(findings[0].id, 'compliance.risk');
+  assert.equal(findingGroupOf(findings[0]), 'improve');
+});
+
+test('미확인·양호 상태의 의료광고법 항목은 등급을 올리지 않는다', () => {
+  const unknown: Finding = { ...LEGACY_RISK_FINDING, tone: 'unknown' };
+  const good: Finding = { ...LEGACY_RISK_FINDING, tone: 'good' };
+  const findings = normalizeStoredFindings({
+    blog: { blogId: null },
+    compliance: LEGACY_COMPLIANCE_AXIS,
+    findings: [unknown, good],
+  });
+  assert.deepEqual(findings.map((f) => f.id), ['compliance.risk', 'compliance.risk']);
+});
+
+/**
+ * ★ 옛 리포트에는 "진단한 블로그" 블록과 같은 말을 하는 blog.exists 카드가 남아 있어
+ *   "잘하고 있는 것" 개수가 1 부풀어 보였다 — 오늘 리포트와 배지 숫자가 비교 불가능해진다.
+ */
+test('블로그가 특정된 옛 리포트의 중복 blog.exists 카드는 읽을 때 뺀다', () => {
+  const duplicate: Finding = {
+    id: 'blog.exists', axis: 'blog', label: '병원 블로그', tone: 'good',
+    state: '블로그를 확인했습니다.', why: null, action: 'a', ourScope: false,
+  };
+  const keep: Finding = {
+    id: 'blog.freshness', axis: 'blog', label: '최근 발행', tone: 'good',
+    state: 's', why: null, action: 'a', ourScope: false,
+  };
+  const findings = normalizeStoredFindings({
+    blog: { blogId: 'newprive' },
+    compliance: LEGACY_COMPLIANCE_AXIS,
+    findings: [duplicate, keep],
+  });
+  assert.deepEqual(findings.map((f) => f.id), ['blog.freshness']);
+
+  // 블로그를 특정하지 못해 상단 블록이 안 나오는 리포트에서는 그대로 남긴다.
+  const kept = normalizeStoredFindings({
+    blog: { blogId: null },
+    compliance: LEGACY_COMPLIANCE_AXIS,
+    findings: [duplicate, keep],
+  });
+  assert.deepEqual(kept.map((f) => f.id), ['blog.exists', 'blog.freshness']);
+});
+
+test('findings 가 배열이 아니어도 죽지 않는다 (깨진 옛 리포트)', () => {
+  assert.deepEqual(
+    normalizeStoredFindings({
+      blog: { blogId: null },
+      compliance: LEGACY_COMPLIANCE_AXIS,
+      findings: undefined as unknown as readonly Finding[],
+    }),
+    [],
+  );
+  const grouped = groupFindings(undefined as unknown as readonly Finding[]);
+  assert.deepEqual(grouped.bad, []);
+  assert.deepEqual(groupFindingsByChannel(undefined as unknown as readonly Finding[]), []);
 });

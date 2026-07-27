@@ -1,5 +1,5 @@
 import { complianceRiskCounts } from './compliance-scan.ts';
-import { groupFindings } from './findings.ts';
+import { groupFindings, LEGACY_COMPLIANCE_RISK_ID } from './findings.ts';
 import type { DiagnosisReport, Finding } from './types.ts';
 
 /**
@@ -92,6 +92,22 @@ export interface ConversionCta {
   readonly badScopeCount: number;
 }
 
+/* ── 저장된 옛 리포트 방어 ───────────────────────────────────
+ *
+ * ★ 이 모듈은 **DB 에 저장된 리포트**로도 호출된다(`/clinic-check/r/[token]`).
+ *   저장 시점의 형태가 지금 타입과 다를 수 있고(축·배열이 통째로 없는 옛 행),
+ *   그 자리에서 예외가 나면 **이미 메일·전화로 나간 링크가 500 으로 죽는다.**
+ *   그래서 리포트 필드는 타입을 믿지 않고 값으로 확인한다.
+ */
+
+function arrayOf<T>(value: readonly T[] | undefined | null): readonly T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function numberOf(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 /** 값이 없어 숫자를 못 넣을 때의 무난한 기본 문구 — 과장 없이. */
 export const FALLBACK_CTA_HEADLINE = '무료 2편으로 먼저 만들어 보기';
 const FALLBACK_CTA_SUB = '가입하면 글 2편을 무료로 만들어 볼 수 있어요. 결제 정보는 받지 않습니다.';
@@ -103,39 +119,40 @@ const FALLBACK_CTA_SUB = '가입하면 글 2편을 무료로 만들어 볼 수 �
 function headlineFor(finding: Finding, report: DiagnosisReport): string | null {
   switch (finding.id) {
     case 'blog.freshness': {
-      const days = report.blog.daysSinceLatest;
-      return typeof days === 'number' && days > 0 ? `${days}일 밀린 글, 이번 주부터 채우기` : null;
+      const days = numberOf(report.blog?.daysSinceLatest);
+      return days !== null && days > 0 ? `${days}일 밀린 글, 이번 주부터 채우기` : null;
     }
     case 'compliance.prohibited': {
-      const { prohibited } = complianceRiskCounts(report.compliance);
+      const prohibited = report.compliance ? complianceRiskCounts(report.compliance).prohibited : 0;
       return prohibited > 0 ? `위험 표현 ${prohibited}건, 발행 전에 자동으로 걸러내기` : null;
     }
+    case LEGACY_COMPLIANCE_RISK_ID:
     case 'compliance.risk': {
-      const total = report.compliance.hits.length;
+      const total = arrayOf(report.compliance?.hits).length;
       return total > 0 ? `지적 소지 ${total}건, 발행 전에 자동으로 걸러내기` : null;
     }
     case 'ai.presence': {
-      const total = report.ai.recommendQuestionTotal;
+      const total = numberOf(report.ai?.recommendQuestionTotal) ?? 0;
       return total > 0 ? `AI 추천 질문 ${total}개 전부 미등장, 근거부터 쌓기` : null;
     }
     case 'ai.presence.partial': {
-      const total = report.ai.recommendQuestionTotal;
-      const hit = report.ai.recommendQuestionMentioned;
+      const total = numberOf(report.ai?.recommendQuestionTotal) ?? 0;
+      const hit = numberOf(report.ai?.recommendQuestionMentioned) ?? 0;
       return total > 0 && hit < total ? `AI 추천 질문 ${total}개 중 ${total - hit}개 미등장, 그 표현부터 채우기` : null;
     }
     case 'ai.known':
       return 'AI가 모르는 병원, 이름부터 알리기';
     case 'blog.rank': {
-      const checked = report.blog.keywords.length;
+      const checked = arrayOf(report.blog?.keywords).length;
       return checked > 0 ? `키워드 ${checked}개 중 상위권 0개, 잡을 키워드부터 받기` : null;
     }
     case 'blog.postSeo': {
-      const missing = report.blog.postSeo?.missingCount ?? 0;
+      const missing = numberOf(report.blog?.postSeo?.missingCount) ?? 0;
       return missing > 0 ? `글 형태 ${missing}가지 미비, 다음 글부터 규격 맞추기` : null;
     }
     case 'blog.cadence': {
-      const perWeek = report.blog.postsPerWeek;
-      return typeof perWeek === 'number' ? `주당 ${perWeek.toFixed(1)}편, 발행 속도 올리기` : null;
+      const perWeek = numberOf(report.blog?.postsPerWeek);
+      return perWeek !== null ? `주당 ${perWeek.toFixed(1)}편, 발행 속도 올리기` : null;
     }
     case 'blog.exists':
       return '병원 블로그 없이 놓치던 검색 접점 만들기';
@@ -153,7 +170,7 @@ function headlineFor(finding: Finding, report: DiagnosisReport): string | null {
  *   머문 것과 버튼 문구가 어긋나지 않게.
  */
 export function buildConversionCta(report: DiagnosisReport): ConversionCta {
-  const groups = groupFindings(report.findings);
+  const groups = groupFindings(arrayOf(report?.findings));
   const badScope = groups.bad.filter((f) => doctorpostLine(f) !== null);
   const improveScope = groups.improve.filter((f) => doctorpostLine(f) !== null);
 
@@ -226,29 +243,32 @@ const TOP_RANK = 10;
 const MAX_TOP_ISSUES = 5;
 
 export function buildDiagnosisLeadSummary(report: DiagnosisReport): DiagnosisLeadSummary {
-  const groups = groupFindings(report.findings);
-  const compliance = report.compliance.checked ? complianceRiskCounts(report.compliance) : null;
-  const keywordsChecked = report.blog.rankChecked ? report.blog.keywords.length : null;
+  const findings = arrayOf(report?.findings);
+  const groups = groupFindings(findings);
+  const compliance = report?.compliance?.checked ? complianceRiskCounts(report.compliance) : null;
+  const keywords = arrayOf(report?.blog?.keywords);
+  const keywordsChecked = report?.blog?.rankChecked ? keywords.length : null;
+  const ai = report?.ai;
 
   return {
     badCount: groups.bad.length,
     improveCount: groups.improve.length,
     goodCount: groups.good.length,
     unknownCount: groups.unknown.length,
-    ourScopeCount: countDoctorpostScope(report.findings),
+    ourScopeCount: countDoctorpostScope(findings),
     topIssues: groups.bad.slice(0, MAX_TOP_ISSUES).map((f) => f.label),
-    daysSinceLatestPost: report.blog.daysSinceLatest,
-    postsPerWeek: report.blog.postsPerWeek,
+    daysSinceLatestPost: numberOf(report?.blog?.daysSinceLatest),
+    postsPerWeek: numberOf(report?.blog?.postsPerWeek),
     prohibitedCount: compliance?.prohibited ?? null,
     cautionCount: compliance?.caution ?? null,
     keywordsChecked,
     keywordsTop10:
       keywordsChecked === null
         ? null
-        : report.blog.keywords.filter((k) => k.apiRank !== null && k.apiRank <= TOP_RANK).length,
-    aiRecommendTotal: report.ai.checked ? report.ai.recommendQuestionTotal : null,
-    aiRecommendMentioned: report.ai.checked ? report.ai.recommendQuestionMentioned : null,
-    blogId: report.blog.blogId,
-    siteUrl: report.site.url,
+        : keywords.filter((k) => k.apiRank !== null && k.apiRank <= TOP_RANK).length,
+    aiRecommendTotal: ai?.checked ? (numberOf(ai.recommendQuestionTotal) ?? 0) : null,
+    aiRecommendMentioned: ai?.checked ? (numberOf(ai.recommendQuestionMentioned) ?? 0) : null,
+    blogId: report?.blog?.blogId ?? null,
+    siteUrl: report?.site?.url ?? null,
   };
 }

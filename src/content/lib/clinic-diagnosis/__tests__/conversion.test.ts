@@ -247,3 +247,71 @@ test('buildDiagnosisLeadSummary: 통화 첫 문장 재료(문제 항목·숫자)
   assert.equal(summary.ourScopeCount, 1);
   assert.deepEqual([...summary.topIssues].sort(), ['최근 발행', '홈페이지 접속(보안 연결)']);
 });
+
+/* ── 저장된 옛 리포트 방어 ──────────────────────────────── */
+
+/**
+ * ★ 2026-07-27 주간 점검 지적.
+ *   `/clinic-check/r/[token]` 은 DB 에 저장된 **옛 형태의 리포트**를 이 함수로 렌더한다.
+ *   결과 화면 전면 개편(a200a8a) 이전에 저장된 행은 축·배열이 통째로 없을 수 있고,
+ *   옵셔널 체이닝 없이 `report.blog.keywords.length` 를 읽으면 페이지가 500 으로 죽는다.
+ *   **이미 메일·전화로 나간 링크가 죽는 것**이라 그대로 신뢰 문제가 된다.
+ */
+const LEGACY_SHAPES: readonly (readonly [string, unknown])[] = [
+  ['빈 객체', {}],
+  ['findings 만 있음', { findings: [] }],
+  ['축이 통째로 없음', { clinic: CLINIC, runAt: '2026-07-01T00:00:00.000Z', findings: [], unchecked: [] }],
+  [
+    'blog 는 있는데 keywords 가 없음',
+    {
+      clinic: CLINIC,
+      runAt: '2026-07-01T00:00:00.000Z',
+      blog: { checked: true, blogId: 'x', rankChecked: true },
+      compliance: { checked: true },
+      ai: { checked: true },
+      site: {},
+      findings: [finding({ id: 'blog.rank', tone: 'warn', ourScope: true })],
+      unchecked: [],
+    },
+  ],
+  [
+    'compliance.hits 가 없음',
+    {
+      clinic: CLINIC,
+      runAt: '2026-07-01T00:00:00.000Z',
+      blog: { checked: true },
+      compliance: { checked: true },
+      ai: {},
+      site: {},
+      findings: [finding({ id: 'compliance.risk', axis: 'compliance', tone: 'warn', ourScope: true })],
+      unchecked: [],
+    },
+  ],
+  ['findings 가 배열이 아님', { clinic: CLINIC, findings: null, blog: {}, site: {}, ai: {}, compliance: {} }],
+  ['null', null],
+];
+
+for (const [name, shape] of LEGACY_SHAPES) {
+  test(`옛 리포트로 전환 문구를 만들어도 던지지 않는다: ${name}`, () => {
+    const cta = buildConversionCta(shape as DiagnosisReport);
+    assert.ok(cta.headline.trim().length > 0, '문구가 비면 화면에 빈 버튼이 나간다');
+    assert.ok(cta.sub.trim().length > 0);
+    assert.ok(Number.isFinite(cta.badCount) && Number.isFinite(cta.badScopeCount));
+    assert.ok(!/undefined|NaN|null/.test(`${cta.headline} ${cta.sub}`), '값이 없는 자리가 문구로 새면 안 된다');
+  });
+
+  test(`옛 리포트로 리드 요약을 만들어도 던지지 않는다: ${name}`, () => {
+    const summary = buildDiagnosisLeadSummary(shape as DiagnosisReport);
+    assert.ok(Number.isFinite(summary.badCount));
+    assert.ok(Array.isArray(summary.topIssues));
+    // 확인 못 한 값은 추정하지 않고 null 로 남긴다(진단 중립성).
+    assert.equal(summary.daysSinceLatestPost, null);
+    assert.equal(summary.postsPerWeek, null);
+  });
+}
+
+test('값이 하나도 없으면 무난한 기본 문구로 떨어진다', () => {
+  const cta = buildConversionCta({} as DiagnosisReport);
+  assert.equal(cta.headline, FALLBACK_CTA_HEADLINE);
+  assert.equal(cta.basis, null);
+});

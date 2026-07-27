@@ -96,6 +96,7 @@ export function isCacheable(input: { readonly hasPastedBody?: boolean }): boolea
 const DIAGNOSIS_QUOTA_KEY = '__dp_clinic_dx_quota__';
 const LOOKUP_QUOTA_KEY = '__dp_clinic_lookup_quota__';
 const DIAGNOSIS_INFLIGHT_KEY = '__dp_clinic_dx_inflight__';
+const SHARE_INFLIGHT_KEY = '__dp_clinic_dx_share_inflight__';
 
 function getMap<T>(key: string): Map<string, T> {
   const g = globalThis as Record<string, unknown>;
@@ -113,6 +114,32 @@ export function getLookupQuotaStore(): Map<string, number> {
 
 export function getDiagnosisInflight<T>(): Map<string, Promise<T>> {
   return getMap<Promise<T>>(DIAGNOSIS_INFLIGHT_KEY);
+}
+
+/**
+ * 공유 링크 발급 in-flight 저장소 — **리포트 행 중복 생성을 막는 유일한 수단**.
+ *
+ * ★ 진단 single-flight 는 리더 1명만 진단을 돌리게 하지만, 공유 링크 발급은 그
+ *   바깥에 있었다. 같은 병원을 두 명이 동시에 진단하면 리더·팔로워가 각자
+ *   `clinic_diagnosis_reports` 에 행을 만들어 **같은 진단에 토큰이 2개** 생겼다.
+ *   "캐시된 토큰을 재사용하므로 행이 요청마다 늘지 않는다"는 주석은 **순차 요청에서만** 참이다.
+ *   그래서 발급 자체를 캐시 키 단위로 한 번만 돌게 묶는다.
+ */
+export function getShareInflight<T>(): Map<string, Promise<T>> {
+  return getMap<Promise<T>>(SHARE_INFLIGHT_KEY);
+}
+
+/**
+ * 같은 키의 동시 호출을 하나로 묶는다 (캡 소비 없음).
+ * joinOrStartSingleFlight 와 달리 **쿼터를 소비하지 않는다** — 공유 링크 발급은
+ * 진단 캡 안에서 이미 허용된 요청의 부산물이라 별도 과금 대상이 아니다.
+ */
+export function shareOnce<T>(inflight: Map<string, Promise<T>>, key: string, start: () => Promise<T>): Promise<T> {
+  const existing = inflight.get(key);
+  if (existing) return existing;
+  const promise = start().finally(() => inflight.delete(key));
+  inflight.set(key, promise);
+  return promise;
 }
 
 export function consumeDiagnosisQuota(ip: string, env: NodeJS.ProcessEnv = process.env): RateLimitDecision {

@@ -12,6 +12,7 @@ import {
   channelStatusText,
   findingGroupOf,
   groupFindingsByChannel,
+  normalizeStoredFindings,
 } from '@/content/lib/clinic-diagnosis/findings';
 import { riskOf } from '@/content/lib/clinic-diagnosis/compliance-scan';
 import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-questions';
@@ -270,11 +271,28 @@ interface DiagnosisReportViewProps {
    * 그때는 메일 입력만 빠지고 나머지 결과는 그대로 나온다.
    */
   readonly shareToken?: string | null;
+  /**
+   * 메일 링크로 열린 공유 화면인가 (`/clinic-check/r/[token]`).
+   *
+   * ★ 이 화면에는 블로그 후보 선택기(BlogGuessPicker)도 상세 진단 폼도 없다.
+   *   둘 다 진단 페이지(ClinicCheckClient)에서만 렌더된다. 그런데 문구는
+   *   "아래에서 바꿔 주세요"라고 말하고 있었다 — 오판을 고칠 길이 없는 안내문이다.
+   *   그래서 화면 종류를 컴포넌트가 알고 문구를 갈라 쓴다.
+   */
+  readonly shared?: boolean;
 }
 
-export default function DiagnosisReportView({ report, shareToken }: DiagnosisReportViewProps) {
+/** 공유 화면에서 "여기서는 못 고친다"를 대신할 목적지. */
+const DIAGNOSIS_PAGE = '/clinic-check';
+
+export default function DiagnosisReportView({ report, shareToken, shared = false }: DiagnosisReportViewProps) {
+  /**
+   * 저장된 옛 리포트 보정 — 등급·중복 카드를 오늘 기준과 맞춘다(findings.ts).
+   * 오늘 만들어진 리포트는 그대로 통과한다.
+   */
+  const findings = normalizeStoredFindings(report);
   /** 채널별 묶음 — 문제가 심한 채널이 위로 온다(정렬 근거는 findings.ts). */
-  const channels = groupFindingsByChannel(report.findings);
+  const channels = groupFindingsByChannel(findings);
   const clinic = report.clinic;
   /** 결과 맨 아래 전환 문구 — 원장이 방금 본 자기 숫자로 만든다(값이 없으면 기본 문구). */
   const cta = buildConversionCta(report);
@@ -285,10 +303,13 @@ export default function DiagnosisReportView({ report, shareToken }: DiagnosisRep
    * (같은 함수를 쓰므로 판정과 화면이 어긋나지 않는다).
    */
   const aiQuestions =
-    report.ai.questions?.length ? report.ai.questions : summarizeQuestions(report.ai.probes ?? []);
+    report.ai?.questions?.length ? report.ai.questions : summarizeQuestions(report.ai?.probes ?? []);
   /** 확신까지는 아닌 채로 1위 후보로 진행한 상태인가 (구 리포트에는 없는 종류 → false). */
-  const blogAssumed = report.blog.resolution?.kind === 'assumed';
-  const blogClose = report.blog.resolution?.kind === 'assumed' && report.blog.resolution.close;
+  const blogAssumed = report.blog?.resolution?.kind === 'assumed';
+  const blogClose = report.blog?.resolution?.kind === 'assumed' && report.blog.resolution.close;
+  /** 저장된 옛 리포트는 배열이 통째로 없을 수 있다 — 길이 접근에서 죽지 않게 한다. */
+  const complianceHits = report.compliance?.hits ?? [];
+  const unchecked = report.unchecked ?? [];
 
   return (
     <div className="bg-white text-[#202020]">
@@ -331,7 +352,9 @@ export default function DiagnosisReportView({ report, shareToken }: DiagnosisRep
             {report.blog.source === 'manual'
               ? '직접 넣어 주신 주소로 진단했어요.'
               : blogAssumed
-                ? '이 블로그를 병원 블로그로 보고 진단했습니다. 아니면 아래에서 바꿔 주세요.'
+                ? shared
+                  ? '이 블로그를 병원 블로그로 보고 진단했습니다. 다른 블로그라면 진단 페이지에서 주소를 직접 넣어 다시 확인하실 수 있어요.'
+                  : '이 블로그를 병원 블로그로 보고 진단했습니다. 아니면 아래에서 바꿔 주세요.'
                 : '병원 이름과 맞는 블로그를 찾아 이 블로그로 진단했어요. 주소를 눌러 확인해 보세요.'}
             {blogClose && ' 비슷한 후보가 하나 더 있었어요.'}
             {/*
@@ -379,10 +402,19 @@ export default function DiagnosisReportView({ report, shareToken }: DiagnosisRep
         <ChannelBlock key={section.axis} section={section} />
       ))}
 
-      {report.unchecked.length > 0 && (
+      {unchecked.length > 0 && (
         <p className="text-[12px] text-[#5b6573] mt-4 bg-[#f7f9fb] border border-[#dbe2ea] rounded-xl px-3.5 py-2.5 leading-relaxed">
-          <b className="font-bold">확인하지 못한 항목</b> · {report.unchecked.join(' · ')} — 아래 상세 진단에서 주소를
-          직접 넣어 주시면 채워 드릴게요.
+          <b className="font-bold">확인하지 못한 항목</b> · {unchecked.join(' · ')} —{' '}
+          {shared ? (
+            <>
+              <a href={DIAGNOSIS_PAGE} className="font-bold text-[#ff4628] underline underline-offset-2">
+                진단 페이지
+              </a>
+              에서 주소를 직접 넣어 주시면 채워 드릴게요.
+            </>
+          ) : (
+            '아래 상세 진단에서 주소를 직접 넣어 주시면 채워 드릴게요.'
+          )}
         </p>
       )}
 
@@ -392,11 +424,11 @@ export default function DiagnosisReportView({ report, shareToken }: DiagnosisRep
           전부 같은 무게로 늘어놓으면 "후기"(경험담)와 "최신"이 같은 것으로 보인다.
         ⚠️ 위험이어도 "위반입니다"라고 쓰지 않는다 — "명시적으로 금지한 유형"까지가 한계다.
       */}
-      {report.compliance.hits.length > 0 && (
+      {complianceHits.length > 0 && (
         <section className="mt-8">
           <h3 className="text-[13px] font-extrabold text-[#5b6573] tracking-[1px] mb-2.5">확인해 보시면 좋을 표현</h3>
           <ul className="space-y-2">
-            {report.compliance.hits.map((hit, i) => {
+            {complianceHits.map((hit, i) => {
               const danger = riskOf(hit) === 'prohibited';
               return (
                 <li
@@ -447,7 +479,8 @@ export default function DiagnosisReportView({ report, shareToken }: DiagnosisRep
           <p className="text-[11px] text-[#8a93a0] mt-2.5 leading-relaxed">
             표현이 실제로 쓰인 문장을 그대로 붙여 두었으니 직접 읽고 판단해 보세요. “위험”은 의료법이 광고에서 명시적으로
             금지한 유형(환자 후기·치료 전후 비교·효과 보장·다른 병원과의 비교)에 해당할 수 있는 표현이고, 나머지는 심의에서
-            자주 지적되는 표현이에요. 묻거나 부정하는 문장, 남들의 후기를 가리키는 문장은 “위험”에서 뺐습니다. 둘 다
+            자주 지적되는 표현이에요. 후기·경험담은 묻거나 부정하는 문장, 남들의 후기를 가리키는 문장이면 “위험”에서 뺐고,
+            효과 보장·전후 비교는 그런 문장 안에 있어도 그대로 두었습니다. 둘 다
             기계적으로 찾아 표시한 것이며 <b className="font-bold">저희가 위반 여부를 판단한 것은 아닙니다.</b> 최종 판단은
             심의기관과 담당 변호사의 몫입니다.
           </p>
@@ -463,7 +496,7 @@ export default function DiagnosisReportView({ report, shareToken }: DiagnosisRep
           보이고, 판정(질문 단위)과 화면(호출 단위)이 어긋난다.
         · 예전에 발급된 공유 리포트에는 questions 가 없으므로 probes 로 폴백한다.
       */}
-      {report.ai.checked && aiQuestions.length > 0 && (
+      {report.ai?.checked && aiQuestions.length > 0 && (
         <section className="mt-8">
           <details>
             <summary className="text-[13px] font-extrabold text-[#5b6573] tracking-[1px] cursor-pointer list-none min-h-[44px] flex items-center">

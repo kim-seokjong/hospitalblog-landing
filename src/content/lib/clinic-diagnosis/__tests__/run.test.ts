@@ -9,6 +9,7 @@ import {
   buildSeoPosts,
   computeBlogRhythm,
   displayRegion,
+  runClinicDiagnosis,
   shortProvinceOf,
 } from '../run.ts';
 import { SEO_POST_LIMIT } from '../post-seo.ts';
@@ -118,4 +119,64 @@ test('buildSeoPosts 는 최근 5편까지만 만든다 (비용·시간 제한)',
 test('본문 수집 예산은 기존 최악 소요(2편×8초)보다 커지지 않는다', () => {
   assert.ok(BODY_BUDGET_MS <= 16_000, '편수를 늘리면서 대기 시간이 늘면 진단 전체가 타임아웃된다');
   assert.ok(BODY_TIMEOUT_MS <= BODY_BUDGET_MS);
+});
+
+/* ── 축 실패 격리 ────────────────────────────────────────── */
+
+const CLINIC_FIXTURE = {
+  mngNo: 'MNG-1',
+  name: '테스트성형외과의원',
+  roadAddress: '대구광역시 수성구 청호로 422',
+  lotAddress: '',
+  region: '수성구',
+  province: '대구광역시',
+  subjects: ['성형외과'],
+  specialty: '성형외과',
+  institutionType: '의원',
+  phone: '053-000-0000',
+  active: true,
+  statusLabel: '영업/정상',
+  openedOn: '2020-01-01',
+  closedOn: '',
+} as const;
+
+/**
+ * ★ 2026-07-27 주간 점검 지적.
+ *   `runAiCitation` 과 `buildComplianceAxis` 만 try/catch 밖에 있었다. 하나가 throw 하면
+ *   진단 전체가 실패하고, single-flight 팔로워까지 같은 실패를 받아
+ *   **동시에 요청한 사용자 전원이 실패**했다. 어떤 축이 죽어도 리포트는 나와야 한다.
+ */
+test('어느 축이 던져도 진단은 리포트를 돌려준다 (진단 전체 500 방지)', async () => {
+  const boom = (() => {
+    throw new Error('network down');
+  }) as unknown as typeof fetch;
+
+  const report = await runClinicDiagnosis(CLINIC_FIXTURE, {
+    env: {
+      NAVER_CLIENT_ID: 'id',
+      NAVER_CLIENT_SECRET: 'secret',
+      OPENAI_API_KEY: 'sk-test',
+    },
+    fetchImpl: boom,
+    now: NOW,
+  });
+
+  assert.equal(report.version, 1);
+  assert.equal(report.clinic.mngNo, 'MNG-1');
+  // 실패한 축은 "확인하지 못했습니다"로 떨어진다 — 추정값으로 메우지 않는다.
+  assert.equal(report.ai.checked, false);
+  assert.equal(report.compliance.checked, false);
+  assert.ok(report.findings.length > 0, '축이 죽어도 결과 화면은 채워져야 한다');
+  assert.ok(report.unchecked.includes('AI 검색 인용'));
+});
+
+test('진단은 절대 reject 하지 않는다 (팔로워까지 함께 실패하지 않게)', async () => {
+  const rejecting = (() => Promise.reject(new Error('boom'))) as unknown as typeof fetch;
+  const report = await runClinicDiagnosis(CLINIC_FIXTURE, {
+    env: { NAVER_CLIENT_ID: 'id', NAVER_CLIENT_SECRET: 'secret' },
+    fetchImpl: rejecting,
+    now: NOW,
+    includeAi: false,
+  });
+  assert.equal(report.version, 1);
 });

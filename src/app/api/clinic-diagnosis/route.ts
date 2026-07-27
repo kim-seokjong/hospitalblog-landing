@@ -11,9 +11,11 @@ import {
   DIAGNOSIS_CACHE_TTL_MS,
   extractClientIp,
   getDiagnosisInflight,
+  getShareInflight,
   isCacheable,
   joinOrStartSingleFlight,
   limitMessage,
+  shareOnce,
 } from '@/content/lib/clinic-diagnosis/limits';
 import { cacheGet, cacheSet } from '@/content/lib/scoreboard/cache';
 import type { ClinicCandidate, DiagnosisReport } from '@/content/lib/clinic-diagnosis/types';
@@ -179,19 +181,32 @@ function shareCacheKey(cacheKey: string): string {
  *
  * 같은 캐시 키에는 같은 토큰을 재사용한다 — 캐시 히트로 들어온 요청마다 리포트
  * 행을 새로 쌓지 않기 위해서다. 캐시하지 않는 진단(본문 붙여넣기)만 매번 발급한다.
+ *
+ * ★ 발급을 **캐시 키 단위 single-flight 안에서** 돌린다.
+ *   같은 병원을 두 명이 동시에 진단하면 둘 다 캐시 미스 상태로 여기 들어와
+ *   `clinic_diagnosis_reports` 에 행이 2개 생겼다(캐시 재사용은 순차 요청에서만 참).
+ *   ⚠️ 캐시하지 않는 진단(본문 붙여넣기)은 요청마다 리포트 내용이 다르므로 묶지 않는다 —
+ *      묶으면 남의 본문으로 만든 리포트 링크를 받게 된다.
  */
 async function getOrCreateShare(
   cacheKey: string,
   report: DiagnosisReport,
   cacheable: boolean,
 ): Promise<ShareLink | null> {
-  if (cacheable) {
-    const cached = cacheGet<ShareLink>(shareCacheKey(cacheKey));
-    if (cached && typeof cached.token === 'string' && typeof cached.url === 'string') return cached;
-  }
-  const created = await createShareLink(report);
-  if (created && cacheable) cacheSet(shareCacheKey(cacheKey), created, DIAGNOSIS_CACHE_TTL_MS);
-  return created;
+  if (!cacheable) return createShareLink(report);
+
+  const key = shareCacheKey(cacheKey);
+  const cached = cacheGet<ShareLink>(key);
+  if (cached && typeof cached.token === 'string' && typeof cached.url === 'string') return cached;
+
+  return shareOnce(getShareInflight<ShareLink | null>(), key, async () => {
+    // 리더를 기다리는 사이 캐시가 채워졌을 수 있다 — 한 번 더 본다.
+    const fresh = cacheGet<ShareLink>(key);
+    if (fresh && typeof fresh.token === 'string' && typeof fresh.url === 'string') return fresh;
+    const created = await createShareLink(report);
+    if (created) cacheSet(key, created, DIAGNOSIS_CACHE_TTL_MS);
+    return created;
+  });
 }
 
 /**

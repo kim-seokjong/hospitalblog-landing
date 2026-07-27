@@ -319,6 +319,20 @@ async function measureSite(clinic: ClinicCandidate, options: RunDiagnosisOptions
 }
 
 /**
+ * 축 하나가 실패했다 — **어느 축인지 서버 로그에 남긴다.**
+ *
+ * ★ 실측(2026-07-27)에서 진단 실행 4건 중 1건이 결과에 도달하지 못했는데
+ *   실패 원인이 어디에도 기록되지 않아 추적이 불가능했다. 축 이름을 접두어로 고정해
+ *   로그만 보고 "어느 축이 몇 번 죽었는지" 셀 수 있게 한다.
+ */
+function logAxisFailure(axis: 'blog' | 'site' | 'ai' | 'compliance', error: unknown): void {
+  console.error(
+    `[clinic-diagnosis] axis=${axis} 실패:`,
+    error instanceof Error ? `${error.name}: ${error.message}` : error,
+  );
+}
+
+/**
  * 진단 1건 실행. 절대 throw 하지 않는다 — 축별 실패는 축 내부에서 흡수된다.
  */
 export async function runClinicDiagnosis(
@@ -332,11 +346,11 @@ export async function runClinicDiagnosis(
   // 1단계 — 블로그 특정과 홈페이지 진단은 서로 독립이라 병렬로 돈다.
   const [blogResult, site] = await Promise.all([
     measureBlog(clinic, options, now).catch((error: unknown) => {
-      console.error('[clinic-diagnosis] 블로그 축 실패:', error instanceof Error ? error.message : error);
+      logAxisFailure('blog', error);
       return { axis: EMPTY_BLOG_AXIS, sources: [] as readonly ComplianceSource[] };
     }),
     measureSite(clinic, options).catch((error: unknown) => {
-      console.error('[clinic-diagnosis] 홈페이지 축 실패:', error instanceof Error ? error.message : error);
+      logAxisFailure('site', error);
       return EMPTY_SITE_AXIS;
     }),
   ]);
@@ -346,7 +360,13 @@ export async function runClinicDiagnosis(
     siteHost: site.url ? (normalizeSiteUrl(site.url)?.hostname ?? null) : null,
   };
 
-  // 2단계 — AI 인용은 자기 자산 정보가 있어야 경로를 나눌 수 있어 뒤에 돈다.
+  /**
+   * 2단계 — AI 인용은 자기 자산 정보가 있어야 경로를 나눌 수 있어 뒤에 돈다.
+   *
+   * ⚠️ 다른 축과 **같은 방식으로** 감싼다. 예전에는 이 호출만 try/catch 밖에 있어서
+   *    한 번 throw 하면 진단 전체가 500 이 됐고, single-flight 팔로워까지 같은 실패를
+   *    받아 **동시에 요청한 사용자 전원이 실패**했다.
+   */
   const ai =
     options.includeAi === false
       ? EMPTY_AI_AXIS
@@ -359,7 +379,10 @@ export async function runClinicDiagnosis(
             owned,
           },
           { env, fetchImpl, deadlineMs: AI_DEADLINE_MS },
-        );
+        ).catch((error: unknown) => {
+          logAxisFailure('ai', error);
+          return EMPTY_AI_AXIS;
+        });
 
   // 컴플라이언스 — 붙여넣은 본문이 있으면 표본에 더한다(상세 진단 경로).
   const pasted = (options.pastedBody ?? '').trim();
@@ -375,7 +398,18 @@ export async function runClinicDiagnosis(
         },
       ]
     : blogResult.sources;
-  const compliance = sources.length > 0 ? buildComplianceAxis(sources, checkCompliance) : EMPTY_COMPLIANCE_AXIS;
+  /**
+   * ⚠️ 순수 함수라도 감싼다 — 정규식·본문 형태 때문에 던질 여지가 있고, 여기서 던지면
+   *    나머지 세 축을 다 측정해 놓고 진단 전체가 실패한다(팔로워까지 함께).
+   */
+  let compliance = EMPTY_COMPLIANCE_AXIS;
+  if (sources.length > 0) {
+    try {
+      compliance = buildComplianceAxis(sources, checkCompliance);
+    } catch (error: unknown) {
+      logAxisFailure('compliance', error);
+    }
+  }
 
   const axes = { blog: blogResult.axis, site, ai, compliance };
   return {

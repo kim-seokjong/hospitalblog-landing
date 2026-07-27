@@ -5,6 +5,7 @@ import {
   extractBlogId,
   parseBlogSearch,
   hasNameSignal,
+  meetsAssumeBar,
   resolveBlogGuesses,
   scoreBlogGuesses,
   stripSearchMarkup,
@@ -98,13 +99,17 @@ test('아이디·블로거명에 병원명이 없어도 제목·지역 신호가
   assert.equal(resolution.kind === 'assumed' && resolution.close, false, '단독 후보라 붙어 있지 않다');
 });
 
-test('플로르: 같은 이름 블로그가 2개면 확신하지 않고, 붙어 있다는 사실을 남긴다', () => {
+test('플로르: 같은 이름 블로그가 2개로 붙어 있으면 임의로 고르지 않고 물어본다', () => {
   const guesses = scoreBlogGuesses(FLOR_ITEMS, FLOR);
   const resolution = resolveBlogGuesses(guesses);
-  // 진단은 1위로 진행하되(사용자를 또 세우지 않는다) 2위와 붙어 있음을 표시한다.
-  assert.equal(resolution.kind, 'assumed');
-  assert.equal(resolution.kind === 'assumed' && resolution.close, true);
-  const ids = resolution.kind === 'assumed' ? resolution.guesses.map((g) => g.blogId) : [];
+  /**
+   * ★ 2026-07-27 변경. 예전에는 1위로 그냥 진행했다(격차 요건이 없었다).
+   *   두 후보가 동점인데 하나를 골라 진단하면 그 발행주기·키워드·의료광고법 검출이
+   *   전부 그 병원 것으로 표시되고, 그 수치가 리드에 저장돼 전화 대본 재료가 된다.
+   *   붙어 있으면 사용자에게 묻는다.
+   */
+  assert.equal(resolution.kind, 'uncertain');
+  const ids = resolution.kind === 'uncertain' ? resolution.guesses.map((g) => g.blogId) : [];
   assert.ok(ids.includes('ehdrjsdlgud1') && ids.includes('florps1'));
 });
 
@@ -137,9 +142,26 @@ test('이름 신호가 0이면 점수가 높아도 물어본다 (uncertain)', ()
   assert.equal(hasNameSignal(guess({ confidence: 90 })), false);
 });
 
-test('자동 진행 임계 — 39점은 물어보고 40점부터 진행한다', () => {
-  assert.equal(resolveBlogGuesses([guess({ titleMentions: 1, confidence: 39 })]).kind, 'uncertain');
-  assert.equal(resolveBlogGuesses([guess({ titleMentions: 1, confidence: 40 })]).kind, 'assumed');
+test('블로거명 신호가 있으면 자동 진행 임계는 그대로 40점이다', () => {
+  // 블로거명은 남이 흉내 낼 수 없는 소유 신호라 기준을 올리지 않았다.
+  assert.equal(resolveBlogGuesses([guess({ nameInBloggerName: true, confidence: 39 })]).kind, 'uncertain');
+  assert.equal(resolveBlogGuesses([guess({ nameInBloggerName: true, confidence: 40 })]).kind, 'assumed');
+});
+
+/**
+ * ★ 2026-07-27 점검 지적의 핵심 회귀.
+ *   제목 언급 2편(22) + 점유 2편(12) + 지역 1편(7) = 41 이 기존 임계 40 을 넘어
+ *   자동 진행됐다. 병원 리뷰·체험단·마케팅 대행 블로그가 흔히 만족하는 조합이다.
+ */
+test('제목 언급만으로 올라온 후보는 3편 이상 + 55점을 넘어야 자동 진행한다', () => {
+  // 제목 2편 조합은 점수가 아무리 높아도 통과하지 못한다(편수 요건).
+  assert.equal(resolveBlogGuesses([guess({ titleMentions: 2, confidence: 41 })]).kind, 'uncertain');
+  assert.equal(resolveBlogGuesses([guess({ titleMentions: 2, confidence: 62 })]).kind, 'uncertain');
+  // 제목 3편이어도 점수가 모자라면 물어본다.
+  assert.equal(resolveBlogGuesses([guess({ titleMentions: 3, confidence: 54 })]).kind, 'uncertain');
+  assert.equal(resolveBlogGuesses([guess({ titleMentions: 3, confidence: 55 })]).kind, 'assumed');
+  assert.equal(meetsAssumeBar(guess({ titleMentions: 2, confidence: 62 })), false);
+  assert.equal(meetsAssumeBar(guess({ titleMentions: 3, confidence: 55 })), true);
 });
 
 test('블로거명에 병원명이 없으면 아무리 점수가 높아도 확신(confident)으로 올리지 않는다', () => {
@@ -147,13 +169,67 @@ test('블로거명에 병원명이 없으면 아무리 점수가 높아도 확�
   assert.equal(resolution.kind, 'assumed');
 });
 
-test('점수 1위가 임계값을 넘어도 2위와 붙어 있으면 확신하지 않는다 (붙어 있음을 표시)', () => {
-  const resolution = resolveBlogGuesses([
+test('2위와 12점 미만으로 붙어 있으면 자동 진행하지 않는다 (assumed 격차 요건)', () => {
+  const close = resolveBlogGuesses([
     guess({ blogId: 'a', hits: 3, nameInBloggerName: true, titleMentions: 2, confidence: 90 }),
     guess({ blogId: 'b', hits: 3, nameInBloggerName: true, titleMentions: 2, confidence: 80 }),
   ]);
+  assert.equal(close.kind, 'uncertain', '10점 차는 임의 선택이다 — 물어본다');
+
+  // 1점 차도 예전에는 그냥 진행했다. 이제는 물어본다.
+  assert.equal(
+    resolveBlogGuesses([
+      guess({ blogId: 'a', nameInBloggerName: true, confidence: 66 }),
+      guess({ blogId: 'b', nameInBloggerName: true, confidence: 65 }),
+    ]).kind,
+    'uncertain',
+  );
+});
+
+test('격차는 넘었지만 확신 격차(20)에는 못 미치면 진행하되 붙어 있음을 표시한다', () => {
+  const resolution = resolveBlogGuesses([
+    guess({ blogId: 'a', hits: 3, nameInBloggerName: true, titleMentions: 2, confidence: 90 }),
+    guess({ blogId: 'b', hits: 3, nameInBloggerName: true, titleMentions: 2, confidence: 75 }),
+  ]);
   assert.equal(resolution.kind, 'assumed');
   assert.equal(resolution.kind === 'assumed' && resolution.close, true);
+});
+
+/* ── 체험단·리뷰 블로그 배제 ────────────────────────────── */
+
+/**
+ * ⚠️ 병원이 인근 지역·시술을 키워드로 붙인 제목("경산리프팅성형외과…")은
+ *    남의 병원 이름이 아니다. 실측(프라이브성형외과)에서 그 규칙을 넣었더니
+ *    자기 병원 블로그가 통째로 후보에서 빠졌다 — 그래서 넣지 않는다.
+ */
+test('인근 지역·시술 키워드가 제목에 붙어도 자기 블로그 신호를 잃지 않는다', () => {
+  const items: BlogSearchItem[] = [
+    item({ title: '브이비성형외과의원 눈성형 안내', link: 'https://blog.naver.com/vbps_official/11', bloggerName: '브이비성형외과의원', bloggerLink: 'blog.naver.com/vbps_official', description: '대구 성형외과' }),
+    item({ title: '경산리프팅성형외과, 상담실에서 자주 듣는 이야기', link: 'https://blog.naver.com/vbps_official/12', bloggerName: '브이비성형외과의원', bloggerLink: 'blog.naver.com/vbps_official', description: '대한성형외과의사회 연수강좌 참석 후기를 남깁니다' }),
+    item({ title: '브이비성형외과의원 진료시간', link: 'https://blog.naver.com/vbps_official/13', bloggerName: '브이비성형외과의원', bloggerLink: 'blog.naver.com/vbps_official', description: '대구 중구 성형외과' }),
+  ];
+  const guesses = scoreBlogGuesses(items, VB);
+  assert.equal(guesses[0]?.blogId, 'vbps_official');
+  assert.ok((guesses[0]?.confidence ?? 0) >= 70);
+});
+
+test('체험단·협찬 어휘가 있는 블로그는 제목 신호를 받지 못한다', () => {
+  const items: BlogSearchItem[] = [
+    item({ title: '브이비성형외과의원 체험단 다녀왔어요', link: 'https://blog.naver.com/tester01/1', bloggerName: '일상기록', bloggerLink: 'blog.naver.com/tester01', description: '대구 성형외과 체험단으로 다녀왔습니다' }),
+    item({ title: '브이비성형외과의원 시술 받은 날', link: 'https://blog.naver.com/tester01/2', bloggerName: '일상기록', bloggerLink: 'blog.naver.com/tester01', description: '소정의 원고료를 제공받아 작성했습니다' }),
+    item({ title: '브이비성형외과의원 재방문', link: 'https://blog.naver.com/tester01/3', bloggerName: '일상기록', bloggerLink: 'blog.naver.com/tester01', description: '대구 성형외과' }),
+  ];
+  const guesses = scoreBlogGuesses(items, VB);
+  assert.deepEqual(guesses, []);
+});
+
+test('병원이 직접 운영하는 블로그는 협찬 어휘가 있어도 후보로 남는다 (블로거명 신호 보호)', () => {
+  const items: BlogSearchItem[] = [
+    item({ title: '브이비성형외과의원 체험단 모집 안내', link: 'https://blog.naver.com/vbps_official/9', bloggerName: '브이비성형외과의원', bloggerLink: 'blog.naver.com/vbps_official', description: '대구 성형외과' }),
+  ];
+  const guesses = scoreBlogGuesses(items, VB);
+  assert.equal(guesses[0]?.blogId, 'vbps_official');
+  assert.equal(guesses[0]?.nameInBloggerName, true);
 });
 
 test('병원명이 2자 미만이면 채점 자체를 하지 않는다', () => {

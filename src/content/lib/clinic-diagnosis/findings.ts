@@ -146,9 +146,11 @@ export function buildBlogFindings(blog: BlogAxis): readonly Finding[] {
           }${closeNote}`
         : `블로그를 확인했습니다.${blog.postCount !== null ? ` (최근 글 ${blog.postCount}편 수집)` : ''}`,
       why: null,
+      // ⚠️ 이 문구는 저장돼 공유 화면에서도 그대로 나온다 — 화면 위치("아래")를 가리키지 않는다.
+      //    공유 화면에는 후보 선택기도 상세 진단 폼도 없다.
       action: assumed
-        ? '주소를 눌러 맞는 블로그인지 확인해 주세요. 다른 블로그라면 바로 아래에서 바꿔 다시 진단할 수 있어요.'
-        : '이 블로그를 기준으로 아래 항목을 진단했어요. 주소를 눌러 맞는 블로그인지 확인해 보세요.',
+        ? '주소를 눌러 맞는 블로그인지 확인해 주세요. 다른 블로그라면 진단 페이지에서 주소를 직접 넣어 다시 진단할 수 있어요.'
+        : '이 블로그를 기준으로 나머지 항목을 진단했어요. 주소를 눌러 맞는 블로그인지 확인해 보세요.',
       ourScope: false,
       // 눌러서 바로 열 수 있어야 "우리 블로그가 맞나"를 그 자리에서 확인한다.
       link: {
@@ -880,6 +882,55 @@ export function collectUnchecked(input: {
   return out;
 }
 
+/* ── 저장된 옛 리포트 보정 ──────────────────────────────── */
+
+/**
+ * 위험/주의 2단 등급 이전에 저장된 의료광고법 항목의 전용 id.
+ * 저장된 값이 아니라 **읽을 때만** 붙인다(DB 를 고쳐 쓰지 않는다).
+ */
+export const LEGACY_COMPLIANCE_RISK_ID = 'compliance.risk.legacy';
+
+/**
+ * 이 리포트가 위험/주의 2단 등급 **이전**에 저장된 것인가.
+ * prohibitedCount 는 등급 분리와 함께 들어온 필드라 그 유무가 세대 구분선이다.
+ */
+export function isLegacyComplianceReport(compliance: ComplianceAxis): boolean {
+  return typeof compliance.prohibitedCount !== 'number';
+}
+
+/**
+ * 저장된 리포트를 **오늘 화면 기준으로 읽기 위한 보정** (순수 함수).
+ *
+ * 저장된 findings 는 발급 시점의 문구·id 를 그대로 갖고 있다. 화면 규칙이 바뀌면
+ * 같은 링크가 어제와 다른 등급·개수를 보여주게 되므로 읽을 때 두 가지를 맞춘다:
+ *
+ *   ① 의료광고법 등급 — 옛 리포트의 'compliance.risk' 는 그때 등급(지금 고쳐야 할 것)으로.
+ *      (지금 기준으로 읽으면 전부 '주의'가 되어 조용히 한 단계 내려간다)
+ *   ② 중복 카드 — 결과 맨 위 "진단한 블로그" 블록이 같은 말을 하므로, 블로그가 특정된
+ *      리포트의 'blog.exists'(잘하고 있는 것) 카드는 빼서 배지 숫자를 오늘 것과 맞춘다.
+ *
+ * 오늘 만들어지는 리포트에는 둘 다 해당 사항이 없어 그대로 통과한다.
+ */
+export function normalizeStoredFindings(report: {
+  readonly blog: Pick<BlogAxis, 'blogId'>;
+  readonly compliance: ComplianceAxis;
+  readonly findings: readonly Finding[];
+}): readonly Finding[] {
+  const legacy = isLegacyComplianceReport(report?.compliance ?? ({} as ComplianceAxis));
+  const hasBlog = report?.blog?.blogId != null;
+
+  const out: Finding[] = [];
+  for (const finding of Array.isArray(report?.findings) ? report.findings : []) {
+    if (hasBlog && finding.id === 'blog.exists' && finding.tone === 'good') continue;
+    if (legacy && finding.id === 'compliance.risk' && finding.tone === 'warn') {
+      out.push({ ...finding, id: LEGACY_COMPLIANCE_RISK_ID });
+      continue;
+    }
+    out.push(finding);
+  }
+  return out;
+}
+
 /* ── 3분류 · 중요도 ─────────────────────────────────────── */
 
 /**
@@ -943,6 +994,16 @@ export const FINDING_WEIGHT: Readonly<
    * 그래서 '챙기면 좋을 것'으로 내리되, 순서는 검색 노출 항목보다 앞에 둔다.
    */
   'compliance.risk': { severity: 'improving', rank: 21 },
+  /**
+   * ★ 위험/주의 2단 등급 **이전에 저장된** 리포트의 의료광고법 항목.
+   *
+   *   옛 리포트는 전부 id 가 'compliance.risk' 이고 hits 에 risk 필드가 없어
+   *   지금 기준으로 읽으면 통째로 '주의'가 된다. 그러면 어제까지 "지금 고쳐야 할 것"
+   *   이던 항목이 **같은 링크에서** "챙기면 좋을 것"으로 내려가 보인다 —
+   *   대표가 전화로 말한 등급과 원장이 보는 화면이 어긋난다.
+   *   그래서 옛 리포트는 그때 등급(losing/16)으로 읽는다. normalizeStoredFindings 참조.
+   */
+  [LEGACY_COMPLIANCE_RISK_ID]: { severity: 'losing', rank: 16 },
   // 환자와 만날 접점이 아예 없다
   'blog.exists': { severity: 'losing', rank: 20 },
   // 글은 쓰는데 검색에서 안 보인다 — 노력이 성과로 안 이어지는 상태
@@ -992,7 +1053,8 @@ export interface GroupedFindings {
  */
 export function groupFindings(findings: readonly Finding[]): GroupedFindings {
   const buckets: Record<FindingGroup, Finding[]> = { bad: [], improve: [], good: [], unknown: [] };
-  findings.forEach((finding) => {
+  // 저장된 옛 리포트가 배열이 아닐 수 있다 — 여기서 죽으면 공유 링크가 통째로 500 이 된다.
+  (Array.isArray(findings) ? findings : []).forEach((finding) => {
     buckets[findingGroupOf(finding)].push(finding);
   });
 
@@ -1068,7 +1130,7 @@ export interface ChannelSection {
  */
 export function groupFindingsByChannel(findings: readonly Finding[]): readonly ChannelSection[] {
   const byAxis = new Map<Finding['axis'], { finding: Finding; index: number }[]>();
-  findings.forEach((finding, index) => {
+  (Array.isArray(findings) ? findings : []).forEach((finding, index) => {
     const list = byAxis.get(finding.axis);
     if (list) list.push({ finding, index });
     else byAxis.set(finding.axis, [{ finding, index }]);

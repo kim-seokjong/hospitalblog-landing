@@ -11,6 +11,9 @@ import {
   lookupCacheKey,
   readDiagnosisLimits,
   readLookupLimits,
+  getDiagnosisInflight,
+  getShareInflight,
+  shareOnce,
 } from '../limits.ts';
 import { consumeBlogCheckQuota } from '../../blog-check-limits.ts';
 import { cacheGet, cacheSet } from '../../scoreboard/cache.ts';
@@ -159,4 +162,54 @@ test('다른 병원은 서로 막지 않는다', () => {
 test('limitMessage 는 사유별로 다른 안내를 준다', () => {
   assert.match(limitMessage('global_limit'), /오늘 무료 진단 사용량/);
   assert.match(limitMessage('ip_limit'), /무료 진단 횟수/);
+});
+
+/* ── 공유 링크 발급 single-flight ───────────────────────── */
+
+/**
+ * ★ 2026-07-27 주간 점검 지적.
+ *   공유 링크 발급이 진단 single-flight **밖**에 있어서, 같은 병원을 두 명이 동시에
+ *   진단하면 `clinic_diagnosis_reports` 에 행이 2개 생겼다. "캐시된 토큰을 재사용하므로
+ *   요청마다 늘지 않는다"는 순차 요청에서만 참이다.
+ */
+test('같은 키로 동시에 발급을 요청해도 실제 발급은 한 번만 돈다', async () => {
+  const inflight = new Map<string, Promise<string>>();
+  let created = 0;
+  const start = async (): Promise<string> => {
+    created += 1;
+    await new Promise((r) => setTimeout(r, 10));
+    return `token-${created}`;
+  };
+
+  const [a, b, c] = await Promise.all([
+    shareOnce(inflight, 'k', start),
+    shareOnce(inflight, 'k', start),
+    shareOnce(inflight, 'k', start),
+  ]);
+
+  assert.equal(created, 1, '동시 요청이 각자 행을 만들면 안 된다');
+  assert.equal(a, 'token-1');
+  assert.equal(b, 'token-1');
+  assert.equal(c, 'token-1');
+  assert.equal(inflight.size, 0, '끝나면 반드시 비워진다(다음 요청이 막히지 않게)');
+});
+
+test('키가 다르면 각각 발급된다', async () => {
+  const inflight = new Map<string, Promise<string>>();
+  let created = 0;
+  const start = async (): Promise<string> => `token-${++created}`;
+  const [a, b] = await Promise.all([shareOnce(inflight, 'k1', start), shareOnce(inflight, 'k2', start)]);
+  assert.equal(created, 2);
+  assert.notEqual(a, b);
+});
+
+test('발급이 실패해도 in-flight 가 남지 않는다 (다음 요청이 영영 막히지 않게)', async () => {
+  const inflight = new Map<string, Promise<string>>();
+  await assert.rejects(shareOnce(inflight, 'k', async () => { throw new Error('db down'); }));
+  assert.equal(inflight.size, 0);
+  assert.equal(await shareOnce(inflight, 'k', async () => 'ok'), 'ok');
+});
+
+test('진단 in-flight 와 공유 in-flight 는 저장소가 분리돼 있다', () => {
+  assert.notEqual(getDiagnosisInflight(), getShareInflight());
 });

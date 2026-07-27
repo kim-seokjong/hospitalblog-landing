@@ -8,6 +8,7 @@ import {
   buildExcerpt,
   classifyComplianceRisk,
   demotionReasonFor,
+  isDemotable,
   riskOf,
   type ComplianceSource,
 } from '../compliance-scan.ts';
@@ -209,12 +210,77 @@ test('문맥을 주지 않으면 예전처럼 단어만으로 판단한다 (저�
 });
 
 test('demotionReasonFor 는 완화 사유를 구분해 돌려준다', () => {
-  assert.equal(demotionReasonFor('환자 후기·치료경험담', '후기가 많으면 믿을 만한 걸까?'), 'question');
-  assert.equal(demotionReasonFor('환자 후기·치료경험담', '무조건 좋은 시술이 아니라고 말씀드립니다.'), 'refutation');
-  assert.equal(demotionReasonFor('환자 후기·치료경험담', '블로그나 SNS에서 접하는 시술 후기들'), 'third_party');
+  assert.equal(demotionReasonFor('환자 후기·치료경험담', '후기가 많으면 믿을 만한 걸까?', '후기'), 'question');
   assert.equal(
-    demotionReasonFor('치료효과 보장·부작용 없음 단정', '저희는 100% 예약제로 하루 인원을 제한합니다'),
+    demotionReasonFor('환자 후기·치료경험담', '무조건 좋은 시술이 아니라고 말씀드립니다.', '후기'),
+    'refutation',
+  );
+  assert.equal(demotionReasonFor('환자 후기·치료경험담', '블로그나 SNS에서 접하는 시술 후기들', '후기'), 'third_party');
+  assert.equal(
+    demotionReasonFor('치료효과 보장·부작용 없음 단정', '저희는 100% 예약제로 하루 인원을 제한합니다', '100%'),
     'no_outcome',
   );
-  assert.equal(demotionReasonFor('환자 후기·치료경험담', '직접 받아본 후기입니다'), null);
+  assert.equal(demotionReasonFor('환자 후기·치료경험담', '직접 받아본 후기입니다', '후기'), null);
+});
+
+/* ── ⑤ 완화 범위 — 어디까지 좁혔는가 (회귀 고정) ────────── */
+
+/**
+ * ★ 2026-07-27 주간 점검 지적.
+ *   완화가 유형 전체에 걸려 있어서 **효과 보장 문구까지 봐주고 있었다.**
+ *   완화는 원래 "후기를 믿지 말라는 글"의 오탐을 잡으려던 것이지
+ *   "확실한 효과를 보장합니다"를 봐주려던 것이 아니다.
+ *
+ *   그래서 완화 대상을 이렇게 좁혔다:
+ *     · 환자 후기·치료경험담            → 문맥 완화 O (원래 의도)
+ *     · 치료 전후 비교 / 다른 병원 비교  → 문맥 완화 X
+ *     · 치료효과 보장·부작용 없음 단정   → 원칙 X, **검출어가 일상어일 때만** O
+ *       (`무조건`·`100%`·`위험 없는` — 프라이브 실측 오탐이 전부 이것이었다)
+ */
+test('완화 대상 판정 — 유형과 검출어를 함께 본다', () => {
+  assert.equal(isDemotable('환자 후기·치료경험담', '후기'), true);
+  assert.equal(isDemotable('치료 전후 비교', '전후 사진'), false);
+  assert.equal(isDemotable('다른 병원과의 비교·비방', '다른 병원보다'), false);
+  // 보장 유형: 일상어만 완화 대상
+  assert.equal(isDemotable('치료효과 보장·부작용 없음 단정', '무조건'), true);
+  assert.equal(isDemotable('치료효과 보장·부작용 없음 단정', '100%'), true);
+  assert.equal(isDemotable('치료효과 보장·부작용 없음 단정', '위험 없는'), true);
+  assert.equal(isDemotable('치료효과 보장·부작용 없음 단정', '확실한 효과'), false);
+  assert.equal(isDemotable('치료효과 보장·부작용 없음 단정', '완치'), false);
+  assert.equal(isDemotable('치료효과 보장·부작용 없음 단정', '부작용 없음'), false);
+  // 검출어를 모르면 완화하지 않는다(recall 우선)
+  assert.equal(isDemotable('치료효과 보장·부작용 없음 단정'), false);
+});
+
+/**
+ * 반례 — 완화 큐 단어가 문장에 있어도 **위험으로 남아야 하는** 문장들.
+ * 전부 2026-07-27 점검에서 재현된 실제 강등 사례다.
+ */
+const MUST_STAY_PROHIBITED: readonly (readonly [string, string])[] = [
+  // REFUTATION_CUES 의 '아니라' 가 걸려 강등되던 문장
+  ['부정문 속 효과 보장', '단순 시술이 아니라 확실한 효과를 보장합니다.'],
+  // REFUTATION_CUES 의 '오해' 가 걸려 강등되던 문장
+  ['오해 언급 + 완치 보장', '많은 분들이 오해하시는데, 저희는 100% 완치를 보장합니다.'],
+  // THIRD_PARTY_CUES 의 '온라인|인터넷|리뷰' 가 걸려 강등되던 문장
+  ['온라인 언급 + 부작용 없음 단정', '온라인 상담 후 진행하시면 부작용 없음이 확인된 시술입니다.'],
+  ['리뷰 언급 + 완전히 안전', '리뷰를 보고 오신 분들께 말씀드리면 완전히 안전한 시술입니다.'],
+  // 의문형 안에 있어도 광고 문구다
+  ['의문형 속 전후 사진', '전후 사진을 보면 확실히 달라 보이지 않나요?'],
+];
+
+for (const [name, body] of MUST_STAY_PROHIBITED) {
+  test(`완화 큐가 있어도 위험을 유지한다: ${name}`, () => {
+    const axis = scan('시술 안내', body);
+    assert.ok(
+      (axis.prohibitedCount ?? 0) > 0,
+      `위험이 사라졌다 — hits: ${axis.hits.map((h) => `${h.phrase}:${riskOf(h)}`).join(', ')}`,
+    );
+  });
+}
+
+test('일상어 검출어(무조건·100%)는 계속 문맥을 본다 — 프라이브 오탐 방어', () => {
+  const refuted = scan('안내', "'함께 받으면 무조건 좋은 시술'이 아니라, 원인에 맞을 때 의미가 있습니다.");
+  assert.equal(refuted.prohibitedCount, 0);
+  const booking = scan('안내', '저희가 100% 예약제로 하루 인원을 제한하고 있습니다.');
+  assert.equal(booking.prohibitedCount, 0);
 });

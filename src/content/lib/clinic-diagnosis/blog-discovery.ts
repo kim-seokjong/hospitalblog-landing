@@ -33,11 +33,37 @@ export const CONFIDENT_SCORE = 70;
 /** 1위·2위 최소 점수 차 — 이보다 붙어 있으면 확신하지 않는다. */
 export const MIN_GAP = 20;
 /**
- * 자동 진행(assumed) 최소 점수.
- * 이름 신호(블로거명 일치 또는 제목에 병원명)가 하나라도 있고 이 점수를 넘으면
- * 1위 후보로 진단을 진행한다. 넘지 못하면 기존처럼 사용자에게 묻는다.
+ * 자동 진행(assumed) 최소 점수 — **블로거명에 병원명이 들어 있는 경로**.
+ *
+ * 블로거명은 남이 흉내 낼 수 없는 소유 신호라 기존 기준(40)을 그대로 둔다.
  */
 export const ASSUME_SCORE = 40;
+/**
+ * 자동 진행(assumed) 최소 점수 — **제목 언급만으로 올라온 경로**.
+ *
+ * ★ 2026-07-27 점검 지적: 제목 2편(22) + 점유 2편(12) + 지역 1편(7) = 41 로
+ *   기존 임계(40)를 넘어 자동 진행됐다. 병원 리뷰·체험단·마케팅 대행 블로그가
+ *   흔히 만족하는 조합이다. 제목 2편 조합의 최대치는
+ *   22 + 20(점유 3편+) + 12(지역 2편+) + 8(진료과 2편+) = 62 라 점수만으로는
+ *   갈라낼 수 없어, **편수 요건(MIN_TITLE_MENTIONS_FOR_ASSUME)을 따로 건다.**
+ */
+export const TITLE_ASSUME_SCORE = 55;
+/**
+ * 블로거명 신호 없이 자동 진행하려면 필요한 **제목 언급 편수**.
+ *
+ * 남의 블로그가 특정 병원 이름을 제목에 3편 이상 쓰는 일은 드물다(체험단·리뷰는
+ * 보통 1~2편이다). 이 요건이 오판의 실질 방어선이고 점수는 보조다.
+ */
+export const MIN_TITLE_MENTIONS_FOR_ASSUME = 3;
+/**
+ * 자동 진행에 필요한 1위·2위 최소 점수 차.
+ *
+ * ★ 예전에는 assumed 에 격차 요건이 아예 없어서 **1점 차여도 진행**했다.
+ *   잘못 짚은 블로그의 발행주기·키워드·의료광고법 검출이 전부 그 병원 것으로
+ *   표시되고 그 수치가 리드에 저장돼 전화 대본 재료가 된다 — 남의 블로그에서 나온
+ *   "후기 5건"으로 원장에게 전화하는 사고가 성립한다. 붙어 있으면 물어본다.
+ */
+export const MIN_ASSUME_GAP = 12;
 /** 검색 1회당 수집 건수. */
 export const SEARCH_DISPLAY = 20;
 /** 사용자에게 보여줄 후보 상한. */
@@ -47,10 +73,31 @@ export const SEARCH_TIMEOUT_MS = 6_000;
 
 const NAVER_BLOG_SEARCH = 'https://openapi.naver.com/v1/search/blog.json';
 
-/** 병원 블로그일 리 없는 블로거명 신호 — 체험단·정보성 계정 배제. */
+/** 병원 블로그일 리 없는 블로거명 신호 — 주소록·모음 계정 배제. */
 const NOISE_BLOGGER_HINTS: readonly string[] = [
   '주소록', '전화번호부', '모음', '정리', '리스트', '디렉토리', '디렉터리',
 ];
+
+/**
+ * 체험단·리뷰·대가성 협찬 블로그 신호 (제목·글 앞부분에서 본다).
+ *
+ * ★ NOISE_BLOGGER_HINTS 만으로는 못 걸렀다 — 그건 블로거명이 '주소록'인 계정만
+ *   잡는데, 실제로 병원 이름을 제목에 쓰는 남의 블로그는 체험단·리뷰 계정이다.
+ * ⚠️ 병원이 직접 체험단을 돌린 경우도 있으므로, 이 신호는 **블로거명 신호가 없는
+ *    후보의 제목 가점만** 없앤다(블로거명이 병원명인 블로그는 그대로 둔다).
+ */
+const SPONSORED_HINTS =
+  /체험단|서포터즈|기자단|협찬|제공받아|제공\s*받아|소정의|원고료|무상\s*제공|내돈내산|공동\s*구매/;
+
+/**
+ * ⚠️ "여러 병원 이름이 섞여 나오면 리뷰 계정" 규칙은 **넣었다가 뺐다**(2026-07-27 실측).
+ *   병원 블로그는 인근 지역·시술을 키워드로 붙인 제목을 일상적으로 쓴다 —
+ *   프라이브성형외과(newprive)의 실제 글 제목이 "경산리프팅성형외과…"였고,
+ *   본문에는 "대한성형외과의사회"가 나왔다. 둘 다 남의 병원 이름이 아닌데
+ *   병원명 형태로 잡혀 **자기 병원 블로그가 후보에서 통째로 빠졌다.**
+ *   기계적으로 뽑은 "○○성형외과" 토큰으로는 남의 병원과 키워드 조합을 가를 수 없다.
+ *   오판 방어는 아래 대가성 어휘 + 제목 편수·격차 요건이 맡는다.
+ */
 
 export interface BlogSearchItem {
   readonly title: string;
@@ -163,6 +210,8 @@ export function scoreBlogGuesses(
     titleMentions: number;
     regionMentions: number;
     specialtyMentions: number;
+    /** 대가성 후기·체험단 어휘가 나온 글 수. */
+    sponsoredMentions: number;
   }
   const buckets = new Map<string, Bucket>();
 
@@ -176,10 +225,13 @@ export function scoreBlogGuesses(
       titleMentions: 0,
       regionMentions: 0,
       specialtyMentions: 0,
+      sponsoredMentions: 0,
     };
     const titleNorm = normalizeClinicName(item.title);
     // 지역·진료과는 제목 + 검색이 함께 준 글 앞부분에서 본다(추가 호출 없음).
+    const rawText = `${item.title} ${item.description ?? ''}`;
     const textNorm = `${titleNorm}${normalizeClinicName(item.description ?? '')}`;
+
     buckets.set(blogId, {
       blogId,
       // 블로거명은 첫 등장값을 유지한다(불변 갱신).
@@ -191,6 +243,7 @@ export function scoreBlogGuesses(
       regionMentions:
         bucket.regionMentions + (regionTokens.some((token) => textNorm.includes(token)) ? 1 : 0),
       specialtyMentions: bucket.specialtyMentions + (spec.length >= 2 && textNorm.includes(spec) ? 1 : 0),
+      sponsoredMentions: bucket.sponsoredMentions + (SPONSORED_HINTS.test(rawText) ? 1 : 0),
     });
   }
 
@@ -198,6 +251,11 @@ export function scoreBlogGuesses(
   for (const bucket of buckets.values()) {
     const nameNorm = normalizeClinicName(bucket.bloggerName);
     const isNoise = NOISE_BLOGGER_HINTS.some((hint) => bucket.bloggerName.includes(hint));
+    /**
+     * 대가성 후기 어휘를 쓰는 블로그 — 제목에 병원 이름이 나와도 그 병원 블로그가 아니다.
+     * (블로거명이 병원명인 후보는 여기에 걸리지 않는다 — 아래 titleScore 에만 적용한다)
+     */
+    const isForeignAuthored = bucket.sponsoredMentions > 0;
 
     let bloggerNameScore = 0;
     let exactName = false;
@@ -214,8 +272,8 @@ export function scoreBlogGuesses(
       }
     }
 
-    // 주소록·모음 계정은 제목에 병원명이 나와도 자기 블로그가 아니다 — 이름 신호를 주지 않는다.
-    const titleScore = isNoise
+    // 주소록·모음·체험단·리뷰 계정은 제목에 병원명이 나와도 자기 블로그가 아니다 — 이름 신호를 주지 않는다.
+    const titleScore = isNoise || isForeignAuthored
       ? 0
       : bucket.titleMentions >= 3
         ? 30
@@ -257,17 +315,32 @@ export function hasNameSignal(guess: BlogGuess): boolean {
 }
 
 /**
+ * 이 후보 하나만 놓고 봤을 때 자동 진행해도 되는가 (2위 격차는 별도).
+ *
+ * 경로에 따라 기준이 다르다 — **블로거명은 남이 흉내 낼 수 없고, 제목은 아니다.**
+ *   · 블로거명에 병원명이 있으면 : 점수 ≥ ASSUME_SCORE
+ *   · 제목 언급만 있으면        : 제목 언급 3편 이상 + 점수 ≥ TITLE_ASSUME_SCORE
+ */
+export function meetsAssumeBar(guess: BlogGuess): boolean {
+  if (guess.nameInBloggerName) return guess.confidence >= ASSUME_SCORE;
+  return guess.titleMentions >= MIN_TITLE_MENTIONS_FOR_ASSUME && guess.confidence >= TITLE_ASSUME_SCORE;
+}
+
+/**
  * 확신도 목록 → 최종 판정 (순수 함수).
  *
  * confident : 블로거명 자체에 병원명이 있고(가장 강한 소유 신호) 점수 ≥ CONFIDENT_SCORE,
  *             2위와 MIN_GAP 이상 벌어짐.
- * assumed   : 이름 신호가 있고 점수 ≥ ASSUME_SCORE → 1위로 진단을 진행하되 화면에 밝힌다.
- *             2위와 붙어 있으면 close=true 로 "비슷한 후보가 하나 더 있었다"를 표시한다.
- * uncertain : 이름 신호가 없거나 점수가 낮다 → 기존처럼 사용자에게 묻는다.
+ * assumed   : 이름 신호가 경로별 기준(meetsAssumeBar)을 넘고 2위와 MIN_ASSUME_GAP 이상
+ *             벌어짐 → 1위로 진단을 진행하되 화면에 밝힌다.
+ *             그래도 MIN_GAP 안쪽이면 close=true 로 "비슷한 후보가 하나 더 있었다"를 표시한다.
+ * uncertain : 기준 미달이거나 2위와 붙어 있다 → 기존처럼 사용자에게 묻는다.
  *
  * ⚠️ 블로거명 신호(nameInBloggerName)가 없으면 아무리 점수가 높아도 confident 로 올리지
  *    않는다. 그 자리에서 "확신했다"고 말할 근거가 부족하고, 남의 블로그를 확정으로
  *    보여주는 것이 이 기능에서 가장 큰 사고이기 때문이다.
+ * ⚠️ assumed 에도 격차를 요구한다. 붙어 있는 두 후보 중 하나를 임의로 골라 진단하면
+ *    그 수치가 리드로 저장돼 영업 대본 재료가 된다 — 틀린 채로 굳는다.
  */
 export function resolveBlogGuesses(guesses: readonly BlogGuess[]): BlogResolution {
   if (guesses.length === 0) return { kind: 'none' };
@@ -277,7 +350,7 @@ export function resolveBlogGuesses(guesses: readonly BlogGuess[]): BlogResolutio
   if (top.nameInBloggerName && top.confidence >= CONFIDENT_SCORE && gap >= MIN_GAP) {
     return { kind: 'confident', guess: top };
   }
-  if (hasNameSignal(top) && top.confidence >= ASSUME_SCORE) {
+  if (hasNameSignal(top) && meetsAssumeBar(top) && gap >= MIN_ASSUME_GAP) {
     return { kind: 'assumed', guess: top, guesses, close: gap < MIN_GAP };
   }
   return { kind: 'uncertain', guesses };
