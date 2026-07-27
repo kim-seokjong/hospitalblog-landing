@@ -321,9 +321,16 @@ export default function LandingPage() {
             ★ 정체 한 줄 — 첫 화면이 입력창뿐이면 "여기 뭐 하는 곳이지?"로 이탈한다.
               입력창 바로 아래에서 무엇을 파는 회사인지 먼저 밝힌다.
           */}
+          {/*
+            ⚠️ 두 문장을 반드시 줄로 나눈다 — 한 문단으로 두면 모바일에서
+              "회원가 / 입없이 무료입니다" 처럼 낱말 가운데가 잘린다(실측 지적).
+              block + text-balance 로 각 줄이 스스로 균형 잡게 한다.
+          */}
           <p className="max-w-xl mx-auto mt-3.5 text-[13.5px] sm:text-[15px] text-[#3f5468] leading-relaxed">
-            닥터포스트는 <b className="font-extrabold text-[#202020]">의료광고법에 맞춰 병원 블로그를 자동으로 써주는</b> 서비스예요.
-            진단은 회원가입 없이 무료입니다.
+            <span className="block [text-wrap:balance]">
+              닥터포스트는 <b className="font-extrabold text-[#202020]">의료광고법에 맞춰 병원 블로그를 자동으로 써주는</b> 서비스예요.
+            </span>
+            <span className="block mt-1 [text-wrap:balance]">진단은 회원가입 없이 무료입니다.</span>
           </p>
 
           <p className="text-[11px] text-[#8a93a0] mt-2.5 leading-relaxed">
