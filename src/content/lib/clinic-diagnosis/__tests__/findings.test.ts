@@ -10,10 +10,14 @@ import {
   buildFindings,
   buildPostSeoFindings,
   buildSiteFindings,
+  channelBadges,
+  channelStatusText,
   collectUnchecked,
   groupFindings,
+  groupFindingsByChannel,
   summarizeFindings,
 } from '../findings.ts';
+import type { ChannelSection } from '../findings.ts';
 import { EMPTY_SITE_AXIS } from '../site-audit.ts';
 import { EMPTY_AI_AXIS, summarizeProbes } from '../ai-citation.ts';
 import { EMPTY_COMPLIANCE_AXIS } from '../compliance-scan.ts';
@@ -225,11 +229,28 @@ test('collectUnchecked 는 확인 못 한 축 이름을 그대로 돌려준다',
 
 /* ── 블로그 축 ──────────────────────────────────────────── */
 
-test('1위 후보로 진행한 경우(assumed) 그 사실과 바꾸는 법을 카드에 적는다', () => {
+/**
+ * ★ 중복 제거 회귀 방지 (대표 지적 2026-07-27).
+ *   결과 화면 맨 위 "진단한 블로그" 블록이 주소·수집 편수·바꾸는 법을 이미 말한다.
+ *   같은 말을 카드로 또 하면 "잘하고 있는 것" 개수만 부풀고 원장은 같은 말을 두 번 읽는다.
+ */
+test('블로그가 특정됐으면 같은 말을 카드로 반복하지 않는다 (상단 블록과 중복)', () => {
+  const guess = { blogId: 'night140160', bloggerName: '리팅 이야기', hits: 3, nameInBloggerName: false, titleMentions: 3, confidence: 62 };
+  const cards = buildBlogFindings({
+    ...BLOG_OK,
+    blogId: 'night140160',
+    resolution: { kind: 'assumed', guess, guesses: [guess], close: true },
+  });
+  assert.ok(!ids(cards).includes('blog.exists'), '상단 블록이 말하는 내용을 카드로 또 내면 중복이다');
+  // 나머지 블로그 항목은 그대로 나온다 — 중복만 지운 것이지 축을 지운 게 아니다
+  assert.ok(ids(cards).includes('blog.freshness'));
+});
+
+test('블로그를 특정하지 못한 예외 상황에서는 카드가 남는다 (상단 블록이 안 나오는 경우)', () => {
   const guess = { blogId: 'night140160', bloggerName: '리팅 이야기', hits: 3, nameInBloggerName: false, titleMentions: 3, confidence: 62 };
   const card = buildBlogFindings({
     ...BLOG_OK,
-    blogId: 'night140160',
+    blogId: null,
     resolution: { kind: 'assumed', guess, guesses: [guess], close: true },
   })[0];
   assert.equal(card.id, 'blog.exists');
@@ -654,9 +675,11 @@ test('HTTPS 가 안 되면 실제 응답한 http 주소로 연결하고 그 사�
   assert.equal(card?.link?.insecure, true);
 });
 
-test('블로그 주소도 눌러서 열 수 있다', () => {
-  const card = buildFindings({ blog: BLOG_OK, site: EMPTY_SITE_AXIS, ai: EMPTY_AI_AXIS, compliance: EMPTY_COMPLIANCE_AXIS })
-    .find((f) => f.id === 'blog.exists');
+test('블로그 카드가 남는 경우에는 주소도 눌러서 열 수 있다', () => {
+  const card = buildFindings({
+    blog: { ...BLOG_OK, blogId: null },
+    site: EMPTY_SITE_AXIS, ai: EMPTY_AI_AXIS, compliance: EMPTY_COMPLIANCE_AXIS,
+  }).find((f) => f.id === 'blog.exists');
   assert.equal(card?.link?.href, 'https://blog.naver.com/vbps_official');
 });
 
@@ -669,6 +692,177 @@ test('summarizeFindings 는 좋음·주의·미확인을 따로 센다 (점수 �
   assert.ok(summary.good > 0);
   assert.ok(summary.unknown > 0);
   assert.equal(typeof summary.warn, 'number');
+});
+
+/* ── 채널(축) 묶기 — 화면의 1차 그룹 ─────────────────────── */
+
+/** 채널별 [분류 개수] 를 한눈에 보기 위한 축약 — 실패 메시지가 읽히게. */
+function channelShape(sections: readonly ChannelSection[]): string[] {
+  return sections.map(
+    (s) =>
+      `${s.label}: ${(['bad', 'improve', 'good', 'unknown'] as const)
+        .filter((g) => s.counts[g] > 0)
+        .map((g) => `${g}${s.counts[g]}`)
+        .join('·')}`,
+  );
+}
+
+/**
+ * ★ 프라이브성형외과 실측 재구성 (대표가 지적한 바로 그 화면).
+ *   같은 채널 항목이 세 덩어리에 흩어져 "AI는 결국 되는 건가"를 알 수 없었다.
+ */
+const PRIVE = {
+  blog: { ...BLOG_OK, postSeo: postSeo() },
+  site: { ...SITE_OK, jsonLd: 'fail' as const, jsonLdTypes: [] },
+  ai: aiAxis([
+    p(Q1, 'recommend', 'openai', true),
+    p(Q1, 'recommend', 'perplexity', true),
+    p(Q2, 'recommend', 'openai', true),
+    p(Q2, 'recommend', 'perplexity', true),
+    p('대구 수성구 프라이브성형외과의원 어떤 병원이야?', 'named', 'openai', true),
+  ]),
+  compliance: complianceAxis({
+    hits: [{ postTitle: '글', postLink: 'l', phrase: '후기', note: 'n', level: 'caution', risk: 'prohibited', riskLabel: '환자 후기·치료경험담' }],
+    postsWithHits: 9,
+    prohibitedCount: 11,
+    cautionCount: 0,
+    postsWithProhibited: 9,
+  }),
+};
+
+test('채널이 1차 그룹이다 — 같은 채널 항목이 흩어지지 않는다 (프라이브 실측)', () => {
+  const findings = buildFindings(PRIVE);
+  const sections = groupFindingsByChannel(findings);
+
+  // 누락·중복 없이 전부 채널에 담긴다
+  assert.equal(sections.reduce((n, s) => n + s.findings.length, 0), findings.length);
+  // AI 항목은 한 덩어리 안에 모여 있어야 한다 — 이게 이 개편의 전부다
+  const ai = sections.find((s) => s.axis === 'ai');
+  assert.deepEqual(ids(ai?.findings ?? []).sort(), ['ai.known', 'ai.path', 'ai.presence']);
+  assert.deepEqual(
+    channelShape(sections),
+    ['의료광고법: bad1', '네이버 블로그: improve1·good3', 'AI 검색: improve1·good2', '홈페이지: improve1·good1'],
+  );
+});
+
+test('채널 순서는 문제가 심한 채널이 위 (프라이브 실측)', () => {
+  const sections = groupFindingsByChannel(buildFindings(PRIVE));
+  assert.deepEqual(
+    sections.map((s) => s.label),
+    ['의료광고법', '네이버 블로그', 'AI 검색', '홈페이지'],
+  );
+  assert.equal(sections[0].worst, 'bad');
+  // 순서 근거는 기존 중요도 표 그대로 — 새 기준을 만들지 않는다
+  assert.equal(sections[0].worstRank, FINDING_WEIGHT['compliance.prohibited'].rank);
+  assert.equal(sections[1].worstRank, FINDING_WEIGHT['blog.postSeo'].rank);
+  assert.equal(sections[2].worstRank, FINDING_WEIGHT['ai.path'].rank);
+});
+
+test('나쁜 항목이 있는 채널은 rank 가 낮은 개선 채널보다 위 (브이성형외과 실측)', () => {
+  // 홈페이지 접속 실패(bad·10) · 블로그 순위 전무(bad·24) vs 의료광고법 주의만(improve·21)
+  const sections = groupFindingsByChannel(
+    buildFindings({
+      blog: { ...BLOG_OK, daysSinceLatest: 200, postsPerWeek: 0.2, keywords: [{ keyword: '대구 성형외과', apiRank: null, docCount: 10 }] },
+      site: { ...SITE_OK, https: 'fail', httpsNote: '인증서 문제' },
+      ai: aiAxis([
+        p(Q1, 'recommend', 'openai', true),
+        p(Q1, 'recommend', 'perplexity', false),
+        p(Q2, 'recommend', 'openai', true),
+        p(Q2, 'recommend', 'perplexity', true),
+        p(Q3, 'recommend', 'openai', false),
+        p(Q3, 'recommend', 'perplexity', false),
+      ]),
+      compliance: complianceAxis({
+        hits: [{ postTitle: '글', postLink: 'l', phrase: '최신', note: 'n', level: 'caution', risk: 'caution' }],
+        postsWithHits: 1,
+        prohibitedCount: 0,
+        cautionCount: 1,
+        postsWithProhibited: 0,
+      }),
+    }),
+  );
+  assert.deepEqual(
+    sections.map((s) => s.label),
+    ['홈페이지', '네이버 블로그', '의료광고법', 'AI 검색'],
+  );
+});
+
+test('채널 안 항목은 나쁜 것부터 — 심각도를 버리지 않는다', () => {
+  const sections = groupFindingsByChannel(
+    buildFindings({
+      blog: { ...BLOG_OK, daysSinceLatest: 200, postSeo: postSeo(), keywords: [{ keyword: '대구 성형외과', apiRank: null, docCount: 10 }] },
+      site: SITE_OK,
+      ai: EMPTY_AI_AXIS,
+      compliance: EMPTY_COMPLIANCE_AXIS,
+    }),
+  );
+  const blog = sections.find((s) => s.axis === 'blog');
+  // blog.rank(bad·24) → blog.freshness(bad·28) → blog.postSeo(improve·26) → blog.cadence(good)
+  assert.deepEqual(ids(blog?.findings ?? []), ['blog.rank', 'blog.freshness', 'blog.postSeo', 'blog.cadence']);
+});
+
+test('확인하지 못한 항목은 해당 채널 안에 남고 맨 뒤로 간다 (따로 빼지 않는다)', () => {
+  const sections = groupFindingsByChannel(
+    buildFindings({
+      blog: { ...BLOG_OK, rankChecked: false, keywords: [] },
+      site: SITE_OK,
+      ai: EMPTY_AI_AXIS,
+      compliance: EMPTY_COMPLIANCE_AXIS,
+    }),
+  );
+  const blog = sections.find((s) => s.axis === 'blog');
+  assert.equal(blog?.findings.at(-1)?.id, 'blog.rank', '미확인 항목은 채널 맨 뒤');
+  assert.equal(blog?.counts.unknown, 1);
+  // 전부 미확인인 채널은 맨 아래로 (급한 일이 아니라 빈칸이다)
+  assert.deepEqual(sections.map((s) => s.axis), ['site', 'blog', 'ai', 'compliance']);
+  assert.ok(sections.slice(-2).every((s) => s.worst === 'unknown'));
+});
+
+test('상단 요약 4칸: 채널명 + 상태 (문제 건수 또는 양호 표시)', () => {
+  const sections = groupFindingsByChannel(buildFindings(PRIVE));
+  assert.deepEqual(
+    sections.map((s) => `${s.label} — ${channelStatusText(s)}`),
+    [
+      '의료광고법 — 지금 고쳐야 할 것 1',
+      '네이버 블로그 — 챙기면 좋을 것 1',
+      'AI 검색 — 챙기면 좋을 것 1',
+      '홈페이지 — 챙기면 좋을 것 1',
+    ],
+  );
+
+  // 문제가 없는 채널은 건수 대신 양호 표시
+  const clean = groupFindingsByChannel(buildFindings({ ...PRIVE, site: SITE_OK }));
+  assert.equal(channelStatusText(clean.find((s) => s.axis === 'site')!), '잘하고 있어요');
+  // 확인조차 못 한 채널
+  const unchecked = groupFindingsByChannel(buildFindings({ ...PRIVE, ai: EMPTY_AI_AXIS }));
+  assert.equal(channelStatusText(unchecked.find((s) => s.axis === 'ai')!), '확인하지 못했어요');
+});
+
+test('채널 배지 문구는 대표가 정한 덩어리 이름 그대로 쓴다 (줄여 쓰지 않는다)', () => {
+  const sections = groupFindingsByChannel(buildFindings(PRIVE));
+  assert.deepEqual(channelBadges(sections[0]).map((b) => b.text), ['지금 고쳐야 할 것 1']);
+  assert.deepEqual(
+    channelBadges(sections.find((s) => s.axis === 'ai')!).map((b) => b.text),
+    ['챙기면 좋을 것 1', '잘하고 있는 것 2'],
+  );
+});
+
+test('옛 공유 리포트도 그대로 채널에 담긴다 (폴백 유지)', () => {
+  // 중복 제거 이전에 저장된 리포트에는 blog.exists(잘하고 있는 것) 카드가 들어 있다
+  const legacy: Finding = {
+    id: 'blog.exists',
+    axis: 'blog',
+    label: '병원 블로그',
+    tone: 'good',
+    state: '블로그를 확인했습니다.',
+    why: null,
+    action: '주소를 눌러 확인해 보세요.',
+    ourScope: false,
+  };
+  const sections = groupFindingsByChannel([legacy, ...buildFindings(PRIVE)]);
+  const blog = sections.find((s) => s.axis === 'blog');
+  assert.ok(ids(blog?.findings ?? []).includes('blog.exists'));
+  assert.equal(blog?.counts.good, 4);
 });
 
 /* ── 최근 글 SEO 카드 ───────────────────────────────────── */

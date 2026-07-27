@@ -115,38 +115,49 @@ export function buildBlogFindings(blog: BlogAxis): readonly Finding[] {
     return out;
   }
 
-  const assumed = blog.resolution.kind === 'assumed';
-  const guess = blog.resolution.guess;
   /**
-   * 확신까지는 아닌 채로 진행한 경우, 그 사실을 카드에 그대로 적는다.
-   * (화면 맨 위에도 같은 내용이 크게 나간다 — DiagnosisReportView)
+   * ★ 중복 제거 (대표 지적 2026-07-27).
+   *
+   *   결과 화면 맨 위 "진단한 블로그" 블록이 이미 같은 말을 한다 —
+   *   주소·수집한 글 편수·1위 후보로 진행했다는 사실·바꾸는 법까지 전부.
+   *   같은 내용을 카드로 한 번 더 내면 "잘하고 있는 것" 개수만 한 칸 부풀고
+   *   원장은 "이거 아까 본 건데?"가 된다.
+   *
+   *   그래서 **블로그가 특정된 상태(blogId 있음)에서는 카드를 만들지 않는다.**
+   *   blogId 가 없는 예외 상황에서는 위 블록이 렌더되지 않으므로 카드를 남긴다(폴백).
+   *   ⚠️ 이미 저장된 옛 공유 리포트에는 이 카드가 그대로 들어 있다 — 화면은 그것을
+   *      그대로 그린다(깨지지 않는다).
    */
-  const closeNote =
-    blog.resolution.kind === 'assumed' && blog.resolution.close
-      ? ' 비슷한 후보가 하나 더 있었어요.'
-      : '';
-  out.push({
-    id: 'blog.exists',
-    axis: 'blog',
-    label: '병원 블로그',
-    tone: 'good',
-    state: assumed
-      ? `이 블로그를 병원 블로그로 보고 진단했습니다.${
-          blog.postCount !== null ? ` (최근 글 ${blog.postCount}편 수집)` : ''
-        }${closeNote}`
-      : `블로그를 확인했습니다.${blog.postCount !== null ? ` (최근 글 ${blog.postCount}편 수집)` : ''}`,
-    why: null,
-    action: assumed
-      ? '주소를 눌러 맞는 블로그인지 확인해 주세요. 다른 블로그라면 바로 아래에서 바꿔 다시 진단할 수 있어요.'
-      : '이 블로그를 기준으로 아래 항목을 진단했어요. 주소를 눌러 맞는 블로그인지 확인해 보세요.',
-    ourScope: false,
-    // 눌러서 바로 열 수 있어야 "우리 블로그가 맞나"를 그 자리에서 확인한다.
-    link: {
-      href: `https://blog.naver.com/${guess.blogId}`,
-      label: `blog.naver.com/${guess.blogId}`,
-      insecure: false,
-    },
-  });
+  if (blog.blogId === null) {
+    const assumed = blog.resolution.kind === 'assumed';
+    const guess = blog.resolution.guess;
+    const closeNote =
+      blog.resolution.kind === 'assumed' && blog.resolution.close
+        ? ' 비슷한 후보가 하나 더 있었어요.'
+        : '';
+    out.push({
+      id: 'blog.exists',
+      axis: 'blog',
+      label: '병원 블로그',
+      tone: 'good',
+      state: assumed
+        ? `이 블로그를 병원 블로그로 보고 진단했습니다.${
+            blog.postCount !== null ? ` (최근 글 ${blog.postCount}편 수집)` : ''
+          }${closeNote}`
+        : `블로그를 확인했습니다.${blog.postCount !== null ? ` (최근 글 ${blog.postCount}편 수집)` : ''}`,
+      why: null,
+      action: assumed
+        ? '주소를 눌러 맞는 블로그인지 확인해 주세요. 다른 블로그라면 바로 아래에서 바꿔 다시 진단할 수 있어요.'
+        : '이 블로그를 기준으로 아래 항목을 진단했어요. 주소를 눌러 맞는 블로그인지 확인해 보세요.',
+      ourScope: false,
+      // 눌러서 바로 열 수 있어야 "우리 블로그가 맞나"를 그 자리에서 확인한다.
+      link: {
+        href: `https://blog.naver.com/${guess.blogId}`,
+        label: `blog.naver.com/${guess.blogId}`,
+        insecure: false,
+      },
+    });
+  }
 
   // 2) 최근 발행일 — 방치 여부
   if (blog.daysSinceLatest === null) {
@@ -480,6 +491,18 @@ export function buildSiteFindings(site: SiteAxis): readonly Finding[] {
 /* ── ③ AI 인용 ──────────────────────────────────────────── */
 
 /**
+ * AI 항목 제목 — **제목만으로 서로 구분돼야 한다** (대표 지적 2026-07-27).
+ *
+ * "AI 검색 노출"과 "AI가 병원을 아는지"는 실제로 다른 지표인데 제목이 비슷해
+ * 원장 눈에는 같은 말로 보였다. 합치지 않는다 — 물어본 방식이 다르고 결론도 다르다.
+ * 대신 **어떻게 물었는지를 제목에 넣어** 둘을 갈라 놓는다.
+ *   · 이름 없이 물었을 때 = 환자가 실제로 하는 검색. 종합 판정의 정본.
+ *   · 이름을 넣고 물었을 때 = 나오는 게 기본. 배경 사실.
+ */
+const AI_PRESENCE_LABEL = 'AI 추천 등장 (이름 없이 물었을 때)';
+const AI_KNOWN_LABEL = 'AI 병원 인지 (이름을 넣고 물었을 때)';
+
+/**
  * AI 축 결과 카드.
  *
  * ★ 판정 규칙 (실측 오판 회귀 방지 — 사고 2건이 이 주석의 근거다):
@@ -510,7 +533,7 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
       {
         id: 'ai.presence',
         axis: 'ai',
-        label: 'AI 검색 노출',
+        label: AI_PRESENCE_LABEL,
         tone: 'unknown',
         state: 'AI 검색 노출은 이번 진단에서 확인하지 못했습니다.',
         why: null,
@@ -553,7 +576,7 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
     out.push({
       id: 'ai.presence',
       axis: 'ai',
-      label: 'AI 검색 노출',
+      label: AI_PRESENCE_LABEL,
       tone: 'unknown',
       state: '환자가 병원 이름 없이 물었을 때의 결과는 이번에 확인하지 못했습니다.',
       why: null,
@@ -565,7 +588,7 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
     out.push({
       id: 'ai.presence',
       axis: 'ai',
-      label: 'AI 검색 노출',
+      label: AI_PRESENCE_LABEL,
       tone: 'warn',
       state:
         recommend.length === 1
@@ -584,7 +607,7 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
     out.push({
       id: 'ai.presence.partial',
       axis: 'ai',
-      label: 'AI 검색 노출',
+      label: AI_PRESENCE_LABEL,
       tone: 'warn',
       state: `${questionsPhrase(recommend.length)} 중 ${koCount(
         shown.length,
@@ -601,7 +624,7 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
     out.push({
       id: 'ai.presence',
       axis: 'ai',
-      label: 'AI 검색 노출',
+      label: AI_PRESENCE_LABEL,
       tone: 'good',
       state:
         recommend.length === 1
@@ -623,7 +646,7 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
         ? {
             id: 'ai.known',
             axis: 'ai',
-            label: 'AI가 병원을 아는지',
+            label: AI_KNOWN_LABEL,
             tone: 'good',
             state: '병원 이름을 넣고 물었을 때는 AI가 답을 했습니다 — AI가 병원 존재는 알고 있습니다.',
             why: null,
@@ -634,7 +657,7 @@ export function buildAiFindings(ai: AiAxis, hasOwnBlog: boolean): readonly Findi
         : {
             id: 'ai.known',
             axis: 'ai',
-            label: 'AI가 병원을 아는지',
+            label: AI_KNOWN_LABEL,
             tone: 'warn',
             state: '병원 이름을 그대로 넣고 물었는데도 AI가 이 병원을 설명하지 못했습니다.',
             why: 'AI가 병원 존재 자체를 모르는 상태입니다. 이름을 알고 검색한 환자마저 엉뚱한 답을 받게 됩니다.',
@@ -985,6 +1008,128 @@ export function groupFindings(findings: readonly Finding[]): GroupedFindings {
     good: sorted(buckets.good),
     unknown: sorted(buckets.unknown),
   };
+}
+
+/* ── 채널(축) 묶기 — 화면의 1차 그룹 ───────────────────────── */
+
+/**
+ * ★ 왜 채널이 1차 그룹인가 (대표 지적 2026-07-27).
+ *
+ *   심각도로만 나누면 같은 채널 항목이 세 덩어리에 흩어진다. 실제 프라이브성형외과
+ *   결과에서 AI 항목은 "챙기면 좋을 것"에 하나, "잘하고 있는 것"에 둘로 갈라져 있었고,
+ *   그래서 **"그래서 AI는 되는 건가 안 되는 건가"를 알 수 없었다.**
+ *
+ *   채널을 1차 그룹으로 올리면 그 질문에 한 화면에서 답이 나온다.
+ *   ⚠️ 심각도를 버리는 게 아니다 — 각 항목의 배지와 채널 안 정렬로 그대로 남는다.
+ *      심각도를 버리면 "뭐부터 손대나"를 잃는다.
+ */
+export const CHANNEL_LABEL: Readonly<Record<Finding['axis'], string>> = {
+  compliance: '의료광고법',
+  ai: 'AI 검색',
+  blog: '네이버 블로그',
+  site: '홈페이지',
+};
+
+/** 점수가 같을 때만 쓰는 최후 순서(표시 안정용). 화면 순서를 여기서 정하지 않는다. */
+export const CHANNEL_ORDER: readonly Finding['axis'][] = ['compliance', 'ai', 'blog', 'site'];
+
+/**
+ * 분류 자체의 무게 — 채널 정렬의 1차 기준.
+ * 미확인을 잘하고 있는 것보다 뒤에 두는 이유: 급한 것이 위로 와야 하는 화면인데
+ * "확인 못 함"은 급한 일이 아니라 빈칸이다.
+ */
+const GROUP_TIER: Readonly<Record<FindingGroup, number>> = { bad: 0, improve: 1, good: 2, unknown: 3 };
+
+export interface ChannelSection {
+  readonly axis: Finding['axis'];
+  readonly label: string;
+  /** 채널 안 항목 — 나쁜 것부터(분류 → rank → 원래 순서). */
+  readonly findings: readonly Finding[];
+  /** 분류별 개수 — 채널 머리의 배지 숫자가 이 값이다. */
+  readonly counts: Readonly<Record<FindingGroup, number>>;
+  /** 지금 손대야 할 항목 수 (지금 고쳐야 할 것 + 챙기면 좋을 것). */
+  readonly problemCount: number;
+  /** 이 채널에서 가장 나쁜 항목의 분류 — 채널 순서와 요약 칸 상태의 근거. */
+  readonly worst: FindingGroup;
+  /** 그 항목의 rank — 같은 분류끼리 줄 세우는 값(기존 중요도 표 재사용). */
+  readonly worstRank: number;
+}
+
+/**
+ * 결과 카드를 채널별로 묶고, **문제가 심한 채널을 위로** 올린다.
+ *
+ * 채널 점수(위에서부터 적용):
+ *   ① 가장 나쁜 항목의 분류 (지금 고쳐야 할 것 > 챙기면 좋을 것 > 잘하고 있는 것 > 미확인)
+ *   ② 그 항목의 rank (기존 FINDING_WEIGHT 재사용 — 새 기준을 만들지 않는다)
+ *   ③ 손대야 할 항목 수가 많은 채널이 위
+ *   ④ 그래도 같으면 고정 순서 (표시가 매번 흔들리지 않게)
+ *
+ * 알 수 없는 축이 섞여 있어도(옛 리포트) 버리지 않고 맨 뒤에 붙인다.
+ */
+export function groupFindingsByChannel(findings: readonly Finding[]): readonly ChannelSection[] {
+  const byAxis = new Map<Finding['axis'], { finding: Finding; index: number }[]>();
+  findings.forEach((finding, index) => {
+    const list = byAxis.get(finding.axis);
+    if (list) list.push({ finding, index });
+    else byAxis.set(finding.axis, [{ finding, index }]);
+  });
+
+  const axes: Finding['axis'][] = [
+    ...CHANNEL_ORDER.filter((axis) => byAxis.has(axis)),
+    ...Array.from(byAxis.keys()).filter((axis) => !CHANNEL_ORDER.includes(axis)),
+  ];
+
+  const sections = axes.map((axis): ChannelSection => {
+    const entries = byAxis.get(axis) ?? [];
+    const sorted = [...entries].sort(
+      (a, b) =>
+        GROUP_TIER[findingGroupOf(a.finding)] - GROUP_TIER[findingGroupOf(b.finding)] ||
+        findingRank(a.finding) - findingRank(b.finding) ||
+        a.index - b.index,
+    );
+    const counts: Record<FindingGroup, number> = { bad: 0, improve: 0, good: 0, unknown: 0 };
+    sorted.forEach((entry) => {
+      counts[findingGroupOf(entry.finding)] += 1;
+    });
+    const head = sorted[0]?.finding ?? null;
+    return {
+      axis,
+      label: CHANNEL_LABEL[axis] ?? axis,
+      findings: sorted.map((entry) => entry.finding),
+      counts,
+      problemCount: counts.bad + counts.improve,
+      worst: head === null ? 'unknown' : findingGroupOf(head),
+      worstRank: head === null ? DEFAULT_RANK : findingRank(head),
+    };
+  });
+
+  return sections.sort(
+    (a, b) =>
+      GROUP_TIER[a.worst] - GROUP_TIER[b.worst] ||
+      a.worstRank - b.worstRank ||
+      b.problemCount - a.problemCount ||
+      CHANNEL_ORDER.indexOf(a.axis) - CHANNEL_ORDER.indexOf(b.axis),
+  );
+}
+
+/**
+ * 상단 요약 한 칸의 상태 문구 — 채널이 지금 어떤 상태인지 한 마디로.
+ * 문구는 FINDING_GROUP_LABEL 을 그대로 쓴다(이름을 여기서 새로 만들지 않는다).
+ */
+export function channelStatusText(section: ChannelSection): string {
+  if (section.counts.bad > 0) return `${FINDING_GROUP_LABEL.bad.title} ${section.counts.bad}`;
+  if (section.counts.improve > 0) return `${FINDING_GROUP_LABEL.improve.title} ${section.counts.improve}`;
+  if (section.counts.good > 0) return '잘하고 있어요';
+  return '확인하지 못했어요';
+}
+
+/** 채널 머리에 붙는 배지 — 있는 분류만, 화면 순서 그대로. */
+export function channelBadges(
+  section: ChannelSection,
+): readonly { readonly group: FindingGroup; readonly text: string }[] {
+  return (['bad', 'improve', 'good', 'unknown'] as const)
+    .filter((group) => section.counts[group] > 0)
+    .map((group) => ({ group, text: `${FINDING_GROUP_LABEL[group].title} ${section.counts[group]}` }));
 }
 
 /**

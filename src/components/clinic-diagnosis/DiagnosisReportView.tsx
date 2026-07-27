@@ -3,9 +3,16 @@ import type {
   DiagnosisReport,
   Finding,
   FindingDetail,
-  FindingTone,
+  FindingGroup,
 } from '@/content/lib/clinic-diagnosis/types';
-import { FINDING_GROUP_LABEL, groupFindings } from '@/content/lib/clinic-diagnosis/findings';
+import type { ChannelSection } from '@/content/lib/clinic-diagnosis/findings';
+import {
+  FINDING_GROUP_LABEL,
+  channelBadges,
+  channelStatusText,
+  findingGroupOf,
+  groupFindingsByChannel,
+} from '@/content/lib/clinic-diagnosis/findings';
 import { riskOf } from '@/content/lib/clinic-diagnosis/compliance-scan';
 import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-questions';
 import { buildConversionCta, doctorpostLine } from '@/content/lib/clinic-diagnosis/conversion';
@@ -16,28 +23,28 @@ import DiagnosisCta from './DiagnosisCta';
  * 진단 결과 화면 (서버·클라이언트 공용 프레젠테이션).
  * /clinic-check 결과와 공유 리포트(/clinic-check/r/[token])가 같은 컴포넌트를 쓴다.
  *
- * ★ 화면은 축(블로그/홈페이지/AI/의료광고법)이 아니라 **원장이 할 판단**으로 나눈다.
- *   축별로 나열하면 뭐가 중요한지 보이지 않는다. 위에서부터
- *     ① 지금 고쳐야 할 것 ② 챙기면 좋을 것 ③ 잘하고 있는 것 ④ 확인하지 못한 것
- *   순서이고, 축 이름은 각 항목의 작은 꼬리표로만 남는다.
- *   (덩어리 문구는 FINDING_GROUP_LABEL 한 곳에서만 정한다)
+ * ★ 화면의 1차 그룹은 **채널**이다 (의료광고법 / AI 검색 / 네이버 블로그 / 홈페이지).
+ *
+ *   심각도로만 나누던 판에서는 같은 채널 항목이 세 덩어리에 흩어졌다. 실제 결과에서
+ *   AI 항목이 "챙기면 좋을 것"에 하나, "잘하고 있는 것"에 둘로 갈라져 있어서
+ *   **"그래서 AI는 되는 건가 안 되는 건가"를 알 수 없었다**(대표 지적 2026-07-27).
+ *
+ *   ⚠️ 심각도를 버린 것이 아니다. 버리면 "뭐부터 손대나"를 잃는다. 그래서
+ *     · 채널 순서   = 문제가 심한 채널이 위 (groupFindingsByChannel)
+ *     · 채널 안 순서 = 나쁜 항목부터 (기존 FINDING_WEIGHT.rank 그대로)
+ *     · 항목마다    = "지금 고쳐야 할 것 / 챙기면 좋을 것 / 잘하고 있는 것" 배지
+ *   (덩어리 문구는 FINDING_GROUP_LABEL 한 곳에서만 정한다 — 여기서 새로 짓지 않는다)
  *
  * 화면 규칙:
  *  · 항목마다 "지금 상태 / 왜 문제인가 / 그래서 뭘 해야 하나" 3단을 그대로 보여준다.
- *  · 점수 하나로 뭉개지 않는다 — 좋음·주의·미확인을 따로 센다.
+ *  · 점수 하나로 뭉개지 않는다 — 상단 요약은 채널 4칸으로 어디가 약한지만 보여준다.
  *  · 미확인 항목을 숨기지 않는다. 확인 못 한 것도 결과의 일부다.
+ *    (해당 채널 안에 접어 둔다 — 따로 빼면 채널이 다시 흩어진다)
  *  · 기술 용어는 접어두기(details) 안으로. 기본 화면에는 원장이 아는 말만 남긴다.
  *  · 결과에 나온 주소는 반드시 눌러서 열린다(target=_blank + noopener).
  *  · 라이트 랜딩 테마 명시(bg-white·text-[#202020]) — 다크 루트 상속 가드.
  *  · 모바일 우선(터치 타깃 44px).
  */
-
-const AXIS_LABEL: Readonly<Record<Finding['axis'], string>> = {
-  blog: '네이버 블로그',
-  site: '홈페이지',
-  ai: 'AI 검색',
-  compliance: '의료광고법',
-};
 
 /** 검출 표현이 어디에 있었는지 — 원장이 글을 열지 않고도 위치를 알 수 있게. */
 const EXCERPT_WHERE_LABEL: Readonly<Record<ComplianceExcerptWhere, string>> = {
@@ -46,18 +53,28 @@ const EXCERPT_WHERE_LABEL: Readonly<Record<ComplianceExcerptWhere, string>> = {
   body: '본문',
 };
 
-const TONE_STYLE: Readonly<Record<FindingTone, { badge: string; text: string; mark: string; border: string }>> = {
-  good: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', text: '잘하고 있어요', mark: '✓', border: 'border-emerald-200' },
-  warn: { badge: 'bg-[#fff2ee] text-[#c3341a] border-[#ffd0c4]', text: '살펴봐야 해요', mark: '!', border: 'border-[#ffd0c4]' },
-  unknown: { badge: 'bg-[#eef2f6] text-[#5b6573] border-[#dbe2ea]', text: '확인하지 못했어요', mark: '?', border: 'border-[#dbe2ea]' },
+/**
+ * 분류별 색 — 이름은 FINDING_GROUP_LABEL 에서만 가져온다(여기서 새로 짓지 않는다).
+ * 빨강은 "지금 고쳐야 할 것" 하나에만 쓴다. 흔해지면 정작 급한 게 묻힌다.
+ */
+const GROUP_STYLE: Readonly<Record<FindingGroup, { badge: string; border: string; mark: string }>> = {
+  bad: { badge: 'bg-[#fff2ee] text-[#c3341a] border-[#ffd0c4]', border: 'border-[#ffd0c4]', mark: '!' },
+  improve: { badge: 'bg-[#fff8ec] text-[#b45309] border-[#f5d9ac]', border: 'border-[#f5d9ac]', mark: '↑' },
+  good: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', border: 'border-emerald-200', mark: '✓' },
+  unknown: { badge: 'bg-[#eef2f6] text-[#5b6573] border-[#dbe2ea]', border: 'border-[#dbe2ea]', mark: '?' },
 };
 
-/** 접어둔 세부 항목 — 기본 화면에는 안 보인다. */
+/**
+ * 접어둔 세부 항목 — 기본 화면에는 안 보인다.
+ *
+ * ★ 이름 있는 group(group/detail) 을 쓴다. 채널 접어두기 안에 이 접어두기가 들어가는데,
+ *   이름 없는 group 이면 바깥이 열렸을 때 안쪽 화살표까지 같이 돌아간다.
+ */
 function DetailList({ details }: { details: readonly FindingDetail[] }) {
   return (
-    <details className="mt-2.5 group">
+    <details className="mt-2.5 group/detail">
       <summary className="text-[12px] font-bold text-[#5b6573] cursor-pointer list-none min-h-[44px] flex items-center gap-1.5">
-        <span className="inline-block transition-transform group-open:rotate-90" aria-hidden="true">
+        <span className="inline-block transition-transform group-open/detail:rotate-90" aria-hidden="true">
           ▸
         </span>
         어떤 항목인지 자세히 보기
@@ -88,7 +105,12 @@ function DetailList({ details }: { details: readonly FindingDetail[] }) {
 }
 
 function FindingCard({ finding }: { finding: Finding }) {
-  const tone = TONE_STYLE[finding.tone];
+  /**
+   * 심각도는 채널 밑으로 내려왔지만 사라지지 않았다 — 항목마다 배지로 남는다.
+   * 배지 문구는 대표가 정한 덩어리 이름 그대로다(줄여 쓰지 않는다).
+   */
+  const group = findingGroupOf(finding);
+  const tone = GROUP_STYLE[group];
   /**
    * "닥터포스트가 이걸 한다" 한 줄.
    * 우리가 실제로 대신하는 항목에만 붙는다(conversion.ts 의 3중 게이트).
@@ -108,9 +130,12 @@ function FindingCard({ finding }: { finding: Finding }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h4 className="text-[15px] font-extrabold">{finding.label}</h4>
-            {/* 축 이름은 섹션 제목이 아니라 작은 꼬리표로만 남긴다 */}
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#dbe2ea] bg-[#f7f9fb] text-[#5b6573]">
-              {AXIS_LABEL[finding.axis]}
+            {/*
+              채널 이름은 이미 섹션 제목에 있다 — 여기 다시 붙이면 같은 말이 두 번이다.
+              대신 심각도(덩어리 이름)를 꼬리표로 남긴다. "뭐부터 손대나"가 여기서 나온다.
+            */}
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tone.badge}`}>
+              {FINDING_GROUP_LABEL[group].title}
             </span>
           </div>
 
@@ -166,50 +191,73 @@ function FindingCard({ finding }: { finding: Finding }) {
   );
 }
 
-interface GroupSectionProps {
-  readonly title: string;
-  readonly subtitle: string;
-  readonly findings: readonly Finding[];
-  readonly accent: string;
-  /** 기본으로 접어 둘지 (잘된 점처럼 짧게 보여도 되는 덩어리). */
-  readonly collapsed?: boolean;
-}
+/**
+ * 채널 한 덩어리 — 이 화면의 뼈대.
+ *
+ * · 손대야 할 항목(지금 고쳐야 할 것 · 챙기면 좋을 것)은 펼쳐 둔다.
+ * · 나머지(잘하고 있는 것 · 확인하지 못한 것)는 같은 채널 안에 접어 둔다.
+ *   따로 빼면 "AI는 되는 건가"가 다시 세 곳으로 흩어진다.
+ * · 손댈 게 없는 채널은 접지 않는다 — 비어 보이면 진단이 안 돈 줄 안다.
+ */
+function ChannelBlock({ section }: { section: ChannelSection }) {
+  if (section.findings.length === 0) return null;
 
-function GroupSection({ title, subtitle, findings, accent, collapsed }: GroupSectionProps) {
-  if (findings.length === 0) return null;
+  const entries = section.findings.map((finding) => ({ finding, group: findingGroupOf(finding) }));
+  const problems = entries.filter((e) => e.group === 'bad' || e.group === 'improve');
+  const rest = entries.filter((e) => e.group === 'good' || e.group === 'unknown');
+  const badges = channelBadges(section);
+  const accent =
+    section.worst === 'bad'
+      ? 'text-[#c3341a]'
+      : section.worst === 'improve'
+        ? 'text-[#b45309]'
+        : section.worst === 'good'
+          ? 'text-emerald-700'
+          : 'text-[#5b6573]';
 
-  const heading = (
-    <>
-      <h3 className={`text-[17px] sm:text-xl font-black ${accent}`}>
-        {title} <span className="text-[13px] font-bold">{findings.length}</span>
-      </h3>
-      <p className="text-[12px] text-[#5b6573] mt-0.5">{subtitle}</p>
-    </>
-  );
-
-  const list = (
+  const list = (items: readonly { finding: Finding }[]) => (
     <ul className="space-y-3 mt-3">
-      {findings.map((f) => (
-        <FindingCard key={f.id} finding={f} />
+      {items.map((e) => (
+        <FindingCard key={e.finding.id} finding={e.finding} />
       ))}
     </ul>
   );
 
-  if (collapsed) {
-    return (
-      <section className="mt-8">
-        <details>
-          <summary className="cursor-pointer list-none min-h-[44px]">{heading}</summary>
-          {list}
-        </details>
-      </section>
-    );
-  }
+  const restSummary = rest
+    .reduce<FindingGroup[]>((acc, e) => (acc.includes(e.group) ? acc : [...acc, e.group]), [])
+    .map((group) => `${FINDING_GROUP_LABEL[group].title} ${section.counts[group]}`)
+    .join(' · ');
 
   return (
     <section className="mt-8">
-      {heading}
-      {list}
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+        <h3 className={`text-[17px] sm:text-xl font-black ${accent}`}>{section.label}</h3>
+        {badges.map((badge) => (
+          <span
+            key={badge.group}
+            className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${GROUP_STYLE[badge.group].badge}`}
+          >
+            {badge.text}
+          </span>
+        ))}
+      </div>
+
+      {problems.length > 0 && list(problems)}
+
+      {rest.length > 0 &&
+        (problems.length > 0 ? (
+          <details className="mt-3 group/tail">
+            <summary className="text-[12.5px] font-bold text-[#5b6573] cursor-pointer list-none min-h-[44px] flex items-center gap-1.5">
+              <span className="inline-block transition-transform group-open/tail:rotate-90" aria-hidden="true">
+                ▸
+              </span>
+              {restSummary} 보기
+            </summary>
+            {list(rest)}
+          </details>
+        ) : (
+          list(rest)
+        ))}
     </section>
   );
 }
@@ -225,16 +273,12 @@ interface DiagnosisReportViewProps {
 }
 
 export default function DiagnosisReportView({ report, shareToken }: DiagnosisReportViewProps) {
-  const groups = groupFindings(report.findings);
+  /** 채널별 묶음 — 문제가 심한 채널이 위로 온다(정렬 근거는 findings.ts). */
+  const channels = groupFindingsByChannel(report.findings);
   const clinic = report.clinic;
   /** 결과 맨 아래 전환 문구 — 원장이 방금 본 자기 숫자로 만든다(값이 없으면 기본 문구). */
   const cta = buildConversionCta(report);
   const emailToken = typeof shareToken === 'string' && shareToken.length > 0 ? shareToken : null;
-  /**
-   * 위에 볼 게 있을 때만 "잘된 점"을 접는다.
-   * 전부 잘하고 있는 병원에서 화면이 텅 비어 보이면 진단이 안 돌았다고 오해한다.
-   */
-  const hasIssues = groups.bad.length + groups.improve.length > 0;
   /**
    * AI 질문 목록 — 질문 단위가 정본.
    * 이 기능 이전에 발급된 공유 리포트에는 questions 가 없으므로 probes 로 그때 만든다
@@ -290,22 +334,29 @@ export default function DiagnosisReportView({ report, shareToken }: DiagnosisRep
                 ? '이 블로그를 병원 블로그로 보고 진단했습니다. 아니면 아래에서 바꿔 주세요.'
                 : '병원 이름과 맞는 블로그를 찾아 이 블로그로 진단했어요. 주소를 눌러 확인해 보세요.'}
             {blogClose && ' 비슷한 후보가 하나 더 있었어요.'}
+            {/*
+              수집 편수는 여기에만 적는다 — 예전에는 아래 "병원 블로그" 카드가 같은 말을
+              한 번 더 했다(대표 지적: 중복). 카드를 없앴으니 그 사실은 이 자리로 옮긴다.
+            */}
+            {report.blog.postCount !== null && ` 최근 글 ${report.blog.postCount}편을 기준으로 봤어요.`}
           </p>
         </div>
       )}
 
-      {/* 요약 — 점수 하나로 뭉개지 않는다 */}
-      <div className="grid grid-cols-3 gap-2.5 mt-4">
-        {(
-          [
-            { key: 'bad', tone: 'warn' as const, count: groups.bad.length, label: FINDING_GROUP_LABEL.bad.title },
-            { key: 'improve', tone: 'warn' as const, count: groups.improve.length, label: FINDING_GROUP_LABEL.improve.title },
-            { key: 'good', tone: 'good' as const, count: groups.good.length, label: FINDING_GROUP_LABEL.good.title },
-          ]
-        ).map((item) => (
-          <div key={item.key} className={`rounded-2xl border p-3 sm:p-4 text-center ${TONE_STYLE[item.tone].badge}`}>
-            <p className="text-2xl sm:text-3xl font-black leading-none">{item.count}</p>
-            <p className="text-[11px] font-bold mt-1.5 leading-snug">{item.label}</p>
+      {/*
+        요약 — **채널 4칸**. 어느 영역이 약한지가 한눈에 보여야 한다.
+        예전 3칸(고쳐야/챙기면/잘함)은 "무엇이 몇 건"만 말할 뿐,
+        "그래서 AI는 되는 건가"에 답하지 못했다. 모바일은 2×2.
+        칸 순서는 아래 본문 채널 순서와 같다 — 눈이 위아래로 오가지 않게.
+      */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
+        {channels.map((section) => (
+          <div
+            key={section.axis}
+            className={`rounded-2xl border p-3 sm:p-4 text-center ${GROUP_STYLE[section.worst].badge}`}
+          >
+            <p className="text-[13px] sm:text-[14px] font-black leading-tight">{section.label}</p>
+            <p className="text-[11px] font-bold mt-1.5 leading-snug">{channelStatusText(section)}</p>
           </div>
         ))}
       </div>
@@ -320,39 +371,13 @@ export default function DiagnosisReportView({ report, shareToken }: DiagnosisRep
         </div>
       )}
 
-      {/* ① 지금 고쳐야 할 것 — 가장 위, 가장 크게 */}
-      <GroupSection
-        title={FINDING_GROUP_LABEL.bad.title}
-        subtitle={FINDING_GROUP_LABEL.bad.subtitle}
-        findings={groups.bad}
-        accent="text-[#c3341a]"
-      />
-
-      {/* ② 챙기면 좋을 것 */}
-      <GroupSection
-        title={FINDING_GROUP_LABEL.improve.title}
-        subtitle={FINDING_GROUP_LABEL.improve.subtitle}
-        findings={groups.improve}
-        accent="text-[#b45309]"
-      />
-
-      {/* ③ 잘하고 있는 것 — 짧게, 접어 둔다 */}
-      <GroupSection
-        title={FINDING_GROUP_LABEL.good.title}
-        subtitle={hasIssues ? '이미 잘 되고 있어요. 눌러서 확인해 보세요.' : FINDING_GROUP_LABEL.good.subtitle}
-        findings={groups.good}
-        accent="text-emerald-700"
-        collapsed={hasIssues}
-      />
-
-      {/* ④ 확인하지 못한 것 — 숨기지 않는다 */}
-      <GroupSection
-        title={FINDING_GROUP_LABEL.unknown.title}
-        subtitle={FINDING_GROUP_LABEL.unknown.subtitle}
-        findings={groups.unknown}
-        accent="text-[#5b6573]"
-        collapsed
-      />
+      {/*
+        본문 — 채널 순서대로. 급한 채널이 위에 있으므로 스크롤 없이 무엇부터 볼지 보인다.
+        각 채널 안에서는 나쁜 항목부터 나온다(기존 중요도 표 그대로).
+      */}
+      {channels.map((section) => (
+        <ChannelBlock key={section.axis} section={section} />
+      ))}
 
       {report.unchecked.length > 0 && (
         <p className="text-[12px] text-[#5b6573] mt-4 bg-[#f7f9fb] border border-[#dbe2ea] rounded-xl px-3.5 py-2.5 leading-relaxed">
