@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { trackFunnel } from '@/dev/lib/funnel';
 import Logo from '@/components/landing/Logo';
 import DiagnosisReportView from './DiagnosisReportView';
 import ClinicCandidatePicker from './ClinicCandidatePicker';
@@ -15,6 +17,9 @@ import type { ClinicCandidate, ClinicLookupOutcome, DiagnosisReport } from '@/co
  *      → 네 축 진단 → 결과(항목마다 지금상태/왜문제/뭘해야)
  *      → 자동 탐색이 실패했거나 더 보고 싶으면 상세 진단(주소·본문 직접 입력).
  *
+ * 진입: 직접 방문 외에 랜딩 첫 화면(/)에서 `?name=병원명` 으로 넘어오며,
+ *      이 경우 방문자가 다시 입력할 필요 없이 진단이 자동 실행된다.
+ *
  * 규칙: 라이트 랜딩 테마 명시(bg-white·text-[#202020]) — 다크 루트 상속 가드.
  *      매출·방문자 추정 금지, 타 병원 비교 금지, 의료광고법 단정 금지.
  */
@@ -23,6 +28,7 @@ const inputClass =
   'w-full px-4 py-3.5 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] text-[15px]';
 
 export default function ClinicCheckClient() {
+  const searchParams = useSearchParams();
   const [name, setName] = useState('');
   const [region, setRegion] = useState('');
   const [showRegion, setShowRegion] = useState(false);
@@ -34,10 +40,14 @@ export default function ClinicCheckClient() {
   const [report, setReport] = useState<DiagnosisReport | null>(null);
   const [busyMngNo, setBusyMngNo] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  /** 결과를 메일로 보내는 동선의 열쇠 — 서버가 이 토큰으로 리포트를 다시 읽는다. */
+  const [shareToken, setShareToken] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
 
   /** 응답 경합 가드 — 연속 실행 시 이전 응답이 최신 결과를 덮지 않도록. */
   const reqRef = useRef(0);
+  /** `?name=` 자동 실행은 1회만 (재렌더·쿼리 재평가로 중복 진단이 돌지 않도록). */
+  const autoRanRef = useRef(false);
   const resultRef = useRef<HTMLDivElement | null>(null);
   const regionRef = useRef<HTMLInputElement | null>(null);
 
@@ -47,6 +57,7 @@ export default function ClinicCheckClient() {
       setBusyMngNo(clinic.mngNo);
       setError(null);
       setShareUrl(null);
+      setShareToken(null);
       try {
         const res = await fetch('/api/clinic-diagnosis', {
           method: 'POST',
@@ -61,7 +72,12 @@ export default function ClinicCheckClient() {
             share: true,
           }),
         });
-        const data = (await res.json()) as { report?: DiagnosisReport; shareUrl?: string | null; error?: string };
+        const data = (await res.json()) as {
+          report?: DiagnosisReport;
+          shareUrl?: string | null;
+          shareToken?: string | null;
+          error?: string;
+        };
         if (reqId !== reqRef.current) return;
         if (!res.ok || !data.report) {
           setError(data.error ?? '진단에 실패했어요. 잠시 후 다시 시도해 주세요.');
@@ -69,7 +85,10 @@ export default function ClinicCheckClient() {
         }
         setReport(data.report);
         setShareUrl(data.shareUrl ?? null);
+        setShareToken(typeof data.shareToken === 'string' ? data.shareToken : null);
         setShowDetail(false);
+        // 퍼널: 결과까지 실제로 도달 (진단 실행 대비 실패율을 여기서 읽는다).
+        trackFunnel('diagnosis_report_view');
         setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
       } catch {
         if (reqId === reqRef.current) setError('네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.');
@@ -80,18 +99,26 @@ export default function ClinicCheckClient() {
     [],
   );
 
-  const runLookup = useCallback(async () => {
-    const value = name.trim();
+  /**
+   * 병원 특정 → (1건이면) 진단까지 실행.
+   * nameOverride 는 `?name=` 자동 실행용 — setName 직후에는 state 반영 전이라
+   * 입력값을 인자로 직접 넘겨야 한 번의 사용자 행동이 두 번 필요해지지 않는다.
+   */
+  const runLookup = useCallback(async (nameOverride?: string) => {
+    const value = (nameOverride ?? name).trim();
     if (value.length < 2) {
       setError('병원 이름을 2자 이상 입력해 주세요.');
       return;
     }
+    // 퍼널: 진단 실행 도달 (랜딩 제출 대비 이동 중 이탈을 여기서 읽는다).
+    trackFunnel('diagnosis_run');
     const reqId = ++reqRef.current;
     setLookupLoading(true);
     setError(null);
     setLookup(null);
     setReport(null);
     setShareUrl(null);
+    setShareToken(null);
     try {
       const res = await fetch('/api/clinic-diagnosis/lookup', {
         method: 'POST',
@@ -117,6 +144,20 @@ export default function ClinicCheckClient() {
       if (reqId === reqRef.current) setLookupLoading(false);
     }
   }, [name, region, runDiagnosis]);
+
+  /**
+   * 랜딩 첫 화면(/)에서 넘어온 `?name=병원명` 자동 실행.
+   * useSearchParams 는 이미 디코딩된 값을 반환한다(한글·공백 안전).
+   * 값이 없거나 2자 미만이면 아무 일도 하지 않는다 — 직접 방문 흐름 그대로.
+   */
+  useEffect(() => {
+    if (autoRanRef.current) return;
+    const raw = searchParams.get('name')?.trim() ?? '';
+    if (raw.length < 2) return;
+    autoRanRef.current = true;
+    setName(raw.slice(0, 60)); // 입력창 maxLength 와 동일 상한
+    void runLookup(raw.slice(0, 60));
+  }, [searchParams, runLookup]);
 
   const handleNeedRegion = useCallback(() => {
     setShowRegion(true);
@@ -236,7 +277,7 @@ export default function ClinicCheckClient() {
 
         {report && !busyMngNo && (
           <div ref={resultRef} className="mt-10">
-            <DiagnosisReportView report={report} />
+            <DiagnosisReportView report={report} shareToken={shareToken} />
 
             {/*
               블로그 후보 목록.

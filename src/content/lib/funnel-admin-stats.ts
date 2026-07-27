@@ -52,7 +52,7 @@ export interface FunnelStats {
   todayViews: number;
   /** 최근 14일 일별 방문자 추이 (과거→오늘 순) */
   daily: FunnelDailyPoint[];
-  /** 최근 7일 퍼널 단계별 고유 카운트 (방문→가입시작→가입완료→첫 글→결제 순) */
+  /** 최근 7일 퍼널 단계별 고유 카운트 (FUNNEL_EVENTS 순서 = 방문→진단 4단계→가입시작→가입완료→첫 글→결제) */
   weekly: FunnelStageCount[];
   /** 창(14일) 안에서 인식된 퍼널 이벤트 총수 — 0이면 빈 상태 */
   totalEvents: number;
@@ -61,6 +61,12 @@ export interface FunnelStats {
 /** 퍼널 단계 표시 라벨 (FUNNEL_EVENTS 순서 = 퍼널 순서). */
 export const FUNNEL_STAGE_LABELS: Record<FunnelEvent, string> = {
   landing_view: '방문',
+  diagnosis_input_start: '진단 입력',
+  diagnosis_submit: '진단 제출',
+  diagnosis_run: '진단 실행',
+  diagnosis_report_view: '진단 결과',
+  diagnosis_email_submitted: '진단 메일 신청',
+  diagnosis_cta_click: '진단 CTA 클릭',
   signup_start: '가입 시작',
   signup_complete: '가입 완료',
   first_post_generated: '첫 글 생성',

@@ -64,7 +64,8 @@ export default async function SharedDiagnosisPage({ params }: PageProps) {
           병원 온라인 노출 진단 결과
         </h1>
 
-        <DiagnosisReportView report={report} />
+        {/* 이 화면의 토큰이 그대로 메일 발송의 열쇠다 — 링크를 받은 사람도 다시 보낼 수 있다. */}
+        <DiagnosisReportView report={report} shareToken={token} />
 
         <div className="mt-8 text-center">
           <Link

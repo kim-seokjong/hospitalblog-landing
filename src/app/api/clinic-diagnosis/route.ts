@@ -82,7 +82,13 @@ export async function POST(req: NextRequest) {
     if (cacheable) {
       const cached = cacheGet<DiagnosisReport>(cacheKey);
       if (cached) {
-        return NextResponse.json({ report: cached, cached: true, shareUrl: null });
+        const shared = share ? await getOrCreateShare(cacheKey, cached, cacheable) : null;
+        return NextResponse.json({
+          report: cached,
+          cached: true,
+          shareUrl: shared?.url ?? null,
+          shareToken: shared?.token ?? null,
+        });
       }
     }
 
@@ -110,15 +116,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3) 리더만 캐시 저장 + 리드 적재 + 공유 링크 발급 (전부 그레이스풀)
-    let shareUrl: string | null = null;
+    // 3) 캐시 저장·리드 적재는 리더만. 공유 링크는 **모든 경로**에서 확보한다.
+    //
+    // ★ 왜 바꿨나. 예전에는 리더만 공유 링크를 받아서, 캐시 히트·팔로워로 들어온
+    //   사용자는 shareUrl 이 null 이었다. 결과를 메일로 보내는 동선(1순위)은 이
+    //   토큰으로 서버가 리포트를 다시 읽는 구조라, 토큰이 없으면 그 사용자는
+    //   메일을 요청할 수 없다 — 이메일 확보가 캐시 여부에 따라 갈리면 안 된다.
+    //   캐시된 토큰을 재사용하므로 리포트 행이 요청마다 늘어나지도 않는다.
     if (join.isLeader) {
       if (cacheable) cacheSet(cacheKey, report, DIAGNOSIS_CACHE_TTL_MS);
       await saveLead(report.clinic, report);
-      if (share) shareUrl = await createShareLink(report);
     }
+    const shared = share ? await getOrCreateShare(cacheKey, report, cacheable) : null;
 
-    return NextResponse.json({ report, cached: false, shareUrl });
+    return NextResponse.json({
+      report,
+      cached: false,
+      shareUrl: shared?.url ?? null,
+      shareToken: shared?.token ?? null,
+    });
   } catch (err) {
     console.error('[clinic-diagnosis]', err instanceof Error ? err.message : err);
     return NextResponse.json(
@@ -148,11 +164,42 @@ async function saveLead(clinic: ClinicCandidate, report: DiagnosisReport): Promi
   }
 }
 
+interface ShareLink {
+  readonly token: string;
+  readonly url: string;
+}
+
+/** 공유 토큰 캐시 키 — 리포트 캐시와 같은 수명으로 붙여 둔다. */
+function shareCacheKey(cacheKey: string): string {
+  return `${cacheKey}|share`;
+}
+
 /**
- * 공유 링크 발급 — 대표가 전화·메일 후속에 그대로 보낼 수 있는 읽기 전용 주소.
+ * 이 진단에 대한 공유 링크를 가져온다(없으면 발급).
+ *
+ * 같은 캐시 키에는 같은 토큰을 재사용한다 — 캐시 히트로 들어온 요청마다 리포트
+ * 행을 새로 쌓지 않기 위해서다. 캐시하지 않는 진단(본문 붙여넣기)만 매번 발급한다.
+ */
+async function getOrCreateShare(
+  cacheKey: string,
+  report: DiagnosisReport,
+  cacheable: boolean,
+): Promise<ShareLink | null> {
+  if (cacheable) {
+    const cached = cacheGet<ShareLink>(shareCacheKey(cacheKey));
+    if (cached && typeof cached.token === 'string' && typeof cached.url === 'string') return cached;
+  }
+  const created = await createShareLink(report);
+  if (created && cacheable) cacheSet(shareCacheKey(cacheKey), created, DIAGNOSIS_CACHE_TTL_MS);
+  return created;
+}
+
+/**
+ * 공유 링크 발급 — 대표가 전화·메일 후속에 그대로 보낼 수 있는 읽기 전용 주소이자,
+ * 결과를 메일로 보내는 동선에서 서버가 리포트를 다시 읽는 열쇠다.
  * 토큰은 추측 불가능한 난수(UUID 2개 결합, 하이픈 제거 = 64자)로만 만든다.
  */
-async function createShareLink(report: DiagnosisReport): Promise<string | null> {
+async function createShareLink(report: DiagnosisReport): Promise<ShareLink | null> {
   try {
     const token = `${randomUUID()}${randomUUID()}`.replace(/-/g, '');
     const admin = createAdminClient();
@@ -166,7 +213,7 @@ async function createShareLink(report: DiagnosisReport): Promise<string | null> 
       console.error('[clinic-diagnosis] 공유 링크 발급 실패(무시):', error.message);
       return null;
     }
-    return `/clinic-check/r/${token}`;
+    return { token, url: `/clinic-check/r/${token}` };
   } catch (e) {
     console.error('[clinic-diagnosis] 공유 링크 예외(무시):', e instanceof Error ? e.message : e);
     return null;

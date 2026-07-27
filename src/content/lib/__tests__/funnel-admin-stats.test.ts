@@ -40,6 +40,13 @@ test('aggregateFunnelStats: KST 귀속·고유 dedup·창 경계·오염 이벤�
     row('landing_view', '2026-07-13T05:00:00Z', 'd'.repeat(32)),
     // 14일 창 밖 → 완전 무시
     row('landing_view', '2026-07-05T05:00:00Z', 'e'.repeat(32)),
+    // 진단 퍼널 (랜딩 첫 화면 → /clinic-check) — 입력 2명, 제출·실행·결과 각 1명
+    row('diagnosis_input_start', '2026-07-24T02:00:00Z', 'a'.repeat(32)),
+    row('diagnosis_input_start', '2026-07-24T02:05:00Z', 'b'.repeat(32)),
+    row('diagnosis_submit', '2026-07-24T02:06:00Z', 'b'.repeat(32)),
+    row('diagnosis_run', '2026-07-24T02:06:30Z', 'b'.repeat(32)),
+    row('diagnosis_report_view', '2026-07-24T02:07:00Z', 'b'.repeat(32)),
+    row('diagnosis_email_submitted', '2026-07-24T02:08:00Z', 'b'.repeat(32)),
     // 가입 시작 — 동일 anon 이틀 연속 → 고유 1
     row('signup_start', '2026-07-24T02:00:00Z', 'a'.repeat(32)),
     row('signup_start', '2026-07-23T02:00:00Z', 'a'.repeat(32)),
@@ -71,11 +78,18 @@ test('aggregateFunnelStats: KST 귀속·고유 dedup·창 경계·오염 이벤�
   assert.equal(stats.daily.some((d) => d.day === '2026-07-05'), false);
 
   // 주간 퍼널 (KST 7/18~7/24): 방문 3(a·b·c, d 는 7일 밖·null 제외)
+  // → 진단 입력 2 → 제출 1 → 실행 1 → 결과 1
   // → 가입시작 1 → 가입완료 1 → 첫 글 1 → 결제 2
   assert.deepEqual(
     stats.weekly.map((s) => [s.stage, s.count]),
     [
       ['landing_view', 3],
+      ['diagnosis_input_start', 2],
+      ['diagnosis_submit', 1],
+      ['diagnosis_run', 1],
+      ['diagnosis_report_view', 1],
+      ['diagnosis_email_submitted', 1],
+      ['diagnosis_cta_click', 0],
       ['signup_start', 1],
       ['signup_complete', 1],
       ['first_post_generated', 1],
@@ -84,7 +98,7 @@ test('aggregateFunnelStats: KST 귀속·고유 dedup·창 경계·오염 이벤�
   );
 
   // 인식된 창 내 이벤트 수 (창 밖·bogus·파싱 불가 제외)
-  assert.equal(stats.totalEvents, 12);
+  assert.equal(stats.totalEvents, 18);
 });
 
 // ── 빈 상태 ──
@@ -94,6 +108,6 @@ test('aggregateFunnelStats: 데이터 없음 → totalEvents 0·전 단계 0 (�
   assert.equal(stats.todayVisitors, 0);
   assert.equal(stats.todayViews, 0);
   assert.equal(stats.daily.length, FUNNEL_DAILY_WINDOW_DAYS);
-  assert.equal(stats.weekly.length, 5);
+  assert.equal(stats.weekly.length, 11);
   assert.equal(stats.weekly.every((s) => s.count === 0), true);
 });

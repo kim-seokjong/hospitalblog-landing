@@ -43,7 +43,14 @@ export function parseVerificationCodes(
 }
 
 /** 검색 노출 대상 공개 페이지 경로 */
-export const PUBLIC_PATHS = ['/', '/pricing', '/terms', '/privacy', '/refund'] as const
+export const PUBLIC_PATHS = [
+  '/',
+  '/clinic-check',
+  '/pricing',
+  '/terms',
+  '/privacy',
+  '/refund',
+] as const
 
 /** 검색 제외 대상 비공개 경로 (robots disallow) */
 export const PRIVATE_PATHS = [

@@ -13,9 +13,29 @@
  * DB 적재(service role insert)와 쿠키 I/O 는 호출부(라우트)가 담당한다.
  */
 
-/** 적재를 허용하는 퍼널 이벤트 종류 (화이트리스트 — 이 외 이벤트는 거부). */
+/**
+ * 적재를 허용하는 퍼널 이벤트 종류 (화이트리스트 — 이 외 이벤트는 거부).
+ * **배열 순서 = 퍼널 단계 순서** (/admin 퍼널 카드가 이 순서대로 표시한다).
+ *
+ * diagnosis_* 4종은 랜딩 첫 화면을 "병원명 무료진단"으로 교체(2026-07-27)하면서 추가했다.
+ * 그 전에는 landing_view 만 쌓여 방문자가 어디서 이탈하는지 알 수 없었다:
+ *   진단 입력 시작 → 제출 → 진단 실행 도달 → 결과 도달 을 각각 끊어 봐야
+ *   "입력조차 안 한다 / 이동에서 샌다 / 진단이 실패한다" 를 구분할 수 있다.
+ *
+ * ⚠️ funnel_events.event 는 자유 텍스트 컬럼이라 DB 제약 변경은 필요 없다
+ *    (마이그 046 의 테이블 코멘트에 적힌 이벤트 목록은 설명용이며 강제력이 없다).
+ */
 export const FUNNEL_EVENTS = [
   'landing_view',
+  'diagnosis_input_start',
+  'diagnosis_submit',
+  'diagnosis_run',
+  'diagnosis_report_view',
+  // 결과 화면의 전환 동선 (2026-07-27). **1순위 지표는 이메일 확보율**이라
+  // 분모(diagnosis_report_view)와 분자(diagnosis_email_submitted)를 붙여서 본다.
+  // diagnosis_email_submitted 는 서버가 발송·적재에 성공했을 때만 기록한다(위조 불가).
+  'diagnosis_email_submitted',
+  'diagnosis_cta_click',
   'signup_start',
   'signup_complete',
   'first_post_generated',
@@ -30,9 +50,23 @@ export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
  * signup_complete·first_post_generated·payment_success 같은 "서버 확정 전환 이벤트"는
  * 익명 클라이언트가 위조하면 지표가 오염되므로 공개 엔드포인트에서 받지 않는다.
  * 이 전환 이벤트들은 각각 서버 라우트(register·generate-content·billing confirm)에서
- * service-role 로만 기록한다(recordFunnelEvent). 여기(공개)는 방문/가입시도 의도만 받는다.
+ * service-role 로만 기록한다(recordFunnelEvent). 여기(공개)는 방문/진단/가입시도 의도만 받는다.
+ *
+ * diagnosis_* 는 비회원이 브라우저에서 일으키는 저신뢰 의도 이벤트이므로 공개 허용이다
+ * (위조되어도 "진단 퍼널이 부풀 뿐" 가입·결제 전환 지표를 오염시키지 않는다).
  */
-export const PUBLIC_FUNNEL_EVENTS = ['landing_view', 'signup_start'] as const;
+export const PUBLIC_FUNNEL_EVENTS = [
+  'landing_view',
+  'diagnosis_input_start',
+  'diagnosis_submit',
+  'diagnosis_run',
+  'diagnosis_report_view',
+  // 결과 하단 전환 버튼 클릭 = 의도 이벤트 → 공개 허용.
+  // diagnosis_email_submitted 는 여기 없다: 실제 발송·적재 성공을 서버만 알 수 있고,
+  // 이메일 확보율이 이 개편의 핵심 지표라 위조된 분자를 받아서는 안 된다.
+  'diagnosis_cta_click',
+  'signup_start',
+] as const;
 
 export type PublicFunnelEvent = (typeof PUBLIC_FUNNEL_EVENTS)[number];
 
@@ -133,6 +167,17 @@ function amountMeta(raw: unknown): MetaValue | undefined {
  */
 const EVENT_META_VALIDATORS: Record<FunnelEvent, Record<string, MetaValidator>> = {
   landing_view: { path: pathMeta, source: tokenMeta, referrer_host: hostMeta },
+  // 진단 퍼널 — 병원명은 PII 성 자유 문자열이라 **절대 meta 로 받지 않는다**.
+  // 어느 화면에서 일어났는지(path)와 유입 출처(source)만 남긴다.
+  diagnosis_input_start: { path: pathMeta, source: tokenMeta },
+  diagnosis_submit: { path: pathMeta, source: tokenMeta },
+  diagnosis_run: { path: pathMeta, source: tokenMeta },
+  diagnosis_report_view: { path: pathMeta, source: tokenMeta },
+  // 메일 실제 발송 여부(sent)까지 남긴다 — RESEND 미설정 환경에서는 리드만 저장되고
+  // 대표가 수동 발송하므로, "확보했지만 안 나간 건"을 지표에서 구분할 수 있어야 한다.
+  // 수신 주소는 당연히 meta 에 넣지 않는다(PII 는 리드 테이블에만).
+  diagnosis_email_submitted: { path: pathMeta, source: tokenMeta, sent: boolMeta },
+  diagnosis_cta_click: { path: pathMeta, source: tokenMeta },
   signup_start: { path: pathMeta, source: tokenMeta, hospital_type: hospitalTypeMeta },
   signup_complete: { hospital_type: hospitalTypeMeta },
   first_post_generated: { free_credit: boolMeta, target_site: tokenMeta },

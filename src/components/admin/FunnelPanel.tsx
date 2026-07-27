@@ -152,8 +152,9 @@ export default function FunnelPanel({ stats, ok, truncated }: FunnelPanelProps) 
           <div className={`${CARD} p-6`}>
             <h3 className="text-sm font-semibold text-[#202020] mb-1">최근 7일 퍼널</h3>
             <p className="text-xs text-[#5b6573] mb-4">
-              단계별 고유 주체 기준 · 방문 → 가입 시작 → 가입 완료 → 첫 글 → 결제 ·
-              비율은 단계별 <span className="font-medium">독립 집계 참고용</span>
+              단계별 고유 주체 기준 · 방문 → 진단(입력·제출·실행·결과) → 가입 시작 → 가입 완료
+              → 첫 글 → 결제 · 비율은 단계별{' '}
+              <span className="font-medium">독립 집계 참고용</span>
               (동일 사용자 추적 코호트 전환율 아님 — 100% 초과 가능)
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">

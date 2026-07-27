@@ -12,6 +12,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
+      // 병원명 무료진단 — 랜딩 첫 화면의 제출 목적지이자 영업 링크(비회원 공개)
+      url: `${SITE_URL}/clinic-check`,
+      lastModified,
+      changeFrequency: 'monthly',
+      priority: 0.9,
+    },
+    {
       url: `${SITE_URL}/pricing`,
       lastModified,
       changeFrequency: 'monthly',

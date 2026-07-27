@@ -33,14 +33,52 @@ test('isFunnelEvent: 전체 화이트리스트만 통과', () => {
 });
 
 // ── isPublicFunnelEvent (공개 엔드포인트 = 저신뢰 이벤트만) ──
-test('isPublicFunnelEvent: landing_view·signup_start 만 true', () => {
-  assert.deepEqual([...PUBLIC_FUNNEL_EVENTS], ['landing_view', 'signup_start']);
+test('isPublicFunnelEvent: 방문·진단·가입시작(저신뢰 의도) 만 true', () => {
+  assert.deepEqual(
+    [...PUBLIC_FUNNEL_EVENTS],
+    [
+      'landing_view',
+      'diagnosis_input_start',
+      'diagnosis_submit',
+      'diagnosis_run',
+      'diagnosis_report_view',
+      'diagnosis_cta_click',
+      'signup_start',
+    ],
+  );
   assert.equal(isPublicFunnelEvent('landing_view'), true);
+  assert.equal(isPublicFunnelEvent('diagnosis_input_start'), true);
+  assert.equal(isPublicFunnelEvent('diagnosis_submit'), true);
+  assert.equal(isPublicFunnelEvent('diagnosis_run'), true);
+  assert.equal(isPublicFunnelEvent('diagnosis_report_view'), true);
+  assert.equal(isPublicFunnelEvent('diagnosis_cta_click'), true);
   assert.equal(isPublicFunnelEvent('signup_start'), true);
   // 전환 확정 이벤트는 공개에서 거부 (서버 전용)
+  // diagnosis_email_submitted 포함 — 이메일 확보율이 핵심 지표라 분자를 위조당하면 안 된다.
+  assert.equal(isPublicFunnelEvent('diagnosis_email_submitted'), false);
   assert.equal(isPublicFunnelEvent('signup_complete'), false);
   assert.equal(isPublicFunnelEvent('first_post_generated'), false);
   assert.equal(isPublicFunnelEvent('payment_success'), false);
+});
+
+// ── 퍼널 단계 순서 (FUNNEL_EVENTS 순서 = /admin 퍼널 카드 순서) ──
+test('FUNNEL_EVENTS: 진단 단계가 방문과 가입 시작 사이에 온다', () => {
+  assert.deepEqual(
+    [...FUNNEL_EVENTS],
+    [
+      'landing_view',
+      'diagnosis_input_start',
+      'diagnosis_submit',
+      'diagnosis_run',
+      'diagnosis_report_view',
+      'diagnosis_email_submitted',
+      'diagnosis_cta_click',
+      'signup_start',
+      'signup_complete',
+      'first_post_generated',
+      'payment_success',
+    ],
+  );
 });
 
 // ── anon_id ──
@@ -95,6 +133,23 @@ test('sanitizeMeta: 교차 이벤트 키 주입 차단 — landing_view 에 plan
   assert.deepEqual(sanitizeMeta({ hospital_type: '치과', value: 1 }, 'signup_start'), {
     hospital_type: '치과',
   });
+});
+
+test('sanitizeMeta: 진단 이벤트는 path·source 만 — 병원명 등 자유 문자열 드롭', () => {
+  for (const ev of [
+    'diagnosis_input_start',
+    'diagnosis_submit',
+    'diagnosis_run',
+    'diagnosis_report_view',
+  ] as const) {
+    assert.deepEqual([...EVENT_META_KEYS[ev]], ['path', 'source']);
+    // 병원명(PII 성 자유 문자열)은 허용 키가 아니므로 통째로 드롭된다
+    assert.deepEqual(
+      sanitizeMeta({ path: '/clinic-check', clinic: '브이비성형외과의원' }, ev),
+      { path: '/clinic-check' },
+    );
+    assert.equal(sanitizeMeta({ clinic: '브이비성형외과의원' }, ev), null);
+  }
 });
 
 test('sanitizeMeta: EVENT_META_KEYS 노출 — 이벤트별 최소 키 + PII 키 미포함', () => {

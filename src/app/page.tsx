@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/dev/lib/supabase/client';
 import { trackFunnel } from '@/dev/lib/funnel';
@@ -18,7 +18,6 @@ import FloatingCta from '@/components/landing/FloatingCta';
 import BlindTestSection from '@/components/landing/BlindTestSection';
 import WhyDoctorPostSection from '@/components/landing/WhyDoctorPostSection';
 import EbookLeadSection from '@/components/landing/EbookLeadSection';
-import BlogCheckSection from '@/components/landing/BlogCheckSection';
 import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildFaqPageJsonLd } from '@/dev/lib/seo/schemas';
 import { HOME_FAQS } from '@/dev/lib/seo/homeFaq';
@@ -46,6 +45,10 @@ export default function LandingPage() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
   const [clinicName, setClinicName] = useState('');
   const [clinicAutoOpened, setClinicAutoOpened] = useState(false);
+  // 첫 화면 진단 입력 — 여기서 넘긴 병원명으로 /clinic-check 가 자동 실행된다.
+  const [diagnoseQuery, setDiagnoseQuery] = useState('');
+  /** diagnosis_input_start 는 세션당 1회만 (타이핑마다 이벤트가 쌓이면 지표가 무의미해진다). */
+  const inputStartSentRef = useRef(false);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -90,11 +93,33 @@ export default function LandingPage() {
     }
   };
 
-  // 무료 블로그 진단(문턱 낮은 리드마그넷) — 회원가입 없이 /blog-check 로.
-  // 방문→가입 전환의 첫 접점: 진단 결과의 상세분석 게이트가 자연스럽게 가입으로 잇는다.
-  const handleDiagnose = () => {
-    router.push('/blog-check');
-  };
+  /**
+   * 첫 화면 진단 입력 변경 — 첫 유효 타이핑 시점을 1회만 계측한다.
+   * (landing_view 만 쌓이던 상태에서는 "본 사람 중 몇 명이 입력조차 안 하는지"를 알 수 없었다.)
+   */
+  const handleDiagnoseChange = useCallback((value: string) => {
+    setDiagnoseQuery(value);
+    if (!inputStartSentRef.current && value.trim().length > 0) {
+      inputStartSentRef.current = true;
+      trackFunnel('diagnosis_input_start');
+    }
+  }, []);
+
+  /**
+   * 병원명 무료진단 제출 — 회원가입 없이 /clinic-check 로 넘겨 자동 실행시킨다.
+   * (BlogCheckSection 이 `/blog-check?blog=` 로 넘기던 검증된 패턴과 동일하다.)
+   * 병원명은 쿼리스트링으로만 전달하고 퍼널 meta 에는 절대 싣지 않는다(PII 미저장 원칙).
+   */
+  const handleDiagnoseSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      const trimmed = diagnoseQuery.trim();
+      if (trimmed.length < 2) return;
+      trackFunnel('diagnosis_submit');
+      router.push(`/clinic-check?name=${encodeURIComponent(trimmed)}`);
+    },
+    [diagnoseQuery, router],
+  );
 
   const handleLogin = () => {
     setAuthMode('login');
@@ -209,7 +234,13 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* 히어로 — 데스크톱 2컬럼(카피+CTA | 제품 미니 목업), 모바일 세로 스택 */}
+      {/*
+        히어로 — 첫 화면 = 병원명 무료진단 입력 (2026-07-27 교체).
+        제품 소개를 먼저 내보내던 구성에서는 방문만 쌓이고 가입이 0이었다. 영업 방식
+        ("문제를 먼저 짚고 → 그 문제를 닥터포스트가 푼다")과 홈페이지를 일치시킨다.
+        문구는 /clinic-check(ClinicCheckClient)의 검증된 카피를 그대로 재사용한다.
+        모바일에서 입력창까지 한 화면에 들어와야 하므로 상하 여백을 좁게 잡는다.
+      */}
       <section
         className="relative overflow-hidden"
         style={{
@@ -230,51 +261,118 @@ export default function LandingPage() {
               "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.95 0 0 0 0 0.94 0 0 0 0 0.93 0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E\")",
           }}
         />
-        <div className="relative max-w-6xl mx-auto px-5 sm:px-6 pt-16 sm:pt-28 pb-16 sm:pb-24">
-          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-center gap-12 lg:gap-10">
-            {/* 왼쪽: 기존 카피 + CTA (모바일 중앙, 데스크톱 좌측 정렬) */}
+        <div className="relative max-w-3xl mx-auto px-5 sm:px-6 pt-9 sm:pt-20 pb-10 sm:pb-16 text-center">
+          <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#202020] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+            <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628]" />
+            무료 진단 · 회원가입 없이 30초
+          </span>
+
+          <h1
+            className="text-[30px] sm:text-[46px] md:text-[54px] font-black text-[#202020] leading-[1.16] mt-4 sm:mt-7"
+            style={{ letterSpacing: '-1.2px' }}
+          >
+            병원 이름만 넣으면
+            <br />
+            <span className="text-[#ff4628]">온라인 노출 성적</span>을 알려드려요
+          </h1>
+
+          <p className="text-[15px] sm:text-lg text-[#4a4f55] mt-3 sm:mt-5 leading-relaxed">
+            블로그·홈페이지·AI 검색 노출·의료광고법 표현까지
+            <br className="hidden sm:block" />
+            공개된 자료로 실제로 조회해서 무료로 진단해 드려요.
+          </p>
+
+          {/* 병원명 입력 → /clinic-check 자동 실행. 지역은 필요할 때만 진단 화면에서 추가로 묻는다. */}
+          <form onSubmit={handleDiagnoseSubmit} className="mt-5 sm:mt-8 max-w-xl mx-auto text-left">
+            <label htmlFor="hero-clinic-name" className="sr-only">
+              병원 이름
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+              <input
+                id="hero-clinic-name"
+                type="text"
+                value={diagnoseQuery}
+                onChange={(e) => handleDiagnoseChange(e.target.value)}
+                placeholder="병원 이름 (예: 브이비성형외과의원)"
+                autoComplete="organization"
+                className="w-full px-4 py-3.5 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] text-[15px] shadow-[0_8px_24px_-16px_rgba(32,32,32,0.20)]"
+                style={{ colorScheme: 'light' }}
+                maxLength={60}
+                required
+              />
+              <button
+                type="submit"
+                disabled={diagnoseQuery.trim().length < 2}
+                className="flex-shrink-0 px-7 py-3.5 min-h-[44px] bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                무료 진단하기
+              </button>
+            </div>
+          </form>
+
+          {/*
+            ★ 정체 한 줄 — 첫 화면이 입력창뿐이면 "여기 뭐 하는 곳이지?"로 이탈한다.
+              입력창 바로 아래에서 무엇을 파는 회사인지 먼저 밝힌다.
+          */}
+          <p className="max-w-xl mx-auto mt-3.5 text-[13.5px] sm:text-[15px] text-[#3f5468] leading-relaxed">
+            닥터포스트는 <b className="font-extrabold text-[#202020]">의료광고법에 맞춰 병원 블로그를 자동으로 써주는</b> 서비스예요.
+            진단은 회원가입 없이 무료입니다.
+          </p>
+
+          <p className="text-[11px] text-[#8a93a0] mt-2.5 leading-relaxed">
+            행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 무료
+          </p>
+
+          {/* 스크롤 유도 — 아래에 제품 설명이 이어진다는 표식 */}
+          <a
+            href="#product"
+            className="inline-flex flex-col items-center gap-1 mt-7 sm:mt-10 text-[13px] font-semibold text-[#5b6573] hover:text-[#ff4628] transition-colors"
+          >
+            닥터포스트가 어떤 서비스인지 보기
+            <span aria-hidden="true" className="dp-float-a text-lg leading-none">↓</span>
+          </a>
+        </div>
+      </section>
+
+      {/*
+        제품 소개 진입 섹션 — 히어로에서 빠진 제품 목업(HeroMockup)과 스탯 3을 옮겨왔다.
+        진단 입력을 지나친 방문자가 가장 먼저 만나는 "이건 무슨 제품인가" 구간이다.
+      */}
+      <section id="product" className="py-16 sm:py-[100px] bg-white">
+        <div className="max-w-6xl mx-auto px-5 sm:px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-center gap-10 lg:gap-12">
             <div className="text-center lg:text-left">
-              <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#202020] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
-                <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628]" />
-                Claude AI · 네이버·구글 SEO · AI검색(GEO) 최적화
-              </span>
-
-              <h1 className="text-[38px] sm:text-[56px] md:text-[66px] font-black text-[#202020] leading-[1.08] mt-6 sm:mt-8" style={{ letterSpacing: '-1.5px' }}>
-                잘 쓰는 건 기본,<br />
+              <p className="text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">Product</p>
+              <h2
+                className="text-[28px] sm:text-[42px] font-black text-[#202020] mt-2.5 leading-tight"
+                style={{ letterSpacing: '-0.5px' }}
+              >
+                잘 쓰는 건 기본,
+                <br />
                 <span className="text-[#ff4628]">안 걸리는 게</span> 실력입니다.
-              </h1>
-
-              <p className="text-base sm:text-lg md:text-[19px] text-[#4a4f55] max-w-2xl mx-auto lg:mx-0 mt-5 leading-relaxed">
-                모든 글은 발행 전 의료광고법 3중 검수를 통과합니다.<br className="hidden sm:block" />
-                금지 표현 필터 · AI 검사 · 주간 점검 — 잘 쓰는 AI는 많지만, 안전까지 책임지는 건 닥터포스트입니다.
+              </h2>
+              <p className="text-base sm:text-[18px] text-[#4a4f55] mt-4 leading-relaxed">
+                키워드 한 줄이면 병원 블로그 글이 60초 만에 나옵니다.<br className="hidden sm:block" />
+                모든 글은 발행 전 의료광고법 3중 검수를 통과합니다 — 금지 표현 필터 · AI 검사 · 주간 점검.
               </p>
-
-              {/* CTA — 문턱 낮은 "무료 진단"을 1순위로(회원가입 없이 30초), 가입은 2순위.
-                  방문→가입 전환 누수 방어: 낯선 방문자에게 가입부터 요구하지 않는다. */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mt-8">
-                <button
-                  onClick={handleDiagnose}
-                  className="px-7 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 hover:-translate-y-0.5"
-                >
-                  무료로 내 블로그 진단받기 →
-                </button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mt-7">
                 <button
                   onClick={handleStart}
-                  className="px-7 sm:px-8 py-3.5 sm:py-4 bg-white border border-[#dbe2ea] text-[#202020] font-semibold text-base sm:text-lg rounded-xl hover:bg-[#eef2f6] transition-colors text-center"
+                  className="px-7 sm:px-8 py-3.5 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 hover:-translate-y-0.5"
                 >
                   회원가입하고 글 생성 →
                 </button>
               </div>
-              {/* 문턱 안내 배지 — 진단은 회원가입 없이, 가입 시 무료 2회 생성 혜택 병기 */}
+              {/* 가입 혜택 배지 — 상시 혜택(프로모 아님) */}
               <p className="mt-4 flex justify-center lg:justify-start">
                 <span className="inline-block bg-[#ff4628]/10 border border-[#ff4628]/25 text-[#e63a1c] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
-                  🔍 진단은 <b className="font-extrabold">회원가입 없이 30초</b> · 가입하면 블로그 글 2회 무료 생성
+                  🎁 가입하면 블로그 글 <b className="font-extrabold">2회 무료 생성</b> · 카드 등록 없음
                 </span>
               </p>
             </div>
 
-            {/* 오른쪽: 제품 미니 목업 (모바일에선 CTA 다음 순서) */}
-            <div className="px-2 sm:px-0 pt-2 pb-2">
+            {/* 제품 미니 목업 (모바일에선 카피 다음 순서) */}
+            <div className="px-2 sm:px-0">
               <HeroMockup />
             </div>
           </div>
@@ -286,7 +384,7 @@ export default function LandingPage() {
               { num: '네이버·구글·AI', label: '3대 검색 최적화' },
               { num: '의료광고법', label: '발행 전 3중 검수' },
             ].map(({ num, label }) => (
-              <div key={num} className="dp-lift bg-white/85 backdrop-blur-sm border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+              <div key={num} className="dp-lift bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
                 <b className="block text-2xl sm:text-[30px] font-black text-[#ff4628]">{num}</b>
                 <span className="block text-sm font-semibold text-[#8a93a0] mt-1.5">{label}</span>
               </div>
@@ -501,8 +599,8 @@ export default function LandingPage() {
       {/* 왜 닥터포스트인가 — 이유 응집 섹션 */}
       <WhyDoctorPostSection />
 
-      {/* 네이버 블로그 무료진단 — 실측 리드마그넷 (/blog-check 진입) */}
-      <BlogCheckSection />
+      {/* 무료진단은 첫 화면(히어로)으로 올라갔다 — 구 BlogCheckSection(/blog-check 진입) 제거.
+          /blog-check 페이지는 외부 공유 링크·검색 유입을 위해 남기되 메인으로 리다이렉트한다. */}
 
       {/* 의료광고법 요약판 무료 다운로드 — 리드마그넷 */}
       <EbookLeadSection />

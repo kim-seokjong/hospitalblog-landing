@@ -8,6 +8,9 @@ import type {
 import { FINDING_GROUP_LABEL, groupFindings } from '@/content/lib/clinic-diagnosis/findings';
 import { riskOf } from '@/content/lib/clinic-diagnosis/compliance-scan';
 import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-questions';
+import { buildConversionCta, doctorpostLine } from '@/content/lib/clinic-diagnosis/conversion';
+import DiagnosisEmailCapture from './DiagnosisEmailCapture';
+import DiagnosisCta from './DiagnosisCta';
 
 /**
  * 진단 결과 화면 (서버·클라이언트 공용 프레젠테이션).
@@ -86,6 +89,13 @@ function DetailList({ details }: { details: readonly FindingDetail[] }) {
 
 function FindingCard({ finding }: { finding: Finding }) {
   const tone = TONE_STYLE[finding.tone];
+  /**
+   * "닥터포스트가 이걸 한다" 한 줄.
+   * 우리가 실제로 대신하는 항목에만 붙는다(conversion.ts 의 3중 게이트).
+   * 홈페이지 SSL·robots 처럼 우리가 안 하는 항목에는 아무것도 붙지 않는다 —
+   * 전부 우리 제품으로 귀결되면 진단이 광고로 읽히고, 그 순간 신뢰가 끝난다.
+   */
+  const ourLine = doctorpostLine(finding);
   return (
     <li className={`bg-white border ${tone.border} rounded-2xl p-4 sm:p-5 shadow-[0_8px_24px_-14px_rgba(32,32,32,0.18)]`}>
       <div className="flex items-start gap-2.5">
@@ -138,6 +148,16 @@ function FindingCard({ finding }: { finding: Finding }) {
           <p className="text-[12.5px] sm:text-[13px] text-[#3c4653] leading-relaxed mt-2">
             <b className="font-bold text-[#202020]">무엇을 하면 되나</b> · {finding.action}
           </p>
+
+          {/*
+            ④ 이 중 우리가 대신하는 부분 — 한 줄. 위의 "무엇을 하면 되나"는 그대로 두고
+            (원장이 직접 할 수 있는 길을 지운 적이 없다) 옆에 덧붙이기만 한다.
+          */}
+          {ourLine && (
+            <p className="text-[12px] text-[#5b6573] leading-relaxed mt-1.5 pl-2.5 border-l-2 border-[#ffd0c4]">
+              {ourLine}
+            </p>
+          )}
 
           {finding.details && finding.details.length > 0 && <DetailList details={finding.details} />}
         </div>
@@ -194,9 +214,22 @@ function GroupSection({ title, subtitle, findings, accent, collapsed }: GroupSec
   );
 }
 
-export default function DiagnosisReportView({ report }: { report: DiagnosisReport }) {
+interface DiagnosisReportViewProps {
+  readonly report: DiagnosisReport;
+  /**
+   * 공유 리포트 토큰. 있으면 "결과를 메일로 보내드릴까요" 를 띄운다.
+   * 없을 수 있는 경우: 공유 링크 발급이 실패했거나(그레이스풀) 옛 화면에서 넘어온 호출.
+   * 그때는 메일 입력만 빠지고 나머지 결과는 그대로 나온다.
+   */
+  readonly shareToken?: string | null;
+}
+
+export default function DiagnosisReportView({ report, shareToken }: DiagnosisReportViewProps) {
   const groups = groupFindings(report.findings);
   const clinic = report.clinic;
+  /** 결과 맨 아래 전환 문구 — 원장이 방금 본 자기 숫자로 만든다(값이 없으면 기본 문구). */
+  const cta = buildConversionCta(report);
+  const emailToken = typeof shareToken === 'string' && shareToken.length > 0 ? shareToken : null;
   /**
    * 위에 볼 게 있을 때만 "잘된 점"을 접는다.
    * 전부 잘하고 있는 병원에서 화면이 텅 비어 보이면 진단이 안 돌았다고 오해한다.
@@ -276,6 +309,16 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
           </div>
         ))}
       </div>
+
+      {/*
+        결과를 메일로 — **상단**. 요약 숫자를 본 직후가 가장 응답이 좋은 자리이고,
+        결과를 끝까지 안 읽고 닫는 원장도 여기서는 주소를 남길 수 있다.
+      */}
+      {emailToken && (
+        <div className="mt-4">
+          <DiagnosisEmailCapture shareToken={emailToken} placement="top" />
+        </div>
+      )}
 
       {/* ① 지금 고쳐야 할 것 — 가장 위, 가장 크게 */}
       <GroupSection
@@ -433,6 +476,16 @@ export default function DiagnosisReportView({ report }: { report: DiagnosisRepor
           </details>
         </section>
       )}
+
+      {/* 결과를 메일로 — **하단**. 다 읽고 나서 남기는 자리. */}
+      {emailToken && (
+        <div className="mt-8">
+          <DiagnosisEmailCapture shareToken={emailToken} placement="bottom" />
+        </div>
+      )}
+
+      {/* 결과 맨 아래 전환 — 바로 가입·무료 2편으로 (제품 소개로 우회하지 않는다) */}
+      <DiagnosisCta headline={cta.headline} sub={cta.sub} hospitalName={clinic.name} />
 
       <p className="text-[11px] text-[#8a93a0] text-center leading-relaxed mt-7">
         본 진단은 행정안전부 공표 정보와 네이버 공개 API, 그리고 공개된 블로그 글·홈페이지를 각각 한 번씩 열어 만든 특정 시점의 참고 자료예요.

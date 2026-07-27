@@ -1,23 +1,18 @@
-import type { Metadata } from 'next';
-import { Suspense } from 'react';
-import BlogCheckClient from '@/components/blog-check/BlogCheckClient';
+import { redirect } from 'next/navigation';
 
 /**
- * /blog-check — 네이버 블로그 무료진단 (영업 리드 마그넷, 비회원 공개).
- * 실제 화면은 클라이언트 컴포넌트(BlogCheckClient) — useSearchParams(?blog=)를
- * 쓰므로 Suspense 경계로 감싼다 (랜딩 ClinicParamReader 패턴 동일).
+ * /blog-check — 구 "네이버 블로그 무료진단" 진입 페이지 (2026-07-27 은퇴).
+ *
+ * 무료진단은 랜딩 첫 화면의 **병원명 진단(/clinic-check)** 으로 일원화했다.
+ * 페이지를 지우지 않고 메인으로 넘기는 이유: 영업 메일·블로그 등 외부에 공유된
+ * /blog-check 링크와 검색 유입이 404 로 죽지 않게 하기 위함이다.
+ *
+ * ⚠️ 진단 엔진은 여전히 blog-check 계열 모듈(blog-check-rss·keywords·serp)과
+ *    /api/blog-check/* 를 내부적으로 사용한다 — 이 파일만 은퇴시킨 것이다.
+ *
+ * 307(임시)로 보낸다: 첫 화면 교체는 전환 실험이라 되돌릴 수 있어야 하고,
+ * 308(영구)은 브라우저에 캐시되어 복구가 어렵다.
  */
-
-export const metadata: Metadata = {
-  title: '네이버 블로그 무료진단 — SEO·AI검색·의료광고법 실측 | 닥터포스트',
-  description:
-    '병원 네이버 블로그 주소만 넣으면 검색량·노출 순위·문서수 실측 기반으로 SEO 점수, AI 검색(GEO) 점수, 의료광고법 위험 신호를 무료로 진단해 드립니다.',
-};
-
-export default function BlogCheckPage() {
-  return (
-    <Suspense fallback={null}>
-      <BlogCheckClient />
-    </Suspense>
-  );
+export default function BlogCheckPage(): never {
+  redirect('/');
 }
