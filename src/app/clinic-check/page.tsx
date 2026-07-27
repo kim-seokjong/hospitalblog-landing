@@ -36,6 +36,19 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     locale: 'ko_KR',
     type: 'website',
+    // ⚠️ 이미지도 반드시 여기서 다시 지정한다. 페이지가 openGraph 를 선언하면 부모 블록을
+    //    통째로 대체하므로, 루트의 파일 규약 OG 이미지(app/opengraph-image.tsx)가 딸려오지
+    //    않는다 — 빼먹으면 카카오톡·페북 미리보기에 썸네일 없는 카드가 뜬다.
+    //    (전용 이미지를 새로 만들지 않는 이유: OG 이미지 폰트가 서브셋이라 새 문구는 글리프가 깨진다.)
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        type: 'image/png',
+        alt: '닥터포스트 - 의료광고법 준수 병원 블로그 자동 작성',
+      },
+    ],
   },
 };
 
