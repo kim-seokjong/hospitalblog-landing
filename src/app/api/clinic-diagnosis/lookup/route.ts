@@ -11,8 +11,8 @@ import { cacheGet, cacheSet } from '@/content/lib/scoreboard/cache';
 import type { ClinicLookupOutcome } from '@/content/lib/clinic-diagnosis/types';
 
 export const dynamic = 'force-dynamic';
-/** 행안부 조회 최대 4콜 × 8초. */
-export const maxDuration = 40;
+/** 행안부 조회 최대 3콜 × 15초 (서버 실측 응답 10.6초). */
+export const maxDuration = 60;
 
 /**
  * POST /api/clinic-diagnosis/lookup — 병원명(+지역)으로 후보를 찾는다 (비회원 공개).

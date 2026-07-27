@@ -29,9 +29,14 @@ export const REGISTRY_SCAN_CAP = 100;
 /** 사용자에게 보여줄 후보 상한. */
 export const MAX_CANDIDATES = 8;
 /** 시드 시도 상한 — 외부 API 호출 비용 방어. */
-export const MAX_REGISTRY_CALLS = 4;
+export const MAX_REGISTRY_CALLS = 3;
 /** 1회 호출 타임아웃(ms). */
-export const REGISTRY_TIMEOUT_MS = 8_000;
+/**
+ * 1회 호출 타임아웃(ms).
+ * ★8초는 부족했다 — 로컬은 1~2초인데 Vercel 서버에서는 10.6초가 걸린다(실측).
+ *   그 결과 모든 시도가 중단되어 어떤 병원도 찾지 못하고 있었다.
+ */
+export const REGISTRY_TIMEOUT_MS = 15_000;
 /** 영업/정상 상태코드. */
 export const ACTIVE_STATUS_CODE = '01';
 
