@@ -67,7 +67,21 @@ export async function POST(req: NextRequest) {
 
     // 행안부(정본) → 안 되면 폴백 명부(심평원 공개자료). 폴백이 못 찾으면
     // 행안부의 판정을 그대로 유지한다 — "조회 실패"를 "그런 병원 없음"으로 바꾸지 않는다.
-    const { outcome, usedDirectory } = await lookupClinicWithFallback(name, region);
+    const { outcome, usedDirectory, directoryStage, directoryVisibleRows } =
+      await lookupClinicWithFallback(name, region);
+
+    /**
+     * 폴백 경로 진단 로그 — 민감정보 없음(단계 이름과 행 수뿐).
+     *
+     * 2026-07-28: "화면은 그런 병원 없음, 로그는 조용함" 상태를 밖에서 가를 수단이
+     * 없어 원인 규명이 길어졌다. 폴백을 탄 요청은 어느 갈래로 빠졌는지 항상 남긴다.
+     */
+    if (directoryStage !== 'skipped' && directoryStage !== 'hit') {
+      console.warn(
+        `[clinic-diagnosis/lookup] 폴백 단계=${directoryStage} ` +
+          `visibleRows=${directoryVisibleRows ?? 'n/a'} registry=${outcome.kind}`,
+      );
+    }
 
     if (outcome.kind === 'unavailable') {
       // ⚠️ 셋을 구분해서 알린다. "설정 문제"를 "그런 병원 없음"처럼 보이게 하면
@@ -92,7 +106,13 @@ export async function POST(req: NextRequest) {
     const baseTtlMs = lookupCacheTtlMs(outcome.kind);
     const ttlMs = usedDirectory ? Math.min(baseTtlMs, LOOKUP_DIRECTORY_CACHE_TTL_MS) : baseTtlMs;
     if (ttlMs > 0) cacheSet(key, outcome, ttlMs);
-    return NextResponse.json({ outcome, cached: false, source: usedDirectory ? 'directory' : 'registry' });
+    return NextResponse.json({
+      outcome,
+      cached: false,
+      source: usedDirectory ? 'directory' : 'registry',
+      // 운영 진단용. 단계 이름과 가시 행 수만 — 자격증명·질의문·개인정보 없음.
+      directory: { stage: directoryStage, visibleRows: directoryVisibleRows },
+    });
   } catch (err) {
     console.error('[clinic-diagnosis/lookup]', err instanceof Error ? err.message : err);
     return NextResponse.json(

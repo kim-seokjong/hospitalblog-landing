@@ -273,6 +273,29 @@ export interface CombinedLookup {
   readonly usedDirectory: boolean;
   /** 폴백까지 시도했는데 못 찾았는가 (정직한 안내 문구 판단용). */
   readonly directoryTried: boolean;
+  /**
+   * 폴백 경로가 실제로 어디까지 갔는지 — **운영 진단용**.
+   *
+   * 2026-07-28 에 "화면은 그런 병원 없음, 로그는 조용함" 상태를 밖에서 가를 방법이
+   * 없어 원인 규명이 몇 시간 늘어졌다. 어느 갈래로 빠졌는지는 민감정보가 아니므로
+   * 응답에 실어 다음번엔 한 번의 호출로 판정되게 한다.
+   *
+   *  · skipped          : 행안부 판정이 확정적이라 폴백을 타지 않았다
+   *  · client_missing   : 폴백 클라이언트를 만들지 못했다(서비스 키 문제)
+   *  · query_failed     : 폴백 질의가 전부 실패했다
+   *  · invisible        : 질의는 됐지만 명부가 한 줄도 안 보인다(권한/RLS)
+   *  · searched_no_hit  : 명부는 보이는데 이 이름이 없다 (= 진짜 없음)
+   *  · hit              : 폴백이 찾아냈다
+   */
+  readonly directoryStage:
+    | 'skipped'
+    | 'client_missing'
+    | 'query_failed'
+    | 'invisible'
+    | 'searched_no_hit'
+    | 'hit';
+  /** 명부 가시성 확인에서 실제로 보인 행 수 (확인하지 않았으면 null). */
+  readonly directoryVisibleRows: number | null;
 }
 
 /**
@@ -293,7 +316,13 @@ export async function combineWithDirectory(
   },
 ): Promise<CombinedLookup> {
   if (!shouldTryDirectory(registryOutcome)) {
-    return { outcome: registryOutcome, usedDirectory: false, directoryTried: false };
+    return {
+      outcome: registryOutcome,
+      usedDirectory: false,
+      directoryTried: false,
+      directoryStage: 'skipped',
+      directoryVisibleRows: null,
+    };
   }
 
   // 폴백을 아예 만들지 못했다 = 설정 장애(서비스 키 누락·무효 등).
@@ -303,12 +332,20 @@ export async function combineWithDirectory(
       outcome: degradeUnverifiedNotFound(registryOutcome, 'search_unavailable'),
       usedDirectory: false,
       directoryTried: false,
+      directoryStage: 'client_missing',
+      directoryVisibleRows: null,
     };
   }
 
   const fallback = await lookupDirectory(rawName, { search: options.search, region: options.region });
   if (fallback.outcome) {
-    return { outcome: fallback.outcome, usedDirectory: true, directoryTried: true };
+    return {
+      outcome: fallback.outcome,
+      usedDirectory: true,
+      directoryTried: true,
+      directoryStage: 'hit',
+      directoryVisibleRows: null,
+    };
   }
   // 폴백 쿼리가 **전부 실패**했다면 "폴백에도 없다"가 아니라 "확인하지 못했다"이다.
   if (!fallback.usable) {
@@ -316,6 +353,8 @@ export async function combineWithDirectory(
       outcome: degradeUnverifiedNotFound(registryOutcome, 'query_failed'),
       usedDirectory: false,
       directoryTried: false,
+      directoryStage: 'query_failed',
+      directoryVisibleRows: null,
     };
   }
 
@@ -326,17 +365,27 @@ export async function combineWithDirectory(
    * 설정 사고가 "그런 병원 없음"으로 둔갑한다 — 2026-07-28 에 실제로 그랬다.
    * 그래서 이 경로에서만 명부 가시성을 1회 확인한다.
    */
+  let visibleRows: number | null = null;
   if (options.probe) {
     const probe = await options.probe();
+    visibleRows = probe.ok ? probe.visibleRows : null;
     if (!probe.ok || probe.visibleRows === 0) {
       return {
         outcome: degradeUnverifiedNotFound(registryOutcome, 'directory_invisible'),
         usedDirectory: false,
         directoryTried: false,
+        directoryStage: 'invisible',
+        directoryVisibleRows: visibleRows,
       };
     }
   }
-  return { outcome: registryOutcome, usedDirectory: false, directoryTried: fallback.usable };
+  return {
+    outcome: registryOutcome,
+    usedDirectory: false,
+    directoryTried: fallback.usable,
+    directoryStage: 'searched_no_hit',
+    directoryVisibleRows: visibleRows,
+  };
 }
 
 /**
