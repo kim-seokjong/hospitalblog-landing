@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AuthModal from '@/hr/components/AuthModal';
 import Logo from '@/components/landing/Logo';
 import { trackEvent } from '@/dev/lib/meta-pixel';
+import { trackFunnel } from '@/dev/lib/funnel';
 
 interface FreeSampleSection {
   heading: string;
@@ -61,6 +62,24 @@ function SamplePageInner() {
   const onClinic = useCallback((name: string) => {
     setClinic(name);
     setClinicResolved(true);
+  }, []);
+
+  /**
+   * ★ 퍼널 계측 (2026-07-28 신설) — 이 페이지가 측정에서 통째로 빠져 있었다.
+   *
+   *   콜드메일이 보내는 딥링크가 바로 여기다:
+   *     /sample?clinic={병원명}&utm_source=email&utm_medium=outbound
+   *   그런데 이 화면은 Meta 픽셀만 쏘고 **자체 퍼널 이벤트를 하나도 보내지 않았다.**
+   *   그래서 누적 772통을 발송하고도 funnel_events 에는 그 트래픽이 한 건도 없고,
+   *   meta 의 source 가 한 번도 찍히지 않았다 — UTM 을 받는 유일한 페이지가
+   *   이벤트를 안 보냈기 때문이다. "콜드메일이 사람을 데려오는가" 를 답할 수 없었다.
+   *
+   *   랜딩과 같은 이벤트 이름을 쓴다. meta 의 path(/sample)·source(email)로 구분되어
+   *   랜딩·영업자료·콜드메일 세 진입 경로를 나란히 비교할 수 있다.
+   *   (anon_id 쿠키도 여기서 발급되어 이후 동선이 이어 붙는다.)
+   */
+  useEffect(() => {
+    trackFunnel('landing_view');
   }, []);
 
   useEffect(() => {

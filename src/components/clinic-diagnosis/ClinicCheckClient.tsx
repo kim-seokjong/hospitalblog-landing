@@ -49,6 +49,24 @@ export default function ClinicCheckClient() {
   const [showRegion, setShowRegion] = useState(false);
 
   /**
+   * ★ 퍼널 계측 (2026-07-28 신설) — 이 페이지가 측정에서 통째로 빠져 있었다.
+   *
+   *   anon_id 쿠키는 /api/funnel-event 가 이벤트를 받을 때만 발급된다. 그런데 이
+   *   화면은 diagnosis_run·report_view 만 보냈다. 즉 **영업자료·콜드메일이 보내는
+   *   바로 그 페이지의 방문자가 카운트에 없었다** — 실측 당시 "방문자 43명" 은
+   *   전부 랜딩(/) 방문자였고, 영업 링크로 들어온 사람은 한 명도 집계되지 않았다.
+   *   이메일 제출 4건의 anon_id 가 전부 null 이었던 것도 같은 이유다.
+   *
+   *   랜딩과 **같은 이벤트 이름**을 쓴다. meta 의 path 로 구분되므로 두 진입 경로를
+   *   나란히 비교할 수 있다 — "영업 링크가 랜딩보다 잘 먹히는가" 를 이제 답할 수 있다.
+   */
+  const inputStartSentRef = useRef(false);
+
+  useEffect(() => {
+    trackFunnel('landing_view');
+  }, []);
+
+  /**
    * 조회·진단의 비동기 상태는 전부 순수 상태기(flow-state.ts)가 들고 있다.
    * 화면은 그 결과를 읽기만 한다 — 경합 가드와 로딩 해제 규칙이 한곳에 모여
    * 회귀 테스트(__tests__/flow-state.test.ts)로 검증된다.
@@ -207,6 +225,8 @@ export default function ClinicCheckClient() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            // 퍼널: 제출 도달 — 입력 시작 대비 얼마나 실제로 눌렀는지 읽는다.
+            trackFunnel('diagnosis_submit');
             runLookup();
           }}
           className="mt-7 max-w-xl mx-auto"
@@ -215,7 +235,18 @@ export default function ClinicCheckClient() {
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                /**
+                 * 퍼널: 입력 시작 — 세션당 1회만. 타이핑마다 쌓으면 지표가 무의미해진다.
+                 * ⚠️ `?name=` 자동 실행은 여기를 타지 않는다(프로그램 세팅). 랜딩에서
+                 *    이미 input_start 를 보냈으므로 중복 집계되지 않는다.
+                 */
+                if (!inputStartSentRef.current && e.target.value.trim().length > 0) {
+                  inputStartSentRef.current = true;
+                  trackFunnel('diagnosis_input_start');
+                }
+                setName(e.target.value);
+              }}
               placeholder="병원 이름 (예: 브이비성형외과의원)"
               className={inputClass}
               style={{ colorScheme: 'light' }}
