@@ -821,3 +821,55 @@ test('checkCompliance(알려진 공백): 성과 명사 없는 "치료를 보장"
   assert.ok(checkCompliance('치료 성과를 보장합니다.').violations.length > 0);
   assert.ok(checkCompliance('치료 효과를 보장합니다.').violations.length > 0);
 });
+
+/* ════════════════════════════════════════════════════════════════════════
+ * 2026-07-28 교차검증 6라운드.
+ *   · "걱정 없이 상담받으세요" 가 CRITICAL 이 됐다 — 제외어(상담) 자신의
+ *     활용형에 든 '받으' 를 시술 권유로 오인했다.
+ *   · 무제한 후방 탐색 `[^.!?\n]*` 이 O(n²) 스캔을 되살렸다.
+ *   → 광고 문형의 실제 신호인 '후'(상담 후 시술)로 좁히고 창을 고정했다.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const ROUND6_MUST_NOT_CATCH: ReadonlyArray<readonly [string, string]> = [
+  ['걱정 없이 상담받으세요', '부작용에 대해 설명드리니 걱정 없이 상담받으세요.'],
+  ['걱정 없이 상담을 진행하세요', '부작용 가능성을 안내드리니 걱정 없이 상담을 진행하세요.'],
+];
+
+for (const [label, text] of ROUND6_MUST_NOT_CATCH) {
+  test(`checkCompliance(6R 정밀도): "${label}" 은 통과한다`, () => {
+    const r = checkCompliance(text);
+    assert.equal(
+      r.violations.length,
+      0,
+      `오탐 — « ${text} » → ${r.violations.map((v) => `${v.word}(${v.severity})`).join(', ')}`,
+    );
+  });
+}
+
+/**
+ * ★ 의도된 동작 — 오탐이 아니다.
+ *
+ * "부작용 걱정 없이" 처럼 위해 명사에 **바로 붙는** 형태는 8자 창의 주 패턴이
+ * 잡는다. 뒤에 무엇이 오든(문의·상담이어도) 그 어구 자체가 무위해 단정이다.
+ * 반면 "부작용에 대해 설명드리니 걱정 없이 문의주세요" 는 위해 명사와 거리가 멀어
+ * 주 패턴이 닿지 않고, 전용 규칙이 '문의' 로 끝나는 안내를 빼 준다.
+ * 이 거리 차이가 의도적이라는 것을 못 박아 둔다.
+ */
+test('checkCompliance(6R 의도): "부작용 걱정 없이"는 뒤 서술과 무관하게 검출된다', () => {
+  const near = checkCompliance('부작용 걱정 없이 문의하시면 진료 진행 여부를 안내합니다.');
+  assert.ok(near.violations.length > 0, '위해 명사에 바로 붙은 형태는 검출되어야 한다');
+  const far = checkCompliance('부작용에 대해 설명드리니 걱정 없이 문의주세요.');
+  assert.equal(far.violations.length, 0, '거리가 먼 안내 문장은 통과해야 한다');
+});
+
+/**
+ * ReDoS·이차 스캔 회귀 방지. 6라운드에서 무제한 후방 탐색으로 O(n²) 가 생겼었다.
+ * 후보가 수백 개인 긴 문장도 즉시 끝나야 한다.
+ */
+test('checkCompliance(6R 성능): 반복 후보가 많은 긴 문장도 선형 시간에 끝난다', () => {
+  const long = '부작용 걱정 없이 상담 '.repeat(400) + '입니다.';
+  const started = process.hrtime.bigint();
+  checkCompliance(long);
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.ok(elapsedMs < 500, `이차 스캔 의심 — ${long.length}자에 ${elapsedMs.toFixed(1)}ms`);
+});
