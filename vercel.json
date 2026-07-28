@@ -112,7 +112,7 @@
     },
     {
       "path": "/api/cron/registry-health",
-      "schedule": "0 * * * *"
+      "schedule": "0 23 * * *"
     }
   ]
 }
