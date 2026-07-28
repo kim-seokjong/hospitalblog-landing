@@ -182,3 +182,27 @@ test('요약 문구에 수신 주소가 실리지 않는다 — 알림 채널에
   });
   assert.ok(!text.includes('@'), `주소가 노출됐다: ${text}`);
 });
+
+/* ── 2026-07-28 교차검증 반영: 처리량이 유입을 따라가야 한다 ── */
+
+/**
+ * 신규 발송의 전역 일일 한도는 200건이다(DEFAULT_EMAIL_GLOBAL_DAILY_LIMIT).
+ * 재시도 처리량이 그보다 작으면 인프라 장애 뒤 backlog 가 기간 창 안에 소화되지
+ * 못하고 만료된다 — 리드를 살리려는 장치가 리드를 버리게 된다.
+ * (처음에 20으로 뒀다가 이 계산 때문에 되물렸다.)
+ */
+test('실행당 상한이 신규 유입 일일 한도(200) 이상이다 — backlog 가 창 안에 소화된다', () => {
+  assert.ok(
+    MAX_RETRIES_PER_RUN >= 200,
+    `상한 ${MAX_RETRIES_PER_RUN} 은 유입(200/일)보다 작다 — 창 만료로 유실된다`,
+  );
+});
+
+test('하루치 최대 유입(200건)이 한 번에 전부 대상이 된다', () => {
+  const rows = Array.from({ length: 200 }, (_, i) =>
+    candidate({ id: `id-${i}`, createdAt: daysAgo(1) }),
+  );
+  const plan = planEmailRetries(rows, NOW);
+  assert.equal(plan.targets.length, 200);
+  assert.equal(plan.deferred, 0);
+});

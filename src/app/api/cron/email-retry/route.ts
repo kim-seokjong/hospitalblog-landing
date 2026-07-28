@@ -38,6 +38,14 @@ const LEADS_TABLE = 'clinic_diagnosis_email_leads';
  *    (2026-07-27 에 매시간 cron 하나로 9커밋이 배포 실패했다).
  *    `src/dev/lib/__tests__/cron-frequency.test.ts` 가 이를 강제한다.
  *
+ * ★ 전달 보장은 **at-least-once** 다 (의도적 선택, 2026-07-28 교차검증에서 검토).
+ *   발송을 먼저 하고 결과를 나중에 기록하므로, 발송 성공 직후 DB 반영이 실패하면
+ *   다음 날 같은 메일이 한 번 더 갈 수 있다. 원자적 claim(먼저 sent=true 로 찜하고
+ *   발송)으로 바꾸면 중복은 사라지지만, 찜한 뒤 프로세스가 죽으면 **메일은 안 갔는데
+ *   보낸 것으로 기록**된다 — 그건 이 기능이 없애려던 바로 그 실패(리드 유실)다.
+ *   같은 리포트가 두 번 가는 것은 불편이고, 리드가 죽는 것은 손실이다. 불편을 택한다.
+ *   (동일 리포트가 이미 성공한 경우는 아래 중복 검사가 걸러 실제 중복을 크게 줄인다.)
+ *
  * 인증: Authorization: Bearer ${CRON_SECRET}
  */
 export async function GET(req: NextRequest) {
@@ -57,7 +65,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 
-  // 창보다 넉넉히 읽고 판정은 순수 모듈에 맡긴다(경계 판단을 한 곳에만 둔다).
+  /**
+   * 창보다 넉넉히 읽고 판정은 순수 모듈에 맡긴다(경계 판단을 한 곳에만 둔다).
+   *
+   * ⚠️ 조회 상한을 200 → 1000 으로 올렸다(2026-07-28 교차검증).
+   *    영구 실패·토큰 누락 행이 오래된 순으로 앞을 채우면, 뒤에 있는 **재시도
+   *    가능한 행이 조회조차 되지 않는다**(starvation). 창이 7일이라 모집단 자체가
+   *    유입 상한(하루 200건) × 8일로 묶여 있으므로 1000 이면 실질적으로 전량이다.
+   */
   const since = new Date(Date.now() - (RETRY_WINDOW_DAYS + 1) * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await admin
     .from(LEADS_TABLE)
@@ -65,7 +80,7 @@ export async function GET(req: NextRequest) {
     .eq('sent', false)
     .gte('created_at', since)
     .order('created_at', { ascending: true })
-    .limit(200);
+    .limit(1000);
 
   if (error) {
     console.error('[cron/email-retry] 리드 조회 실패:', error.message);
@@ -86,8 +101,35 @@ export async function GET(req: NextRequest) {
   const plan = planEmailRetries(rows);
   let succeeded = 0;
   let failed = 0;
+  let deduped = 0;
 
   for (const target of plan.targets) {
+    /**
+     * 이미 같은 리포트가 같은 주소로 나간 적이 있으면 보내지 않는다.
+     *
+     * ⚠️ 기존 발송 경로는 사용자가 재요청할 때마다 **새 행**을 만든다. 그래서
+     *    "처음 실패 → 사용자가 다시 요청 → 성공" 이면 실패 행이 남아 있고,
+     *    cron 이 같은 리포트를 한 번 더 보내게 된다(2026-07-28 교차검증 지적).
+     *    같은 (토큰, 주소) 로 성공한 행이 있으면 목적은 이미 달성됐으므로
+     *    행을 해소만 하고 발송은 건너뛴다.
+     */
+    const { data: already } = await admin
+      .from(LEADS_TABLE)
+      .select('id')
+      .eq('share_token', target.shareToken)
+      .eq('email', target.email)
+      .eq('sent', true)
+      .limit(1);
+
+    if (already && already.length > 0) {
+      deduped += 1;
+      await admin
+        .from(LEADS_TABLE)
+        .update({ sent: true, send_error: '중복 — 동일 리포트가 같은 주소로 이미 발송됨' })
+        .eq('id', target.id);
+      continue;
+    }
+
     const { subject, html } = buildDiagnosisEmail({
       clinicName: target.clinicName ?? '',
       summary: (target.summary ?? null) as DiagnosisLeadSummary | null,
@@ -119,19 +161,26 @@ export async function GET(req: NextRequest) {
   }
 
   const summary = {
-    attempted: plan.targets.length,
+    attempted: succeeded + failed,
     succeeded,
     failed,
-    skipped: plan.skipped.length,
+    skipped: plan.skipped.length + deduped,
     deferred: plan.deferred,
   };
   const text = buildRetrySummaryText(summary);
 
-  // 조용한 성공은 알리지 않는다 — 아무 일도 없던 날까지 보고하면 채널이 오염된다.
-  if (summary.attempted > 0) {
+  /**
+   * 조용한 날은 알리지 않는다 — 아무 일도 없던 날까지 보고하면 채널이 오염된다.
+   *
+   * ⚠️ 개별 실패는 sendEmail 내부의 notifyEmailFailure 가 이미 알린다(24시간 5건 상한).
+   *    여기 요약과 겹치는 것은 **의도한 중복**이다 — 개별 알림은 "무엇이 왜 실패했나",
+   *    요약은 "이번 실행 전체가 어땠나" 로 답하는 질문이 다르다. 개별 알림에 상한이
+   *    걸려 있어 폭주하지 않는다.
+   */
+  if (summary.attempted > 0 || deduped > 0) {
     console.warn(`[cron/email-retry] ${text}`);
     await sendTelegram(text).catch(() => undefined);
   }
 
-  return NextResponse.json({ ok: true, ...summary });
+  return NextResponse.json({ ok: true, ...summary, deduped });
 }
