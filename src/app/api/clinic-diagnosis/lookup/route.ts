@@ -67,8 +67,15 @@ export async function POST(req: NextRequest) {
 
     // 행안부(정본) → 안 되면 폴백 명부(심평원 공개자료). 폴백이 못 찾으면
     // 행안부의 판정을 그대로 유지한다 — "조회 실패"를 "그런 병원 없음"으로 바꾸지 않는다.
-    const { outcome, usedDirectory, directoryStage, directoryVisibleRows } =
-      await lookupClinicWithFallback(name, region);
+    const {
+      outcome,
+      usedDirectory,
+      directoryStage,
+      directoryVisibleRows,
+      directoryQueries,
+      directoryRowsSeen,
+      directoryCandidatesSeen,
+    } = await lookupClinicWithFallback(name, region);
 
     /**
      * 폴백 경로 진단 로그 — 민감정보 없음(단계 이름과 행 수뿐).
@@ -111,7 +118,13 @@ export async function POST(req: NextRequest) {
       cached: false,
       source: usedDirectory ? 'directory' : 'registry',
       // 운영 진단용. 단계 이름과 가시 행 수만 — 자격증명·질의문·개인정보 없음.
-      directory: { stage: directoryStage, visibleRows: directoryVisibleRows },
+      directory: {
+        stage: directoryStage,
+        visibleRows: directoryVisibleRows,
+        queries: directoryQueries,
+        rowsSeen: directoryRowsSeen,
+        candidatesSeen: directoryCandidatesSeen,
+      },
     });
   } catch (err) {
     console.error('[clinic-diagnosis/lookup]', err instanceof Error ? err.message : err);

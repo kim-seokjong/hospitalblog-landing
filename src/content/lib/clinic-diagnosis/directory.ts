@@ -170,6 +170,16 @@ export interface DirectoryLookupResult {
   readonly outcome: ClinicLookupOutcome | null;
   /** 실제 수행한 질의 수 (로그용). */
   readonly queries: number;
+  /**
+   * 질의로 실제 받아온 행 수 합계 — **운영 진단용**.
+   *
+   * 2026-07-28: outcome=null 이 "질의를 안 했다"·"행이 0건이다"·"행은 왔는데
+   * 후보 변환에서 전부 탈락했다" 셋 중 어느 것인지 밖에서 가릴 수 없어
+   * 원인 규명이 길어졌다. queries 와 함께 보면 셋이 즉시 갈린다.
+   */
+  readonly rowsSeen: number;
+  /** 후보 변환(toDirectoryCandidate)을 통과한 행 수 합계. */
+  readonly candidatesSeen: number;
 }
 
 /**
@@ -182,13 +192,12 @@ export async function lookupDirectory(
   rawName: string,
   options: { readonly search: DirectorySearch; readonly region?: string },
 ): Promise<DirectoryLookupResult> {
+  const empty = { usable: true, outcome: null, queries: 0, rowsSeen: 0, candidatesSeen: 0 } as const;
   const parsed = splitRegionHint(rawName, options.region);
-  if (normalizeClinicName(parsed.name).length < 2) {
-    return { usable: true, outcome: null, queries: 0 };
-  }
+  if (normalizeClinicName(parsed.name).length < 2) return empty;
 
   const terms = buildDirectoryTerms(parsed.name);
-  if (terms.length === 0) return { usable: true, outcome: null, queries: 0 };
+  if (terms.length === 0) return empty;
 
   const regionFilter = sanitizeLikeTerm(parsed.region);
   const attempts: Array<{ term: string; region: string }> = terms.map((term) => ({
@@ -199,6 +208,8 @@ export async function lookupDirectory(
 
   let anySuccess = false;
   let queries = 0;
+  let rowsSeen = 0;
+  let candidatesSeen = 0;
 
   for (const attempt of attempts.slice(0, MAX_DIRECTORY_QUERIES)) {
     const result = await options.search({
@@ -209,11 +220,13 @@ export async function lookupDirectory(
     queries += 1;
     if (!result.ok) continue;
     anySuccess = true;
+    rowsSeen += result.rows.length;
     if (result.rows.length === 0) continue;
 
     const candidates = result.rows
       .map(toDirectoryCandidate)
       .filter((c): c is ClinicCandidate => c !== null);
+    candidatesSeen += candidates.length;
     if (candidates.length === 0) continue;
 
     const outcome = decideLookup(candidates, parsed.name, {
@@ -228,12 +241,14 @@ export async function lookupDirectory(
         usable: true,
         outcome: toRegionMiss(outcome, parsed.region, result.total > candidates.length),
         queries,
+        rowsSeen,
+        candidatesSeen,
       };
     }
-    return { usable: true, outcome, queries };
+    return { usable: true, outcome, queries, rowsSeen, candidatesSeen };
   }
 
-  return { usable: anySuccess, outcome: null, queries };
+  return { usable: anySuccess, outcome: null, queries, rowsSeen, candidatesSeen };
 }
 
 /** 지역 필터를 뺀 결과를 region_miss 로 강등한다 (자동 확정 금지). */
@@ -296,6 +311,10 @@ export interface CombinedLookup {
     | 'hit';
   /** 명부 가시성 확인에서 실제로 보인 행 수 (확인하지 않았으면 null). */
   readonly directoryVisibleRows: number | null;
+  /** 폴백 질의 수 / 받아온 행 수 / 후보 변환 통과 수 — 운영 진단용. */
+  readonly directoryQueries: number;
+  readonly directoryRowsSeen: number;
+  readonly directoryCandidatesSeen: number;
 }
 
 /**
@@ -322,6 +341,9 @@ export async function combineWithDirectory(
       directoryTried: false,
       directoryStage: 'skipped',
       directoryVisibleRows: null,
+      directoryQueries: 0,
+      directoryRowsSeen: 0,
+      directoryCandidatesSeen: 0,
     };
   }
 
@@ -334,6 +356,9 @@ export async function combineWithDirectory(
       directoryTried: false,
       directoryStage: 'client_missing',
       directoryVisibleRows: null,
+      directoryQueries: 0,
+      directoryRowsSeen: 0,
+      directoryCandidatesSeen: 0,
     };
   }
 
@@ -345,6 +370,9 @@ export async function combineWithDirectory(
       directoryTried: true,
       directoryStage: 'hit',
       directoryVisibleRows: null,
+      directoryQueries: fallback.queries,
+      directoryRowsSeen: fallback.rowsSeen,
+      directoryCandidatesSeen: fallback.candidatesSeen,
     };
   }
   // 폴백 쿼리가 **전부 실패**했다면 "폴백에도 없다"가 아니라 "확인하지 못했다"이다.
@@ -355,6 +383,9 @@ export async function combineWithDirectory(
       directoryTried: false,
       directoryStage: 'query_failed',
       directoryVisibleRows: null,
+      directoryQueries: fallback.queries,
+      directoryRowsSeen: fallback.rowsSeen,
+      directoryCandidatesSeen: fallback.candidatesSeen,
     };
   }
 
@@ -376,6 +407,9 @@ export async function combineWithDirectory(
         directoryTried: false,
         directoryStage: 'invisible',
         directoryVisibleRows: visibleRows,
+        directoryQueries: fallback.queries,
+        directoryRowsSeen: fallback.rowsSeen,
+        directoryCandidatesSeen: fallback.candidatesSeen,
       };
     }
   }
@@ -385,6 +419,9 @@ export async function combineWithDirectory(
     directoryTried: fallback.usable,
     directoryStage: 'searched_no_hit',
     directoryVisibleRows: visibleRows,
+    directoryQueries: fallback.queries,
+    directoryRowsSeen: fallback.rowsSeen,
+    directoryCandidatesSeen: fallback.candidatesSeen,
   };
 }
 
