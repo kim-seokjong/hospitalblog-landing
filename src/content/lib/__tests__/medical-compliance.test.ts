@@ -714,7 +714,6 @@ const ROUND4_MUST_CATCH: ReadonlyArray<readonly [string, string]> = [
   ['부작용이 발생하지 않습니다', '부작용이 발생하지 않습니다.'],
   ['감염은 발생하지 않습니다', '감염은 발생하지 않습니다.'],
   ['합병증도 발생하지 않습니다', '합병증도 발생하지 않습니다.'],
-  ['치료를 보장합니다', '치료를 보장합니다.'],
   ['치료 성과를 보장', '치료 성과를 보장합니다.'],
   ['치료 효험을 보장', '치료 효험을 보장합니다.'],
   ['증상 개선을 보장', '증상 개선을 보장합니다.'],
@@ -757,3 +756,68 @@ for (const [label, text] of ROUND4_MUST_NOT_CATCH) {
     );
   });
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * 2026-07-28 교차검증 5라운드.
+ *   · 보험 안내의 서술형 "치료를 보장하는 상품" 이 CRITICAL 로 막혔다
+ *     → 조사 유무로 가르려던 시도를 철회하고 성과 명사를 요구하도록 되돌렸다
+ *   · "걱정 없이 상담 후 시술받으세요" 가 제외어 삽입으로 빠져나갔다
+ *     → 제외 조건에 "뒤에 시술·치료 권유가 없을 것" 을 덧붙였다
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const ROUND5_MUST_CATCH: ReadonlyArray<readonly [string, string]> = [
+  ['걱정 없이 상담 후 시술받으세요', '부작용 걱정 없이 상담 후 시술받으세요.'],
+  ['걱정 없이 문의 후 치료 시작', '후유증 걱정 없이 문의 후 치료를 시작하세요.'],
+  ['걱정 없이 방문 상담 후 수술', '흉터 걱정 없이 방문 상담 후 수술받으세요.'],
+];
+
+for (const [label, text] of ROUND5_MUST_CATCH) {
+  test(`checkCompliance(5R 회피차단): "${label}" 검출`, () => {
+    const r = checkCompliance(text);
+    assert.ok(r.violations.length > 0 || r.warnings.length > 0, `놓침 — « ${text} »`);
+  });
+}
+
+const ROUND5_MUST_NOT_CATCH: ReadonlyArray<readonly [string, string]> = [
+  // 보험 안내 서술형 — 조사가 붙어도 정상이다
+  ['보험은 암 치료를 보장하는 상품', '보험은 암 치료를 보장하는 상품입니다.'],
+  ['특약은 입원 치료를 보장', '해당 특약은 입원 치료를 보장합니다.'],
+  ['질병 치료를 보장받을 수', '이 보험으로 질병 치료를 보장받을 수 있습니다.'],
+  ['보장 내용 개선', '보험 보장 내용이 개선되었습니다.'],
+];
+
+for (const [label, text] of ROUND5_MUST_NOT_CATCH) {
+  test(`checkCompliance(5R 정밀도): "${label}" 은 통과한다`, () => {
+    const r = checkCompliance(text);
+    assert.equal(
+      r.violations.length,
+      0,
+      `오탐 — « ${text} » → ${r.violations.map((v) => `${v.word}(${v.severity})`).join(', ')}`,
+    );
+  });
+}
+
+/**
+ * ★ 알려진 A층 공백 — **의도적으로 남긴 것**이다. 지우거나 슬쩍 메우지 말 것.
+ *
+ * 성과 명사 없는 "치료를 보장합니다" 단독은 A층에서 잡지 않는다.
+ * 4라운드에서 `치료\s*(를|을)\s*보장` 을 넣었다가 5라운드에서 철회했다 —
+ * 보험 안내에서 "보험은 암 치료를 보장하는 상품입니다",
+ * "질병 치료를 보장받을 수 있습니다" 처럼 **같은 표기가 정상적으로** 쓰인다.
+ * 어휘만으로는 광고와 보험 안내를 가를 수 없고, 이걸 CRITICAL 로 잡으면
+ * 실손·보험 안내 글이 발행 게이트에 막힌다. 문맥 판단이 필요한 층위라
+ * **B층 LLM 심의**에 맡긴다(3층 구조의 존재 이유가 이것이다).
+ *
+ * 이 테스트는 공백을 승인하는 것이 아니라 **공백의 위치를 못 박아** 두는 것이다.
+ * 나중에 A층에서 잡도록 바꾼다면, 위 보험 문장들이 여전히 통과하는지 함께 확인해라.
+ */
+test('checkCompliance(알려진 공백): 성과 명사 없는 "치료를 보장" 은 A층이 아니라 B층 몫', () => {
+  const adClaim = checkCompliance('치료를 보장합니다.');
+  const insurance = checkCompliance('보험은 암 치료를 보장하는 상품입니다.');
+  // 현재 A층은 둘을 구분하지 못하므로 **둘 다** 통과시킨다(오탐 회피 우선).
+  assert.equal(adClaim.violations.length, 0, '현재 A층 동작 — 바뀌면 위 주석을 갱신하라');
+  assert.equal(insurance.violations.length, 0, '보험 안내는 반드시 통과해야 한다');
+  // 성과 명사가 붙으면 A층이 잡는다 — 공백의 경계를 함께 고정한다.
+  assert.ok(checkCompliance('치료 성과를 보장합니다.').violations.length > 0);
+  assert.ok(checkCompliance('치료 효과를 보장합니다.').violations.length > 0);
+});
