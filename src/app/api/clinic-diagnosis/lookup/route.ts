@@ -80,15 +80,19 @@ export async function POST(req: NextRequest) {
     } = await lookupClinicWithFallback(name, region);
 
     /**
-     * 폴백 경로 진단 로그 — 민감정보 없음(단계 이름과 행 수뿐).
+     * 폴백 경로 진단 로그 — 서버 로그에만 남긴다(응답에는 싣지 않는다).
      *
-     * 2026-07-28: "화면은 그런 병원 없음, 로그는 조용함" 상태를 밖에서 가를 수단이
-     * 없어 원인 규명이 길어졌다. 폴백을 탄 요청은 어느 갈래로 빠졌는지 항상 남긴다.
+     * 2026-07-28: 폴백이 "왜" 빈손인지 밖에서 가릴 수단이 없어 원인 규명이 길어졌다.
+     * 단계·질의수·행수만 남겨 두면 다음번엔 로그 한 줄로 갈린다.
+     * ⚠️ 검색어(terms)는 사용자 입력의 파생형이라 로그에도 남기지 않는다.
      */
     if (directoryStage !== 'skipped' && directoryStage !== 'hit') {
       console.warn(
         `[clinic-diagnosis/lookup] 폴백 단계=${directoryStage} ` +
-          `visibleRows=${directoryVisibleRows ?? 'n/a'} registry=${outcome.kind}`,
+          `visibleRows=${directoryVisibleRows ?? 'n/a'} queries=${directoryQueries} ` +
+          `rows=${directoryRowsSeen} candidates=${directoryCandidatesSeen} ` +
+          `terms=${directoryTerms.length} region=${directoryRegion ? 'yes' : 'no'} ` +
+          `registry=${outcome.kind}`,
       );
     }
 
@@ -120,15 +124,6 @@ export async function POST(req: NextRequest) {
       cached: false,
       source: usedDirectory ? 'directory' : 'registry',
       // 운영 진단용. 단계 이름과 가시 행 수만 — 자격증명·질의문·개인정보 없음.
-      directory: {
-        stage: directoryStage,
-        visibleRows: directoryVisibleRows,
-        queries: directoryQueries,
-        rowsSeen: directoryRowsSeen,
-        candidatesSeen: directoryCandidatesSeen,
-        terms: directoryTerms,
-        region: directoryRegion,
-      },
     });
   } catch (err) {
     console.error('[clinic-diagnosis/lookup]', err instanceof Error ? err.message : err);
