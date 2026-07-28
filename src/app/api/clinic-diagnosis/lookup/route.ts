@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
       directoryQueries,
       directoryRowsSeen,
       directoryCandidatesSeen,
+      directoryTerms,
+      directoryRegion,
     } = await lookupClinicWithFallback(name, region);
 
     /**
@@ -124,6 +126,8 @@ export async function POST(req: NextRequest) {
         queries: directoryQueries,
         rowsSeen: directoryRowsSeen,
         candidatesSeen: directoryCandidatesSeen,
+        terms: directoryTerms,
+        region: directoryRegion,
       },
     });
   } catch (err) {

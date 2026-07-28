@@ -180,6 +180,16 @@ export interface DirectoryLookupResult {
   readonly rowsSeen: number;
   /** 후보 변환(toDirectoryCandidate)을 통과한 행 수 합계. */
   readonly candidatesSeen: number;
+  /**
+   * 실제로 질의에 쓴 검색어들 — **운영 진단용**.
+   *
+   * 2026-07-28: 같은 이름이 로컬에서는 검색어 2개로 풀려 찾아지는데 프로덕션은
+   * 1개만 만들어 0건이 났다. 무엇으로 찾고 있는지 모르면 더 좁힐 수가 없다.
+   * 사용자가 방금 입력한 병원명의 파생형이라 새로 노출되는 정보가 없다.
+   */
+  readonly terms: readonly string[];
+  /** 이름에서 분리해 낸 지역 힌트 ('' 이면 지역 필터 없음). */
+  readonly regionUsed: string;
 }
 
 /**
@@ -192,8 +202,16 @@ export async function lookupDirectory(
   rawName: string,
   options: { readonly search: DirectorySearch; readonly region?: string },
 ): Promise<DirectoryLookupResult> {
-  const empty = { usable: true, outcome: null, queries: 0, rowsSeen: 0, candidatesSeen: 0 } as const;
   const parsed = splitRegionHint(rawName, options.region);
+  const empty = {
+    usable: true,
+    outcome: null,
+    queries: 0,
+    rowsSeen: 0,
+    candidatesSeen: 0,
+    terms: [] as readonly string[],
+    regionUsed: parsed.region,
+  } as const;
   if (normalizeClinicName(parsed.name).length < 2) return empty;
 
   const terms = buildDirectoryTerms(parsed.name);
@@ -243,12 +261,30 @@ export async function lookupDirectory(
         queries,
         rowsSeen,
         candidatesSeen,
+        terms,
+        regionUsed: parsed.region,
       };
     }
-    return { usable: true, outcome, queries, rowsSeen, candidatesSeen };
+    return {
+      usable: true,
+      outcome,
+      queries,
+      rowsSeen,
+      candidatesSeen,
+      terms,
+      regionUsed: parsed.region,
+    };
   }
 
-  return { usable: anySuccess, outcome: null, queries, rowsSeen, candidatesSeen };
+  return {
+    usable: anySuccess,
+    outcome: null,
+    queries,
+    rowsSeen,
+    candidatesSeen,
+    terms,
+    regionUsed: parsed.region,
+  };
 }
 
 /** 지역 필터를 뺀 결과를 region_miss 로 강등한다 (자동 확정 금지). */
@@ -315,6 +351,9 @@ export interface CombinedLookup {
   readonly directoryQueries: number;
   readonly directoryRowsSeen: number;
   readonly directoryCandidatesSeen: number;
+  /** 실제 사용한 검색어와 지역 힌트 — 운영 진단용. */
+  readonly directoryTerms: readonly string[];
+  readonly directoryRegion: string;
 }
 
 /**
@@ -344,6 +383,8 @@ export async function combineWithDirectory(
       directoryQueries: 0,
       directoryRowsSeen: 0,
       directoryCandidatesSeen: 0,
+      directoryTerms: [],
+      directoryRegion: '',
     };
   }
 
@@ -359,6 +400,8 @@ export async function combineWithDirectory(
       directoryQueries: 0,
       directoryRowsSeen: 0,
       directoryCandidatesSeen: 0,
+      directoryTerms: [],
+      directoryRegion: '',
     };
   }
 
@@ -373,6 +416,8 @@ export async function combineWithDirectory(
       directoryQueries: fallback.queries,
       directoryRowsSeen: fallback.rowsSeen,
       directoryCandidatesSeen: fallback.candidatesSeen,
+      directoryTerms: fallback.terms,
+      directoryRegion: fallback.regionUsed,
     };
   }
   // 폴백 쿼리가 **전부 실패**했다면 "폴백에도 없다"가 아니라 "확인하지 못했다"이다.
@@ -386,6 +431,8 @@ export async function combineWithDirectory(
       directoryQueries: fallback.queries,
       directoryRowsSeen: fallback.rowsSeen,
       directoryCandidatesSeen: fallback.candidatesSeen,
+      directoryTerms: fallback.terms,
+      directoryRegion: fallback.regionUsed,
     };
   }
 
@@ -410,6 +457,8 @@ export async function combineWithDirectory(
         directoryQueries: fallback.queries,
         directoryRowsSeen: fallback.rowsSeen,
         directoryCandidatesSeen: fallback.candidatesSeen,
+        directoryTerms: fallback.terms,
+        directoryRegion: fallback.regionUsed,
       };
     }
   }
@@ -422,6 +471,8 @@ export async function combineWithDirectory(
     directoryQueries: fallback.queries,
     directoryRowsSeen: fallback.rowsSeen,
     directoryCandidatesSeen: fallback.candidatesSeen,
+    directoryTerms: fallback.terms,
+    directoryRegion: fallback.regionUsed,
   };
 }
 
