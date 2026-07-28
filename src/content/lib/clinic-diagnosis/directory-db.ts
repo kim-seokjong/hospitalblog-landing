@@ -113,16 +113,21 @@ export function createDirectoryProbe(
 
   return async (): Promise<DirectoryProbeResult> => {
     try {
-      const { data, error } = await admin
+      /**
+       * ⚠️ limit(1) 로 "한 줄이라도 보이나"만 보면 안 된다 (2026-07-28 실패).
+       *    권한이 정상인데 **명부가 거의 비어 있는** 상태(적재를 다른 Supabase
+       *    프로젝트에 했다든지)를 "정상"으로 오판한다. 실제 건수를 센다.
+       *    head:true 라 행을 실어 오지 않고 COUNT 만 받는다.
+       */
+      const { count, error } = await admin
         .from('clinic_directory')
-        .select('mng_no')
-        .limit(1)
+        .select('mng_no', { count: 'exact', head: true })
         .abortSignal(timeoutSignal(timeoutMs));
       if (error) {
         console.error('[clinic-diagnosis/directory] 명부 가시성 확인 실패:', error.message);
         return { ok: false, visibleRows: 0 };
       }
-      return { ok: true, visibleRows: (data ?? []).length };
+      return { ok: true, visibleRows: typeof count === 'number' ? count : 0 };
     } catch (e) {
       console.error(
         '[clinic-diagnosis/directory] 명부 가시성 확인 예외:',
