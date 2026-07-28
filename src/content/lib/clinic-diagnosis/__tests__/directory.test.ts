@@ -194,8 +194,53 @@ test('행안부가 진짜 0건이고 폴백에도 없으면 not_found 를 유지
   assert.equal(combined.directoryTried, true);
 });
 
-test('폴백이 아예 없는 환경(search=null)에서도 행안부 판정이 그대로 나간다', async () => {
+/**
+ * ★ 2026-07-28 에 뒤집은 판단.
+ *
+ * 원래 이 자리에는 "폴백이 없는 환경(search=null)에서도 행안부 판정이 그대로
+ * 나간다"는 테스트가 있었다. 그 선택이 실제 사고를 감췄다 — 프로덕션의
+ * SUPABASE_SERVICE_ROLE_KEY 가 무효라 폴백 클라이언트가 만들어지지 않는 동안
+ * 행안부는 0건을 뱉었고, 실존 병원이 전부 "그런 병원 없음"으로 표시됐다.
+ * 화면에는 아무 이상 신호가 없어서 하루 넘게 아무도 몰랐다.
+ *
+ * 폴백은 정본이 0건일 때 판정을 뒤집을 수 있는 **유일한 근거**다. 그것을 못 본
+ * 채로 "없다"고 말하면 안 된다 — 2026-07-27 사고의 교훈 그대로다.
+ */
+test('★폴백을 못 만들면(search=null) not_found 를 unavailable 로 강등한다 — "없음"으로 내보내지 않는다', async () => {
   const combined = await combineWithDirectory({ kind: 'not_found' }, '미소치과의원', { search: null });
-  assert.equal(combined.outcome.kind, 'not_found');
+  assert.equal(combined.outcome.kind, 'unavailable');
+  assert.equal(combined.usedDirectory, false);
   assert.equal(combined.directoryTried, false);
+});
+
+test('★폴백 쿼리가 전부 실패해도 not_found 를 unavailable 로 강등한다', async () => {
+  const combined = await combineWithDirectory({ kind: 'not_found' }, '미소치과의원', {
+    search: FAILING_SEARCH,
+  });
+  assert.equal(combined.outcome.kind, 'unavailable');
+  assert.equal(combined.usedDirectory, false);
+});
+
+test('강등은 not_found 에만 적용한다 — 행안부가 이미 unavailable 이면 사유를 보존한다', async () => {
+  const combined = await combineWithDirectory(
+    { kind: 'unavailable', reason: 'key_rejected' },
+    '미소치과의원',
+    { search: null },
+  );
+  assert.equal(combined.outcome.kind, 'unavailable');
+  assert.equal(
+    combined.outcome.kind === 'unavailable' ? combined.outcome.reason : null,
+    'key_rejected',
+  );
+});
+
+test('행안부가 자료를 보여준 판정은 폴백 상태와 무관하게 그대로 둔다', async () => {
+  for (const outcome of [
+    { kind: 'resolved' as const, clinic: toDirectoryCandidate(ROW_MISO)! },
+    { kind: 'needs_region' as const, candidates: [], totalCount: 300 },
+  ]) {
+    const combined = await combineWithDirectory(outcome, '미소치과의원', { search: null });
+    assert.equal(combined.outcome.kind, outcome.kind);
+    assert.equal(combined.usedDirectory, false);
+  }
 });

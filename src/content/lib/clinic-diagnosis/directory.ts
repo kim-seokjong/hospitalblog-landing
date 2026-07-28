@@ -272,13 +272,55 @@ export async function combineWithDirectory(
   rawName: string,
   options: { readonly search: DirectorySearch | null; readonly region?: string },
 ): Promise<CombinedLookup> {
-  if (!options.search || !shouldTryDirectory(registryOutcome)) {
+  if (!shouldTryDirectory(registryOutcome)) {
     return { outcome: registryOutcome, usedDirectory: false, directoryTried: false };
+  }
+
+  // 폴백을 아예 만들지 못했다 = 설정 장애(서비스 키 누락·무효 등).
+  // 행안부의 not_found 를 그대로 내보내면 "그런 병원 없음"이 된다 — 금지.
+  if (!options.search) {
+    return {
+      outcome: degradeUnverifiedNotFound(registryOutcome, 'search_unavailable'),
+      usedDirectory: false,
+      directoryTried: false,
+    };
   }
 
   const fallback = await lookupDirectory(rawName, { search: options.search, region: options.region });
   if (fallback.outcome) {
     return { outcome: fallback.outcome, usedDirectory: true, directoryTried: true };
   }
+  // 폴백 쿼리가 **전부 실패**했다면 "폴백에도 없다"가 아니라 "확인하지 못했다"이다.
+  if (!fallback.usable) {
+    return {
+      outcome: degradeUnverifiedNotFound(registryOutcome, 'query_failed'),
+      usedDirectory: false,
+      directoryTried: false,
+    };
+  }
   return { outcome: registryOutcome, usedDirectory: false, directoryTried: fallback.usable };
+}
+
+/**
+ * 폴백을 **확인하지 못한** 상태에서 행안부의 not_found 를 그대로 내보내지 않는다.
+ *
+ * ★ 2026-07-28. 행안부가 다시 0건을 뱉는 동안 폴백 명부가 조용히 죽어 있었다
+ *   (프로덕션 서비스 키 무효). 그 결과 실존 병원이 전부 "그런 병원 없음"으로
+ *   표시됐다 — 2026-07-27 사고에서 다시는 하지 않기로 한 바로 그 실패 모드다.
+ *   폴백은 정본이 0건일 때 **판정을 뒤집을 수 있는 유일한 근거**이므로, 그것을
+ *   못 본 채로는 "없다"고 말할 자격이 없다.
+ *
+ * 행안부가 이미 unavailable 이었다면 그대로 둔다(사유가 더 구체적이다).
+ * 폴백이 정상 동작해 "정말 없음"을 확인한 경로는 여기로 오지 않는다.
+ */
+function degradeUnverifiedNotFound(
+  registryOutcome: ClinicLookupOutcome,
+  cause: 'search_unavailable' | 'query_failed',
+): ClinicLookupOutcome {
+  if (registryOutcome.kind !== 'not_found') return registryOutcome;
+  console.error(
+    `[clinic-diagnosis/directory] 폴백 확인 불가(${cause}) — not_found 를 unavailable 로 강등한다. ` +
+      '운영 확인 필요: SUPABASE_SERVICE_ROLE_KEY 및 clinic_directory 접근.',
+  );
+  return { kind: 'unavailable', reason: 'fetch_failed' };
 }
