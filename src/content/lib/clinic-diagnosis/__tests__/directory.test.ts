@@ -188,10 +188,57 @@ test('★둘 다 실패하면 행안부의 판정을 그대로 둔다 — 조회
 test('행안부가 진짜 0건이고 폴백에도 없으면 not_found 를 유지한다', async () => {
   const combined = await combineWithDirectory({ kind: 'not_found' }, '없는이름의원', {
     search: searchReturning([]),
+    probe: async () => ({ ok: true, visibleRows: 1 }), // 명부는 정상적으로 보인다
   });
   assert.equal(combined.outcome.kind, 'not_found');
   assert.equal(combined.usedDirectory, false);
   assert.equal(combined.directoryTried, true);
+});
+
+/**
+ * ★ 2026-07-28 의 진짜 실패 모드 — "오류"가 아니라 "조용한 0건".
+ *
+ * clinic_directory 는 RLS 활성 + SELECT 정책 없음이라 service_role 키만 읽을 수 있다.
+ * 프로덕션에 service_role 이 아닌 키가 들어가 있으면 PostgREST 가 **오류 없이**
+ * 200 + 빈 배열을 준다. 그래서 ok:false 판정으로는 절대 잡히지 않고,
+ * 실존 병원이 전부 "그런 병원 없음"으로 표시됐다. 79,562 건이 적재된 명부가
+ * 한 줄도 안 보이면 그건 "없는 병원"이 아니라 **우리 쪽 사고**다.
+ */
+test('★명부가 한 줄도 안 보이면(조용한 0건) not_found 를 unavailable 로 강등한다', async () => {
+  const combined = await combineWithDirectory({ kind: 'not_found' }, '미소치과의원', {
+    search: searchReturning([]), // 질의는 성공, 결과만 0건
+    probe: async () => ({ ok: true, visibleRows: 0 }), // 그런데 명부 자체가 안 보인다
+  });
+  assert.equal(combined.outcome.kind, 'unavailable');
+  assert.equal(combined.usedDirectory, false);
+});
+
+test('가시성 확인 자체가 실패해도 강등한다 — 확인 못 한 것을 "없음"으로 말하지 않는다', async () => {
+  const combined = await combineWithDirectory({ kind: 'not_found' }, '미소치과의원', {
+    search: searchReturning([]),
+    probe: async () => ({ ok: false, visibleRows: 0 }),
+  });
+  assert.equal(combined.outcome.kind, 'unavailable');
+});
+
+test('probe 를 안 넘기면 종전대로 동작한다 — 기존 호출부를 깨지 않는다', async () => {
+  const combined = await combineWithDirectory({ kind: 'not_found' }, '없는이름의원', {
+    search: searchReturning([]),
+  });
+  assert.equal(combined.outcome.kind, 'not_found');
+});
+
+test('폴백이 병원을 찾았으면 가시성 확인을 하지 않는다 — 정상 경로에 비용을 더하지 않는다', async () => {
+  let probed = 0;
+  const combined = await combineWithDirectory({ kind: 'not_found' }, '미소치과의원', {
+    search: searchReturning([ROW_MISO]),
+    probe: async () => {
+      probed += 1;
+      return { ok: true, visibleRows: 1 };
+    },
+  });
+  assert.equal(combined.outcome.kind, 'resolved');
+  assert.equal(probed, 0);
 });
 
 /**

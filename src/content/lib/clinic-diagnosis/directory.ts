@@ -144,6 +144,21 @@ export type DirectorySearchResult =
 /** DB 질의 어댑터 — directory-db.ts 가 구현한다. 절대 throw 하지 않는다. */
 export type DirectorySearch = (query: DirectoryQuery) => Promise<DirectorySearchResult>;
 
+/**
+ * 명부 가시성 확인 결과.
+ *
+ * `ok:true && visibleRows === 0` 은 "이 자격증명으로는 명부가 한 줄도 안 보인다"는
+ * 뜻이다 — 79,562 건이 적재돼 있으므로 정상 상태에서는 나올 수 없다.
+ * (RLS 활성 + SELECT 정책 없음 → service_role 이 아닌 키는 오류 없이 빈 결과를 받는다.)
+ */
+export interface DirectoryProbeResult {
+  readonly ok: boolean;
+  readonly visibleRows: number;
+}
+
+/** 명부 가시성 확인 어댑터 — directory-db.ts 가 구현한다. 절대 throw 하지 않는다. */
+export type DirectoryProbe = () => Promise<DirectoryProbeResult>;
+
 export interface DirectoryLookupResult {
   /**
    * 폴백 명부를 **실제로 조회할 수 있었는가**.
@@ -270,7 +285,12 @@ export interface CombinedLookup {
 export async function combineWithDirectory(
   registryOutcome: ClinicLookupOutcome,
   rawName: string,
-  options: { readonly search: DirectorySearch | null; readonly region?: string },
+  options: {
+    readonly search: DirectorySearch | null;
+    readonly region?: string;
+    /** 이름 검색이 0건일 때 명부 가시성을 1회 확인한다. 없으면 확인을 건너뛴다. */
+    readonly probe?: DirectoryProbe | null;
+  },
 ): Promise<CombinedLookup> {
   if (!shouldTryDirectory(registryOutcome)) {
     return { outcome: registryOutcome, usedDirectory: false, directoryTried: false };
@@ -298,6 +318,24 @@ export async function combineWithDirectory(
       directoryTried: false,
     };
   }
+
+  /**
+   * 여기까지 왔다 = 질의는 전부 성공했는데 이름으로 한 건도 못 찾았다.
+   * 대부분은 정말 없는 병원이지만, **명부 자체가 안 보이는 상태**도 똑같이 생겼다
+   * (RLS 활성 + service_role 아닌 키 → 오류 없이 빈 결과). 그 둘을 가르지 않으면
+   * 설정 사고가 "그런 병원 없음"으로 둔갑한다 — 2026-07-28 에 실제로 그랬다.
+   * 그래서 이 경로에서만 명부 가시성을 1회 확인한다.
+   */
+  if (options.probe) {
+    const probe = await options.probe();
+    if (!probe.ok || probe.visibleRows === 0) {
+      return {
+        outcome: degradeUnverifiedNotFound(registryOutcome, 'directory_invisible'),
+        usedDirectory: false,
+        directoryTried: false,
+      };
+    }
+  }
   return { outcome: registryOutcome, usedDirectory: false, directoryTried: fallback.usable };
 }
 
@@ -315,7 +353,7 @@ export async function combineWithDirectory(
  */
 function degradeUnverifiedNotFound(
   registryOutcome: ClinicLookupOutcome,
-  cause: 'search_unavailable' | 'query_failed',
+  cause: 'search_unavailable' | 'query_failed' | 'directory_invisible',
 ): ClinicLookupOutcome {
   if (registryOutcome.kind !== 'not_found') return registryOutcome;
   console.error(

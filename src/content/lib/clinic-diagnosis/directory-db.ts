@@ -2,6 +2,8 @@ import { createAdminClient } from '@/dev/lib/supabase/server';
 import {
   isDirectoryMngNo,
   toDirectoryCandidate,
+  type DirectoryProbe,
+  type DirectoryProbeResult,
   type DirectoryQuery,
   type DirectoryRow,
   type DirectorySearch,
@@ -80,6 +82,53 @@ export function createDirectorySearch(timeoutMs: number = DIRECTORY_TIMEOUT_MS):
       const message = e instanceof Error ? e.message : '알 수 없는 오류';
       console.error('[clinic-diagnosis/directory] 폴백 조회 예외:', message);
       return { ok: false, message };
+    }
+  };
+}
+
+/**
+ * 폴백 명부가 **실제로 보이는가**를 1회 확인한다 (필터 없이 1건).
+ *
+ * ★ 2026-07-28. 폴백이 죽는 방식이 "오류"가 아니라 "조용한 0건"이었다.
+ *   clinic_directory 는 RLS 가 켜져 있고 SELECT 정책이 없다 — service_role 키만
+ *   RLS 를 우회해 79,562건을 본다. 프로덕션에 service_role 이 아닌 키가 들어가
+ *   있으면 PostgREST 는 **오류 없이 200 + 빈 배열**을 돌려준다. 그래서 서버는
+ *   "조회 성공, 결과 없음"으로 받아들이고 화면에 "그런 병원 없음"을 냈다.
+ *   조회 실패 판정(ok:false)만으로는 이 상태를 절대 잡을 수 없다.
+ *
+ * 그래서 "이름으로 못 찾았다"와 "명부 자체가 안 보인다"를 가른다. 후자면 폴백은
+ * 근거가 될 수 없으므로 not_found 를 그대로 내보내면 안 된다.
+ *
+ * 비용: 이름 검색이 전부 0건일 때만 1회 더 doubles. 정상 경로에는 영향이 없다.
+ */
+export function createDirectoryProbe(
+  timeoutMs: number = DIRECTORY_TIMEOUT_MS,
+): DirectoryProbe | null {
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return null;
+  }
+
+  return async (): Promise<DirectoryProbeResult> => {
+    try {
+      const { data, error } = await admin
+        .from('clinic_directory')
+        .select('mng_no')
+        .limit(1)
+        .abortSignal(timeoutSignal(timeoutMs));
+      if (error) {
+        console.error('[clinic-diagnosis/directory] 명부 가시성 확인 실패:', error.message);
+        return { ok: false, visibleRows: 0 };
+      }
+      return { ok: true, visibleRows: (data ?? []).length };
+    } catch (e) {
+      console.error(
+        '[clinic-diagnosis/directory] 명부 가시성 확인 예외:',
+        e instanceof Error ? e.message : e,
+      );
+      return { ok: false, visibleRows: 0 };
     }
   };
 }

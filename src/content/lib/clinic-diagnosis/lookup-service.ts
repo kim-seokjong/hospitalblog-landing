@@ -10,7 +10,7 @@ import {
   shouldTryDirectory,
   type CombinedLookup,
 } from './directory';
-import { createDirectorySearch, findDirectoryClinic } from './directory-db';
+import { createDirectorySearch, createDirectoryProbe, findDirectoryClinic } from './directory-db';
 import type { ClinicCandidate } from './types';
 
 /**
@@ -31,8 +31,11 @@ export async function lookupClinicWithFallback(
 ): Promise<CombinedLookup> {
   const { outcome: registryOutcome, trace } = await lookupClinicsDetailed(name, { region });
   // 행안부가 제대로 답한 경우(대부분)에는 폴백 클라이언트를 만들지도 않는다.
+  const tryDirectory = shouldTryDirectory(registryOutcome);
   const combined = await combineWithDirectory(registryOutcome, name, {
-    search: shouldTryDirectory(registryOutcome) ? createDirectorySearch() : null,
+    search: tryDirectory ? createDirectorySearch() : null,
+    // 이름 검색이 0건일 때만 쓰인다 — 명부가 안 보이는 상태를 "없음"과 가르기 위해.
+    probe: tryDirectory ? createDirectoryProbe() : null,
     region,
   });
 
