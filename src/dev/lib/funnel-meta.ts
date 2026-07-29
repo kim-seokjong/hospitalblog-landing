@@ -74,11 +74,15 @@ export interface ClientFunnelContext {
   ownHostname?: string | null;
 }
 
+/** referrer_host 를 서버가 받아주는 이벤트 (EVENT_META_VALIDATORS 미러). */
+const REFERRER_HOST_EVENTS: readonly PublicFunnelEvent[] = ['landing_view', 'pricing_view'];
+
 /**
- * 공개 퍼널 이벤트(landing_view·signup_start)용 자동 meta 조립.
+ * 공개 퍼널 이벤트(landing_view·pricing_view·signup_start 등)용 자동 meta 조립.
  * 서버 화이트리스트가 허용하는 키만 만든다:
- *  - landing_view: path·source·referrer_host
- *  - signup_start: path·source (referrer_host 는 서버가 안 받으므로 애초에 안 보냄)
+ *  - landing_view·pricing_view: path·source·referrer_host
+ *  - 그 외(signup_start·diagnosis_*): path·source
+ *    (referrer_host 는 서버가 안 받으므로 애초에 안 보냄)
  * 유효한 값이 하나도 없으면 빈 객체.
  */
 export function buildPublicFunnelMeta(
@@ -93,7 +97,7 @@ export function buildPublicFunnelMeta(
   const source = normalizeUtmSource(ctx.search);
   if (source !== undefined) out.source = source;
 
-  if (event === 'landing_view') {
+  if (REFERRER_HOST_EVENTS.includes(event)) {
     const referrerHost = normalizeReferrerHost(ctx.referrer, ctx.ownHostname);
     if (referrerHost !== undefined) out.referrer_host = referrerHost;
   }

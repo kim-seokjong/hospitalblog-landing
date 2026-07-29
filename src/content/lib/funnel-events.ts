@@ -36,6 +36,10 @@ export const FUNNEL_EVENTS = [
   // diagnosis_email_submitted 는 서버가 발송·적재에 성공했을 때만 기록한다(위조 불가).
   'diagnosis_email_submitted',
   'diagnosis_cta_click',
+  // 요금제 페이지 도달 (2026-07-29 추가). 랜딩~가입 사이가 통째로 비어 있어서
+  // "요금을 보러 가지도 않는다"와 "요금을 보고 나간다"를 구분할 수 없었다.
+  // 가입 시작 **직전** 단계로 둔다 — /admin 퍼널 카드가 이 순서대로 표시한다.
+  'pricing_view',
   'signup_start',
   'signup_complete',
   'first_post_generated',
@@ -65,6 +69,10 @@ export const PUBLIC_FUNNEL_EVENTS = [
   // diagnosis_email_submitted 는 여기 없다: 실제 발송·적재 성공을 서버만 알 수 있고,
   // 이메일 확보율이 이 개편의 핵심 지표라 위조된 분자를 받아서는 안 된다.
   'diagnosis_cta_click',
+  // 요금제 페이지 도달 = 비회원이 브라우저에서 일으키는 **저신뢰 의도 이벤트**라
+  // landing_view 와 같은 등급으로 공개 허용한다. 위조되어도 요금 조회 수가 부풀 뿐
+  // 가입·결제 전환 지표(서버 전용 이벤트)는 오염되지 않는다.
+  'pricing_view',
   'signup_start',
 ] as const;
 
@@ -187,6 +195,10 @@ const EVENT_META_VALIDATORS: Record<FunnelEvent, Record<string, MetaValidator>> 
   // 수신 주소는 당연히 meta 에 넣지 않는다(PII 는 리드 테이블에만).
   diagnosis_email_submitted: { path: pathMeta, source: tokenMeta, sent: boolMeta },
   diagnosis_cta_click: { path: pathMeta, source: tokenMeta },
+  // landing_view 와 **동일한 3키**. referrer_host 까지 받는 이유: 요금 페이지는 랜딩·
+  // 진단 결과·외부 검색 등 여러 경로로 도달하는데, 유입 출처를 모르면 "어디서 요금을
+  // 보러 왔나"를 답할 수 없다. 병원명 같은 PII 는 여기서도 받지 않는다.
+  pricing_view: { path: pathMeta, source: tokenMeta, referrer_host: hostMeta },
   signup_start: { path: pathMeta, source: tokenMeta, hospital_type: hospitalTypeMeta },
   signup_complete: { hospital_type: hospitalTypeMeta },
   first_post_generated: { free_credit: boolMeta, target_site: tokenMeta },

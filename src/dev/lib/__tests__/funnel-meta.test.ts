@@ -124,6 +124,32 @@ test('landing_view: 자기 도메인 리퍼러·utm 부재면 해당 키 생략'
   assert.deepEqual(meta, { path: '/pricing' });
 });
 
+// pricing_view 는 landing_view 와 동급 — 유입 출처를 알아야 "어디서 요금 보러 왔나"가 나온다.
+test('pricing_view: path·source·referrer_host 조립 (landing_view 와 동일)', () => {
+  const meta = buildPublicFunnelMeta('pricing_view', {
+    pathname: '/pricing',
+    search: '?utm_source=cold-email',
+    referrer: 'https://search.naver.com/search.naver?query=x',
+    ownHostname: 'hospitalblog.kr',
+  });
+  assert.deepEqual(meta, {
+    path: '/pricing',
+    source: 'cold-email',
+    referrer_host: 'search.naver.com',
+  });
+});
+
+test('pricing_view: 랜딩에서 넘어온 내부 이동은 referrer_host 를 남기지 않는다', () => {
+  // 자기 도메인 리퍼러는 유입 출처가 아니다(랜딩→요금 이동은 path 로 읽는다).
+  const meta = buildPublicFunnelMeta('pricing_view', {
+    pathname: '/pricing',
+    search: '',
+    referrer: 'https://hospitalblog.kr/',
+    ownHostname: 'hospitalblog.kr',
+  });
+  assert.deepEqual(meta, { path: '/pricing' });
+});
+
 test('signup_start: referrer_host 는 만들지 않는다 (서버 화이트리스트 밖)', () => {
   const meta = buildPublicFunnelMeta('signup_start', {
     pathname: '/',

@@ -90,6 +90,7 @@ test('aggregateFunnelStats: KST 귀속·고유 dedup·창 경계·오염 이벤�
       ['diagnosis_report_view', 1],
       ['diagnosis_email_submitted', 1],
       ['diagnosis_cta_click', 0],
+      ['pricing_view', 0],
       ['signup_start', 1],
       ['signup_complete', 1],
       ['first_post_generated', 1],
@@ -108,6 +109,6 @@ test('aggregateFunnelStats: 데이터 없음 → totalEvents 0·전 단계 0 (�
   assert.equal(stats.todayVisitors, 0);
   assert.equal(stats.todayViews, 0);
   assert.equal(stats.daily.length, FUNNEL_DAILY_WINDOW_DAYS);
-  assert.equal(stats.weekly.length, 11);
+  assert.equal(stats.weekly.length, 12);
   assert.equal(stats.weekly.every((s) => s.count === 0), true);
 });

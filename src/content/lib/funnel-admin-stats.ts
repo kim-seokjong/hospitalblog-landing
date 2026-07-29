@@ -67,6 +67,7 @@ export const FUNNEL_STAGE_LABELS: Record<FunnelEvent, string> = {
   diagnosis_report_view: '진단 결과',
   diagnosis_email_submitted: '진단 메일 신청',
   diagnosis_cta_click: '진단 CTA 클릭',
+  pricing_view: '요금 확인',
   signup_start: '가입 시작',
   signup_complete: '가입 완료',
   first_post_generated: '첫 글 생성',

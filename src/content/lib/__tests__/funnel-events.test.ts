@@ -43,6 +43,7 @@ test('isPublicFunnelEvent: 방문·진단·가입시작(저신뢰 의도) 만 tr
       'diagnosis_run',
       'diagnosis_report_view',
       'diagnosis_cta_click',
+      'pricing_view',
       'signup_start',
     ],
   );
@@ -52,6 +53,8 @@ test('isPublicFunnelEvent: 방문·진단·가입시작(저신뢰 의도) 만 tr
   assert.equal(isPublicFunnelEvent('diagnosis_run'), true);
   assert.equal(isPublicFunnelEvent('diagnosis_report_view'), true);
   assert.equal(isPublicFunnelEvent('diagnosis_cta_click'), true);
+  // 요금 확인 = 비회원 브라우저가 일으키는 저신뢰 의도 이벤트 → 공개 허용.
+  assert.equal(isPublicFunnelEvent('pricing_view'), true);
   assert.equal(isPublicFunnelEvent('signup_start'), true);
   // 전환 확정 이벤트는 공개에서 거부 (서버 전용)
   // diagnosis_email_submitted 포함 — 이메일 확보율이 핵심 지표라 분자를 위조당하면 안 된다.
@@ -73,12 +76,56 @@ test('FUNNEL_EVENTS: 진단 단계가 방문과 가입 시작 사이에 온다',
       'diagnosis_report_view',
       'diagnosis_email_submitted',
       'diagnosis_cta_click',
+      // 요금 확인은 가입 시작 **직전** 단계다 — 랜딩~가입 사이의 빈칸을 메운다.
+      'pricing_view',
       'signup_start',
       'signup_complete',
       'first_post_generated',
       'payment_success',
     ],
   );
+});
+
+// ── pricing_view meta (landing_view 와 동급: path·source·referrer_host) ──
+test('pricing_view: 허용 meta 는 path·source·referrer_host 뿐', () => {
+  assert.deepEqual([...EVENT_META_KEYS.pricing_view], ['path', 'source', 'referrer_host']);
+  assert.deepEqual(
+    sanitizeMeta(
+      { path: '/pricing', source: 'insta_bio', referrer_host: 'Search.Naver.com' },
+      'pricing_view',
+    ),
+    { path: '/pricing', source: 'insta_bio', referrer_host: 'search.naver.com' },
+  );
+});
+
+test('pricing_view: 허용되지 않은 키는 전부 버린다 (전환 속성 주입·PII 차단)', () => {
+  // plan·value 는 payment_success 전용 — 요금 페이지에서 주입해 결제 분석을 오염시킬 수 없다.
+  assert.equal(sanitizeMeta({ plan: 'pro', value: 399000 }, 'pricing_view'), null);
+  assert.equal(sanitizeMeta({ hospital_type: '치과', free_credit: true }, 'pricing_view'), null);
+  assert.equal(sanitizeMeta({ email: 'a@b.com', phone: '010-0000-0000' }, 'pricing_view'), null);
+  // 섞여 들어와도 허용 키만 남는다.
+  assert.deepEqual(sanitizeMeta({ path: '/pricing', plan: 'pro' }, 'pricing_view'), {
+    path: '/pricing',
+  });
+});
+
+test('pricing_view: 값 형식 검증은 landing_view 와 동일하게 적용된다', () => {
+  // 쿼리스트링·해시는 잘린다(PII 가능 영역 미저장).
+  assert.deepEqual(sanitizeMeta({ path: '/pricing?email=a@b.com#x' }, 'pricing_view'), {
+    path: '/pricing',
+  });
+  // 자유 문자열 source·호스트 형식이 아닌 referrer_host 는 거부.
+  assert.equal(sanitizeMeta({ source: 'a@b.com' }, 'pricing_view'), null);
+  assert.equal(sanitizeMeta({ referrer_host: 'evil.com/path?x=1' }, 'pricing_view'), null);
+});
+
+test('validateFunnelBody: pricing_view 는 공개 엔드포인트에서 통과한다', () => {
+  const r = validateFunnelBody({ event: 'pricing_view', meta: { path: '/pricing' } });
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    assert.equal(r.value.event, 'pricing_view');
+    assert.deepEqual(r.value.meta, { path: '/pricing' });
+  }
 });
 
 // ── anon_id ──
