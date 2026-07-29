@@ -80,6 +80,15 @@ export function isPublicFunnelEvent(value: unknown): value is PublicFunnelEvent 
   return typeof value === 'string' && (PUBLIC_FUNNEL_EVENTS as readonly string[]).includes(value);
 }
 
+/**
+ * ⚠️ **anon_id 고유 수 = 방문자 수가 아니다.** 쿠키를 저장하지 않는 클라이언트(크롤러·
+ * 메일 링크스캐너)는 매 요청마다 새 anon_id 를 받아간다. 실제로 2026-07-29 이전
+ * funnel_events 는 이 때문에 오염돼 있다 — 7일 고유 anon_id 49개 중 사람은 사실상 1명,
+ * 42개는 이벤트 1건짜리였다. **7월 방문자·유입 수치를 그대로 믿지 마라.**
+ * 2026-07-29부터 라우트가 봇 UA 를 앞단에서 거른다(src/content/lib/bot-user-agent.ts).
+ * 과거 데이터 소급 정리는 하지 않았다.
+ */
+
 /** anon_id 쿠키 이름 — 브라우저·서버 공통 상수. */
 export const ANON_ID_COOKIE = 'dp_anon_id';
 /** anon_id 쿠키 수명 (초) — 1년. */

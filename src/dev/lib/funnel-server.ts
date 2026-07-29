@@ -14,6 +14,7 @@ import {
   shouldRecordOnceEvent,
   shouldRecordFirstPostEvent,
 } from '@/content/lib/funnel-events';
+import { isInternalUserId, readInternalUserIds } from '@/content/lib/internal-traffic';
 
 export interface RecordFunnelInput {
   event: FunnelEvent;
@@ -30,6 +31,13 @@ export interface RecordFunnelInput {
  */
 export async function recordFunnelEvent(input: RecordFunnelInput): Promise<boolean> {
   try {
+    // 내부 계정(대표·팀) 제외 — **모든 적재의 길목**이라 여기 두어야 새는 곳이 없다.
+    // /api/funnel-event 에만 두면 서버가 직접 기록하는 전환 이벤트(signup_complete·
+    // payment_success·diagnosis_email_submitted·first_post_generated)가 그대로 샌다.
+    // 목록은 env(FUNNEL_INTERNAL_USER_IDS)로만 오며, 비어 있으면 아무도 제외되지 않는다
+    // — 실제 고객이 휩쓸리는 것이 최악의 실패 모드다(internal-traffic.ts 주석 참조).
+    if (isInternalUserId(input.userId, readInternalUserIds())) return false;
+
     const meta: SanitizedMeta = sanitizeMeta(input.meta, input.event);
     const admin = createAdminClient();
     const { error } = await admin.from('funnel_events').insert({

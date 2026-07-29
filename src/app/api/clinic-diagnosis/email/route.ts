@@ -18,6 +18,7 @@ import {
 } from '@/content/lib/clinic-diagnosis/email-lead';
 import { extractClientIp } from '@/content/lib/clinic-diagnosis/limits';
 import { ANON_ID_COOKIE, isValidAnonId } from '@/content/lib/funnel-events';
+import { INTERNAL_COOKIE, hasInternalCookie } from '@/content/lib/internal-traffic';
 import { SITE_URL } from '@/dev/lib/seo/site';
 import type { DiagnosisReport } from '@/content/lib/clinic-diagnosis/types';
 
@@ -209,6 +210,11 @@ export async function POST(req: NextRequest) {
         }
       },
       recordFunnel: async ({ sent }) => {
+        // 내부 트래픽(대표 본인) 제외 — 이 이벤트는 로그인 없이 익명으로 기록되므로
+        // recordFunnelEvent 의 계정 기반 필터가 걸러주지 못한다(userId 가 없다).
+        // 이메일 확보율은 1순위 지표라 우리 자신의 테스트 제출이 섞이면 안 된다.
+        // ※ 리드 저장·발송 자체는 그대로 진행한다 — 막는 건 계측뿐이다.
+        if (hasInternalCookie(req.cookies.get(INTERNAL_COOKIE)?.value)) return;
         // 수신 주소는 meta 에 넣지 않는다(PII 는 리드 테이블에만).
         await recordFunnelEvent({
           event: 'diagnosis_email_submitted',
