@@ -242,8 +242,16 @@ export function buildFaqPageSchema(faqItems: ReadonlyArray<FaqItem>): JsonLdObje
 }
 
 /**
- * MedicalClinic 스키마 — 프로필의 공개 사실정보(병원명·진료과·지역·주소)만 사용.
+ * 발행 주체 스키마 — 프로필의 공개 사실정보(이름·진료과·지역·주소)만 사용.
  * 병원명이 없으면 null (스키마 생략). 매출·방문자 등 수치는 어떤 경우에도 없음.
+ *
+ * ★@type 은 진료과 유무로 가른다 (2026-07-30):
+ *   - 진료과 있음 → MedicalClinic (기존 그대로)
+ *   - 진료과 없음 → Organization
+ *   진료과가 비어 있으면 이 주체가 의료기관인지 확신할 수 없다. 실제로 대행사
+ *   계정(광고진정성)이 서브블로그를 쓰면서 MedicalClinic 으로 나가고 있었다 —
+ *   AI 가 "병원마케팅 업체"를 찾을 때 병원으로 잘못 분류된다. Organization 은
+ *   MedicalClinic 의 상위 타입이라, 진료과 미설정 병원에게도 틀린 라벨이 아니다.
  */
 export function buildMedicalClinicSchema(profile: GeoHospitalProfile): JsonLdObject | null {
   const hospitalName = normalized(profile.hospitalName);
@@ -267,7 +275,7 @@ export function buildMedicalClinicSchema(profile: GeoHospitalProfile): JsonLdObj
 
   return {
     '@context': SCHEMA_CONTEXT,
-    '@type': 'MedicalClinic',
+    '@type': specialty ? 'MedicalClinic' : 'Organization',
     name: hospitalName,
     ...(specialty ? { medicalSpecialty: specialty } : {}),
     ...(postalAddress ? { address: postalAddress } : {}),
