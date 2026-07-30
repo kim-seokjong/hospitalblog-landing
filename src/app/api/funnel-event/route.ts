@@ -89,6 +89,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'internal' });
   }
 
+  // 3-2) 우리 자신이 만든 경로 제외 (2026-07-30).
+  //      배포 점검용 `/__deploy_check` 접속이 방문자 1명으로 잡혀 있었다
+  //      (07/29 16:56:45, anon_id acf482d5). 사람이 아니라 우리 배포 스크립트다.
+  //      쿠키·계정으로는 못 거른다 — 그쪽에는 브라우저도 계정도 없다.
+  //      ⚠️경로 접두사로만 판단한다. 실제 고객이 볼 수 있는 페이지를 넣지 말 것.
+  const rawPath = validation.value.meta?.path;
+  const eventPath = typeof rawPath === 'string' ? rawPath : '';
+  if (eventPath.startsWith('/__')) {
+    return NextResponse.json({ ok: true, skipped: 'internal-path' });
+  }
+
   // 4) 레이트리밋 (공개 엔드포인트 남용 방어)
   const decision = consumeFunnelQuota(getQuotaStore(), {
     ip: extractClientIp(req.headers),
