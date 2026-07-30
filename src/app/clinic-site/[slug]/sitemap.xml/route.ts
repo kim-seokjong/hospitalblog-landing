@@ -12,6 +12,12 @@ import { hasClinicAboutContent } from '@/content/lib/clinic-site/about';
  */
 
 export const dynamic = 'force-dynamic';
+// ★fetch Data Cache 까지 명시적으로 끈다 (2026-07-30 실측).
+//   force-dynamic 만으로는 Supabase 조회(fetch)가 Data Cache 에 남아, 새로 발행한
+//   글이 페이지에는 보이는데 **사이트맵에만 영영 안 들어가는** 상태가 됐다
+//   (adsincerity 새 글이 홈·글 페이지엔 뜨고 sitemap.xml 에는 빠져 있었다).
+//   사이트맵에 없는 글은 검색엔진이 늦게 찾거나 못 찾는다 — 전 고객 공통 문제.
+export const fetchCache = 'force-no-store';
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
