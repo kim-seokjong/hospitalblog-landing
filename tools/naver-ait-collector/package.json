@@ -1,0 +1,9 @@
+{
+  "name": "naver-ait-collector",
+  "private": true,
+  "type": "module",
+  "description": "네이버 AI 탭 인용 수집기 — 로컬 전용. 리포 playwright-core(1.49)가 Node 24와 안 맞아 여기서만 최신판을 쓴다.",
+  "dependencies": {
+    "playwright-core": "^1.54.0"
+  }
+}

@@ -24,6 +24,18 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+/** 엔진 식별자 → 사용자 표시명. 미지의 값은 그대로 노출하지 않고 'AI 검색'으로 뭉갠다 */
+const ENGINE_LABELS: Record<string, string> = {
+  openai: 'ChatGPT',
+  perplexity: 'Perplexity',
+  gemini: 'Gemini',
+  naver: '네이버 AI',
+};
+
+function engineLabel(engine: string): string {
+  return ENGINE_LABELS[engine] ?? 'AI 검색';
+}
+
 function citationBadge(item: GeoCheckItem): { text: string; className: string } {
   if (!item.cited) {
     return { text: '미인용', className: 'bg-[#eef2f6] text-[#5b6573] border border-[#b4bfce]' };
@@ -40,9 +52,14 @@ function CheckCard({ item }: { item: GeoCheckItem }) {
   return (
     <div className="bg-white border border-[#b4bfce] rounded-2xl p-4 sm:p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${badge.className}`}>
-          {badge.text}
-        </span>
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${badge.className}`}>
+            {badge.text}
+          </span>
+          <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#eef2f6] text-[#5b6573] border border-[#b4bfce]/60 flex-shrink-0">
+            {engineLabel(item.engine)}
+          </span>
+        </div>
         <span className="text-xs text-[#5b6573] flex-shrink-0">{formatDate(item.checkedAt)}</span>
       </div>
       <p className="text-sm font-semibold text-[#202020] leading-snug mb-2">
@@ -369,7 +386,7 @@ export default function GeoSearchTab() {
           <span aria-hidden>🔍</span> AI 검색 시대, 우리 병원이 먼저 인용되게
         </p>
         <p className="text-xs text-[#5b6573] leading-relaxed mt-1.5">
-          이제 환자들은 ChatGPT 같은 AI에게 &quot;○○지역 △△과 어디가 좋아?&quot;라고 묻습니다.
+          이제 환자들은 ChatGPT·네이버 AI 같은 AI에게 &quot;○○지역 △△과 어디가 좋아?&quot;라고 묻습니다.
           닥터포스트가 환자 입장의 질문을 매주 AI에게 직접 물어보고, 우리 병원·블로그가 답변에
           인용되는지 추적합니다. 인용률을 높이는 준비(GEO)를 먼저 시작한 병원이 AI 검색 시대를 선점합니다.
         </p>

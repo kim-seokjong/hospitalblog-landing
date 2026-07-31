@@ -55,8 +55,12 @@ function toDbError(error: { code?: string; message?: string } | null): DbErrorLi
 /**
  * Supabase 게이트웨이. 로직은 없고 쿼리만 있다 —
  * 시간 마감·상태 판정은 전부 runGeoTracking 이 담당한다.
+ *
+ * engineIds: 이 cron 이 관리하는 엔진 식별자 목록. 중복 확인을 이 엔진들의 행으로
+ * 한정한다 — 로컬 수집기가 같은 주에 engine='naver' 행을 먼저 넣어도(브라우저 기반이라
+ * 서버 cron 에 못 얹는다) 그 회원의 API 엔진 질의가 건너뛰어지지 않게 하기 위해서다.
  */
-function createSupabaseGateway(admin: AdminClient): GeoTrackingGateway {
+function createSupabaseGateway(admin: AdminClient, engineIds: readonly string[]): GeoTrackingGateway {
   return {
     async acquireLock(weekStart, timeoutMs) {
       const { error } = await admin
@@ -121,6 +125,8 @@ function createSupabaseGateway(admin: AdminClient): GeoTrackingGateway {
         .from('geo_citations')
         .select('user_id')
         .in('user_id', candidateIds as string[])
+        // 이 cron 소관 엔진의 행만 중복으로 본다 — 로컬 네이버 수집기 행과 분리
+        .in('engine', engineIds as string[])
         .gte('checked_at', weekStartIso)
         .limit(limit)
         .abortSignal(timeoutSignal(timeoutMs));
@@ -174,7 +180,7 @@ export async function GET(req: NextRequest) {
   }
 
   const result = await runGeoTracking({
-    gateway: createSupabaseGateway(createAdminClient()),
+    gateway: createSupabaseGateway(createAdminClient(), engines.map((e) => e.id)),
     engines,
     env: process.env,
     weekStart,
