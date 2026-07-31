@@ -6,8 +6,10 @@ import MemberTable from '@/components/admin/MemberTable';
 import NoticeComposer from '@/components/admin/NoticeComposer';
 import BlogAuditPanel from '@/components/admin/BlogAuditPanel';
 import FunnelPanel from '@/components/admin/FunnelPanel';
+import CareOnboardingPanel from '@/components/admin/CareOnboardingPanel';
 import { fetchFunnelStatRows } from '@/dev/lib/funnel-admin-server';
 import { isBeaconSigningEnabled } from '@/dev/lib/ai-referral-crypto';
+import { isCredentialKeyConfigured } from '@/payment/lib/care-credentials';
 import { aggregateFunnelStats } from '@/content/lib/funnel-admin-stats';
 import type {
   DashboardData,
@@ -321,6 +323,20 @@ export default async function AdminPage() {
           </div>
         )}
 
+        {/* 설정 누락 경고 — 케어 온보딩 암호화 키가 없으면 계정 위임 제출이 전부 실패한다 */}
+        {!isCredentialKeyConfigured() && (
+          <div className="rounded-xl border border-[#ff4628]/40 bg-[#ffece7] px-4 py-3">
+            <p className="text-sm font-semibold text-[#202020]">
+              케어 온보딩 저장이 꺼져 있습니다
+            </p>
+            <p className="text-xs text-[#5b6573] mt-1 leading-relaxed">
+              환경변수 <code className="font-mono">CARE_CREDENTIALS_KEY</code>(base64 32바이트)가
+              설정되지 않아 케어 플랜 고객의 계정 위임 제출이 실패합니다. 로컬 .env.local 의 값을
+              Vercel 환경변수(Production)에도 등록해 주세요.
+            </p>
+          </div>
+        )}
+
         <KpiDashboard data={data} />
 
         <FunnelPanel
@@ -328,6 +344,8 @@ export default async function AdminPage() {
           ok={funnelRes.ok}
           truncated={funnelRes.truncated}
         />
+
+        <CareOnboardingPanel />
 
         <BlogAuditPanel />
 

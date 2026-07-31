@@ -5,6 +5,7 @@ import type { Payment, PaymentStatus } from '@/payment/lib/types';
 import type { PlanId } from '@/payment/lib/plans';
 import { PLANS, isPaidPlanId, isUpgrade, isCarePlanId, PAID_PLAN_IDS } from '@/payment/lib/plans';
 import type { SubscriptionInfo } from '@/hr/lib/mypage-types';
+import CareOnboardingCard from './CareOnboardingCard';
 
 interface UpgradePreview {
   amount: number;
@@ -435,6 +436,16 @@ export default function SubscriptionTab() {
           </div>
         )}
       </section>
+
+      {/* 케어 플랜 발행 대행 온보딩 — 케어 구독자에게만 노출 */}
+      {subscription?.isActive &&
+        subscription.plan &&
+        isPaidPlanId(subscription.plan) &&
+        isCarePlanId(subscription.plan as PlanId) && (
+          <section>
+            <CareOnboardingCard includeInsta={subscription.plan === 'growth_care'} />
+          </section>
+        )}
 
       {/* 결제 내역 */}
       <section>
