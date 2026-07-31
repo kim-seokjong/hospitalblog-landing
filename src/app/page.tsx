@@ -678,10 +678,13 @@ export default function LandingPage() {
                 <h3 className="text-lg font-extrabold text-[#202020] mb-1">{plan.name}</h3>
                 {/* 정상가 단일 표시 (2026-07 프로모 전면 종료) */}
                 <p className="mt-2 mb-1 flex flex-wrap items-baseline gap-x-1">
-                  <span className="text-2xl sm:text-3xl font-black text-[#202020]">
-                    {plan.price.toLocaleString('ko-KR')}
+                  {/* 숫자와 "원"은 한 묶음 — 분리하면 긴 금액에서 "원"만 다음 줄로 떨어진다 */}
+                  <span className="whitespace-nowrap items-baseline">
+                    <span className="text-2xl sm:text-3xl font-black text-[#202020]">
+                      {plan.price.toLocaleString('ko-KR')}
+                    </span>
+                    <span className="text-[#202020] text-sm font-bold ml-1">원</span>
                   </span>
-                  <span className="text-[#202020] text-sm font-bold">원</span>
                   <span className="text-[#8a93a0] text-xs sm:text-sm">/ 월</span>
                 </p>
                 <p className="text-[11px] text-[#8a93a0] mb-1">매월 자동결제</p>

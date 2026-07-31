@@ -35,8 +35,8 @@ export default function PlanCard({
 
       <h3 className="text-lg font-bold text-[#202020]">{plan.name}</h3>
 
-      {/* 정상가 단일 표시 (2026-07 프로모 전면 종료) */}
-      <div className="mt-3 mb-1">
+      {/* 정상가 단일 표시 (2026-07 프로모 전면 종료). 숫자와 원/월은 줄바꿈 금지 */}
+      <div className="mt-3 mb-1 whitespace-nowrap">
         <span className="text-3xl font-extrabold text-[#202020]">
           {plan.price.toLocaleString('ko-KR')}
         </span>
