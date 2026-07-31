@@ -1,10 +1,12 @@
-// 'basic' 은 레거시(신규 판매 중단)이나 기존 구독자 집계를 위해 유지한다.
+// 'basic'·'pro'·'pro12_pro' 는 레거시(신규 판매 중단)이나 기존 구독자 집계를 위해 유지한다.
 export type PlanType =
   | 'free'
   | 'basic'
   | 'standard'
+  | 'standard_care'
   | 'pro'
   | 'growth8_standard'
+  | 'growth_care'
   | 'pro12_pro';
 
 export interface ProfileRow {

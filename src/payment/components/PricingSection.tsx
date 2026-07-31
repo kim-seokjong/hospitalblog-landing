@@ -8,9 +8,10 @@ export default function PricingSection() {
   const [agreed, setAgreed] = useState(false)
   const [showAgreementError, setShowAgreementError] = useState(false)
   const agreementRef = useRef<HTMLDivElement | null>(null)
-  // 공개 플랜만 노출 (레거시 베이직 제외). 블로그 전용 그룹 / 번들 그룹으로 분리.
-  const blogPlans = [PLANS.standard, PLANS.pro]
-  const bundlePlans = [PLANS.growth8_standard, PLANS.pro12_pro]
+  // 공개 플랜만 노출 (레거시 베이직·프로 2종 제외). 블로그 전용 그룹 / 번들 그룹으로 분리.
+  // 각 그룹 = 셀프 발행 + 발행 대행(케어) 한 쌍 (2026-07-31 개편).
+  const blogPlans = [PLANS.standard, PLANS.standard_care]
+  const bundlePlans = [PLANS.growth8_standard, PLANS.growth_care]
 
   const requestAgreement = useCallback((): boolean => {
     if (agreed) {
@@ -47,7 +48,9 @@ export default function PricingSection() {
         {/* 블로그 전용 (닥터포스트) */}
         <div className="mb-3">
           <h3 className="text-lg sm:text-xl font-bold text-[#202020]">블로그 자동화</h3>
-          <p className="text-xs sm:text-sm text-[#5b6573] mt-0.5">AI 블로그 + 이미지 생성</p>
+          <p className="text-xs sm:text-sm text-[#5b6573] mt-0.5">
+            AI 블로그 + 이미지 생성 · 케어 플랜은 네이버 블로그 발행까지 대행합니다
+          </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
           {blogPlans.map((plan) => (
@@ -68,7 +71,7 @@ export default function PricingSection() {
             </span>
           </h3>
           <p className="text-xs sm:text-sm text-[#5b6573] mt-0.5">
-            블로그·AI 영상·멀티채널 콘텐츠를 한 번에
+            블로그·AI 영상·멀티채널 콘텐츠를 한 번에 · 케어 플랜은 채널 발행까지 대행합니다
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">

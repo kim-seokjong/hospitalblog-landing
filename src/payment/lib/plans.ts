@@ -1,21 +1,28 @@
 // 플랜 정의 (단일 소스). 결제·사용량 가드·마이페이지·관리자·SEO 가 모두 참조한다.
 //
-// 플랜 구조 (2026-06 개편):
+// 플랜 구조 (2026-07-31 개편: 무제한 2종 판매 중단 → 발행 대행 "케어" 2종 신설):
 //   [블로그 전용 — DoctorPost]
-//     standard  스탠다드  ₩199,000  블로그 20 + 이미지
-//     pro       프로      ₩399,000  블로그 무제한
+//     standard       스탠다드      ₩199,000  블로그 20 + 이미지 (셀프 발행)
+//     standard_care  스탠다드 케어 ₩399,000  블로그 20 + **네이버 발행 대행**
 //   [번들 — ClinicFlix (블로그 + 영상 + 멀티채널)]
-//     growth8_standard  올인원 그로스  ₩499,000  블로그 20 / 영상 6 / 채널 20
-//     pro12_pro         올인원 프로     ₩699,000  블로그 무제한 / 영상 10 / 채널 무제한(공정사용 소프트캡 60)
-//   [레거시 — 공개 비노출]
-//     basic     베이직    ₩99,000   블로그 10  ← 신규 판매 중단(아래 LEGACY 주석 참조)
+//     growth8_standard  올인원 그로스  ₩499,000  블로그 20 / 영상 6 / 채널 20 (셀프 발행)
+//     growth_care       올인원 케어    ₩699,000  같은 구성 + **발행·게시 대행**
+//   [레거시 — 공개 비노출·기존 구독자 유지]
+//     basic      베이직     ₩99,000   블로그 10        ← 2026-06 판매 중단
+//     pro        프로       ₩399,000  블로그 무제한    ← 2026-07-31 판매 중단
+//     pro12_pro  올인원 프로 ₩699,000  블로그 무제한 외 ← 2026-07-31 판매 중단
+//
+// 무제한 2종을 내린 이유: 발행 대행과 "무제한"은 양립하지 않고(대행 노동이 캡 없이 늘어남),
+// 무제한 플랜은 마진 변동 리스크만 있었다. 대행 티어가 같은 가격점(399k/699k)을 대체한다.
 
 export type PlanId =
   | 'basic' // LEGACY (hidden)
   | 'standard'
-  | 'pro'
+  | 'standard_care'
+  | 'pro' // LEGACY (hidden, 2026-07-31 판매 중단)
   | 'growth8_standard'
-  | 'pro12_pro'
+  | 'growth_care'
+  | 'pro12_pro' // LEGACY (hidden, 2026-07-31 판매 중단)
 
 export type PlanCategory = 'blog' | 'bundle'
 
@@ -89,8 +96,31 @@ export const PLANS: Record<PlanId, Plan> = {
       'SEO 분석',
       '네이버 검색 트렌드',
     ],
+  },
+  standard_care: {
+    id: 'standard_care',
+    name: '스탠다드 케어',
+    category: 'blog',
+    price: 399000,
+    limits: { blog: 20, video: 0, channels: 0 },
+    usageLimit: 20, // = limits.blog
+    features: [
+      'AI 블로그 월 20건',
+      '네이버 블로그 발행 대행 (월 20편)',
+      '이미지 생성 (실사/카드뉴스)',
+      '독창성 검사',
+      '의료광고법 검수 후 발행',
+      'SEO 분석',
+      '네이버 검색 트렌드',
+      '우선 고객 지원',
+    ],
     recommended: true,
   },
+
+  // ──────────────────────────────────────────────────────────────
+  // LEGACY: 프로(무제한)는 2026-07-31 신규 판매를 중단했다(케어 개편).
+  // 기존 구독자 사용량/결제 enforce 를 위해 정의는 유지한다. hidden:true.
+  // ──────────────────────────────────────────────────────────────
   pro: {
     id: 'pro',
     name: '프로',
@@ -107,6 +137,7 @@ export const PLANS: Record<PlanId, Plan> = {
       '네이버 검색 트렌드',
       '우선 고객 지원',
     ],
+    hidden: true,
   },
 
   // ───────────── 번들 (ClinicFlix: 블로그 + 영상 + 멀티채널) ─────────────
@@ -128,6 +159,31 @@ export const PLANS: Record<PlanId, Plan> = {
       '네이버 검색 트렌드',
     ],
   },
+  growth_care: {
+    id: 'growth_care',
+    name: '올인원 케어',
+    category: 'bundle',
+    price: 699000,
+    limits: { blog: 20, video: 6, channels: 20 },
+    usageLimit: 20, // = limits.blog
+    features: [
+      'AI 블로그 월 20건',
+      'AI 영상 월 6건',
+      '멀티채널 세트 월 20건 (쓰레드·카드뉴스·인스타·스토리)',
+      '블로그·영상·멀티채널 발행 대행',
+      '이미지 생성 (실사/카드뉴스)',
+      '독창성 검사',
+      '의료광고법 검수 후 발행',
+      'SEO 분석',
+      '네이버 검색 트렌드',
+      '우선 고객 지원',
+    ],
+  },
+
+  // ──────────────────────────────────────────────────────────────
+  // LEGACY: 올인원 프로(무제한)는 2026-07-31 신규 판매를 중단했다(케어 개편).
+  // 기존 구독자 사용량/결제 enforce 를 위해 정의는 유지한다. hidden:true.
+  // ──────────────────────────────────────────────────────────────
   pro12_pro: {
     id: 'pro12_pro',
     name: '올인원 프로',
@@ -147,6 +203,7 @@ export const PLANS: Record<PlanId, Plan> = {
       '네이버 검색 트렌드',
       '우선 고객 지원',
     ],
+    hidden: true,
   },
 }
 
@@ -157,16 +214,23 @@ export const PLANS: Record<PlanId, Plan> = {
 export const PAID_PLAN_IDS: PlanId[] = [
   'basic', // LEGACY: 신규 판매 중단, 기존 구독자 enforce 위해 유지
   'standard',
-  'pro',
+  'standard_care',
+  'pro', // LEGACY (2026-07-31 판매 중단)
   'growth8_standard',
-  'pro12_pro',
+  'growth_care',
+  'pro12_pro', // LEGACY (2026-07-31 판매 중단)
 ]
 
 /**
  * 공개 요금제(PricingSection / 랜딩)에 노출할 플랜 ID.
- * 레거시 basic 은 제외한다.
+ * 레거시(basic·pro·pro12_pro)는 제외한다.
  */
-export const PUBLIC_PLAN_IDS: PlanId[] = ['standard', 'pro', 'growth8_standard', 'pro12_pro']
+export const PUBLIC_PLAN_IDS: PlanId[] = [
+  'standard',
+  'standard_care',
+  'growth8_standard',
+  'growth_care',
+]
 
 // ─────────────────────────────────────────────────────────────
 // 프로모션 전면 종료 (2026-07-02 정책): 할인/무료체험 신규 부여 없음.
@@ -189,10 +253,15 @@ export function getPlan(id: PlanId): Plan {
  * 여기에 없는 경로(동일 플랜·다운그레이드 포함)는 업그레이드가 아니다.
  */
 const ALLOWED_UPGRADES: Record<PlanId, PlanId[]> = {
-  basic: ['standard', 'pro', 'growth8_standard', 'pro12_pro'],
-  standard: ['growth8_standard', 'pro12_pro'],
-  pro: ['pro12_pro'],
-  growth8_standard: ['pro12_pro'],
+  basic: ['standard', 'standard_care', 'growth8_standard', 'growth_care'],
+  standard: ['standard_care', 'growth8_standard', 'growth_care'],
+  // 스탠다드 케어 → 그로스(499k)는 가격이 올라도 발행 대행이 빠지는 사이드그레이드라 제외
+  standard_care: ['growth_care'],
+  // 레거시 프로(무제한 399k): 신규 판매 중단 플랜(pro12_pro)으로의 경로 대신 케어 라인으로
+  pro: ['growth8_standard', 'growth_care'],
+  growth8_standard: ['growth_care'],
+  growth_care: [],
+  // 레거시 올인원 프로(699k) → 올인원 케어(699k)는 동액이라 업그레이드가 아님(전환은 별도 협의)
   pro12_pro: [],
 }
 

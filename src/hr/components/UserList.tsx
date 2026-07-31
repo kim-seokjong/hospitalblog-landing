@@ -29,14 +29,22 @@ const PLAN_LABEL: Record<string, string> = {
   free: '무료',
   basic: '베이직',
   standard: '스탠다드',
+  standard_care: '스탠다드 케어',
   pro: '프로',
+  growth8_standard: '올인원 그로스',
+  growth_care: '올인원 케어',
+  pro12_pro: '올인원 프로',
 };
 
 const PLAN_BADGE: Record<string, string> = {
   free: 'bg-[#eef2f6] text-[#4a4f55]',
   basic: 'bg-blue-50 text-blue-600 border border-blue-200',
   standard: 'bg-purple-50 text-purple-600 border border-purple-200',
+  standard_care: 'bg-teal-50 text-teal-700 border border-teal-200',
   pro: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+  growth8_standard: 'bg-amber-50 text-amber-700 border border-amber-200',
+  growth_care: 'bg-orange-50 text-orange-700 border border-orange-200',
+  pro12_pro: 'bg-rose-50 text-rose-700 border border-rose-200',
 };
 
 function formatDate(iso: string | null): string {

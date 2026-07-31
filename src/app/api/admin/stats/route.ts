@@ -46,7 +46,16 @@ export async function GET() {
     const totalUsers = profiles?.length ?? 0;
 
     // 플랜별 분포
-    const planCounts: Record<string, number> = { free: 0, basic: 0, standard: 0, pro: 0 };
+    const planCounts: Record<string, number> = {
+      free: 0,
+      basic: 0,
+      standard: 0,
+      standard_care: 0,
+      pro: 0,
+      growth8_standard: 0,
+      growth_care: 0,
+      pro12_pro: 0,
+    };
     for (const p of profiles ?? []) {
       const plan = p.plan ?? 'free';
       planCounts[plan] = (planCounts[plan] ?? 0) + 1;

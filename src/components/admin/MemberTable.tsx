@@ -7,8 +7,10 @@ type FilterKey =
   | 'all'
   | 'basic'
   | 'standard'
+  | 'standard_care'
   | 'pro'
   | 'growth8_standard'
+  | 'growth_care'
   | 'pro12_pro'
   | 'expired';
 
@@ -20,17 +22,21 @@ const PLAN_LABEL: Record<PlanType, string> = {
   free: '무료',
   basic: '베이직', // 레거시
   standard: '스탠다드',
-  pro: '프로',
+  standard_care: '스탠다드 케어',
+  pro: '프로', // 레거시
   growth8_standard: '올인원 그로스',
-  pro12_pro: '올인원 프로',
+  growth_care: '올인원 케어',
+  pro12_pro: '올인원 프로', // 레거시
 };
 
 const PLAN_BADGE: Record<PlanType, string> = {
   free: 'bg-[#eef2f6] text-[#4a4f55]',
   basic: 'bg-blue-50 text-blue-600',
   standard: 'bg-violet-50 text-violet-600',
+  standard_care: 'bg-teal-50 text-teal-700',
   pro: 'bg-emerald-50 text-emerald-700',
   growth8_standard: 'bg-amber-50 text-amber-700',
+  growth_care: 'bg-orange-50 text-orange-700',
   pro12_pro: 'bg-rose-50 text-rose-700',
 };
 
@@ -38,8 +44,10 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: '전체' },
   { key: 'basic', label: '베이직' },
   { key: 'standard', label: '스탠다드' },
+  { key: 'standard_care', label: '스탠다드 케어' },
   { key: 'pro', label: '프로' },
   { key: 'growth8_standard', label: '올인원 그로스' },
+  { key: 'growth_care', label: '올인원 케어' },
   { key: 'pro12_pro', label: '올인원 프로' },
   { key: 'expired', label: '만료' },
 ];

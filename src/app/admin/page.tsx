@@ -25,12 +25,16 @@ import type {
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// 실제 판매가(plans.ts price)와 일치시킨다 — MRR 집계용.
+// (구 값 basic 19,900/standard 49,000/pro 119,000 은 초기 가격표의 잔재로 실제와 불일치했다)
 const PLAN_PRICES: Record<PlanType, number> = {
   free: 0,
-  basic: 19900,
-  standard: 49000,
-  pro: 119000,
+  basic: 99000,
+  standard: 199000,
+  standard_care: 399000,
+  pro: 399000,
   growth8_standard: 499000,
+  growth_care: 699000,
   pro12_pro: 699000,
 };
 
@@ -122,8 +126,10 @@ function buildDashboardData(
     free: 0,
     basic: 0,
     standard: 0,
+    standard_care: 0,
     pro: 0,
     growth8_standard: 0,
+    growth_care: 0,
     pro12_pro: 0,
   };
   for (const p of activeProfiles) {
@@ -133,7 +139,15 @@ function buildDashboardData(
     }
   }
   const planDist: PlanDistribution[] = (
-    ['basic', 'standard', 'pro', 'growth8_standard', 'pro12_pro'] as PlanType[]
+    [
+      'basic',
+      'standard',
+      'standard_care',
+      'pro',
+      'growth8_standard',
+      'growth_care',
+      'pro12_pro',
+    ] as PlanType[]
   ).map((plan) => ({ plan, count: planCountMap[plan] }));
 
   // ----- 진료과별 (활성만) -----

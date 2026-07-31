@@ -644,23 +644,23 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-start">
             {[
               {
-                plan: PLANS.standard, desc: "블로그 + 이미지",
+                plan: PLANS.standard, desc: "블로그 + 이미지 (직접 발행)",
                 features: ["AI 블로그 작성 월 20건", "카드뉴스·이미지 자동 생성", "독창성 검사", "의료광고법 검수"],
                 highlight: false,
               },
               {
-                plan: PLANS.pro, desc: "블로그 무제한",
-                features: ["AI 블로그 작성 무제한", "이미지 생성 무제한", "독창성 검사 무제한", "의료광고법 검수", "우선 고객 지원"],
-                highlight: false,
-              },
-              {
-                plan: PLANS.growth8_standard, desc: "블로그+영상+멀티채널",
-                features: ["AI 블로그 월 20건", "AI 영상 월 6건", "멀티채널 세트 월 20건", "카드뉴스·이미지 자동 생성", "의료광고법 검수"],
+                plan: PLANS.standard_care, desc: "글부터 네이버 발행까지 대행",
+                features: ["AI 블로그 작성 월 20건", "네이버 블로그 발행 대행 (월 20편)", "카드뉴스·이미지 자동 생성", "의료광고법 검수 후 발행", "우선 고객 지원"],
                 highlight: true,
               },
               {
-                plan: PLANS.pro12_pro, desc: "올인원 무제한",
-                features: ["AI 블로그 무제한", "AI 영상 월 10건", "멀티채널 세트 무제한 (공정사용 월 60세트)", "이미지 생성 무제한", "우선 고객 지원"],
+                plan: PLANS.growth8_standard, desc: "블로그+영상+멀티채널 (직접 발행)",
+                features: ["AI 블로그 월 20건", "AI 영상 월 6건", "멀티채널 세트 월 20건", "카드뉴스·이미지 자동 생성", "의료광고법 검수"],
+                highlight: false,
+              },
+              {
+                plan: PLANS.growth_care, desc: "모든 채널, 발행까지 대행",
+                features: ["AI 블로그 월 20건", "AI 영상 월 6건", "멀티채널 세트 월 20건", "블로그·영상·멀티채널 발행 대행", "의료광고법 검수 후 발행", "우선 고객 지원"],
                 highlight: false,
               },
             ].map(({ plan, desc, features, highlight }) => {

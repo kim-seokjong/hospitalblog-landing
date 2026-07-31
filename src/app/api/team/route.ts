@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server';
+import type { PlanId } from '@/payment/lib/plans';
 
 type MemberRole = 'admin' | 'member';
 
@@ -18,12 +19,23 @@ interface TeamMemberRow {
   created_at: string;
 }
 
-const PLAN_LIMITS: Record<string, number> = {
+// Record<PlanId | 'free'> 로 전수성을 강제한다 — Record<string> 이던 시절
+// 번들·신규 플랜이 빠져 0(팀 기능 차단)으로 조용히 떨어지는 버그가 있었다.
+const PLAN_LIMITS: Record<PlanId | 'free', number> = {
   free: 0,
   basic: 2,
   standard: 5,
-  pro: Infinity,
+  standard_care: 5,
+  pro: Infinity, // 레거시
+  growth8_standard: 5,
+  growth_care: 5,
+  pro12_pro: Infinity, // 레거시
 };
+
+/** DB 의 plan 문자열(미지의 값 포함)을 팀원 한도로 변환. 모르는 값은 0(차단). */
+function teamLimitFor(plan: string): number {
+  return (PLAN_LIMITS as Record<string, number | undefined>)[plan] ?? 0;
+}
 
 export async function GET() {
   try {
@@ -54,7 +66,7 @@ export async function GET() {
     }
 
     const plan = (profileResult.data?.plan as string) ?? 'free';
-    const limit = PLAN_LIMITS[plan] ?? 0;
+    const limit = teamLimitFor(plan);
 
     return NextResponse.json({ members: membersResult.data ?? [], plan, limit });
   } catch (e) {
@@ -97,7 +109,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     const plan = (profileData?.plan as string) ?? 'free';
-    const limit = PLAN_LIMITS[plan] ?? 0;
+    const limit = teamLimitFor(plan);
 
     if (limit === 0) {
       return NextResponse.json(

@@ -101,6 +101,9 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   let pendingPaymentId: string | null = null
+  // 카드 승인 완료 여부. true 가 된 뒤의 예외에서는 절대 markPaymentFailed 를 호출하지 않는다 —
+  // 실승인된 결제를 FAILED 로 덮으면 사용자가 재시도해 같은 차액이 이중 청구된다.
+  let cardCharged = false
   try {
     const supabase = getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -204,6 +207,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    cardCharged = true
+
     await markPaymentPaid({
       paymentId,
       pgTxId: chargeResult.transactionId,
@@ -221,6 +226,21 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, plan: target, charged: amount, trial: false })
   } catch (e) {
+    // 카드 승인 후의 예외 = 돈은 나갔고 DB 후처리만 실패한 상태.
+    // FAILED 로 덮지 않고(재시도 시 이중 청구), 수동 정합화가 필요함을 로그로 남긴다.
+    if (cardCharged) {
+      console.error(
+        `[change-plan] ⚠️결제 승인 후 후처리 실패 — 수동 확인 필요 (payment=${pendingPaymentId}): ` +
+          (e instanceof Error ? e.message : String(e)),
+      )
+      return NextResponse.json(
+        {
+          error:
+            '결제는 완료되었으나 플랜 전환 처리 중 오류가 발생했습니다. 다시 시도하지 마시고 고객센터로 문의해 주세요.',
+        },
+        { status: 500 },
+      )
+    }
     if (pendingPaymentId) {
       await markPaymentFailed(
         pendingPaymentId,

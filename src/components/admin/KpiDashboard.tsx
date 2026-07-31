@@ -27,18 +27,22 @@ const PLAN_LABEL: Record<PlanType, string> = {
   free: '무료',
   basic: '베이직', // 레거시
   standard: '스탠다드',
-  pro: '프로',
+  standard_care: '스탠다드 케어',
+  pro: '프로', // 레거시
   growth8_standard: '올인원 그로스',
-  pro12_pro: '올인원 프로',
+  growth_care: '올인원 케어',
+  pro12_pro: '올인원 프로', // 레거시
 };
 
 const PLAN_COLOR: Record<PlanType, string> = {
   free: '#4b5563',
   basic: '#6ee7b7', // emerald-300
   standard: '#10b981', // emerald-500
-  pro: '#047857', // emerald-700
+  standard_care: '#0d9488', // teal-600
+  pro: '#047857', // emerald-700 (레거시)
   growth8_standard: '#f59e0b', // amber-500
-  pro12_pro: '#e11d48', // rose-600
+  growth_care: '#ea580c', // orange-600
+  pro12_pro: '#e11d48', // rose-600 (레거시)
 };
 
 function formatKRW(n: number): string {
