@@ -12,7 +12,7 @@ import {
   setUserPlanKeepUsage,
   updateActiveBillingKeyPlan,
 } from '@/payment/lib/repository'
-import { PLANS, isUpgrade, proratedUpgradeCharge } from '@/payment/lib/plans'
+import { PLANS, isUpgrade, isCarePlanId, proratedUpgradeCharge } from '@/payment/lib/plans'
 import type { PlanId } from '@/payment/lib/plans'
 
 function getSupabase() {
@@ -130,6 +130,15 @@ export async function POST(req: NextRequest) {
     if (!isUpgrade(currentPlanId, target)) {
       return NextResponse.json(
         { error: '해당 플랜으로는 업그레이드할 수 없습니다' },
+        { status: 400 },
+      )
+    }
+
+    // 케어 플랜 전환 = 특약(약관 제8조의2) 동의 필수. 무료체험 0원 전환 경로도
+    // 이 지점을 지나므로 "결제 시 동의 간주"가 성립하지 않는 경우까지 커버된다.
+    if (isCarePlanId(target) && body?.careTermsAgreed !== true) {
+      return NextResponse.json(
+        { error: '케어 플랜 전환에는 계정 위임·발행 대행 특약(이용약관 제8조의2) 동의가 필요합니다' },
         { status: 400 },
       )
     }

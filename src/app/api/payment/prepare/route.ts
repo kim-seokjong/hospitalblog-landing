@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { randomUUID } from 'crypto'
-import { PLANS, PUBLIC_PLAN_IDS } from '@/payment/lib/plans'
+import { PLANS, PUBLIC_PLAN_IDS, isCarePlanId } from '@/payment/lib/plans'
 import { createPendingPayment } from '@/payment/lib/repository'
 import type { PlanId } from '@/payment/lib/plans'
 
@@ -28,6 +28,15 @@ export async function POST(req: NextRequest) {
     // (PAID_PLAN_IDS 는 기존 구독자 enforce 용이지 판매 목록이 아니다).
     if (!PUBLIC_PLAN_IDS.includes(plan)) {
       return NextResponse.json({ error: '유효하지 않은 플랜입니다' }, { status: 400 })
+    }
+
+    // 케어 플랜 = 계정 위임·발행 대행 특약(약관 제8조의2) 동의 필수.
+    // 클라이언트 체크박스만으로는 API 직접 호출을 못 막으므로 서버에서 강제한다.
+    if (isCarePlanId(plan) && body.careTermsAgreed !== true) {
+      return NextResponse.json(
+        { error: '케어 플랜 구독에는 계정 위임·발행 대행 특약(이용약관 제8조의2) 동의가 필요합니다' },
+        { status: 400 },
+      )
     }
 
     const channelKey = process.env.PORTONE_CHANNEL_KEY_KPN_BILLING

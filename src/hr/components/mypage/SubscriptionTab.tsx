@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Payment, PaymentStatus } from '@/payment/lib/types';
 import type { PlanId } from '@/payment/lib/plans';
-import { PLANS, isPaidPlanId, isUpgrade, PAID_PLAN_IDS } from '@/payment/lib/plans';
+import { PLANS, isPaidPlanId, isUpgrade, isCarePlanId, PAID_PLAN_IDS } from '@/payment/lib/plans';
 import type { SubscriptionInfo } from '@/hr/lib/mypage-types';
 
 interface UpgradePreview {
@@ -75,6 +75,9 @@ function UpgradeModal({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 케어 플랜 전환 시 특약(약관 제8조의2) 동의 체크 — 서버(change-plan)가 필수 검증한다
+  const [careAgreed, setCareAgreed] = useState(false);
+  const needsCareConsent = selected != null && isCarePlanId(selected);
 
   const loadPreview = useCallback(async (target: PlanId) => {
     setLoading(true);
@@ -94,6 +97,7 @@ function UpgradeModal({
 
   useEffect(() => {
     if (selected) void loadPreview(selected);
+    setCareAgreed(false); // 대상 플랜이 바뀌면 특약 동의를 다시 받는다
   }, [selected, loadPreview]);
 
   const handleConfirm = useCallback(async () => {
@@ -104,7 +108,9 @@ function UpgradeModal({
       const res = await fetch('/api/payment/change-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: selected }),
+        body: JSON.stringify(
+          isCarePlanId(selected) ? { plan: selected, careTermsAgreed: true } : { plan: selected },
+        ),
       });
       const json = (await res.json().catch(() => ({}))) as { error?: string; plan?: string };
       if (!res.ok) throw new Error(json.error ?? '업그레이드에 실패했습니다.');
@@ -212,12 +218,37 @@ function UpgradeModal({
           </div>
         )}
 
+        {/* 케어 플랜 특약 동의 (필수) */}
+        {needsCareConsent && (
+          <label className="flex items-start gap-2.5 mb-4 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={careAgreed}
+              onChange={(e) => setCareAgreed(e.target.checked)}
+              className="mt-0.5 w-4 h-4 shrink-0 accent-[#ff4628] cursor-pointer"
+            />
+            <span className="text-xs leading-relaxed text-[#4a4f55]">
+              케어 플랜의{' '}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#ff4628] underline hover:text-[#e63a1c]"
+              >
+                계정 위임·발행 대행 특약(이용약관 제8조의2)
+              </a>
+              에 동의합니다. 계정 정보 전달 등 위임 절차는 전환 후 안내에 따라 진행됩니다.{' '}
+              <span className="text-red-600">(필수)</span>
+            </span>
+          </label>
+        )}
+
         {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
 
         <button
           type="button"
           onClick={() => void handleConfirm()}
-          disabled={!selected || loading || submitting || !preview}
+          disabled={!selected || loading || submitting || !preview || (needsCareConsent && !careAgreed)}
           className="w-full py-2.5 rounded-lg text-sm font-semibold bg-[#ff4628] hover:bg-[#e63a1c] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitting ? '처리 중...' : '기존 카드로 업그레이드'}

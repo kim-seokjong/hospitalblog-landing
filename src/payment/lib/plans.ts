@@ -243,6 +243,14 @@ export function getPlan(id: PlanId): Plan {
   return PLANS[id]
 }
 
+/**
+ * 발행 대행(케어) 플랜 여부 — 결제 진입 시 계정 위임·발행 대행 특약(약관 제8조의2)
+ * 동의(careTermsAgreed)가 필수인 플랜. prepare/change-plan 서버 검증이 참조한다.
+ */
+export function isCarePlanId(id: PlanId): boolean {
+  return id === 'standard_care' || id === 'growth_care'
+}
+
 // ─────────────────────────────────────────────────────────────
 // 업그레이드 (마이페이지 인앱 플랜 상향)
 // ─────────────────────────────────────────────────────────────

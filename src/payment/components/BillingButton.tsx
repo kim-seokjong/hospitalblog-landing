@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { PLANS, type PlanId } from '@/payment/lib/plans'
+import { PLANS, isCarePlanId, type PlanId } from '@/payment/lib/plans'
 import { trackEvent } from '@/dev/lib/meta-pixel'
 
 interface Props {
@@ -27,10 +27,14 @@ export default function BillingButton({
     setLoading(true)
     setError(null)
     try {
+      // 케어 플랜: requestAgreement 통과 = 특약(제8조의2) 포함 동의 문구에 체크한 상태.
+      // 서버(prepare)가 careTermsAgreed 를 필수로 검증한다.
       const prepRes = await fetch('/api/payment/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify(
+          isCarePlanId(plan) ? { plan, careTermsAgreed: true } : { plan },
+        ),
       })
       if (!prepRes.ok) {
         const { error: msg } = await prepRes.json()

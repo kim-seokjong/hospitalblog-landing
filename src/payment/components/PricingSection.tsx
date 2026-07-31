@@ -106,7 +106,9 @@ export default function PricingSection() {
               <a href="/refund" target="_blank" rel="noopener noreferrer" className="text-[#ff4628] underline hover:text-[#e63a1c]">환불·해지정책</a>
               {', '}
               <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[#ff4628] underline hover:text-[#e63a1c]">개인정보처리방침</a>
-              에 동의합니다. <span className="text-red-600">(필수)</span>
+              에 동의합니다. 케어 플랜 구독 시 이용약관 내{' '}
+              <strong className="text-[#202020]">계정 위임·발행 대행 특약(제8조의2)</strong>에도
+              함께 동의합니다. <span className="text-red-600">(필수)</span>
             </span>
           </label>
           {showAgreementError && (
