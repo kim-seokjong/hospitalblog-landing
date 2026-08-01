@@ -462,7 +462,7 @@ export default function AppPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [userPlan, setUserPlan] = useState<{ plan: string; usage_count: number; hospital_type?: string | null } | null>(null);
+  const [userPlan, setUserPlan] = useState<{ plan: string; usage_count: number; hospital_type?: string | null; plan_expires_at?: string | null } | null>(null);
   const [hospitalName, setHospitalName] = useState('');
   const [profileRegion, setProfileRegion] = useState('');
   // 프로필 완성도 게이팅: 필수 컬럼이 비면 유령 계정으로 보고 서비스 진입 차단
@@ -516,6 +516,8 @@ export default function AppPage() {
   const [prefillKeyword, setPrefillKeyword] = useState<string>('');
   // 온보딩 완주 가이드 배너 (결제 직후 ?welcome=1 또는 유료+사용량 0)
   const [showWelcome, setShowWelcome] = useState(false);
+  // 가이드 배너 문구 분기 — 무료 가입(?welcome=free)에게 "구독을 시작하셨네요"는 거짓말이다
+  const [welcomePaid, setWelcomePaid] = useState(false);
   // 온보딩 첫 글 원클릭 카드 닫힘 여부 (마운트 시 localStorage 에서 복원)
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   // prefill 적용 시 KeywordInput 을 강제 리마운트하기 위한 키
@@ -583,7 +585,7 @@ export default function AppPage() {
         if (incomplete) setShowAuthModal(true);
 
         if (profile) {
-          setUserPlan({ plan: profile.plan, usage_count: profile.usage_count, hospital_type: profile.hospital_type });
+          setUserPlan({ plan: profile.plan, usage_count: profile.usage_count, hospital_type: profile.hospital_type, plan_expires_at: profile.plan_expires_at });
 
           // 미구독(free)·만료 회원: 생성 시도를 기다리지 않고 진입 즉시 구독 안내 배너 노출
           // (가입 직후 결제 안내를 한 번도 못 보고 이탈하는 전환 누수 방지 — 관리자·프로필 미완성 모달과 중복 제외)
@@ -672,13 +674,14 @@ export default function AppPage() {
     }
   }, []);
 
-  // 온보딩 완주 가이드: ?welcome=1(결제 직후) 감지 → 첫 글 가이드 배너. URL은 즉시 정리.
+  // 온보딩 완주 가이드: ?welcome=1(결제 직후)·?welcome=free(무료 가입) 감지 → 첫 글 가이드 배너. URL은 즉시 정리.
   useEffect(() => {
     try {
       if (localStorage.getItem(WELCOME_DONE_KEY)) return;
       const params = new URLSearchParams(window.location.search);
       if (params.get('welcome') === '1' || params.get('welcome') === 'free') {
         setShowWelcome(true);
+        setWelcomePaid(params.get('welcome') === '1');
         params.delete('welcome');
         const qs = params.toString();
         window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
@@ -688,12 +691,15 @@ export default function AppPage() {
     }
   }, []);
 
-  // 유료 플랜인데 아직 글 0건이면(결제 후 이탈했다 돌아온 경우 포함) 가이드 배너 노출
+  // 활성 유료 플랜인데 아직 글 0건이면(결제 후 이탈했다 돌아온 경우 포함) 가이드 배너 노출.
+  // isPaidPlanId 가 아니라 isActivePlan 인 이유: 만료된 유료 플랜에 "구독을 시작하셨네요"를
+  // 보여주면 거짓이고, 만료 회원은 아래 미구독 차단 배너가 따로 안내한다 (Codex 지적 반영).
   useEffect(() => {
     try {
       if (localStorage.getItem(WELCOME_DONE_KEY)) return;
-      if (userPlan && isPaidPlanId(userPlan.plan) && (userPlan.usage_count ?? 0) === 0) {
+      if (userPlan && isActivePlan(userPlan.plan, userPlan.plan_expires_at ?? null) && (userPlan.usage_count ?? 0) === 0) {
         setShowWelcome(true);
+        setWelcomePaid(true);
       }
     } catch {
       // 무시
@@ -811,9 +817,9 @@ export default function AppPage() {
 
   const refreshUsage = () => {
     if (!user) return;
-    supabase.from('profiles').select('plan, usage_count, hospital_type').eq('id', user.id).single()
+    supabase.from('profiles').select('plan, usage_count, hospital_type, plan_expires_at').eq('id', user.id).single()
       .then(({ data }) => {
-        if (data) setUserPlan(data as { plan: string; usage_count: number; hospital_type?: string | null });
+        if (data) setUserPlan(data as { plan: string; usage_count: number; hospital_type?: string | null; plan_expires_at?: string | null });
       });
   };
 
@@ -1445,7 +1451,9 @@ export default function AppPage() {
                     >
                       ×
                     </button>
-                    <p className="font-bold text-base mb-0.5">🎉 구독을 시작하셨네요! 첫 글, 3분이면 됩니다</p>
+                    <p className="font-bold text-base mb-0.5">
+                      {welcomePaid ? '🎉 구독을 시작하셨네요! 첫 글, 3분이면 됩니다' : '🎉 가입을 환영해요! 무료 체험으로 첫 글, 3분이면 됩니다'}
+                    </p>
                     <p className="text-xs text-white/60 mb-3">첫 글을 발행해 본 병원이 검색 노출도 빨리 시작됩니다.</p>
                     <ol className="space-y-1.5 text-sm">
                       <li className="flex items-start gap-2">
