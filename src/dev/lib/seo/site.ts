@@ -54,6 +54,9 @@ export function parseVerificationCodes(
 export const PUBLIC_PATHS = [
   '/',
   '/clinic-check',
+  // /sample 은 PRIVATE_PATHS 에 없어 이미 크롤링·색인 대상이고 sitemap.ts 에도 있다.
+  // 여기서만 빠져 있어 "공개 페이지 목록"이 사실과 어긋났다(2026-08-03 점검).
+  '/sample',
   '/pricing',
   '/terms',
   '/privacy',

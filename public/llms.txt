@@ -6,6 +6,7 @@
 
 ## 핵심 기능
 
+- 병원 온라인 노출 무료 진단: 가입 없이 병원 이름만 입력하면 블로그·홈페이지·AI 검색(GEO) 노출 상태를 진단해 결과 리포트를 제공 (https://www.hospitalblog.kr/clinic-check)
 - AI 병원 블로그 글 자동 작성: 키워드 입력 후 제목·본문·태그 자동 생성 (네이버 C-Rank·D.I.A+ 및 구글/AI 검색 최적화 반영)
 - 상위노출 역분석: 키워드 상위 노출 글의 구조를 분석해 글 생성에 반영
 - 의료광고법 검토: 의료법 제56조 기준으로 과장·허위 광고 소지 문구를 자동 필터링
@@ -30,6 +31,8 @@
 ## 페이지
 
 - [홈](https://www.hospitalblog.kr/): 서비스 소개 및 회원가입
+- [무료 진단](https://www.hospitalblog.kr/clinic-check): 병원 이름으로 온라인 노출 상태 무료 진단 (가입 불필요)
+- [무료 샘플](https://www.hospitalblog.kr/sample): 가입 전 우리 병원 맞춤 블로그 글 샘플
 - [요금제](https://www.hospitalblog.kr/pricing): 요금제 상세 및 결제
 - [이용약관](https://www.hospitalblog.kr/terms)
 - [개인정보처리방침](https://www.hospitalblog.kr/privacy)
