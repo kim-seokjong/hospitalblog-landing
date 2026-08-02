@@ -160,10 +160,13 @@ body {
   color: #9ca3af !important;
   opacity: 1 !important;
 }
-.auth-modal-light label,
-.auth-modal-light h1,
-.auth-modal-light h2,
-.auth-modal-light h3,
-.auth-modal-light h4 {
+/*
+ * 라벨만 강제한다. 제목(h1~h4)까지 !important 로 묶으면 파란 헤더 안의
+ * 흰 제목("닥터포스트", text-white)까지 #111827 로 덮여 파랑 위 짙은 회색이
+ * 된다 — 이 모달의 유일한 제목이 그 헤더 제목이라 규칙이 순수하게 해롭다.
+ * 본문 제목이 생기더라도 카드의 text-gray-900 과 .auth-modal-light 의
+ * color 상속이 이미 흰 글자 회귀를 막는다.
+ */
+.auth-modal-light label {
   color: #111827 !important;
 }
