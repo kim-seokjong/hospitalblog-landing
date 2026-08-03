@@ -17,6 +17,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { isCarePlanId, PLANS } from './plans'
 import type { PlanId } from './plans'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 function getAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -36,6 +37,74 @@ export function isActiveCareSubscription(
   if (!expiresAt) return false
   const t = Date.parse(expiresAt)
   return Number.isFinite(t) && t > now
+}
+
+/**
+ * 위임 계정을 **열어볼 근거**가 아직 살아 있는가 (관리자 복호화 게이트).
+ *
+ * ★ 왜 필요한가 (2026-08-03 주간점검 교차검증).
+ *   제출 시점에만 케어 플랜을 확인하고, 열람 시점에는 `status='revoked'` 만 봤다.
+ *   그래서 **케어 구독이 끝난 뒤에도** 관리자가 평문 비밀번호를 계속 꺼낼 수 있었다.
+ *   위임의 근거는 발행 대행 계약이고, 계약이 끝나면 근거도 끝난다. 고객이 철회
+ *   버튼을 안 눌렀다는 사실이 계속 접근해도 된다는 뜻이 될 수는 없다.
+ */
+export interface CareEntitlement {
+  readonly active: boolean
+  readonly plan: PlanId | null
+  readonly planName: string | null
+  readonly expiresAt: string | null
+  /** 왜 막혔는지 — 화면·응답에 그대로 쓴다. */
+  readonly reason: 'ok' | 'not_care_plan' | 'expired' | 'no_expiry' | 'no_profile' | 'lookup_failed'
+}
+
+export const ENTITLEMENT_MESSAGE: Record<CareEntitlement['reason'], string> = {
+  ok: '',
+  not_care_plan:
+    '케어 플랜 구독자가 아닙니다. 위임 근거가 없으므로 계정 정보를 열 수 없습니다 — 자격증명을 파기해 주세요.',
+  expired:
+    '케어 구독이 만료됐습니다. 위임 근거가 끝났으므로 계정 정보를 열 수 없습니다 — 자격증명을 파기해 주세요.',
+  lookup_failed: '구독 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+  no_expiry: '구독 만료일이 비어 있어 케어 자격을 확인할 수 없습니다. 결제 상태를 먼저 확인해 주세요.',
+  no_profile: '회원 정보를 찾을 수 없습니다.',
+}
+
+export async function loadCareEntitlement(
+  admin: SupabaseClient,
+  userId: string,
+  now: Date = new Date(),
+): Promise<CareEntitlement> {
+  const { data, error } = await admin
+    .from('profiles')
+    .select('plan, plan_expires_at')
+    .eq('id', userId)
+    .maybeSingle()
+
+  // 확인을 못 한 것과 자격이 없는 것은 다르다. 열람은 **막되**, 이유는 구분해 남긴다.
+  if (error) {
+    console.error('[care-retention] 구독 상태 조회 실패:', error.message)
+    return { active: false, plan: null, planName: null, expiresAt: null, reason: 'lookup_failed' }
+  }
+
+  const row = data as { plan: string | null; plan_expires_at: string | null } | null
+  if (!row) {
+    return { active: false, plan: null, planName: null, expiresAt: null, reason: 'no_profile' }
+  }
+
+  const plan = (row.plan ?? '') as PlanId
+  const planName = PLANS[plan]?.name ?? null
+  const expiresAt = row.plan_expires_at
+
+  if (!plan || !PLANS[plan] || !isCarePlanId(plan)) {
+    return { active: false, plan: plan || null, planName, expiresAt, reason: 'not_care_plan' }
+  }
+  if (!expiresAt) {
+    return { active: false, plan, planName, expiresAt: null, reason: 'no_expiry' }
+  }
+  const expiry = Date.parse(expiresAt)
+  if (!Number.isFinite(expiry) || expiry <= now.getTime()) {
+    return { active: false, plan, planName, expiresAt, reason: 'expired' }
+  }
+  return { active: true, plan, planName, expiresAt, reason: 'ok' }
 }
 
 export interface PurgeResult {

@@ -4,91 +4,22 @@
 // POST : { userId } — 해당 회원의 위임 계정 정보를 복호화해 반환.
 //        발행 작업 직전에만 호출하는 용도. 호출 사실을 서버 로그에 남긴다.
 
+// ⚠️ Next.js App Router 의 route 파일은 GET/POST 등 **정해진 것 외에는 export 할 수 없다.**
+//    헬퍼를 여기서 export 했다가 배포가 깨졌다(2026-08-03). `tsc --noEmit` 은 이걸 못 잡는다 —
+//    Next 가 빌드 때 생성하는 타입에서만 걸리므로 확인은 `next build` 로 해야 한다.
+//    그래서 자격 판정 로직은 `@/payment/lib/care-retention` 에 둔다.
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server'
 import { isAdmin } from '@/hr/lib/admin'
 import { decryptCredential } from '@/payment/lib/care-credentials'
-import { isCarePlanId, PLANS } from '@/payment/lib/plans'
-import { isActiveCareSubscription } from '@/payment/lib/care-retention'
-import type { PlanId } from '@/payment/lib/plans'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import {
+  ENTITLEMENT_MESSAGE,
+  isActiveCareSubscription,
+  loadCareEntitlement,
+} from '@/payment/lib/care-retention'
 
 export const dynamic = 'force-dynamic'
-
-/**
- * 위임 계정을 열어볼 근거가 아직 살아 있는가.
- *
- * ★ 왜 필요한가 (2026-08-03 주간점검 교차검증).
- *   제출 시점에만 케어 플랜을 확인하고, 열람 시점에는 `status='revoked'` 만 봤다.
- *   그래서 **케어 구독이 끝난 뒤에도** 관리자가 평문 비밀번호를 계속 꺼낼 수 있었다.
- *   위임의 근거는 "발행 대행 계약"이고, 계약이 끝나면 근거도 끝난다. 고객이 직접
- *   철회 버튼을 누르지 않았다는 사실이 계속 접근해도 된다는 뜻이 될 수는 없다.
- *
- * 만료일이 비어 있는 경우는 **유효로 보지 않는다** — 케어 플랜은 결제 기반이라
- * 만료일이 반드시 있고, 없다는 것은 상태가 깨졌다는 뜻이다. 애매하면 막는 쪽이다.
- */
-export interface CareEntitlement {
-  readonly active: boolean
-  readonly plan: PlanId | null
-  readonly planName: string | null
-  readonly expiresAt: string | null
-  /** 왜 막혔는지 — 화면·응답에 그대로 쓴다. */
-  readonly reason:
-    | 'ok'
-    | 'not_care_plan'
-    | 'expired'
-    | 'no_expiry'
-    | 'no_profile'
-    | 'lookup_failed'
-}
-
-export async function loadCareEntitlement(
-  admin: SupabaseClient,
-  userId: string,
-  now: Date = new Date(),
-): Promise<CareEntitlement> {
-  const { data, error } = await admin
-    .from('profiles')
-    .select('plan, plan_expires_at')
-    .eq('id', userId)
-    .maybeSingle()
-
-  // 확인을 못 한 것과 자격이 없는 것은 다르다. 열람은 **막되**, 이유는 구분해 남긴다.
-  if (error) {
-    console.error('[admin/care-onboarding] 구독 상태 조회 실패:', error.message)
-    return { active: false, plan: null, planName: null, expiresAt: null, reason: 'lookup_failed' }
-  }
-
-  const row = data as { plan: string | null; plan_expires_at: string | null } | null
-  if (!row) {
-    return { active: false, plan: null, planName: null, expiresAt: null, reason: 'no_profile' }
-  }
-
-  const plan = (row.plan ?? '') as PlanId
-  const planName = PLANS[plan]?.name ?? null
-  const expiresAt = row.plan_expires_at
-
-  if (!plan || !PLANS[plan] || !isCarePlanId(plan)) {
-    return { active: false, plan: plan || null, planName, expiresAt, reason: 'not_care_plan' }
-  }
-  if (!expiresAt) {
-    return { active: false, plan, planName, expiresAt: null, reason: 'no_expiry' }
-  }
-  const expiry = Date.parse(expiresAt)
-  if (!Number.isFinite(expiry) || expiry <= now.getTime()) {
-    return { active: false, plan, planName, expiresAt, reason: 'expired' }
-  }
-  return { active: true, plan, planName, expiresAt, reason: 'ok' }
-}
-
-const ENTITLEMENT_MESSAGE: Record<CareEntitlement['reason'], string> = {
-  ok: '',
-  not_care_plan: '케어 플랜 구독자가 아닙니다. 위임 근거가 없으므로 계정 정보를 열 수 없습니다 — 자격증명을 파기해 주세요.',
-  expired: '케어 구독이 만료됐습니다. 위임 근거가 끝났으므로 계정 정보를 열 수 없습니다 — 자격증명을 파기해 주세요.',
-  lookup_failed: '구독 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-  no_expiry: '구독 만료일이 비어 있어 케어 자격을 확인할 수 없습니다. 결제 상태를 먼저 확인해 주세요.',
-  no_profile: '회원 정보를 찾을 수 없습니다.',
-}
 
 async function requireAdmin(): Promise<
   { ok: true; email: string } | { ok: false; res: NextResponse }
