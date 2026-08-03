@@ -7,6 +7,8 @@ import {
   getProfile,
   getActiveBillingKey,
   createPendingPayment,
+  findRecentPaidUpgrade,
+  hasRecentPendingPayment,
   markPaymentPaid,
   markPaymentFailed,
   setUserPlanKeepUsage,
@@ -127,6 +129,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '현재 구독 플랜을 확인할 수 없습니다' }, { status: 400 })
     }
 
+    /**
+     * 반쯤 끝난 유료 전환을 **먼저** 이어서 끝낸다.
+     *
+     * ⚠️ 이 검사는 반드시 `isUpgrade()` 앞에 있어야 한다 (2026-08-03 3라운드 지적).
+     *    차액 승인 후 `profiles` 는 바뀌고 `billing_keys` 갱신이 실패한 상태에서는
+     *    프로필이 이미 목표 플랜이라 `isUpgrade()` 가 먼저 거부해 버린다 —
+     *    복구 코드가 뒤에 있으면 **영영 도달하지 못하고** 빌링키가 옛 플랜에 묶인 채
+     *    다음 정기결제가 옛 금액으로 돈다.
+     *
+     * 여기서 하는 일은 재청구가 아니라 **후처리 재개**다(돈은 이미 받았다).
+     */
+    if (currentPlanId === target && billingKey && billingKey.plan !== target) {
+      const priorPaid = await findRecentPaidUpgrade(user.id, target)
+      if (priorPaid.state === 'unknown') {
+        // 일시 장애를 "업그레이드 불가"(400)로 뭉개면 원인을 알 수 없다.
+        return NextResponse.json(
+          { error: '결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.' },
+          { status: 409 },
+        )
+      }
+      if (priorPaid.state === 'found') {
+        console.warn(`[change-plan] 반쯤 끝난 전환 복구 — 빌링키 플랜 정합화 (user=${user.id})`)
+        await updateActiveBillingKeyPlan(user.id, target)
+        return NextResponse.json({
+          success: true,
+          plan: target,
+          charged: 0,
+          trial: false,
+          recovered: true,
+        })
+      }
+    }
+
     if (!isUpgrade(currentPlanId, target)) {
       return NextResponse.json(
         { error: '해당 플랜으로는 업그레이드할 수 없습니다' },
@@ -154,10 +189,33 @@ export async function POST(req: NextRequest) {
     const targetPlan = PLANS[target]
     const existingExpiresAt = profile?.plan_expires_at ?? null
 
-    // ── 무료체험 중: 결제 없이 즉시 전환 ──
-    if (isTrialNow(billingKey.trial_until)) {
+    /**
+     * 플랜 전환의 두 갱신은 원자적이지 않다 — **돈이 오갔는지에 따라 순서를 바꾼다.**
+     *
+     * 중간에 실패하면 둘 중 하나가 남는데, 어느 쪽이 덜 나쁜지가 경로마다 다르다.
+     *
+     * ① 돈이 안 오간 경로(체험·차액 0원): `billing_keys` → `profiles` 순.
+     *    프로필이 옛 플랜으로 남으므로 **재시도가 `isUpgrade()` 를 그대로 통과**한다.
+     *    빌링키 갱신은 멱등이라 두 번 돌아도 무해하다. 잃을 돈이 없으니 재시도가 답이다.
+     *
+     * ② 돈이 오간 경로(차액 결제): `profiles` → `billing_keys` 순.
+     *    여기서 재시도를 열어주면 **이미 승인된 차액이 한 번 더 청구**된다
+     *    (2026-08-03 교차검증 2라운드 지적). 프로필을 먼저 바꿔 재시도를
+     *    `isUpgrade()` 에서 막고, 남은 빌링키 불일치는 로그로 수동 정합화한다.
+     *    ①의 순서를 유료 경로에 그대로 쓰면 안 되는 이유가 이것이다.
+     */
+    const applyPlanChangeUnpaid = async () => {
+      await updateActiveBillingKeyPlan(user.id, target)
+      await setUserPlanKeepUsage(user.id, target, existingExpiresAt)
+    }
+    const applyPlanChangePaid = async () => {
       await setUserPlanKeepUsage(user.id, target, existingExpiresAt)
       await updateActiveBillingKeyPlan(user.id, target)
+    }
+
+    // ── 무료체험 중: 결제 없이 즉시 전환 ──
+    if (isTrialNow(billingKey.trial_until)) {
+      await applyPlanChangeUnpaid()
       return NextResponse.json({ success: true, plan: target, charged: 0, trial: true })
     }
 
@@ -171,9 +229,56 @@ export async function POST(req: NextRequest) {
 
     // 차액이 0 이하면 결제 없이 플랜만 전환
     if (amount <= 0) {
-      await setUserPlanKeepUsage(user.id, target, existingExpiresAt)
-      await updateActiveBillingKeyPlan(user.id, target)
+      await applyPlanChangeUnpaid()
       return NextResponse.json({ success: true, plan: target, charged: 0, trial: false })
+    }
+
+    /**
+     * 이미 이 플랜으로 승인된 차액이 있으면 **다시 받지 않고 후처리만 이어서 끝낸다.**
+     *
+     * 차액 승인 성공 후 DB 후처리가 실패한 상태에서 사용자가 다시 시도하는 경우다.
+     * 돈은 이미 받았으므로 여기서 또 청구하면 그게 이중청구다.
+     */
+    const alreadyPaid = await findRecentPaidUpgrade(user.id, target)
+    if (alreadyPaid.state === 'unknown') {
+      // 이미 받은 돈이 있는지 확인을 못 했다 — 여기서 승인하면 이중청구가 될 수 있다.
+      return NextResponse.json(
+        { error: '결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.' },
+        { status: 409 },
+      )
+    }
+    if (alreadyPaid.state === 'found') {
+      console.warn(
+        `[change-plan] 승인된 차액 발견 — 재청구 없이 후처리만 재개 ` +
+          `(user=${user.id}, payment=${alreadyPaid.id})`,
+      )
+      await applyPlanChangePaid()
+      return NextResponse.json({
+        success: true,
+        plan: target,
+        charged: 0,
+        trial: false,
+        recovered: true,
+      })
+    }
+
+    /**
+     * 같은 회원의 같은 플랜 결제가 아직 진행 중이면 새로 승인하지 않는다.
+     *
+     * 더블클릭·탭 두 개·네트워크 재시도로 같은 차액이 두 번 승인되는 것을 막는다.
+     * (완전한 잠금이 아닌 이유는 `hasRecentPendingPayment` 주석 참조.)
+     */
+    const pendingState = await hasRecentPendingPayment(user.id, target)
+    if (pendingState !== 'no') {
+      return NextResponse.json(
+        {
+          error:
+            pendingState === 'yes'
+              ? '이전 결제가 아직 처리 중입니다. 잠시 후 마이페이지에서 결과를 확인해 주세요. (중복 결제 방지)'
+              : '결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        },
+        { status: 409 },
+      )
     }
 
     // ── 차액 즉시 결제 ──
@@ -230,8 +335,7 @@ export async function POST(req: NextRequest) {
     })
 
     // 결제 성공 후에만 플랜 전환 (usage_count·next_billing_at 불변)
-    await setUserPlanKeepUsage(user.id, target, existingExpiresAt)
-    await updateActiveBillingKeyPlan(user.id, target)
+    await applyPlanChangePaid()
 
     return NextResponse.json({ success: true, plan: target, charged: amount, trial: false })
   } catch (e) {

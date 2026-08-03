@@ -16,6 +16,12 @@ interface OnboardingItem {
   note: string | null;
   status: string;
   updatedAt: string;
+  /** 위임 근거(활성 케어 구독)가 아직 살아 있는가. */
+  entitled: boolean;
+  /** 구독은 끝났는데 자격증명이 남아 있다 — 파기 대상. */
+  needsPurge: boolean;
+  currentPlan: string | null;
+  planExpiresAt: string | null;
 }
 
 interface Credentials {
@@ -48,14 +54,23 @@ export default function CareOnboardingPanel() {
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Record<string, Credentials>>({});
   const [revealing, setRevealing] = useState<string | null>(null);
+  // 구독 상태를 못 읽은 화면에서 "구독 종료" 표시를 사실처럼 보여주면 안 된다.
+  const [statusKnown, setStatusKnown] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     fetch('/api/admin/care-onboarding')
       .then(async (res) => {
-        const json = (await res.json()) as { items?: OnboardingItem[]; error?: string };
+        const json = (await res.json()) as {
+          items?: OnboardingItem[];
+          subscriptionStatusKnown?: boolean;
+          error?: string;
+        };
         if (!res.ok) throw new Error(json.error ?? '조회 실패');
-        if (!cancelled) setItems(json.items ?? []);
+        if (!cancelled) {
+          setItems(json.items ?? []);
+          setStatusKnown(json.subscriptionStatusKnown !== false);
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : '조회 실패');
@@ -102,6 +117,13 @@ export default function CareOnboardingPanel() {
         케어 구독자가 제출한 계정 위임 정보입니다. 비밀번호는 발행 작업 직전에만 &quot;계정
         보기&quot;로 열람하세요(열람 기록이 서버 로그에 남습니다).
       </p>
+
+      {!statusKnown && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
+          구독 상태를 확인하지 못했습니다. 아래 구독/파기 표시는 신뢰할 수 없으니 새로고침 후
+          확인해 주세요. (계정 열람은 서버에서 다시 검증합니다)
+        </p>
+      )}
 
       {!loaded ? (
         <p className="text-sm text-[#5b6573]">불러오는 중...</p>
@@ -153,11 +175,19 @@ export default function CareOnboardingPanel() {
                     </td>
                     <td className="px-3 py-2 border border-[#b4bfce]">
                       {STATUS_LABEL[item.status] ?? item.status}
+                      {item.needsPurge && (
+                        <p className="text-xs font-semibold text-red-600 mt-1">
+                          구독 종료 — 자격증명 파기 필요
+                        </p>
+                      )}
                     </td>
                     <td className="px-3 py-2 border border-[#b4bfce]">{formatDate(item.updatedAt)}</td>
                     <td className="px-3 py-2 border border-[#b4bfce]">
                       {item.status === 'revoked' ? (
                         <span className="text-xs text-[#5b6573]">파기됨</span>
+                      ) : !item.entitled ? (
+                        // 구독이 끝나면 위임 근거도 끝난다 — 서버도 403 으로 막는다.
+                        <span className="text-xs text-[#5b6573]">열람 불가 (구독 종료)</span>
                       ) : creds ? (
                         <button
                           type="button"

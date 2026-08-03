@@ -49,6 +49,8 @@ const LEADS_TABLE = 'clinic_diagnosis_email_leads';
  * 인증: Authorization: Bearer ${CRON_SECRET}
  */
 export async function GET(req: NextRequest) {
+  // 시간 예산은 **핸들러 시작부터** 잰다 — 조회·경고 발송도 maxDuration 을 먹는다.
+  const startedAt = Date.now();
   if (!isAuthorizedCron(req)) {
     return NextResponse.json(
       { error: 'Unauthorized', cronSecret: cronSecretStatus() },
@@ -68,11 +70,14 @@ export async function GET(req: NextRequest) {
   /**
    * 창보다 넉넉히 읽고 판정은 순수 모듈에 맡긴다(경계 판단을 한 곳에만 둔다).
    *
-   * ⚠️ 조회 상한을 200 → 1000 으로 올렸다(2026-07-28 교차검증).
+   * ⚠️ 조회 상한을 200 → 1000 → **1800** 으로 올렸다(2026-08-03 교차검증).
    *    영구 실패·토큰 누락 행이 오래된 순으로 앞을 채우면, 뒤에 있는 **재시도
-   *    가능한 행이 조회조차 되지 않는다**(starvation). 창이 7일이라 모집단 자체가
-   *    유입 상한(하루 200건) × 8일로 묶여 있으므로 1000 이면 실질적으로 전량이다.
+   *    가능한 행이 조회조차 되지 않는다**(starvation). 1000 이 "실질적으로 전량"
+   *    이라던 계산이 틀렸다 — 모집단 상한은 유입 상한(하루 200건) × 조회 창 8일 =
+   *    **1600건**이라 1000 으로는 최악의 경우 600건이 조회 밖으로 밀린다.
+   *    상한을 모집단 위(1800)로 올리고, 그래도 가득 차면 **조용히 자르지 않고 알린다.**
    */
+  const FETCH_LIMIT = 1800;
   const since = new Date(Date.now() - (RETRY_WINDOW_DAYS + 1) * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await admin
     .from(LEADS_TABLE)
@@ -80,7 +85,7 @@ export async function GET(req: NextRequest) {
     .eq('sent', false)
     .gte('created_at', since)
     .order('created_at', { ascending: true })
-    .limit(1000);
+    .limit(FETCH_LIMIT);
 
   if (error) {
     console.error('[cron/email-retry] 리드 조회 실패:', error.message);
@@ -98,12 +103,45 @@ export async function GET(req: NextRequest) {
     createdAt: String(r.created_at),
   }));
 
+  if (rows.length >= FETCH_LIMIT) {
+    // 잘렸다는 사실을 삼키지 않는다 — 조용한 절단은 "전량 처리했다"로 읽힌다.
+    console.error(
+      `[cron/email-retry] ⚠️조회 상한(${FETCH_LIMIT})에 도달 — 창 안의 일부 리드가 이번 실행에서 누락됐을 수 있다`,
+    );
+    await sendTelegram(
+      `⚠️ 진단 메일 재발송: 조회 상한 ${FETCH_LIMIT}건에 도달했습니다. 미발송 리드가 쌓이고 있는지 확인이 필요합니다.`,
+    );
+  }
+
   const plan = planEmailRetries(rows);
   let succeeded = 0;
   let failed = 0;
   let deduped = 0;
+  /** 이번 실행에서 손대지 않고 다음으로 넘긴 건수 (시간 예산 초과·중복확인 실패). */
+  let postponed = 0;
+
+  /**
+   * 시간 예산 — `maxDuration`(120초) 안에서 스스로 멈춘다.
+   *
+   * ⚠️ 상한이 200건인데 발송은 건당 조회·메일 API·DB 업데이트를 **직렬**로 돈다.
+   *    건당 0.6초만 넘어도 120초를 넘겨 함수가 중간에 잘린다(2026-08-03 교차검증).
+   *    그때 잘린 지점은 아무도 모르고, 이미 보낸 뒤 DB 반영 전에 죽은 행은
+   *    다음 날 중복 발송된다. 스스로 멈추면 남은 건수를 **이월로 보고**할 수 있다.
+   *
+   * ⚠️ 이것은 **보장이 아니라 여유**다(2026-08-03 2라운드). 검사는 각 건을 시작하기
+   *    직전에만 하므로, 마지막으로 시작한 한 건이 오래 끌면 여전히 넘길 수 있다.
+   *    그래서 남은 시간을 넉넉히(45초) 남겨 한 건의 초과를 흡수한다. 발송 자체에
+   *    타임아웃을 거는 것은 "보냈는지 모르는 상태" 를 만들어 오히려 중복을 키우므로
+   *    하지 않는다 — 이 기능의 전달 보장은 애초에 at-least-once 다.
+   */
+  const BUDGET_MS = 75_000;
 
   for (const target of plan.targets) {
+    if (Date.now() - startedAt > BUDGET_MS) {
+      postponed += 1;
+      continue;
+    }
+
     /**
      * 이미 같은 리포트가 같은 주소로 나간 적이 있으면 보내지 않는다.
      *
@@ -113,13 +151,27 @@ export async function GET(req: NextRequest) {
      *    같은 (토큰, 주소) 로 성공한 행이 있으면 목적은 이미 달성됐으므로
      *    행을 해소만 하고 발송은 건너뛴다.
      */
-    const { data: already } = await admin
+    const { data: already, error: dupError } = await admin
       .from(LEADS_TABLE)
       .select('id')
       .eq('share_token', target.shareToken)
       .eq('email', target.email)
       .eq('sent', true)
       .limit(1);
+
+    if (dupError) {
+      /**
+       * 중복 확인이 실패했으면 **보내지 않고 미룬다.**
+       *
+       * ⚠️ 예전엔 error 를 안 읽고 data 만 봤다(2026-08-03 교차검증). 조회가
+       *    일시적으로 실패하면 `already` 가 비어 있는 것처럼 보여, 이미 성공한
+       *    리포트를 한 번 더 보냈다. 확인을 못 한 것과 중복이 없는 것은 다르다.
+       *    행은 그대로 두므로 다음 실행에서 다시 대상이 된다.
+       */
+      console.error('[cron/email-retry] 중복 확인 실패 — 이번 건은 미룬다:', dupError.message);
+      postponed += 1;
+      continue;
+    }
 
     if (already && already.length > 0) {
       deduped += 1;
@@ -165,7 +217,8 @@ export async function GET(req: NextRequest) {
     succeeded,
     failed,
     skipped: plan.skipped.length + deduped,
-    deferred: plan.deferred,
+    // 상한 때문에 미룬 것과 이번 실행에서 손대지 못한 것을 함께 이월로 보고한다.
+    deferred: plan.deferred + postponed,
   };
   const text = buildRetrySummaryText(summary);
 

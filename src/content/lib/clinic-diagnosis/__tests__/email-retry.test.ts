@@ -80,6 +80,41 @@ test('일시 장애는 영구 실패가 아니다', () => {
   assert.equal(isPermanentSendError(''), false);
 });
 
+/**
+ * 회귀 고정 — 2026-08-03 주간점검 교차검증.
+ *
+ * `invalid` 라는 단어만 보고 영구 실패로 뭉갰다. 발송 공급자는 **우리 쪽 설정
+ * 오류**에도 같은 단어를 쓴다(`Invalid API key`). 그러면 키를 고친 뒤에도 그
+ * 리드는 영영 안 나간다 — 이 모듈이 막으려던 사고를 이 모듈이 만든다.
+ * 7/27 실제 사고 원인도 수신자가 아니라 도메인 미검증이었다.
+ */
+test('우리 쪽 설정 오류의 invalid 는 영구 실패가 아니다 — 고치면 다시 보내야 한다', () => {
+  assert.equal(isPermanentSendError('Invalid API key'), false);
+  assert.equal(isPermanentSendError('Invalid sender configuration'), false);
+  assert.equal(isPermanentSendError('invalid from address'), false);
+  assert.equal(isPermanentSendError('Invalid credentials'), false);
+  assert.equal(isPermanentSendError('invalid request payload'), false);
+});
+
+test('수신자를 가리키는 invalid 는 여전히 영구 실패다', () => {
+  assert.equal(isPermanentSendError('Invalid `to` field'), true);
+  assert.equal(isPermanentSendError('invalid recipient'), true);
+  assert.equal(isPermanentSendError('invalid email address'), true);
+  assert.equal(isPermanentSendError('recipient is invalid'), true);
+  assert.equal(isPermanentSendError('no such user here'), true);
+  assert.equal(isPermanentSendError('mailbox does not exist'), true);
+});
+
+/**
+ * `mailbox unavailable` 은 SMTP 450(임시)에도 쓰인다 — 메일함 잠김·용량 초과·
+ * 서버 장애. 상태 코드 없이 문구만으로 영구를 단정하지 않는다.
+ */
+test('임시일 수 있는 메일함 오류는 영구 실패가 아니다', () => {
+  assert.equal(isPermanentSendError('mailbox unavailable'), false);
+  assert.equal(isPermanentSendError('mailbox full'), false);
+  assert.equal(isPermanentSendError('temporarily deferred'), false);
+});
+
 test('영구 실패 리드는 건너뛴다 — 매일 같은 주소를 두드리면 발신 평판이 깎인다', () => {
   const plan = planEmailRetries([candidate({ sendError: 'Invalid `to` field' })], NOW);
   assert.equal(plan.targets.length, 0);

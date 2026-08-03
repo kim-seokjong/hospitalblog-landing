@@ -42,18 +42,49 @@ export const MAX_RETRIES_PER_RUN = 200;
  * 매일 같은 주소를 두드리면 발신 평판만 깎인다 — 그래서 건너뛴다.
  * 판단이 애매하면 **재시도하는 쪽**을 택한다(일시 장애를 영구로 오판하면
  * 리드가 죽고, 그 반대는 며칠 헛시도로 끝난다).
+ *
+ * ⚠️ **맨 `invalid` 한 단어로 판정하지 않는다** (2026-08-03 주간점검 교차검증).
+ *    발송 공급자는 인프라 오류에도 `Invalid API key`·`Invalid sender configuration`
+ *    처럼 같은 단어를 쓴다. 그걸 영구 실패로 뭉개면 **키를 고친 뒤에도 그 리드는
+ *    영영 안 나간다** — 이 모듈이 막으려던 바로 그 사고를 이 모듈이 만든다.
+ *    실제로 2026-07-27 사고의 원인은 수신자가 아니라 도메인 미검증이었다.
+ *    그래서 영구 판정은 **수신자를 가리키는 문구일 때만** 내린다.
  */
+const RECIPIENT_PERMANENT_PATTERNS: readonly RegExp[] = [
+  /**
+   * `invalid` 는 **수신자를 가리킬 때만** 영구다.
+   *
+   * 백틱·따옴표를 낀 표기(Resend 의 ``Invalid `to` field``)까지 잡되,
+   * `Invalid API key`·`Invalid sender configuration`·`invalid from address`
+   * 같은 **우리 쪽 설정 오류는 통과시킨다** — 고치면 다시 보내야 하는 것들이다.
+   */
+  /invalid[^a-z]{0,3}(to|recipient|recipients|email|e-mail|address(?:ee)?)\b/,
+  /(recipient|email|address)[^a-z]{0,3}(is )?invalid\b/,
+  /not a valid (email|e-mail|recipient|address)/,
+  /**
+   * 수신함이 **없다고** 서버가 명시한 경우만.
+   *
+   * ⚠️ `mailbox unavailable` 은 뺐다(2026-08-03 2라운드). SMTP 에서 이 문구는
+   *    영구(550)뿐 아니라 **임시(450)** 에도 쓰인다 — 메일함 잠김·용량 초과·
+   *    서버 장애가 여기 해당한다. 상태 코드 없이 문구만 보고 영구로 단정하면
+   *    맨 `invalid` 를 지웠던 것과 똑같은 오판을 다른 이름으로 되풀이한다.
+   */
+  /no such user/,
+  /mailbox (not found|does not exist|is disabled)/,
+  /user unknown/,
+  /unknown user/,
+  /(recipient|address|user) (does not|doesn't) exist/,
+  // 수신자가 더 이상 받지 않기로 된 상태
+  /bounce/,
+  /suppress/,
+  /unsubscrib/,
+  /blocked/,
+];
+
 export function isPermanentSendError(message: string | null | undefined): boolean {
   if (!message) return false;
   const m = message.toLowerCase();
-  return (
-    m.includes('invalid') ||
-    m.includes('not a valid') ||
-    m.includes('bounce') ||
-    m.includes('suppress') ||
-    m.includes('blocked') ||
-    m.includes('unsubscrib')
-  );
+  return RECIPIENT_PERMANENT_PATTERNS.some((re) => re.test(m));
 }
 
 /** 재발송 후보 행 — 라우트가 DB 에서 읽어 넘긴다. */

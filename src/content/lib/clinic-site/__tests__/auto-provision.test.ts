@@ -120,10 +120,18 @@ test('차단 판정은 사용자 플로우를 막지 않는다(예외를 던지�
 
 test('결제 훅: 플랜 활성화(activateUserPlan) 지점에서 블로그를 개설한다', () => {
   assert.match(paymentRepoSource, /import \{ provisionClinicSite \}/);
-  const activateBody = paymentRepoSource.slice(
-    paymentRepoSource.indexOf('export async function activateUserPlan'),
-  );
-  assert.match(activateBody.slice(0, 2000), /provisionClinicSite\(admin, params\.userId, signal\)/);
+  /**
+   * 함수 **본문 전체**를 본다.
+   *
+   * ⚠️ 예전엔 앞 2000자만 잘라 봤다. 그러면 주석이 길어지는 것만으로 통과/실패가
+   *    갈린다 — 실제로 2026-08-03 에 주석을 더했다가 개설 호출은 그대로인데
+   *    테스트가 깨졌다. 창 크기가 아니라 **다음 export 까지**를 함수로 본다.
+   */
+  const start = paymentRepoSource.indexOf('export async function activateUserPlan');
+  assert.ok(start >= 0, 'activateUserPlan 함수를 찾지 못했다');
+  const after = paymentRepoSource.indexOf('\nexport ', start + 1);
+  const activateBody = paymentRepoSource.slice(start, after === -1 ? undefined : after);
+  assert.match(activateBody, /provisionClinicSite\(admin, params\.userId, signal\)/);
 });
 
 test('결제 훅: service role 클라이언트로 실행된다(남의 슬러그 중복 확인 필요)', () => {
