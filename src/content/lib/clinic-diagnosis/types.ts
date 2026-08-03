@@ -298,6 +298,25 @@ export interface SocialAxis {
 export type { PlaceRank, PlaceRankState, PlaceScopeKind } from './place.ts';
 
 /**
+ * 순위를 잴 키워드 하나 — **검색량을 함께 들고 다닌다.**
+ *
+ * ★ 왜 검색량이 붙어야 하나 (2026-08-04 실측).
+ *   등록 키워드를 그대로 쓰면 `레진빌드업충치치료` 같은 롱테일이 섞이고, 그건
+ *   동·구·시 **세 단계 모두 1위**로 나온다. 아무도 그 말로 검색하지 않으니 당연하고,
+ *   그 1위는 성과가 아니다. 검색량 없이 순위만 보여주면 **잘하고 있다는 착시**를 만든다.
+ */
+export interface PlaceKeyword {
+  readonly keyword: string;
+  /** 월 검색량(PC+모바일, 전국). 조회 못 했으면 null. */
+  readonly volume: number | null;
+  /**
+   * 업종 키워드인가 — 검색량과 무관하게 **항상** 잰다.
+   * "범어동 치과"는 환자가 가장 많이 치는 말이라 이 한 줄은 언제나 나와야 한다.
+   */
+  readonly anchor: boolean;
+}
+
+/**
  * 플레이스 축.
  *
  * ⚠️ 나중에 추가된 축이라 **저장된 옛 리포트에는 없다** — 읽을 때 항상 옵셔널로 다룬다.
@@ -320,8 +339,30 @@ export interface PlaceAxis {
   readonly category: string | null;
   /** 업주가 직접 등록한 키워드 원문 — 화면에 그대로 보여준다. */
   readonly registeredKeywords: readonly string[];
-  /** 순위를 실제로 재 본 키워드(업종 + 정제된 등록 키워드). */
-  readonly measuredKeywords: readonly string[];
+  /** 상세 페이지를 실제로 읽었는가 — false 면 "등록 키워드 없음" 이라고 말하면 안 된다. */
+  readonly profileChecked: boolean;
+  /**
+   * `keywordList` 필드 자체를 찾았는가.
+   * ⚠️ "빈 등록"과 "파싱 실패"를 가르는 값 — 뭉치면 등록해 둔 원장에게
+   *    "등록 안 하셨다"고 말하게 된다.
+   */
+  readonly keywordFieldFound: boolean;
+  /** 순위를 실제로 재 본 키워드(업종 + 검색량이 확인된 등록 키워드). */
+  readonly measuredKeywords: readonly PlaceKeyword[];
+  /**
+   * 검색량이 바닥이라 **재지 않은** 등록 키워드.
+   *
+   * ⚠️ 조용히 버리지 않는다. "1위"가 나와도 아무도 안 치는 말이면 성과가 아닌데,
+   *    그 사실을 안 보여주면 원장은 우리가 그냥 몇 개만 골랐다고 생각한다.
+   */
+  readonly lowVolumeKeywords: readonly PlaceKeyword[];
+  /**
+   * 검색량은 충분한데 **측정 상한에 밀린** 키워드.
+   * ⚠️ 위와 합치면 "검색량이 거의 없다"는 거짓말이 된다 — 반드시 따로 둔다.
+   */
+  readonly overLimitKeywords: readonly PlaceKeyword[];
+  /** 검색량 조회가 실제로 됐는가 (검색광고 키가 없으면 false — 그때는 거르지 않는다). */
+  readonly volumeChecked: boolean;
   /** 지역 3단계 × 키워드 조합의 노출 결과. */
   readonly ranks: readonly PlaceRankRow[];
   /** 순위 측정을 실제로 수행했는가. */

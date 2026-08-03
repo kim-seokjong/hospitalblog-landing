@@ -1069,7 +1069,29 @@ export function buildPlaceFindings(place: PlaceAxis | null | undefined): readonl
 
   const out: Finding[] = [];
 
-  if (place.registeredKeywords.length === 0) {
+  /**
+   * ⚠️ 상세 페이지를 못 읽었으면 **"등록 안 하셨다" 고 단정하지 않는다.**
+   *    조회 실패·마크업 변경도 빈 목록으로 오는데, 그걸 사실로 보고하면
+   *    등록해 둔 원장에게 없는 문제를 지적하게 된다.
+   */
+  if (!place.keywordFieldFound) {
+    /**
+     * ⚠️ 판정 근거는 **키워드 필드 하나**다 (2026-08-04 지적).
+     *    업종만 읽히고 키워드 구조가 바뀐 경우에도 카드가 나와야 한다 —
+     *    전체 `profileChecked` 로 묶으면 그 경우 **아무 카드도 안 나와** 원장은
+     *    우리가 확인했는데 문제가 없다고 읽는다.
+     */
+    out.push({
+      id: 'place.keywords',
+      axis: 'place',
+      label: '플레이스 대표 키워드',
+      tone: 'unknown',
+      state: '등록된 대표 키워드를 확인하지 못했습니다.',
+      why: null,
+      action: '잠시 후 다시 진단해 주세요.',
+      ourScope: false,
+    });
+  } else if (place.registeredKeywords.length === 0) {
     out.push({
       id: 'place.keywords',
       axis: 'place',
@@ -1082,7 +1104,33 @@ export function buildPlaceFindings(place: PlaceAxis | null | undefined): readonl
     });
   }
 
-  for (const keyword of place.measuredKeywords) {
+  /**
+   * 검색량 미달로 재지 않은 키워드를 **밝힌다.**
+   *
+   * ⚠️ 조용히 버리면 원장은 우리가 임의로 몇 개만 골랐다고 본다. 왜 뺐는지를
+   *    말해야 "그럼 그 말은 의미가 없구나" 로 이어진다 — 이게 오히려 설득이다.
+   */
+  if (place.volumeChecked && place.lowVolumeKeywords.length > 0) {
+    const names = place.lowVolumeKeywords.map((k) => k.keyword).slice(0, 4).join(' · ');
+    out.push({
+      id: 'place.keywords.lowVolume',
+      axis: 'place',
+      label: '검색되지 않는 등록 키워드',
+      tone: 'warn',
+      state: `등록해 두신 키워드 중 검색량이 거의 없는 것이 ${place.lowVolumeKeywords.length}개입니다 — ${names}`,
+      why: '이런 말은 경쟁이 없어 순위가 1위로 나와도 찾아오는 환자가 없습니다. 등록 칸만 채우고 실제 유입은 만들지 못합니다.',
+      action: '환자가 실제로 검색하는 시술명으로 대표 키워드를 바꿔 주세요.',
+      ourScope: false,
+      details: place.lowVolumeKeywords.slice(0, 6).map((k) => ({
+        label: k.keyword,
+        ok: false,
+        hint: k.volume === null ? '검색량을 확인하지 못했습니다.' : `월 검색량 약 ${k.volume.toLocaleString()}회`,
+      })),
+    });
+  }
+
+  for (const pick of place.measuredKeywords) {
+    const keyword = pick.keyword;
     const rows = place.ranks.filter((r) => r.keyword === keyword);
     if (rows.length === 0) continue;
 
@@ -1109,21 +1157,74 @@ export function buildPlaceFindings(place: PlaceAxis | null | undefined): readonl
     );
     const summary = rows.map((r) => placeRankText(r, place.topN)).join(' · ');
 
-    const tone: FindingTone = ranked.length === 0 ? 'warn' : widest?.scope === 'city' ? 'good' : 'warn';
+    /**
+     * ⚠️ 검색량을 확인 못 한 등록 키워드는 **'잘하고 있는 것' 으로 올리지 않는다.**
+     *    아무도 안 치는 말의 1위를 성과로 보고하는 것이 이 필터가 막으려던 일이다.
+     *    업종(anchor)은 환자가 실제로 치는 말이 확실하므로 예외다.
+     */
+    /**
+     * ⚠️ **키워드 단위로** 판정한다 (2026-08-04 지적).
+     *    API 호출이 성공해도 특정 키워드 행만 빠지는 경우가 있는데, 전체 성공
+     *    여부만 보면 그 키워드의 1위를 성과로 승격시킨다.
+     */
+    const volumeTrusted = pick.anchor || (place.volumeChecked && pick.volume !== null);
+    const tone: FindingTone =
+      ranked.length === 0
+        ? // 전부 확인하지 못한 채 "안 보인다" 로 단정하지 않는다 — 그건 미확인이다.
+          checkedRows.length === rows.length
+          ? 'warn'
+          : 'unknown'
+        : widest?.scope === 'city' && volumeTrusted
+          ? 'good'
+          : 'warn';
+
+    /**
+     * ⚠️ **확인한 범위 밖까지 단정하지 않는다** (2026-08-04 지적).
+     *    동은 5위 밖이고 구·시는 타임아웃이었는데 "이 키워드로는 안 보입니다" 라고
+     *    쓰면, 확인도 안 한 범위를 사실처럼 말하는 것이 된다.
+     */
+    const allChecked = checkedRows.length === rows.length;
+
+    /**
+     * ⚠️ "더 넓히면 사라진다" 는 **더 넓은 범위를 실제로 확인했을 때만** 할 수 있는 말이다
+     *    (2026-08-04 지적). 동만 확인되고 구·시가 타임아웃이면 넓은 쪽은 모르는 상태인데,
+     *    그걸 "사라진다" 고 쓰면 확인도 안 한 범위를 사실처럼 말하는 것이 된다.
+     */
+    const widerRows = widest
+      ? rows.filter((r) => SCOPE_WIDTH[r.scope] > SCOPE_WIDTH[widest.scope])
+      : [];
+    const widerConfirmedMissing = widerRows.some((r) => r.state === 'outside_top');
+    const widerAllUnchecked = widerRows.length > 0 && widerRows.every((r) => r.state === 'unchecked');
 
     const why =
       ranked.length === 0
-        ? `'${keyword}'로 찾는 환자에게는 첫 화면에 병원이 보이지 않습니다.`
-        : widest && widest.scope !== 'city'
+        ? allChecked
+          ? `'${keyword}'로 찾는 환자에게는 첫 화면에 병원이 보이지 않습니다.`
+          : `확인된 범위에서는 상위 ${place.topN}개 안에 없었고, 나머지 지역은 확인하지 못했습니다.`
+        : widerConfirmedMissing && widest
           ? `${PLACE_SCOPE_LABEL[widest.scope]} 범위에서는 보이지만, 더 넓혀 검색하면 첫 화면에서 사라집니다.`
-          : null;
+          : widerAllUnchecked && widest
+            ? `${PLACE_SCOPE_LABEL[widest.scope]} 범위에서는 보이지만, 더 넓은 지역은 확인하지 못했습니다.`
+            : null;
+
+    /**
+     * 검색량을 붙여야 "이 순위가 얼마나 중요한지" 가 같이 읽힌다.
+     *
+     * ⚠️ 검색량을 못 봤으면 **그 사실을 밝힌다.** 안 밝히면 아무도 안 치는 말의
+     *    1위가 성과처럼 읽힌다 — 이 필터를 넣은 이유가 바로 그 착시였다.
+     */
+    const volumeText = volumeTrusted
+      ? pick.volume !== null && pick.volume > 0
+        ? ` · 월 검색 약 ${pick.volume.toLocaleString()}회`
+        : ''
+      : ' · 검색량 미확인';
 
     out.push({
       id: `place.rank.${keyword}`,
       axis: 'place',
       label: `플레이스 노출 — ${keyword}`,
       tone,
-      state: `${summary} (상위 ${place.topN}개 기준)`,
+      state: `${summary} (상위 ${place.topN}개 기준${volumeText})`,
       why,
       action:
         ranked.length === 0
