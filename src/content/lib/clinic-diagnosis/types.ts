@@ -293,6 +293,52 @@ export interface SocialAxis {
   readonly searchedYoutube?: boolean;
 }
 
+/* ── 2단계 ⑥: 네이버 플레이스 ─────────────────────────────── */
+
+export type { PlaceRank, PlaceRankState, PlaceScopeKind } from './place.ts';
+
+/**
+ * 플레이스 축.
+ *
+ * ⚠️ 나중에 추가된 축이라 **저장된 옛 리포트에는 없다** — 읽을 때 항상 옵셔널로 다룬다.
+ * ⚠️ 순위는 **상위 5개까지만** 볼 수 있다(서버 렌더 HTML 한계). 그 밖은 순위 숫자가
+ *    아니라 `outside_top` 이며, 확인 실패(`unchecked`)와 절대 뭉개지 않는다.
+ */
+export interface PlaceAxis {
+  readonly checked: boolean;
+  /**
+   * 플레이스에 등록돼 있는가.
+   *  found     : 병원명으로 찾았다
+   *  not_found : 우리가 본 범위에서 확인되지 않았다 (등록돼 있는데 이름이 다를 수도 있다)
+   *  unknown   : 조회 자체를 못 했다
+   */
+  readonly presence: 'found' | 'not_found' | 'unknown';
+  /** 네이버 플레이스 id. 못 찾았으면 null. */
+  readonly placeId: string | null;
+  readonly placeName: string | null;
+  /** 플레이스 업종 (예: '치과'). */
+  readonly category: string | null;
+  /** 업주가 직접 등록한 키워드 원문 — 화면에 그대로 보여준다. */
+  readonly registeredKeywords: readonly string[];
+  /** 순위를 실제로 재 본 키워드(업종 + 정제된 등록 키워드). */
+  readonly measuredKeywords: readonly string[];
+  /** 지역 3단계 × 키워드 조합의 노출 결과. */
+  readonly ranks: readonly PlaceRankRow[];
+  /** 순위 측정을 실제로 수행했는가. */
+  readonly rankChecked: boolean;
+  /** 상위 몇 위까지 볼 수 있었는가 — 화면에 그대로 밝힌다. */
+  readonly topN: number;
+}
+
+export interface PlaceRankRow {
+  readonly keyword: string;
+  readonly scope: 'dong' | 'gu' | 'city';
+  readonly region: string;
+  readonly query: string;
+  readonly state: 'ranked' | 'outside_top' | 'unchecked';
+  readonly rank: number | null;
+}
+
 /* ── 2단계 ③: AI 인용 ────────────────────────────────────── */
 
 /** 인용 경로 — 이 진단에서 가장 설득력 있는 구분. */
@@ -535,7 +581,7 @@ export interface Finding {
    * ⚠️ 'social' 은 나중에 추가된 축이다. 저장된 옛 리포트에는 없고, 화면은 모르는
    *    축이 섞여 있어도 버리지 않고 맨 뒤에 붙인다(groupFindingsByChannel).
    */
-  readonly axis: 'blog' | 'site' | 'ai' | 'compliance' | 'social';
+  readonly axis: 'blog' | 'site' | 'ai' | 'compliance' | 'social' | 'place';
   readonly label: string;
   readonly tone: FindingTone;
   /** ① 지금 상태 — 사실·수치만. */
@@ -568,6 +614,11 @@ export interface DiagnosisReport {
    * ⚠️ 나중에 추가된 축이라 **저장된 옛 리포트에는 없다** — 읽을 때 항상 옵셔널로 다룬다.
    */
   readonly social?: SocialAxis;
+  /**
+   * 네이버 플레이스 — 등록·등록 키워드·지역 3단계 노출.
+   * ⚠️ 나중에 추가된 축이라 저장된 옛 리포트에는 없다 — 항상 옵셔널로 읽는다.
+   */
+  readonly place?: PlaceAxis;
   readonly findings: readonly Finding[];
   /** 확인하지 못한 축 이름 목록 — 화면에 그대로 표기한다. */
   readonly unchecked: readonly string[];

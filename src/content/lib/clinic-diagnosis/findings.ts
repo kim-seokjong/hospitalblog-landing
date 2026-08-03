@@ -16,6 +16,9 @@ import type {
   Finding,
   FindingDetail,
   FindingGroup,
+  FindingTone,
+  PlaceAxis,
+  PlaceRankRow,
   SiteAxis,
   SiteCheckState,
   SocialAxis,
@@ -1008,14 +1011,143 @@ export function collectUnchecked(input: {
   readonly site: SiteAxis;
   readonly ai: AiAxis;
   readonly compliance: ComplianceAxis;
+  readonly place?: PlaceAxis;
 }): readonly string[] {
   const out: string[] = [];
   if (!input.blog.checked || input.blog.blogId === null) out.push('네이버 블로그');
   if (!input.site.checked || !input.site.url) out.push('홈페이지');
   if (!input.ai.checked) out.push('AI 검색 인용');
   if (!input.compliance.checked) out.push('의료광고법 표현');
+  if (input.place && !input.place.checked) out.push('네이버 플레이스');
   return out;
 }
+
+/* ── 네이버 플레이스 ──────────────────────────────────────── */
+
+const PLACE_SCOPE_LABEL: Readonly<Record<'dong' | 'gu' | 'city', string>> = {
+  dong: '동네',
+  gu: '구·군',
+  city: '시·도',
+};
+
+/** 한 줄 표기 — "범어동 2위" / "수성구 5위 밖" / "대구 확인 못 함". */
+function placeRankText(row: PlaceRankRow, topN: number): string {
+  if (row.state === 'ranked' && row.rank !== null) return `${row.region} ${row.rank}위`;
+  if (row.state === 'outside_top') return `${row.region} ${topN}위 밖`;
+  return `${row.region} 확인 못 함`;
+}
+
+/**
+ * 플레이스 결과 카드.
+ *
+ * ★ 왜 키워드마다 한 장인가.
+ *   "플레이스 노출이 나쁩니다" 한 줄은 행동으로 이어지지 않는다. 원장이 실제로
+ *   움직이려면 **어떤 말로 검색했을 때 어디서부터 안 보이는지**가 있어야 한다.
+ *   지역을 넓힐수록 밀리는 낙차가 그 자체로 메시지다.
+ *
+ * ⚠️ 경쟁 병원 이름은 절대 싣지 않는다 — 타 병원 비교·비방 광고 금지(회사 공통 규칙).
+ *    우리 병원이 어디쯤인지만 말한다.
+ */
+export function buildPlaceFindings(place: PlaceAxis | null | undefined): readonly Finding[] {
+  if (!place || !place.checked) return [];
+
+  if (place.presence !== 'found') {
+    return [
+      {
+        id: 'place.presence',
+        axis: 'place',
+        label: '네이버 플레이스 등록',
+        tone: 'warn',
+        state: '병원 이름으로 검색했을 때 네이버 플레이스에서 확인되지 않았습니다.',
+        why: '지역 검색은 병원을 찾는 가장 흔한 경로인데, 플레이스에 없으면 그 검색 결과에 아예 나오지 않습니다.',
+        action:
+          '네이버 스마트플레이스에서 업체 등록 상태를 확인해 주세요. 등록돼 있는데 안 잡혔다면 등록 상호가 실제 간판과 다를 수 있습니다.',
+        ourScope: false,
+      },
+    ];
+  }
+
+  const out: Finding[] = [];
+
+  if (place.registeredKeywords.length === 0) {
+    out.push({
+      id: 'place.keywords',
+      axis: 'place',
+      label: '플레이스 대표 키워드',
+      tone: 'warn',
+      state: '플레이스에 등록된 대표 키워드가 없습니다.',
+      why: '대표 키워드는 환자가 그 말로 검색했을 때 병원이 후보에 들어갈지를 정합니다. 비어 있으면 업종 검색에만 기대게 됩니다.',
+      action: '스마트플레이스에서 진료 항목 중심으로 대표 키워드를 등록해 주세요.',
+      ourScope: false,
+    });
+  }
+
+  for (const keyword of place.measuredKeywords) {
+    const rows = place.ranks.filter((r) => r.keyword === keyword);
+    if (rows.length === 0) continue;
+
+    const checkedRows = rows.filter((r) => r.state !== 'unchecked');
+    if (checkedRows.length === 0) {
+      out.push({
+        id: `place.rank.${keyword}`,
+        axis: 'place',
+        label: `플레이스 노출 — ${keyword}`,
+        tone: 'unknown',
+        state: `'${keyword}' 노출 순위를 확인하지 못했습니다.`,
+        why: null,
+        action: '잠시 후 다시 진단해 주세요.',
+        ourScope: false,
+      });
+      continue;
+    }
+
+    const ranked = checkedRows.filter((r) => r.state === 'ranked');
+    const widest = ranked.reduce<PlaceRankRow | null>(
+      (best, row) =>
+        !best || SCOPE_WIDTH[row.scope] > SCOPE_WIDTH[best.scope] ? row : best,
+      null,
+    );
+    const summary = rows.map((r) => placeRankText(r, place.topN)).join(' · ');
+
+    const tone: FindingTone = ranked.length === 0 ? 'warn' : widest?.scope === 'city' ? 'good' : 'warn';
+
+    const why =
+      ranked.length === 0
+        ? `'${keyword}'로 찾는 환자에게는 첫 화면에 병원이 보이지 않습니다.`
+        : widest && widest.scope !== 'city'
+          ? `${PLACE_SCOPE_LABEL[widest.scope]} 범위에서는 보이지만, 더 넓혀 검색하면 첫 화면에서 사라집니다.`
+          : null;
+
+    out.push({
+      id: `place.rank.${keyword}`,
+      axis: 'place',
+      label: `플레이스 노출 — ${keyword}`,
+      tone,
+      state: `${summary} (상위 ${place.topN}개 기준)`,
+      why,
+      action:
+        ranked.length === 0
+          ? `플레이스 정보와 소식을 '${keyword}' 중심으로 채워 지역 검색 후보에 들어가게 해야 합니다.`
+          : '지금 보이는 범위를 넓히려면 해당 키워드의 소식·사진을 꾸준히 쌓아야 합니다.',
+      ourScope: true,
+      details: rows.map((row) => ({
+        label: row.query,
+        ok: row.state === 'unchecked' ? null : row.state === 'ranked',
+        hint:
+          row.state === 'ranked'
+            ? `상위 ${place.topN}개 중 ${row.rank}번째로 보입니다.`
+            : row.state === 'outside_top'
+              ? `상위 ${place.topN}개 안에 없습니다.`
+              : '확인하지 못했습니다.',
+      })),
+    });
+  }
+
+  return out;
+}
+
+/** 넓을수록 큰 값 — "어디까지 보이는가"를 비교하는 데만 쓴다. */
+const SCOPE_WIDTH: Readonly<Record<'dong' | 'gu' | 'city', number>> = { dong: 1, gu: 2, city: 3 };
 
 /* ── 저장된 옛 리포트 보정 ──────────────────────────────── */
 
@@ -1231,13 +1363,21 @@ export function groupFindings(findings: readonly Finding[]): GroupedFindings {
 export const CHANNEL_LABEL: Readonly<Record<Finding['axis'], string>> = {
   compliance: '의료광고법',
   ai: 'AI 검색',
+  place: '네이버 플레이스',
   blog: '네이버 블로그',
   site: '홈페이지',
   social: '인스타·유튜브',
 };
 
 /** 점수가 같을 때만 쓰는 최후 순서(표시 안정용). 화면 순서를 여기서 정하지 않는다. */
-export const CHANNEL_ORDER: readonly Finding['axis'][] = ['compliance', 'ai', 'blog', 'social', 'site'];
+export const CHANNEL_ORDER: readonly Finding['axis'][] = [
+  'compliance',
+  'place',
+  'ai',
+  'blog',
+  'social',
+  'site',
+];
 
 /**
  * 분류 자체의 무게 — 채널 정렬의 1차 기준.
@@ -1351,6 +1491,7 @@ export function buildFindings(input: {
   readonly ai: AiAxis;
   readonly compliance: ComplianceAxis;
   readonly social?: SocialAxis;
+  readonly place?: PlaceAxis;
 }): readonly Finding[] {
   return [
     ...buildBlogFindings(input.blog),
@@ -1358,6 +1499,7 @@ export function buildFindings(input: {
     ...buildAiFindings(input.ai, input.blog.blogId !== null),
     ...buildComplianceFindings(input.compliance),
     ...buildSocialFindings(input.social, input.blog),
+    ...buildPlaceFindings(input.place),
   ];
 }
 

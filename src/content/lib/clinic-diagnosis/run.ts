@@ -4,6 +4,7 @@ import { fetchKeywordSerps } from '../blog-check-serp.ts';
 import { checkCompliance } from '../medical-compliance.ts';
 import { discoverClinicBlog, type NaverSearchEnv } from './blog-discovery.ts';
 import { findClinicSiteUrl } from './naver-local.ts';
+import { EMPTY_PLACE_RESULT, measurePlace, PLACE_DEADLINE_MS } from './place.ts';
 import { auditSite, EMPTY_SITE_AXIS } from './site-audit.ts';
 import { runAiCitation, EMPTY_AI_AXIS, type OwnedAssets } from './ai-citation.ts';
 import {
@@ -450,7 +451,10 @@ async function measureSite(clinic: ClinicCandidate, options: RunDiagnosisOptions
  *   실패 원인이 어디에도 기록되지 않아 추적이 불가능했다. 축 이름을 접두어로 고정해
  *   로그만 보고 "어느 축이 몇 번 죽었는지" 셀 수 있게 한다.
  */
-function logAxisFailure(axis: 'blog' | 'site' | 'ai' | 'compliance' | 'social', error: unknown): void {
+function logAxisFailure(
+  axis: 'blog' | 'site' | 'ai' | 'compliance' | 'social' | 'place',
+  error: unknown,
+): void {
   console.error(
     `[clinic-diagnosis] axis=${axis} 실패:`,
     error instanceof Error ? `${error.name}: ${error.message}` : error,
@@ -468,8 +472,8 @@ export async function runClinicDiagnosis(
   const env = options.env ?? (process.env as DiagnosisEnv);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  // 1단계 — 블로그 특정과 홈페이지 진단은 서로 독립이라 병렬로 돈다.
-  const [blogResult, site] = await Promise.all([
+  // 1단계 — 블로그·홈페이지·플레이스는 서로 독립이라 병렬로 돈다.
+  const [blogResult, site, place] = await Promise.all([
     measureBlog(clinic, options, now).catch((error: unknown) => {
       logAxisFailure('blog', error);
       return {
@@ -482,6 +486,22 @@ export async function runClinicDiagnosis(
     measureSite(clinic, options).catch((error: unknown) => {
       logAxisFailure('site', error);
       return EMPTY_SITE_AXIS;
+    }),
+    /**
+     * 플레이스 — 네이버 화면을 직접 읽는 유일한 축이라 **가장 잘 깨진다.**
+     * 다른 축과 같은 방식으로 감싸서, 여기가 죽어도 나머지 진단은 그대로 나가게 한다.
+     */
+    measurePlace(
+      {
+        clinicName: clinic.name,
+        lotAddress: clinic.lotAddress,
+        region: clinic.region,
+        shortProvince: shortProvinceOf(clinic.province),
+      },
+      { fetchImpl, now, deadlineMs: PLACE_DEADLINE_MS },
+    ).catch((error: unknown) => {
+      logAxisFailure('place', error);
+      return EMPTY_PLACE_RESULT;
     }),
   ]);
 
@@ -567,7 +587,7 @@ export async function runClinicDiagnosis(
     logAxisFailure('social', error);
   }
 
-  const axes = { blog: blogResult.axis, site, ai, compliance, social };
+  const axes = { blog: blogResult.axis, site, ai, compliance, social, place };
   return {
     version: 1,
     runAt: new Date(now).toISOString(),
