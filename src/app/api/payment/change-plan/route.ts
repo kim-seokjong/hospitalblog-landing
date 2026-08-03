@@ -6,12 +6,16 @@ import { chargeWithBillingKey } from '@/payment/lib/billing-client'
 import {
   getProfile,
   getActiveBillingKey,
+  acquirePlanChangeClaim,
   createPendingPayment,
   findRecentPaidUpgrade,
   hasRecentPendingPayment,
   markPaymentPaid,
   markPaymentFailed,
+  markPaymentPostProcessed,
+  releasePlanChangeClaim,
   setUserPlanKeepUsage,
+  stillOwnsPlanChangeClaim,
   updateActiveBillingKeyPlan,
 } from '@/payment/lib/repository'
 import { PLANS, isUpgrade, isCarePlanId, proratedUpgradeCharge } from '@/payment/lib/plans'
@@ -106,6 +110,10 @@ export async function POST(req: NextRequest) {
   // 카드 승인 완료 여부. true 가 된 뒤의 예외에서는 절대 markPaymentFailed 를 호출하지 않는다 —
   // 실승인된 결제를 FAILED 로 덮으면 사용자가 재시도해 같은 차액이 이중 청구된다.
   let cardCharged = false
+  // 원자적 claim 보유 여부 — 어떤 경로로 끝나든 반드시 해제해야 한다(finally).
+  let claimHeld = false
+  let claimUserId: string | null = null
+  let claimToken: string | null = null
   try {
     const supabase = getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -152,6 +160,12 @@ export async function POST(req: NextRequest) {
       if (priorPaid.state === 'found') {
         console.warn(`[change-plan] 반쯤 끝난 전환 복구 — 빌링키 플랜 정합화 (user=${user.id})`)
         await updateActiveBillingKeyPlan(user.id, target)
+        /**
+         * ⚠️ 복구했으면 반드시 **완료 표시**를 남긴다.
+         *    안 남기면 이 결제가 계속 "미완료 PAID" 로 남아, 나중에 같은 플랜으로
+         *    올라가려는 **정상 업그레이드까지 공짜로 통과**시킨다.
+         */
+        await markPaymentPostProcessed(priorPaid.id)
         return NextResponse.json({
           success: true,
           plan: target,
@@ -253,6 +267,8 @@ export async function POST(req: NextRequest) {
           `(user=${user.id}, payment=${alreadyPaid.id})`,
       )
       await applyPlanChangePaid()
+      // 완료 표시 — 안 남기면 이 결제가 다음 업그레이드까지 공짜로 통과시킨다.
+      await markPaymentPostProcessed(alreadyPaid.id)
       return NextResponse.json({
         success: true,
         plan: target,
@@ -263,22 +279,44 @@ export async function POST(req: NextRequest) {
     }
 
     /**
-     * 같은 회원의 같은 플랜 결제가 아직 진행 중이면 새로 승인하지 않는다.
+     * 여기서부터 **원자적 claim** 으로 잠근다 (마이그 060: `plan_change_claims`).
      *
-     * 더블클릭·탭 두 개·네트워크 재시도로 같은 차액이 두 번 승인되는 것을 막는다.
-     * (완전한 잠금이 아닌 이유는 `hasRecentPendingPayment` 주석 참조.)
+     * 조회 기반 방어는 두 요청이 동시에 조회하면 둘 다 통과한다(TOCTOU) — 유니크
+     * 제약에 판정을 맡겨야 경쟁 자체가 없어진다. claim 을 잡은 요청만 카드로 간다.
      */
-    const pendingState = await hasRecentPendingPayment(user.id, target)
-    if (pendingState !== 'no') {
+    const claim = await acquirePlanChangeClaim(user.id, target)
+    if (claim.state === 'busy') {
       return NextResponse.json(
         {
           error:
-            pendingState === 'yes'
-              ? '이전 결제가 아직 처리 중입니다. 잠시 후 마이페이지에서 결과를 확인해 주세요. (중복 결제 방지)'
-              : '결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+            '이전 요청이 아직 처리 중입니다. 잠시 후 마이페이지에서 결과를 확인해 주세요. (중복 결제 방지)',
         },
         { status: 409 },
       )
+    }
+    if (claim.state === 'acquired') {
+      claimHeld = true
+      claimUserId = user.id
+      claimToken = claim.token
+    }
+
+    if (claim.state === 'unavailable') {
+      /**
+       * 마이그 060 미적용 — 잠금이 없다. 예전의 조회 기반 방어로 떨어진다.
+       * 동시 더블클릭은 못 막지만 지연 재시도는 막는다(없는 것보다는 낫다).
+       */
+      const pendingState = await hasRecentPendingPayment(user.id, target)
+      if (pendingState !== 'no') {
+        return NextResponse.json(
+          {
+            error:
+              pendingState === 'yes'
+                ? '이전 결제가 아직 처리 중입니다. 잠시 후 마이페이지에서 결과를 확인해 주세요. (중복 결제 방지)'
+                : '결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          },
+          { status: 409 },
+        )
+      }
     }
 
     // ── 차액 즉시 결제 ──
@@ -293,6 +331,27 @@ export async function POST(req: NextRequest) {
       .single()
 
     const customerId = user.id.replace(/-/g, '').slice(0, 20)
+
+    /**
+     * 긁기 직전 소유권 재확인 — 지연 사이에 잠금을 뺏겼으면 여기서 멈춘다.
+     *
+     * TTL 인수는 늦어진 요청을 멈추지 못한다. 이 확인이 없으면 인수당한 요청이
+     * 그대로 승인해 **두 요청이 동시에 카드를 긁는다.**
+     */
+    if (claimHeld && claimUserId && claimToken) {
+      const stillMine = await stillOwnsPlanChangeClaim(claimUserId, claimToken)
+      if (!stillMine) {
+        claimHeld = false // 내 잠금이 아니므로 finally 에서 지우면 안 된다
+        await markPaymentFailed(paymentId, '처리 지연으로 잠금을 잃어 결제를 진행하지 않음')
+        return NextResponse.json(
+          {
+            error:
+              '처리가 지연되어 요청을 취소했습니다. 마이페이지에서 현재 플랜을 확인한 뒤 다시 시도해 주세요.',
+          },
+          { status: 409 },
+        )
+      }
+    }
 
     let chargeResult: Awaited<ReturnType<typeof chargeWithBillingKey>>
     try {
@@ -336,6 +395,8 @@ export async function POST(req: NextRequest) {
 
     // 결제 성공 후에만 플랜 전환 (usage_count·next_billing_at 불변)
     await applyPlanChangePaid()
+    // 반영까지 끝났다는 표시 — 이게 있어야 미완료 결제를 시간 추정 없이 찾을 수 있다.
+    await markPaymentPostProcessed(paymentId)
 
     return NextResponse.json({ success: true, plan: target, charged: amount, trial: false })
   } catch (e) {
@@ -362,5 +423,10 @@ export async function POST(req: NextRequest) {
     }
     const msg = e instanceof Error ? e.message : '업그레이드 처리에 실패했습니다'
     return NextResponse.json({ error: msg }, { status: 400 })
+  } finally {
+    // 어떤 경로로 끝나든 잠금을 놓는다 — 안 놓으면 그 회원은 TTL 동안 플랜을 못 바꾼다.
+    if (claimHeld && claimUserId && claimToken) {
+      await releasePlanChangeClaim(claimUserId, claimToken).catch(() => undefined)
+    }
   }
 }

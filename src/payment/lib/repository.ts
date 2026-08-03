@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { provisionClinicSite } from '@/content/lib/clinic-site/provision'
 import type { ProvisionOutcome } from '@/content/lib/clinic-site/provision'
 import { purgeCareCredentials } from './care-retention'
+import { isUndefinedColumn, isUndefinedTable } from '@/dev/lib/optional-columns'
+import { randomUUID } from 'crypto'
 import type { Payment, PaymentStatus, Profile, BillingKey } from './types'
 import type { PlanId } from './plans'
 
@@ -83,6 +85,132 @@ export async function hasRecentPendingPayment(
  *   **같은 차액이 한 번 더 청구**된다. 이미 받은 돈이 있으면 다시 받지 않고
  *   후처리만 이어서 끝낸다.
  */
+/**
+ * 플랜 변경 원자적 claim (마이그 060: `plan_change_claims`).
+ *
+ * ★ 왜 조회가 아니라 INSERT 인가.
+ *   "최근 진행 중 결제가 있나" 를 **조회로** 판단하면 두 요청이 동시에 조회할 때
+ *   둘 다 "없음" 을 본다(TOCTOU). 원리적으로 못 막는다. 유니크 제약에 판정을
+ *   맡기면 경쟁 자체가 성립하지 않는다 — 한쪽만 INSERT 에 성공한다.
+ *
+ * ⚠️ 죽은 claim 을 남기지 않는다. 프로세스가 중간에 죽어 DELETE 를 못 하면
+ *    그 회원은 영영 플랜을 못 바꾼다. TTL 을 넘긴 claim 은 조건부 UPDATE 로 인수한다
+ *    (조건이 WHERE 절에 있으므로 인수도 원자적이다).
+ */
+export type PlanChangeClaim =
+  | { readonly state: 'acquired'; readonly token: string }
+  | { readonly state: 'busy' }
+  | { readonly state: 'unavailable' }
+
+/** claim 유효시간 — 카드 승인 왕복이 이보다 오래 걸리는 일은 없다. */
+const CLAIM_TTL_MS = 2 * 60 * 1000
+
+export async function acquirePlanChangeClaim(
+  userId: string,
+  plan: PlanId,
+  ttlMs: number = CLAIM_TTL_MS,
+): Promise<PlanChangeClaim> {
+  const admin = getAdmin()
+  const now = new Date().toISOString()
+  const token = randomUUID()
+
+  const { error } = await admin
+    .from('plan_change_claims')
+    .insert({ user_id: userId, plan, owner_token: token, claimed_at: now })
+  if (!error) return { state: 'acquired', token }
+
+  // 테이블이 아직 없다(마이그 060 미적용) — 호출부가 기존 방어로 떨어지게 알린다.
+  // ⚠️ 42P01 만 보면 안 된다. PostgREST 는 스키마 캐시에서 PGRST205 로 먼저 거른다.
+  if (isUndefinedTable(error)) return { state: 'unavailable' }
+  // owner_token 컬럼이 없는 구버전 테이블도 "아직 준비 안 됨" 으로 본다.
+  if (isUndefinedColumn(error)) return { state: 'unavailable' }
+
+  // 이미 누가 잡고 있다. TTL 을 넘긴 죽은 claim 이면 인수한다.
+  if (error.code === '23505') {
+    const cutoff = new Date(Date.now() - ttlMs).toISOString()
+    const { data: taken, error: takeError } = await admin
+      .from('plan_change_claims')
+      // 인수하면서 **소유 토큰을 갈아 끼운다** — 이전 소유자가 나중에 해제하려 해도
+      // 토큰이 달라 우리 잠금을 건드리지 못한다.
+      .update({ plan, owner_token: token, claimed_at: now })
+      .eq('user_id', userId)
+      .lt('claimed_at', cutoff)
+      .select('user_id')
+    if (takeError) {
+      console.error('[repository] 죽은 claim 인수 실패:', takeError.message)
+      return { state: 'busy' }
+    }
+    return (taken ?? []).length > 0 ? { state: 'acquired', token } : { state: 'busy' }
+  }
+
+  console.error('[repository] 플랜 변경 claim 실패:', error.message)
+  // 무슨 일인지 모르면 진행하지 않는다 — 결제는 애매할 때 멈추는 쪽이다.
+  return { state: 'busy' }
+}
+
+/**
+ * **카드를 긁기 직전에** 내 잠금이 아직 내 것인지 다시 본다.
+ *
+ * ⚠️ TTL 인수는 늦어진 요청을 **멈추지 못한다**(2026-08-03 지적). A 가 잠금을 잡고
+ *    2분 넘게 지연되면 B 가 인수하는데, A 는 그 사실을 모른 채 그대로 승인해 버린다.
+ *    소유 토큰은 "남의 잠금을 지우는 것" 만 막을 뿐 동시 승인은 못 막는다.
+ *    그래서 승인 직전에 소유권을 한 번 더 확인하고, 뺏겼으면 **긁지 않는다.**
+ *
+ * ⚠️ 이것도 완전하지는 않다 — 확인과 승인 사이의 밀리초 창은 남는다. 다만 창이
+ *    "분" 에서 "밀리초" 로 줄어든다. 완전한 해법은 승인까지 포함하는 트랜잭션인데
+ *    외부 PG 호출은 그 안에 넣을 수 없다.
+ */
+export async function stillOwnsPlanChangeClaim(userId: string, token: string): Promise<boolean> {
+  const { data, error } = await getAdmin()
+    .from('plan_change_claims')
+    .select('owner_token')
+    .eq('user_id', userId)
+    .eq('owner_token', token)
+    .limit(1)
+  if (error) {
+    // 테이블이 없으면 애초에 잠금을 안 쓰는 환경이다 — 여기서 막지 않는다.
+    if (isUndefinedTable(error)) return true
+    console.error('[repository] claim 소유권 재확인 실패:', error.message)
+    return false
+  }
+  return (data ?? []).length > 0
+}
+
+/**
+ * 잠금 해제 — **내가 잡은 그 claim 일 때만** 지운다.
+ *
+ * ⚠️ user_id 만으로 지우면, TTL 인수가 일어난 뒤 늦게 끝난 이전 요청이 **새 소유자의
+ *    잠금까지** 날려버린다(2026-08-03 지적). 그러면 세 번째 요청이 잠금을 새로 잡아
+ *    두 요청이 동시에 카드를 긁는다 — 잠금을 만든 목적이 무너진다.
+ */
+export async function releasePlanChangeClaim(userId: string, token: string): Promise<void> {
+  const { error } = await getAdmin()
+    .from('plan_change_claims')
+    .delete()
+    .eq('user_id', userId)
+    .eq('owner_token', token)
+  // 해제 실패는 치명적이지 않다 — TTL 이 지나면 다음 요청이 인수한다.
+  if (error && !isUndefinedTable(error)) {
+    console.error('[repository] 플랜 변경 claim 해제 실패:', error.message)
+  }
+}
+
+/**
+ * 결제 후처리(플랜 반영)가 끝났음을 기록한다 (마이그 060: `payments.post_processed_at`).
+ *
+ * 이 값이 있어야 "PAID 인데 아직 반영 안 된 결제" 를 **시간 추정 없이** 찾을 수 있다.
+ * 컬럼이 없으면 조용히 넘어간다 — 그 경우 복구는 기존 시간창 방식으로 동작한다.
+ */
+export async function markPaymentPostProcessed(paymentId: string): Promise<void> {
+  const { error } = await getAdmin()
+    .from('payments')
+    .update({ post_processed_at: new Date().toISOString() })
+    .eq('id', paymentId)
+  if (error && !isUndefinedColumn(error)) {
+    console.error('[repository] 후처리 완료 기록 실패:', error.message)
+  }
+}
+
 export type PaidUpgradeLookup =
   | { readonly state: 'found'; readonly id: string; readonly amount: number }
   | { readonly state: 'none' }
@@ -103,8 +231,40 @@ export async function findRecentPaidUpgrade(
   plan: PlanId,
   withinMs: number = PAID_RECOVERY_WINDOW_MS,
 ): Promise<PaidUpgradeLookup> {
+  const admin = getAdmin()
+
   const since = new Date(Date.now() - withinMs).toISOString()
-  const { data, error } = await getAdmin()
+
+  /**
+   * 마이그 060 이 적용됐으면 `post_processed_at IS NULL` 로 **정확히** 판정한다.
+   *
+   * ⚠️ 그래도 시간창은 **함께** 건다. 이 컬럼은 change-plan 이 도입한 것이라,
+   *    다른 경로(최초 구독·정기결제)로 생긴 옛 PAID 행에는 값이 없다. 창 없이
+   *    `IS NULL` 만 보면 **"예전에 이 플랜을 결제한 적 있음" 이 곧 복구 대상**이 되어,
+   *    해지 후 같은 플랜으로 다시 올라가는 정상 업그레이드가 공짜로 통과한다.
+   *    창(24시간)은 "지금 진행 중이던 전환" 이라는 뜻을 지키는 안전장치다.
+   */
+  const exact = await admin
+    .from('payments')
+    .select('id, amount')
+    .eq('user_id', userId)
+    .eq('plan', plan)
+    .eq('status', 'PAID')
+    .is('post_processed_at', null)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (!exact.error) {
+    const row = (exact.data ?? [])[0] as { id: string; amount: number } | undefined
+    return row ? { state: 'found', id: row.id, amount: row.amount } : { state: 'none' }
+  }
+  if (!isUndefinedColumn(exact.error)) {
+    console.error('[repository] 미완료 결제 확인 실패:', exact.error.message)
+    return { state: 'unknown' }
+  }
+
+  // ── 폴백: 컬럼이 아직 없다 → 시간창만으로 근사 ──
+  const { data, error } = await admin
     .from('payments')
     .select('id, amount')
     .eq('user_id', userId)

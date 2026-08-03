@@ -12,7 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createAdminClient } from '@/dev/lib/supabase/server'
 import { isAdmin } from '@/hr/lib/admin'
-import { decryptCredential } from '@/payment/lib/care-credentials'
+import { decryptCredential, LEGACY_KEY_VERSION } from '@/payment/lib/care-credentials'
+import { isUndefinedColumn } from '@/dev/lib/optional-columns'
 import {
   ENTITLEMENT_MESSAGE,
   isActiveCareSubscription,
@@ -140,11 +141,20 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'userId가 필요합니다' }, { status: 400 })
 
     const admin = createAdminClient()
-    const { data, error } = await admin
+    const BASE_COLS = 'blog_id, blog_pw_enc, insta_id, insta_pw_enc, status'
+    // 마이그 060 적용 전에는 key_version 이 없다 — 없으면 빼고 다시 읽고 v1 로 본다.
+    let { data, error } = await admin
       .from('care_onboarding')
-      .select('blog_id, blog_pw_enc, insta_id, insta_pw_enc, status')
+      .select(`${BASE_COLS}, key_version`)
       .eq('user_id', userId)
       .maybeSingle()
+    if (error && isUndefinedColumn(error)) {
+      ;({ data, error } = await admin
+        .from('care_onboarding')
+        .select(BASE_COLS)
+        .eq('user_id', userId)
+        .maybeSingle())
+    }
     if (error || !data) {
       return NextResponse.json({ error: '온보딩 정보를 찾을 수 없습니다' }, { status: 404 })
     }
@@ -154,7 +164,9 @@ export async function POST(req: NextRequest) {
       insta_id: string | null
       insta_pw_enc: string | null
       status: string
+      key_version?: number | null
     }
+    const keyVersion = row.key_version ?? LEGACY_KEY_VERSION
     if (row.status === 'revoked') {
       return NextResponse.json({ error: '위임이 철회된 회원입니다 (비밀번호 파기됨)' }, { status: 410 })
     }
@@ -181,9 +193,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         blogId: row.blog_id,
-        blogPassword: row.blog_pw_enc ? decryptCredential(row.blog_pw_enc) : null,
+        blogPassword: row.blog_pw_enc
+          ? decryptCredential(row.blog_pw_enc, process.env, keyVersion)
+          : null,
         instaId: row.insta_id,
-        instaPassword: row.insta_pw_enc ? decryptCredential(row.insta_pw_enc) : null,
+        instaPassword: row.insta_pw_enc
+          ? decryptCredential(row.insta_pw_enc, process.env, keyVersion)
+          : null,
       },
       // 평문 자격증명 응답은 어디에도 남기지 않는다 (브라우저·프록시·CDN 캐시).
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', Pragma: 'no-cache' } },

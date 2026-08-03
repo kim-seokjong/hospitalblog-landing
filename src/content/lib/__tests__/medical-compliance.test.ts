@@ -143,6 +143,64 @@ for (const name of W28_NEW_DEVICES) {
   });
 }
 
+// ── 1군: 2026-W32 신규 등록 장비 (대표 승인 2026-08-03) ──
+const W32_NEW_DEVICES = ['엠페이스', '엑시온', '온다리프팅'];
+for (const name of W32_NEW_DEVICES) {
+  test(`detectProductNames(W32): "${name}" 단독 → MEDIUM 검출`, () => {
+    const { violations } = detectProductNames(`${name}의 원리를 설명합니다.`);
+    const hit = violations.find((v) => v.word === name);
+    assert.ok(hit, `${name} 이 검출되어야 함`);
+    assert.equal(hit?.severity, 'MEDIUM');
+  });
+}
+
+test('detectProductNames(W32): "엠페이스 이벤트" → HIGH 격상', () => {
+  const { violations } = detectProductNames('이번 달 엠페이스 이벤트를 진행합니다.');
+  const hit = violations.find((v) => v.word === '엠페이스');
+  assert.ok(hit);
+  assert.equal(hit?.severity, 'HIGH');
+});
+
+/**
+ * ⚠️ 오탐 방어의 핵심 — 맨 `온다` 는 절대 등록하지 않는다.
+ *
+ * '오다'의 활용형("환자가 온다", "다음 주에 온다")과 완전히 겹쳐서, 등록하면
+ * 정상 글이 대량으로 막힌다. 복합어 `온다리프팅` 만 잡아야 한다.
+ */
+test('detectProductNames(W32): 동사 "온다"는 상품명으로 오탐되지 않는다', () => {
+  for (const s of [
+    '환자분이 내일 병원에 온다고 하셨습니다.',
+    '겨울이 온다.',
+    '연락이 온다면 안내해 드립니다.',
+  ]) {
+    const { violations } = detectProductNames(s);
+    assert.equal(
+      violations.some((v) => v.word.includes('온다')),
+      false,
+      `"${s}" 에서 상품명이 검출되면 안 된다`,
+    );
+  }
+});
+
+test('detectProductNames(W32): "온다리프팅"은 복합어로 검출된다', () => {
+  const { violations } = detectProductNames('온다리프팅의 원리를 설명합니다.');
+  assert.ok(violations.some((v) => v.word === '온다리프팅'));
+});
+
+/**
+ * `엠페이스`와 기존 `튠페이스`는 접미사만 겹칠 뿐 부분문자열 관계가 아니다 —
+ * 서로를 오탐하지 않아야 한다.
+ */
+test('detectProductNames(W32): 엠페이스 ↔ 튠페이스 상호 오탐 없음', () => {
+  const a = detectProductNames('엠페이스 시술 안내입니다.').violations;
+  assert.ok(a.some((v) => v.word === '엠페이스'));
+  assert.ok(!a.some((v) => v.word === '튠페이스'));
+
+  const b = detectProductNames('튠페이스 시술 안내입니다.').violations;
+  assert.ok(b.some((v) => v.word === '튠페이스'));
+  assert.ok(!b.some((v) => v.word === '엠페이스'));
+});
+
 test('detectProductNames(W28): "리쥬란 이벤트" → HIGH 격상', () => {
   const { violations } = detectProductNames('이번 달 리쥬란 이벤트를 진행합니다.');
   const hit = violations.find((v) => v.word === '리쥬란');
