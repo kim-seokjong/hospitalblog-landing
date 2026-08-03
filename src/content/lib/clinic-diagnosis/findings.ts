@@ -1427,6 +1427,100 @@ export interface GroupedFindings {
  * 결과 카드를 화면 순서 그대로 3분류(+미확인)로 나눈다.
  * 각 덩어리 안은 FINDING_WEIGHT.rank 오름차순, 동점이면 원래 순서를 유지한다.
  */
+/* ── 해결방법 공개 범위 (이메일 전 화면) ──────────────────── */
+
+/**
+ * 이메일을 남기기 전 화면에서 **해결방법을 공개할 항목**.
+ *
+ * ★ 왜 가리는가 (2026-08-04 대표 지시).
+ *   진단을 끝까지 보고도 그냥 나간다 — 8/3 실측에서 리포트를 본 2명 중 이메일을
+ *   남긴 사람이 0명이었다. 문제와 이유는 다 보여주되 **고치는 법은 메일로** 보내면
+ *   메일을 남길 이유가 생긴다. 우리 목표는 가입이 아니라 이메일 주소다
+ *   ([[project_diagnosis_sales_engine]]).
+ *
+ * ⚠️ **의료광고법 항목은 절대 가리지 않는다.** 법 위반 소지를 알려주면서 고치는 법만
+ *    숨기면 "겁주고 돈 받는" 모양이 되고, 의료광고법 안전이 우리 USP 인데 정면으로
+ *    충돌한다. 무엇보다 원장이 위반 상태로 방치되면 실제 피해가 난다.
+ *
+ * ⚠️ **가장 심각한 것 하나는 끝까지 보여준다.** 아무것도 안 주면 낚시로 읽힌다.
+ *    하나를 제대로 주면 "진짜 준비돼 있구나" 가 되고 그게 나머지의 근거가 된다.
+ *
+ * ⚠️ 잠금 대상은 **손대야 할 것(bad·improve)뿐**이다. "잘하고 있는 것" 의 조언까지
+ *    세어 "해결 방법 N개" 라고 하면 숫자 부풀리기다 — 그 숫자는 정직해야 한다.
+ */
+/**
+ * 잠글 항목과 열 항목을 한 번에 가른다 — **화면과 메일이 같은 목록을 쓰게** 하는 유일한 지점.
+ *
+ * ⚠️ 잠그는 것은 **메일에 실제로 보낼 것뿐**이다. 상한을 넘겨 가려 놓고 안 보내면
+ *    "가려 둔 것을 보내드립니다" 가 거짓이 된다(2026-08-04 교차검증). 상한을 넘는
+ *    항목은 잠그지 않고 그대로 보여준다 — 가린 것과 보낸 것이 정확히 같아야 한다.
+ */
+function splitActionGate(findings: readonly Finding[]): {
+  readonly unlocked: ReadonlySet<string>;
+  readonly locked: readonly Finding[];
+} {
+  const list = Array.isArray(findings) ? findings : [];
+  const unlocked = new Set(list.map((f) => f.id));
+
+  const groups = groupFindings(list);
+  /**
+   * 잠금 후보 — 급한 순(groupFindings 가 이미 지금 고쳐야 할 것 → rank 로 정렬한다).
+   * 의료광고법은 후보에서 아예 뺀다.
+   */
+  const candidates = [...groups.bad, ...groups.improve].filter((f) => f.axis !== 'compliance');
+
+  // 가장 심각한 하나는 끝까지 보여준다 → 후보의 첫 항목은 건너뛴다.
+  const locked = candidates.slice(1, 1 + MAX_LEAD_ACTIONS);
+  for (const finding of locked) unlocked.delete(finding.id);
+
+  return { unlocked, locked };
+}
+
+/**
+ * 이메일을 남기기 전 화면에서 **해결방법을 공개할 항목**.
+ *
+ * ★ 왜 가리는가 (2026-08-04 대표 지시).
+ *   진단을 끝까지 보고도 그냥 나간다 — 8/3 실측에서 리포트를 본 2명 중 이메일을
+ *   남긴 사람이 0명이었다. 문제와 이유는 다 보여주되 **고치는 법은 메일로** 보내면
+ *   메일을 남길 이유가 생긴다. 우리 목표는 가입이 아니라 이메일 주소다
+ *   ([[project_diagnosis_sales_engine]]).
+ *
+ * ⚠️ **의료광고법 항목은 절대 가리지 않는다.** 법 위반 소지를 알려주면서 고치는 법만
+ *    숨기면 "겁주고 돈 받는" 모양이 되고, 의료광고법 안전이 우리 USP 인데 정면으로
+ *    충돌한다. 무엇보다 원장이 위반 상태로 방치되면 실제 피해가 난다.
+ *
+ * ⚠️ **가장 심각한 것 하나는 끝까지 보여준다.** 아무것도 안 주면 낚시로 읽힌다.
+ *    하나를 제대로 주면 "진짜 준비돼 있구나" 가 되고 그게 나머지의 근거가 된다.
+ *
+ * ⚠️ 잠금 대상은 **손대야 할 것(bad·improve)뿐**이다. "잘하고 있는 것" 의 조언까지
+ *    세어 "해결 방법 N개" 라고 하면 숫자 부풀리기다 — 그 숫자는 정직해야 한다.
+ */
+export function unlockedActionIds(findings: readonly Finding[]): ReadonlySet<string> {
+  return splitActionGate(findings).unlocked;
+}
+
+/**
+ * 메일에 싣는 해결방법 상한 — 길어지면 아무도 안 읽는다.
+ *
+ * ⚠️ 이 상한은 **가리는 개수의 상한이기도 하다.** 가린 것과 보낸 것이 같아야 한다.
+ */
+export const MAX_LEAD_ACTIONS = 8;
+
+/**
+ * 이메일을 남기면 받게 될 항목 — **메일에 실제로 실리는 그 목록**이다.
+ *
+ * 화면 문구와 메일 본문이 이 한 함수에서 나와야 숫자가 어긋나지 않는다
+ * (2026-08-04 교차검증: 화면은 잠긴 것만 세고 메일은 전부 실어 개수가 달랐다).
+ */
+export function lockedActions(findings: readonly Finding[]): readonly Finding[] {
+  return splitActionGate(findings).locked;
+}
+
+/** 이메일을 남기면 받게 되는 해결방법 수 — 화면 문구의 근거. */
+export function lockedActionCount(findings: readonly Finding[]): number {
+  return splitActionGate(findings).locked.length;
+}
+
 export function groupFindings(findings: readonly Finding[]): GroupedFindings {
   const buckets: Record<FindingGroup, Finding[]> = { bad: [], improve: [], good: [], unknown: [] };
   // 저장된 옛 리포트가 배열이 아닐 수 있다 — 여기서 죽으면 공유 링크가 통째로 500 이 된다.

@@ -52,6 +52,23 @@ export default async function SharedDiagnosisPage({ params }: PageProps) {
 
   const report = data.results as DiagnosisReport;
 
+  /**
+   * 이 토큰으로 **이메일을 남긴 적이 있는가** — 해결방법 공개의 서버 측 근거.
+   *
+   * ⚠️ 화면에서만 가리면 게이트가 아니다(2026-08-04 교차검증). 진단 API 응답에
+   *    공유 토큰이 그대로 실려 있어서, 개발자도구를 열거나 API 를 직접 부르면
+   *    토큰을 얻어 이 화면으로 전부 볼 수 있었다.
+   *
+   * 대표가 전화 후속으로 보내는 링크도 **메일 발송을 거치므로** 리드 행이 남는다.
+   * 조회가 실패하면 잠근다 — 확인 못 한 것을 공개 근거로 삼지 않는다.
+   */
+  const { data: lead } = await admin
+    .from('clinic_diagnosis_email_leads')
+    .select('id')
+    .eq('share_token', token)
+    .limit(1);
+  const emailGiven = Array.isArray(lead) && lead.length > 0;
+
   return (
     <Shell>
       {/*
@@ -59,7 +76,7 @@ export default async function SharedDiagnosisPage({ params }: PageProps) {
         shared=true : 여기에는 블로그 후보 선택기도 상세 진단 폼도 없다. 문구가 "아래에서
         바꿔 주세요"라고 말하면 고칠 수 없는 안내가 된다.
       */}
-      <ReportBody report={report} token={token} />
+      <ReportBody report={report} token={token} emailGiven={emailGiven} />
     </Shell>
   );
 }
@@ -115,12 +132,23 @@ function isRenderableReport(value: unknown): value is DiagnosisReport {
   );
 }
 
-function ReportBody({ report, token }: { report: DiagnosisReport; token: string }) {
+function ReportBody({
+  report,
+  token,
+  emailGiven,
+}: {
+  report: DiagnosisReport;
+  token: string;
+  /** 이 토큰으로 이메일을 남긴 적이 있는가 — 해결방법 공개 여부. */
+  emailGiven: boolean;
+}) {
   if (!isRenderableReport(report)) {
     console.error('[clinic-check/share] 저장된 리포트 형태가 화면 기대와 다릅니다.');
     return <ReportUnavailable />;
   }
-  return <DiagnosisReportView report={report} shareToken={token} shared />;
+  return (
+    <DiagnosisReportView report={report} shareToken={token} shared unlockActions={emailGiven} />
+  );
 }
 
 function ReportUnavailable() {

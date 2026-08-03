@@ -30,6 +30,14 @@ interface DiagnosisEmailCaptureProps {
    * bottom = 결과 맨 아래(다 읽고 나서)
    */
   readonly placement: 'top' | 'bottom';
+  /**
+   * 이메일을 남기면 받게 될 **해결방법 개수**.
+   *
+   * ⚠️ 화면에서 실제로 가린 항목 수와 같아야 한다(lockedActionCount). 부풀리면
+   *    메일을 열었을 때 개수가 안 맞고, 그 순간 나머지 문장도 못 믿게 된다.
+   *    0 이면 개수 문구를 쓰지 않는다.
+   */
+  readonly lockedCount?: number;
 }
 
 type Status = 'idle' | 'sending' | 'sent' | 'queued' | 'error';
@@ -37,7 +45,11 @@ type Status = 'idle' | 'sending' | 'sent' | 'queued' | 'error';
 const INPUT_CLASS =
   'w-full px-4 py-3 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] text-[15px] min-h-[44px]';
 
-export default function DiagnosisEmailCapture({ shareToken, placement }: DiagnosisEmailCaptureProps) {
+export default function DiagnosisEmailCapture({
+  shareToken,
+  placement,
+  lockedCount = 0,
+}: DiagnosisEmailCaptureProps) {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -101,12 +113,14 @@ export default function DiagnosisEmailCapture({ shareToken, placement }: Diagnos
       }`}
     >
       <label htmlFor={inputId} className="block text-[14px] sm:text-[15px] font-extrabold">
-        이 결과를 메일로 보내드릴까요?
+        {lockedCount > 0 ? '고치는 방법을 정리해서 보내드릴까요?' : '이 결과를 메일로 보내드릴까요?'}
       </label>
       <p className="text-[12.5px] text-[#4a4f55] mt-1 leading-relaxed">
-        {placement === 'top'
-          ? '지금 다 못 보셔도 괜찮아요. 주소를 남겨 주시면 결과 링크를 보내드려서 나중에 다시 열어보실 수 있어요.'
-          : '나중에 다시 보시거나 원장님께 그대로 전달하실 수 있게 결과 링크를 보내드릴게요. 이 화면을 닫으면 결과는 다시 찾기 어려워요.'}
+        {lockedCount > 0
+          ? `위에서 가려 둔 해결 방법 ${lockedCount}개를 순서대로 정리해 보내드릴게요. 의료광고법 가이드 요약본(PDF)도 함께 보내드립니다.`
+          : placement === 'top'
+            ? '지금 다 못 보셔도 괜찮아요. 주소를 남겨 주시면 결과 링크를 보내드려서 나중에 다시 열어보실 수 있어요.'
+            : '나중에 다시 보시거나 원장님께 그대로 전달하실 수 있게 결과 링크를 보내드릴게요. 이 화면을 닫으면 결과는 다시 찾기 어려워요.'}
       </p>
 
       <form
@@ -138,7 +152,7 @@ export default function DiagnosisEmailCapture({ shareToken, placement }: Diagnos
           disabled={busy || email.trim().length === 0}
           className="flex-shrink-0 px-6 py-3 min-h-[44px] bg-[#ff4628] text-white font-bold rounded-xl transition-all hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed text-[15px]"
         >
-          {busy ? '보내는 중…' : '결과 받기'}
+          {busy ? '보내는 중…' : lockedCount > 0 ? '해결 방법 받기' : '결과 받기'}
         </button>
       </form>
 

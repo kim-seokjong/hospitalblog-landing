@@ -12,7 +12,9 @@ import {
   channelStatusText,
   findingGroupOf,
   groupFindingsByChannel,
+  lockedActionCount,
   normalizeStoredFindings,
+  unlockedActionIds,
 } from '@/content/lib/clinic-diagnosis/findings';
 import { riskOf } from '@/content/lib/clinic-diagnosis/compliance-scan';
 import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-questions';
@@ -105,7 +107,7 @@ function DetailList({ details }: { details: readonly FindingDetail[] }) {
   );
 }
 
-function FindingCard({ finding }: { finding: Finding }) {
+function FindingCard({ finding, locked = false }: { finding: Finding; locked?: boolean }) {
   /**
    * 심각도는 채널 밑으로 내려왔지만 사라지지 않았다 — 항목마다 배지로 남는다.
    * 배지 문구는 대표가 정한 덩어리 이름 그대로다(줄여 쓰지 않는다).
@@ -170,16 +172,32 @@ function FindingCard({ finding }: { finding: Finding }) {
             </p>
           )}
 
-          {/* ③ 그래서 뭘 해야 하나 */}
-          <p className="text-[12.5px] sm:text-[13px] text-[#3c4653] leading-relaxed mt-2">
-            <b className="font-bold text-[#202020]">무엇을 하면 되나</b> · {finding.action}
-          </p>
+          {/*
+            ③ 그래서 뭘 해야 하나.
+
+            ⚠️ 이메일 전 화면에서는 일부를 가린다(unlockedActionIds). 무엇이 잘못됐고
+               왜 손해인지는 **그대로 다 보여준다** — 문제 자체를 가리면 진단이 아니라
+               미끼가 된다. 의료광고법 항목과 가장 심각한 하나는 언제나 열려 있다.
+          */}
+          {locked ? (
+            <p className="text-[12.5px] sm:text-[13px] text-[#5b6573] leading-relaxed mt-2 bg-[#f7f9fb] border border-dashed border-[#c9d3de] rounded-xl px-3 py-2">
+              <b className="font-bold text-[#202020]">무엇을 하면 되나</b> · 이 항목을 고치는
+              방법은 <b className="text-[#ff4628]">아래에 이메일을 남기시면</b> 정리해서
+              보내드립니다.
+            </p>
+          ) : (
+            <p className="text-[12.5px] sm:text-[13px] text-[#3c4653] leading-relaxed mt-2">
+              <b className="font-bold text-[#202020]">무엇을 하면 되나</b> · {finding.action}
+            </p>
+          )}
 
           {/*
             ④ 이 중 우리가 대신하는 부분 — 한 줄. 위의 "무엇을 하면 되나"는 그대로 두고
             (원장이 직접 할 수 있는 길을 지운 적이 없다) 옆에 덧붙이기만 한다.
+            잠긴 항목에는 붙이지 않는다 — 해결책은 안 보여주면서 우리 제품만 말하면
+            그 순간 진단이 광고로 읽힌다.
           */}
-          {ourLine && (
+          {!locked && ourLine && (
             <p className="text-[12px] text-[#5b6573] leading-relaxed mt-1.5 pl-2.5 border-l-2 border-[#ffd0c4]">
               {ourLine}
             </p>
@@ -200,7 +218,14 @@ function FindingCard({ finding }: { finding: Finding }) {
  *   따로 빼면 "AI는 되는 건가"가 다시 세 곳으로 흩어진다.
  * · 손댈 게 없는 채널은 접지 않는다 — 비어 보이면 진단이 안 돈 줄 안다.
  */
-function ChannelBlock({ section }: { section: ChannelSection }) {
+function ChannelBlock({
+  section,
+  unlocked,
+}: {
+  section: ChannelSection;
+  /** 해결방법을 공개할 항목 id — 없으면(공유 화면) 전부 공개다. */
+  unlocked: ReadonlySet<string> | null;
+}) {
   if (section.findings.length === 0) return null;
 
   const entries = section.findings.map((finding) => ({ finding, group: findingGroupOf(finding) }));
@@ -219,7 +244,11 @@ function ChannelBlock({ section }: { section: ChannelSection }) {
   const list = (items: readonly { finding: Finding }[]) => (
     <ul className="space-y-3 mt-3">
       {items.map((e) => (
-        <FindingCard key={e.finding.id} finding={e.finding} />
+        <FindingCard
+          key={e.finding.id}
+          finding={e.finding}
+          locked={unlocked !== null && !unlocked.has(e.finding.id)}
+        />
       ))}
     </ul>
   );
@@ -280,12 +309,25 @@ interface DiagnosisReportViewProps {
    *   그래서 화면 종류를 컴포넌트가 알고 문구를 갈라 쓴다.
    */
   readonly shared?: boolean;
+  /**
+   * 해결방법을 전부 공개할까 (공유 화면 전용).
+   *
+   * ⚠️ 화면에서만 가리는 것은 게이트가 아니다 — 공유 토큰은 진단 API 응답에 실려
+   *    있어서 마음먹으면 얻을 수 있다. **이메일을 실제로 남겼는지는 서버가 판단**하고
+   *    (리드 행 존재 여부) 그 결과를 여기로 내려준다. 진단 직후 화면에는 해당 없음.
+   */
+  readonly unlockActions?: boolean;
 }
 
 /** 공유 화면에서 "여기서는 못 고친다"를 대신할 목적지. */
 const DIAGNOSIS_PAGE = '/clinic-check';
 
-export default function DiagnosisReportView({ report, shareToken, shared = false }: DiagnosisReportViewProps) {
+export default function DiagnosisReportView({
+  report,
+  shareToken,
+  shared = false,
+  unlockActions = false,
+}: DiagnosisReportViewProps) {
   /**
    * 저장된 옛 리포트 보정 — 등급·중복 카드를 오늘 기준과 맞춘다(findings.ts).
    * 오늘 만들어진 리포트는 그대로 통과한다.
@@ -297,6 +339,16 @@ export default function DiagnosisReportView({ report, shareToken, shared = false
   /** 결과 맨 아래 전환 문구 — 원장이 방금 본 자기 숫자로 만든다(값이 없으면 기본 문구). */
   const cta = buildConversionCta(report);
   const emailToken = typeof shareToken === 'string' && shareToken.length > 0 ? shareToken : null;
+  /**
+   * 해결방법 공개 범위.
+   *
+   * 공유 화면()은 **메일을 받은 사람이 여는 화면**이라 전부 공개한다 — 이미
+   * 이메일을 주셨는데 또 가리면 그건 약속을 안 지키는 것이다. 진단 직후 화면에서만
+   * 가린다. 무엇이 잘못됐고 왜 손해인지는 어느 쪽이든 그대로 다 보여준다.
+   */
+  const fullyUnlocked = shared && unlockActions;
+  const unlocked = fullyUnlocked ? null : unlockedActionIds(findings);
+  const lockedCount = fullyUnlocked ? 0 : lockedActionCount(findings);
   /**
    * AI 질문 목록 — 질문 단위가 정본.
    * 이 기능 이전에 발급된 공유 리포트에는 questions 가 없으므로 probes 로 그때 만든다
@@ -390,7 +442,7 @@ export default function DiagnosisReportView({ report, shareToken, shared = false
       */}
       {emailToken && (
         <div className="mt-4">
-          <DiagnosisEmailCapture shareToken={emailToken} placement="top" />
+          <DiagnosisEmailCapture shareToken={emailToken} placement="top" lockedCount={lockedCount} />
         </div>
       )}
 
@@ -399,7 +451,7 @@ export default function DiagnosisReportView({ report, shareToken, shared = false
         각 채널 안에서는 나쁜 항목부터 나온다(기존 중요도 표 그대로).
       */}
       {channels.map((section) => (
-        <ChannelBlock key={section.axis} section={section} />
+        <ChannelBlock key={section.axis} section={section} unlocked={unlocked} />
       ))}
 
       {unchecked.length > 0 && (
@@ -538,7 +590,7 @@ export default function DiagnosisReportView({ report, shareToken, shared = false
       {/* 결과를 메일로 — **하단**. 다 읽고 나서 남기는 자리. */}
       {emailToken && (
         <div className="mt-8">
-          <DiagnosisEmailCapture shareToken={emailToken} placement="bottom" />
+          <DiagnosisEmailCapture shareToken={emailToken} placement="bottom" lockedCount={lockedCount} />
         </div>
       )}
 

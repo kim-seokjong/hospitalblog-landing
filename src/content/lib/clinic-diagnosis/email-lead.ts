@@ -274,6 +274,18 @@ export function formatKstDate(iso: unknown): string {
   return new Date(t + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+/** 의료광고법 가이드 요약본 — 이메일을 남긴 분께 함께 드리는 자료(리드마그넷용). */
+export const MEDLAW_GUIDE_PATH = '/downloads/dp-medlaw-guide-lite-x7k2m.pdf';
+
+/** 결과 주소에서 도메인만 딴다. 파싱 실패하면 운영 도메인으로 떨어진다. */
+function originOf(reportUrl: string): string {
+  try {
+    return new URL(reportUrl).origin;
+  } catch {
+    return 'https://www.hospitalblog.kr';
+  }
+}
+
 export interface DiagnosisEmailInput {
   readonly clinicName: string;
   /** 요약을 만들지 못한 옛 리포트면 null — 그때는 링크만 담아 보낸다. */
@@ -537,6 +549,47 @@ export function buildDiagnosisEmail(input: DiagnosisEmailInput): DiagnosisEmailC
         )}건</b>은 닥터포스트가 대신할 수 있는 항목입니다.</p>`
       : '';
 
+  /**
+   * ★ **해결방법 — 이 메일의 알맹이** (2026-08-04).
+   *
+   *   화면에서 해결방법 일부를 가리고 "메일로 보내드립니다" 라고 하므로, 여기에
+   *   반드시 실려야 한다. 받아놓고 안 보내면 카피 문제가 아니라 사기다.
+   *
+   * ⚠️ 옛 리드에는 actions 가 없다(email-retry 가 다시 보낼 수 있다) — 없으면
+   *    이 블록을 통째로 빼고, 대신 링크로 안내한다. 빈 제목만 남기지 않는다.
+   */
+  const actions = Array.isArray(summary?.actions) ? summary.actions : [];
+  const actionHtml =
+    actions.length === 0
+      ? ''
+      : `<p style="margin:0 0 6px;font-size:12px;font-weight:800;letter-spacing:0.5px;color:#5b6573">고치는 방법 (급한 것부터)</p>
+<ol style="margin:0 0 22px;padding-left:20px;color:#3c4653;font-size:14px;line-height:1.85">${actions
+          .map(
+            (item) =>
+              `<li style="margin-bottom:10px"><b style="color:#202020">${escapeHtml(
+                String(item?.label ?? ''),
+              )}</b><br>${escapeHtml(String(item?.action ?? ''))}${
+                item?.ourScope === true
+                  ? '<br><span style="font-size:12px;color:#8a93a0">— 이 항목은 닥터포스트가 대신할 수 있습니다</span>'
+                  : ''
+              }</li>`,
+          )
+          .join('')}</ol>`;
+
+  /**
+   * 의료광고법 가이드 요약본 — 이메일을 남긴 분께 함께 드리기로 한 것(대표 지시).
+   *
+   * ⚠️ 크몽에서 판매 중인 전자책 본편이 아니라 **요약본**이다. 본편을 무료로 뿌리면
+   *    판매와 충돌한다. 문구에서도 "요약본" 이라고 밝힌다 — 받고 나서 다르면 그게 더 나쁘다.
+   */
+  // 결과 주소가 이미 절대 주소라 거기서 도메인을 딴다 — 호출부에 인자를 늘리지 않는다.
+  const guideUrl = escapeHtml(`${originOf(input.reportUrl)}${MEDLAW_GUIDE_PATH}`);
+  const guideHtml = `<p style="margin:0 0 24px;padding:14px 16px;background:#fffaf8;border:1px solid #ffd0c4;border-radius:10px;font-size:13.5px;line-height:1.8;color:#3c4653">
+    <b style="color:#202020">의료광고법 가이드 요약본</b>도 함께 보내드립니다.<br>
+    심의에서 자주 걸리는 표현과 안전하게 바꾸는 방법을 정리한 자료입니다.<br>
+    <a href="${guideUrl}" style="color:#ff4628;font-weight:700;text-decoration:underline">요약본 내려받기 (PDF)</a>
+  </p>`;
+
   const html = `<!doctype html>
 <html lang="ko"><body style="margin:0;padding:0;background:#f7f9fb">
 <div style="max-width:600px;margin:0 auto;padding:32px 20px;background:#ffffff;color:#202020;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif">
@@ -545,7 +598,9 @@ export function buildDiagnosisEmail(input: DiagnosisEmailInput): DiagnosisEmailC
   <p style="margin:0 0 24px;font-size:12px;color:#8a93a0">${escapeHtml(runAtText)} 진단(한국 시간 기준) · 요청하신 주소로 보내드립니다</p>
   ${leadHtml}
   ${factHtml}
+  ${actionHtml}
   ${scopeHtml}
+  ${guideHtml}
   <p style="margin:0 0 28px">
     <a href="${url}" style="display:inline-block;padding:14px 28px;background:#ff4628;color:#ffffff;font-weight:700;font-size:15px;border-radius:10px;text-decoration:none">진단 결과 전체 보기</a>
   </p>

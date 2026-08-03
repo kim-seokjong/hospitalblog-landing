@@ -1,5 +1,10 @@
 import { complianceRiskCounts } from './compliance-scan.ts';
-import { groupFindings, LEGACY_COMPLIANCE_RISK_ID, normalizeStoredFindings } from './findings.ts';
+import {
+  groupFindings,
+  LEGACY_COMPLIANCE_RISK_ID,
+  lockedActions,
+  normalizeStoredFindings,
+} from './findings.ts';
 import type { ComplianceAxis, DiagnosisReport, Finding } from './types.ts';
 
 /**
@@ -251,6 +256,17 @@ export interface DiagnosisLeadSummary {
   readonly ourScopeCount: number;
   /** 지금 고쳐야 할 것 항목 이름 (최대 5개) — 통화 첫 문장 재료. */
   readonly topIssues: readonly string[];
+  /**
+   * **고치는 방법** — 메일 본문의 알맹이 (2026-08-04 추가).
+   *
+   * ★ 왜 넣는가. 화면에서 해결방법 일부를 가리고 "메일로 보내드립니다" 라고 하는데,
+   *   정작 메일에 그게 없었다. 받아놓고 안 보내면 카피 문제가 아니라 사기다
+   *   ([[feedback_email_manual_send]] 와 같은 종류의 사고).
+   *
+   * ⚠️ 이 필드가 생기기 전에 저장된 리드에는 없다 — 읽을 때 항상 `?? []`.
+   *    email-retry 가 옛 리드를 다시 보낼 때 여기서 깨지면 안 된다.
+   */
+  readonly actions?: readonly LeadAction[];
   /** 마지막 발행 이후 경과 일수. 확인 못 했으면 null. */
   readonly daysSinceLatestPost: number | null;
   readonly postsPerWeek: number | null;
@@ -266,6 +282,14 @@ export interface DiagnosisLeadSummary {
   readonly aiRecommendMentioned: number | null;
   readonly blogId: string | null;
   readonly siteUrl: string | null;
+}
+
+/** 메일에 싣는 해결방법 한 줄. */
+export interface LeadAction {
+  readonly label: string;
+  readonly action: string;
+  /** 우리가 대신할 수 있는 일인가 — 메일에서 표시를 가른다. */
+  readonly ourScope: boolean;
 }
 
 /** 상위권 판정 기준 — findings.ts 의 키워드 판정과 같은 10위. */
@@ -295,6 +319,18 @@ export function buildDiagnosisLeadSummary(report: DiagnosisReport): DiagnosisLea
     improveScopeCount,
     ourScopeCount: badScopeCount + improveScopeCount,
     topIssues: groups.bad.slice(0, MAX_TOP_ISSUES).map((f) => f.label),
+    /**
+     * 메일에 실을 해결방법 = **화면에서 가린 그 항목들**.
+     *
+     * ⚠️ 화면이 "N개 보내드립니다" 라고 한 그 N 과 같아야 한다. 예전엔 화면은
+     *    잠긴 것만 세고 메일은 전부 실어서 숫자가 어긋났다(2026-08-04 교차검증).
+     *    같은 함수(lockedActions)에서 뽑아 어긋날 여지를 없앤다.
+     */
+    actions: lockedActions(findings).map((f) => ({
+      label: f.label,
+      action: f.action,
+      ourScope: f.ourScope === true,
+    })),
     daysSinceLatestPost: numberOf(report?.blog?.daysSinceLatest),
     postsPerWeek: numberOf(report?.blog?.postsPerWeek),
     prohibitedCount: compliance?.prohibited ?? null,
