@@ -5,6 +5,7 @@ import {
   validateFunnelBody,
   isValidAnonId,
   generateAnonId,
+  resolveAnonId,
   consumeFunnelQuota,
   readFunnelLimits,
   funnelKstDayKey,
@@ -110,9 +111,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, throttled: true });
   }
 
-  // 5) anon_id 쿠키 확보 (없거나 형식 오류면 새로 발급)
+  /**
+   * 5) anon_id 확보 — 우선순위 판정은 순수 함수(resolveAnonId)에 있다.
+   *    **클라 제공값 > 쿠키 > 새로 발급**. 이유는 그 함수 주석 참조
+   *    (쿠키 우선이면 기존 방문자의 쿠키와 localStorage 가 영구히 어긋난다).
+   *    쿠키는 아래에서 항상 확정값으로 다시 심어 둘이 수렴하게 한다.
+   */
   const existing = req.cookies.get(ANON_ID_COOKIE)?.value;
-  const anonId = isValidAnonId(existing) ? existing : generateAnonId();
+  const { anonId } = resolveAnonId(existing, validation.value.anonId, generateAnonId);
   const isNewAnon = anonId !== existing;
 
   // 6) 로그인 사용자면 user_id 귀속 (선택 — 익명 이벤트는 null)

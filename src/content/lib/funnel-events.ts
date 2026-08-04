@@ -111,6 +111,77 @@ export function isValidAnonId(value: unknown): value is string {
 }
 
 /**
+ * 이 요청에 쓸 anon_id 를 정한다 — **클라 제공값 > 쿠키 > 새로 발급**.
+ *
+ * ★ 왜 클라가 우선인가 (2026-08-04, 교차검증으로 순서를 뒤집음).
+ *   처음엔 쿠키를 우선했다. httpOnly 라 위조가 어려워 더 믿을 만하다고 봤기 때문이다.
+ *   그런데 그러면 **기존 방문자의 쿠키와 새로 생긴 localStorage 가 영구히 어긋난다** —
+ *   평소엔 쿠키로 기록되다가 쿠키가 지워지는 순간 localStorage 값이 살아나 같은 사람이
+ *   다른 방문자로 바뀐다. 클라를 우선하면 쿠키가 항상 클라 값을 따라가 **한 번 수렴한 뒤
+ *   다시는 갈리지 않는다.** 배포 직후 기존 방문자 한 번만 ID 가 바뀌는데, 이건 익명
+ *   지표 식별자라 감수할 만하다.
+ *
+ * ⚠️ 위조 가능성은 안다. 다만 이 값으로 할 수 있는 일은 **방문자 지표를 섞는 것뿐**이고,
+ *    그건 쿠키를 지우는 것만으로도 이미 가능했다. 전환 확정 이벤트·인증·DB 권한은
+ *    이 값과 무관하며, 레이트리밋도 IP·전체 기준이라 영향받지 않는다.
+ */
+export function resolveAnonId(
+  cookieValue: unknown,
+  providedValue: unknown,
+  generate: () => string,
+): { anonId: string; source: 'client' | 'cookie' | 'generated' } {
+  if (isValidAnonId(providedValue)) return { anonId: providedValue, source: 'client' };
+  if (isValidAnonId(cookieValue)) return { anonId: cookieValue, source: 'cookie' };
+  return { anonId: generate(), source: 'generated' };
+}
+
+/** 브라우저 저장소 최소 인터페이스 — 테스트에서 갈아끼우기 위해 좁게 잡는다. */
+export interface AnonIdStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+/** 로컬에 보관하는 익명 식별자 키 — 서버 쿠키(dp_anon_id)와 같은 사람을 가리킨다. */
+export const ANON_ID_STORAGE_KEY = 'dp_anon_id';
+
+/**
+ * 브라우저의 anon_id 를 **요청을 보내기 전에** 확정한다 (순수 — 저장소·난수는 주입).
+ *
+ * ★ 왜 필요한가 (2026-08-04 실측).
+ *   서버 쿠키만으로 발급하면 **한 사람이 둘로 세어진다.** `/clinic-check` 는 마운트 시
+ *   `landing_view` 를 쏘고, 콜드메일 링크의 `?name=` 이 있으면 같은 틱에 자동 조회가
+ *   시작돼 `diagnosis_run` 도 쏜다. 두 요청이 동시에 나가 둘 다 쿠키를 못 받은 상태라
+ *   서버가 각각 새 ID 를 줬다(실측 0.0006초 차이). 여기서 먼저 정하면 한 사람으로 묶인다.
+ *
+ * ⚠️ **절대 던지지 않는다.** 시크릿 모드·저장소 차단에서 접근 자체가 예외를 낸다.
+ *    그때는 undefined 를 돌려주고 서버가 기존대로 발급한다 — 예전 동작으로 떨어질 뿐이다.
+ *
+ * ⚠️ **남은 한계(알고 감수한 것)**: `getItem → 생성 → setItem` 은 원자적이지 않다.
+ *    저장소가 빈 상태에서 **서로 다른 탭이 정확히 동시에** 첫 이벤트를 쏘면 각자 다른
+ *    ID 를 만들 수 있다. 막으려면 탭 간 동기화(Web Locks·BroadcastChannel)가 필요한데,
+ *    익명 지표 식별자에 그만한 복잡도를 넣지 않는다. 원래 사고였던 **한 탭에서 같은 틱에
+ *    나가는 두 요청**은 localStorage 가 동기 API 라 이 함수만으로 해결된다.
+ */
+export function readOrCreateAnonId(
+  storage: AnonIdStorage | null | undefined,
+  randomHex: () => string,
+): string | undefined {
+  if (!storage) return undefined;
+  try {
+    const stored = storage.getItem(ANON_ID_STORAGE_KEY);
+    if (isValidAnonId(stored)) return stored;
+    const generated = randomHex();
+    if (!isValidAnonId(generated)) return undefined;
+    storage.setItem(ANON_ID_STORAGE_KEY, generated);
+    return generated;
+  } catch {
+    // 저장은 실패해도 이번 요청엔 쓸 수 있게 값을 만들어 보려 하지 않는다 —
+    // 매 요청 새 값이면 지금 고치려는 그 문제(한 사람이 여럿)가 그대로 재현된다.
+    return undefined;
+  }
+}
+
+/**
  * 32자리 hex anon_id 생성. randomFn 은 [0,1) 난수 공급자(주입 가능 — 테스트용).
  * 기본은 Math.random (익명 식별자라 암호학적 강도 불필요).
  */
@@ -265,6 +336,22 @@ export function shouldRecordFirstPostEvent(
 export interface ValidatedFunnelEvent {
   event: FunnelEvent;
   meta: SanitizedMeta;
+  /**
+   * 클라이언트가 들고 온 anon_id — **형식이 맞을 때만** 채워진다.
+   *
+   * ★ 왜 필요한가 (2026-08-04 실측).
+   *   anon_id 를 서버 쿠키로만 발급했더니 **한 사람이 둘로 세어졌다.** `/clinic-check` 는
+   *   마운트 시 `landing_view` 를 쏘고, 콜드메일 링크의 `?name=` 이 있으면 같은 틱에
+   *   자동 조회가 시작돼 `diagnosis_run` 도 쏜다. 두 요청이 **동시에** 나가므로 둘 다
+   *   쿠키를 못 받은 상태고, 서버는 각각에 새 ID 를 발급한다.
+   *   실측: 02:20:29.740406 / 02:20:29.741029 — 0.0006초 차이로 서로 다른 anon_id.
+   *   이걸 스캐너 시그니처로 오독하기까지 했다(같은 초·다른 ID = 쿠키 미저장).
+   *
+   * ⚠️ 신뢰 등급은 여전히 best-effort 다. 클라가 임의 값을 보낼 수 있으므로 **형식만**
+   *    검증하고, 쿠키가 있으면 쿠키를 우선한다(라우트 참조). 위조해 봐야 지표가
+   *    섞일 뿐이고, 그건 쿠키를 지우는 것으로도 이미 가능한 일이다.
+   */
+  anonId?: string;
 }
 
 export type FunnelValidation =
@@ -285,11 +372,19 @@ export function validateFunnelBody(
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     return { ok: false, reason: 'invalid_body' };
   }
-  const { event, meta } = body as { event?: unknown; meta?: unknown };
+  const { event, meta, anonId } = body as { event?: unknown; meta?: unknown; anonId?: unknown };
   if (typeof event !== 'string' || !allowed.includes(event) || !isFunnelEvent(event)) {
     return { ok: false, reason: 'invalid_event' };
   }
-  return { ok: true, value: { event, meta: sanitizeMeta(meta, event) } };
+  return {
+    ok: true,
+    value: {
+      event,
+      meta: sanitizeMeta(meta, event),
+      // 형식이 어긋나면 조용히 버린다 — 잘못된 값 때문에 이벤트를 통째로 거부하지 않는다.
+      ...(isValidAnonId(anonId) ? { anonId } : {}),
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

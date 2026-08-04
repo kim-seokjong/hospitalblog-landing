@@ -6,7 +6,24 @@
 // 브라우저에서만 동작하고, 절대 예외를 던지지 않는다(계측이 UX 를 막지 않음).
 
 import type { PublicFunnelEvent } from '@/content/lib/funnel-events';
+import { readOrCreateAnonId } from '@/content/lib/funnel-events';
 import { buildPublicFunnelMeta } from '@/dev/lib/funnel-meta';
+
+/** 32자리 소문자 hex — 서버 isValidAnonId 형식과 같아야 한다. */
+function randomHex32(): string {
+  const bytes = new Uint8Array(16);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** 브라우저 저장소를 순수 함수에 물린다. 접근 자체가 던지는 환경이 있어 감싼다. */
+function getOrCreateAnonId(): string | undefined {
+  try {
+    return readOrCreateAnonId(window.localStorage, randomHex32);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * 퍼널 이벤트를 서버(/api/funnel-event)로 비차단 전송한다. 실패는 조용히 무시.
@@ -37,9 +54,11 @@ export function trackFunnel(
       /* 자동 meta 수집 실패는 무시 — 이벤트 자체는 계속 보낸다 */
     }
     const merged = { ...autoMeta, ...meta };
-    const body = JSON.stringify(
-      Object.keys(merged).length > 0 ? { event, meta: merged } : { event },
-    );
+    const anonId = getOrCreateAnonId();
+    const payload: Record<string, unknown> = { event };
+    if (Object.keys(merged).length > 0) payload.meta = merged;
+    if (anonId) payload.anonId = anonId;
+    const body = JSON.stringify(payload);
     // keepalive: 페이지 전환(가입 후 리다이렉트 등) 중에도 전송이 취소되지 않도록.
     void fetch('/api/funnel-event', {
       method: 'POST',
