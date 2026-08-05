@@ -1412,6 +1412,123 @@ export function findingGroupOf(finding: Finding): FindingGroup {
   return FINDING_WEIGHT[finding.id]?.severity === 'losing' ? 'bad' : 'improve';
 }
 
+/* ── 종합 점수 ────────────────────────────────────────────────────
+ *
+ * 왜 만드는가 (2026-08-05 대표 지시):
+ *   원장은 항목 목록보다 **숫자 하나**를 먼저 본다. 점수가 있어야 "우리가 지금
+ *   어느 수준인지"가 한 번에 전해지고, 그래야 고칠 마음이 생긴다.
+ *
+ * 어떻게 매기는가 — 이미 있는 FINDING_WEIGHT 를 그대로 쓴다:
+ *   · 지금 손해(losing) 항목은 개선 항목보다 3배로 센다. 순서를 정하던 근거를
+ *     점수에도 그대로 쓰는 것이라 "왜 이 점수냐"에 답할 수 있다.
+ *   · 잘하고 있는 항목(good)은 그 가중치를 전부 얻고, 경고(warn)는 0점이다.
+ *   · ★확인하지 못한 항목(unknown)은 **분모에서 뺀다.** 우리가 못 본 것을 감점하면
+ *     블로그를 못 찾았다는 이유로 점수가 깎인다 — 그건 병원 잘못이 아니다.
+ *   · 점수는 상대 비교가 아니라 자기 진단이다. 다른 병원과 비교한 값이 아니므로
+ *     화면에서도 "몇 등"이라고 말하지 않는다.
+ */
+
+/** 지금 손해 보는 항목의 가중치. 개선 항목(1)의 3배로 센다. */
+const SCORE_WEIGHT_LOSING = 3;
+const SCORE_WEIGHT_IMPROVING = 1;
+
+export type DiagnosisGrade = 'good' | 'fair' | 'weak';
+
+export interface DiagnosisScore {
+  /** 0~100. 확인한 항목만으로 계산한다. */
+  readonly score: number;
+  readonly grade: DiagnosisGrade;
+  /** 점수 계산에 들어간 항목 수 (unknown 제외). */
+  readonly counted: number;
+  /** 확인하지 못해 뺀 항목 수 — 화면에서 정직하게 밝힌다. */
+  readonly skipped: number;
+  /** 지금 고쳐야 할 것 개수 — 점수 옆에 붙일 근거. */
+  readonly losing: number;
+}
+
+export function gradeOf(score: number): DiagnosisGrade {
+  if (score >= 70) return 'good';
+  if (score >= 40) return 'fair';
+  return 'weak';
+}
+
+export const GRADE_LABEL: Readonly<Record<DiagnosisGrade, string>> = {
+  good: '양호 — 큰 구멍은 없습니다',
+  fair: '보통 — 손볼 곳이 있습니다',
+  weak: '취약 — 지금 환자를 놓치고 있습니다',
+};
+
+/** 축 표시 이름 — 점수표에 그대로 쓴다. */
+export const AXIS_LABEL: Readonly<Record<Finding['axis'], string>> = {
+  place: '네이버 플레이스',
+  blog: '블로그',
+  site: '홈페이지',
+  social: 'SNS·영상',
+  ai: 'AI 검색',
+  compliance: '의료광고법',
+};
+
+/** 점수표에 세우는 순서 — 환자 유입에 가까운 축이 위로. */
+const AXIS_ORDER: readonly Finding['axis'][] = ['place', 'blog', 'site', 'ai', 'social', 'compliance'];
+
+export interface AxisScore extends DiagnosisScore {
+  readonly axis: Finding['axis'];
+  readonly label: string;
+  /** 확인된 항목이 없어 점수를 낼 수 없는 축 — 0점과 구분해야 한다. */
+  readonly unmeasured: boolean;
+}
+
+/**
+ * 축별 점수 (2026-08-05 대표 지시 "다른 것들도 점수표로").
+ *
+ * ★확인하지 못한 축은 **0점이 아니라 '측정 못 함'** 이다. 블로그를 못 찾았다고
+ *   0점을 주면 "블로그가 나쁘다"로 읽히는데, 사실은 우리가 못 본 것뿐이다.
+ *   그 구분을 잃으면 점수표 전체가 거짓말이 된다.
+ */
+export function scoreByAxis(findings: readonly Finding[]): readonly AxisScore[] {
+  const list = Array.isArray(findings) ? findings : [];
+  const seen = new Set<Finding['axis']>();
+  for (const f of list) if (f?.axis) seen.add(f.axis);
+  const axes = [
+    ...AXIS_ORDER.filter((a) => seen.has(a)),
+    ...Array.from(seen).filter((a) => !AXIS_ORDER.includes(a)),
+  ];
+  return axes.map((axis) => {
+    const base = scoreFindings(list.filter((f) => f?.axis === axis));
+    return {
+      ...base,
+      axis,
+      label: AXIS_LABEL[axis] ?? axis,
+      unmeasured: base.counted === 0,
+    };
+  });
+}
+
+export function scoreFindings(findings: readonly Finding[]): DiagnosisScore {
+  const list = Array.isArray(findings) ? findings : [];
+  let earned = 0;
+  let total = 0;
+  let counted = 0;
+  let skipped = 0;
+  let losing = 0;
+  for (const f of list) {
+    if (!f || typeof f !== 'object') continue;
+    if (f.tone === 'unknown') {
+      skipped += 1;
+      continue;
+    }
+    const w =
+      FINDING_WEIGHT[f.id]?.severity === 'losing' ? SCORE_WEIGHT_LOSING : SCORE_WEIGHT_IMPROVING;
+    total += w;
+    counted += 1;
+    if (f.tone === 'good') earned += w;
+    else if (FINDING_WEIGHT[f.id]?.severity === 'losing') losing += 1;
+  }
+  // 확인된 항목이 하나도 없으면 점수를 지어내지 않는다.
+  const score = total === 0 ? 0 : Math.round((earned / total) * 100);
+  return { score, grade: gradeOf(score), counted, skipped, losing };
+}
+
 export interface GroupedFindings {
   /** 지금 고쳐야 할 것 — 지금 손해 보고 있거나 리스크를 지고 있는 것. */
   readonly bad: readonly Finding[];

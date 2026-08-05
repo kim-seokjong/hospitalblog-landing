@@ -15,7 +15,11 @@ import {
   lockedActionCount,
   normalizeStoredFindings,
   unlockedActionIds,
+  scoreFindings,
+  scoreByAxis,
+  GRADE_LABEL,
 } from '@/content/lib/clinic-diagnosis/findings';
+import { rankCompetitors } from '@/content/lib/clinic-diagnosis/ai-citation';
 import { riskOf } from '@/content/lib/clinic-diagnosis/compliance-scan';
 import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-questions';
 import { buildConversionCta, doctorpostLine } from '@/content/lib/clinic-diagnosis/conversion';
@@ -218,6 +222,102 @@ function FindingCard({ finding, locked = false }: { finding: Finding; locked?: b
  *   따로 빼면 "AI는 되는 건가"가 다시 세 곳으로 흩어진다.
  * · 손댈 게 없는 채널은 접지 않는다 — 비어 보이면 진단이 안 돈 줄 안다.
  */
+/**
+ * 종합 점수 + 축별 점수표 + 경쟁 병원 (2026-08-05 대표 지시).
+ *
+ * 왜 이 순서인가: 원장은 숫자 하나 → 어디가 문제인지 → 그럼 누가 나오는지 순으로 본다.
+ * 점수는 다른 병원과 비교한 값이 아니라 **자기 진단**이므로 "몇 등"이라고 쓰지 않는다.
+ */
+function ScoreBoard({
+  findings,
+  competitors,
+}: {
+  findings: readonly Finding[];
+  competitors: readonly { readonly name: string; readonly count: number }[];
+}) {
+  const total = scoreFindings(findings);
+  const axes = scoreByAxis(findings);
+  if (total.counted === 0) return null;
+
+  const tone =
+    total.grade === 'good'
+      ? { text: 'text-emerald-600', bar: 'bg-emerald-500', ring: 'ring-emerald-200' }
+      : total.grade === 'fair'
+        ? { text: 'text-amber-600', bar: 'bg-amber-500', ring: 'ring-amber-200' }
+        : { text: 'text-[#ff4628]', bar: 'bg-[#ff4628]', ring: 'ring-red-200' };
+
+  return (
+    <section className="mt-6 rounded-2xl border border-[#e8ecf2] bg-white p-6 sm:p-7">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+        <div className={`flex h-32 w-32 shrink-0 flex-col items-center justify-center rounded-full ring-8 ${tone.ring} bg-[#fafbfc]`}>
+          <div className={`text-4xl font-black leading-none ${tone.text}`}>{total.score}</div>
+          <div className="mt-1 text-xs text-[#8a93a0]">/ 100점</div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold tracking-wide text-[#ff4628]">온라인 노출 종합 점수</p>
+          <p className={`mt-1 text-lg font-black ${tone.text}`}>{GRADE_LABEL[total.grade]}</p>
+          <p className="mt-2 text-sm leading-relaxed text-[#5b6472]">
+            확인한 {total.counted}개 항목으로 매긴 점수입니다.
+            {total.losing > 0 && (
+              <>
+                {' '}
+                그중 <b className="text-[#202020]">지금 고쳐야 할 것이 {total.losing}개</b>입니다.
+              </>
+            )}
+            {total.skipped > 0 && (
+              <span className="text-[#8a93a0]"> (확인하지 못한 {total.skipped}개는 점수에서 뺐습니다.)</span>
+            )}
+          </p>
+          <p className="mt-1 text-xs text-[#8a93a0]">70점 이상 양호 · 40~69점 보통 · 40점 미만 취약</p>
+        </div>
+      </div>
+
+      <div className="mt-6 border-t border-[#eef1f5] pt-5">
+        <p className="text-sm font-bold text-[#202020]">어디가 부족한지</p>
+        <ul className="mt-3 space-y-2.5">
+          {axes.map((a) => (
+            <li key={a.axis} className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-sm text-[#5b6472]">{a.label}</span>
+              <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-[#f0f2f5]">
+                {!a.unmeasured && (
+                  <span
+                    className={`block h-full rounded-full ${
+                      a.grade === 'good' ? 'bg-emerald-500' : a.grade === 'fair' ? 'bg-amber-500' : 'bg-[#ff4628]'
+                    }`}
+                    style={{ width: `${Math.max(a.score, 3)}%` }}
+                  />
+                )}
+              </span>
+              <span className="w-20 shrink-0 text-right text-sm font-bold text-[#202020]">
+                {a.unmeasured ? <span className="text-xs font-normal text-[#a7aeb8]">측정 못 함</span> : `${a.score}점`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {competitors.length > 0 && (
+        <div className="mt-6 border-t border-[#eef1f5] pt-5">
+          <p className="text-sm font-bold text-[#202020]">환자가 물었을 때 대신 나온 병원</p>
+          <p className="mt-1 text-xs leading-relaxed text-[#8a93a0]">
+            같은 질문에 AI가 답하면서 함께 언급한 의료기관입니다. 저희가 평가한 것이 아니라
+            답변에 나온 횟수만 세었습니다.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {competitors.map((c, i) => (
+              <li key={c.name} className="flex items-center gap-3 text-sm">
+                <span className="w-5 shrink-0 text-right text-xs text-[#a7aeb8]">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate text-[#202020]">{c.name}</span>
+                <span className="shrink-0 text-xs text-[#8a93a0]">{c.count}회 언급</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ChannelBlock({
   section,
   unlocked,
@@ -354,6 +454,11 @@ export default function DiagnosisReportView({
    * 이 기능 이전에 발급된 공유 리포트에는 questions 가 없으므로 probes 로 그때 만든다
    * (같은 함수를 쓰므로 판정과 화면이 어긋나지 않는다).
    */
+  /**
+   * 같은 질문에 AI가 함께 언급한 다른 병원 — 옛 리포트에는 없으므로 빈 배열이 된다.
+   * 추천 질의 프로브에서만 모은다(이름을 넣고 물은 답변은 당연히 우리 병원이 나온다).
+   */
+  const competitors = rankCompetitors(report.ai?.probes ?? []);
   const aiQuestions =
     report.ai?.questions?.length ? report.ai.questions : summarizeQuestions(report.ai?.probes ?? []);
   /** 확신까지는 아닌 채로 1위 후보로 진행한 상태인가 (구 리포트에는 없는 종류 → false). */
@@ -417,6 +522,9 @@ export default function DiagnosisReportView({
           </p>
         </div>
       )}
+
+      {/* 종합 점수 · 축별 점수 · 대신 나온 병원 — 채널 요약보다 먼저 본다(숫자 하나가 먼저). */}
+      <ScoreBoard findings={findings} competitors={competitors} />
 
       {/*
         요약 — **채널 4칸**. 어느 영역이 약한지가 한눈에 보여야 한다.

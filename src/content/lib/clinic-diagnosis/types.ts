@@ -419,6 +419,11 @@ export interface CitationProbe {
   readonly ownedSources: readonly string[];
   /** 제3자 출처 호스트 목록. */
   readonly thirdPartyHosts: readonly string[];
+  /**
+   * 이 답변에 함께 등장한 다른 의료기관 이름 (2026-08-05 추가).
+   * ⚠️저장된 옛 리포트에는 없다 — 읽는 쪽에서 항상 없을 수 있다고 보고 다뤄야 한다.
+   */
+  readonly competitors?: readonly string[];
 }
 
 /**

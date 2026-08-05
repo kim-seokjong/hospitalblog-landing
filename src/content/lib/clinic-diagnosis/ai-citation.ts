@@ -126,6 +126,58 @@ export function classifyCitationPath(
   return 'directory';
 }
 
+/* ── 경쟁 병원 추출 ───────────────────────────────────────────────
+ *
+ * 왜 필요한가 (2026-08-05 대표 지시):
+ *   "우리가 안 나옵니다"보다 **"대신 이 병원들이 나옵니다"**가 훨씬 실감난다.
+ *   원장이 아는 이름이 목록에 뜨면 그때 진단이 진짜가 된다.
+ *
+ * 원칙:
+ *   · AI 답변 본문에서 **의료기관 형태의 이름만** 뽑는다. 문장을 통째로 옮기지 않는다.
+ *   · 우리 병원 자신과 일반명사(대학병원·종합병원 등)는 뺀다.
+ *   · 여러 답변에 반복해서 나온 순서로 정렬한다 — 한 번 스친 이름은 뒤로 간다.
+ *   · 이건 공개된 AI 답변에 이미 실려 있는 이름이다. 우리가 평가·비교하지 않고
+ *     **나온 횟수만** 센다(의료광고법상 비교광고로 읽히지 않게).
+ */
+const CLINIC_SUFFIX =
+  '(?:의원|병원|의료원|한의원|안과|치과|피부과|성형외과|정형외과|신경외과|내과|외과|이비인후과|산부인과|소아과|소아청소년과|비뇨기과|비뇨의학과|재활의학과|가정의학과|마취통증의학과|영상의학과)';
+const CLINIC_NAME_RE = new RegExp(`[가-힣A-Za-z0-9]{2,12}${CLINIC_SUFFIX}`, 'g');
+/** 이름이 아니라 분류어 — 뽑으면 안 된다. */
+const GENERIC_CLINIC_WORDS = new Set([
+  '대학병원', '종합병원', '동네병원', '지역병원', '전문병원', '개인병원', '일반병원',
+  '상급종합병원', '요양병원', '한방병원', '치과병원', '주변병원', '근처병원', '해당병원',
+  '우리병원', '이비인후과', '가까운병원', '유명병원',
+]);
+
+/** 답변 본문에서 경쟁 의료기관 이름 후보를 뽑는다. */
+export function extractClinicNames(text: string, selfName: string): readonly string[] {
+  const self = (selfName ?? '').replace(/\s+/g, '');
+  const out: string[] = [];
+  for (const raw of (text ?? '').match(CLINIC_NAME_RE) ?? []) {
+    const name = raw.replace(/\s+/g, '');
+    if (name.length < 3 || name.length > 20) continue;
+    if (GENERIC_CLINIC_WORDS.has(name)) continue;
+    // 자기 자신(부분 일치 포함 — "보라빛안과"와 "보라빛안과의원")은 경쟁이 아니다
+    if (self && (name.includes(self) || self.includes(name))) continue;
+    if (!out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
+/** 여러 프로브에 흩어진 경쟁 병원을 등장 횟수로 묶는다. */
+export function rankCompetitors(
+  probes: readonly { readonly competitors?: readonly string[] }[],
+  limit = 6,
+): readonly { readonly name: string; readonly count: number }[] {
+  const tally = new Map<string, number>();
+  for (const p of probes) {
+    for (const name of p.competitors ?? []) tally.set(name, (tally.get(name) ?? 0) + 1);
+  }
+  return Array.from(tally, ([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
 export interface DiagnosisQueries {
   /** 이름 없이 지역+진료과로만 묻는 질의 — 환자가 실제로 하는 검색. */
   readonly recommend: readonly string[];
@@ -370,6 +422,9 @@ export async function runAiCitation(
         thirdPartyHosts: Array.from(
           new Set(sourceUrls.filter((u) => !isOwnedSource(u, input.owned)).map(hostOf).filter((h) => h)),
         ).slice(0, 5),
+        // 이 답변에서 우리 대신(또는 함께) 거론된 병원들 — 추천 질의에서만 의미가 있다.
+        competitors:
+          kind === 'recommend' ? extractClinicNames(answer.text, input.clinicName).slice(0, 8) : [],
       });
     }
   };
