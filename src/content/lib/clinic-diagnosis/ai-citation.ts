@@ -140,6 +140,51 @@ export interface DiagnosisQueries {
  * "안 나온다"를 근거로 말할 수 있다. 표현을 바꿔가며 물어도 전부 안 나오면
  * 그건 문장 문제가 아니라 노출 문제다.
  */
+/**
+ * 진료과별 **환자가 실제로 검색하는 니즈**.
+ *
+ * ★왜 필요한가 (2026-08-05, 경쟁 서비스 실측 비교).
+ *   기존 질의는 "○○구 안과 추천해줘"의 표현만 바꾼 3개였다. 표현이 달라도
+ *   묻는 것은 하나 — "지역+진료과"뿐이다. 그런데 환자는 그렇게 묻지 않는다.
+ *   "백내장 수술 대기 안 길고 빠른 곳", "부모님 모시고 갈 설명 친절한 안과",
+ *   "노안이랑 백내장 동시 수술" 처럼 **시술·상황·조건**을 붙여 묻는다.
+ *   같은 병원이라도 "지역+진료과"에는 나오는데 이런 질문에는 안 나오는 경우가
+ *   대부분이고, 그 간극이 실제로 환자를 잃는 자리다.
+ *
+ *   여기 값은 "그 과에서 환자가 돈과 시간을 크게 쓰는 결정"을 기준으로 골랐다.
+ *   목록에 없는 과는 공통 축(대기·설명)만 쓴다 — 억지로 시술명을 지어내면
+ *   그 병원이 하지도 않는 진료로 진단하게 된다.
+ */
+const SPECIALTY_NEEDS: Readonly<Record<string, readonly string[]>> = {
+  안과: ['백내장 수술', '라식 라섹', '노안 교정'],
+  성형외과: ['눈 성형', '코 성형', '리프팅'],
+  피부과: ['여드름 치료', '기미 색소 치료', '리프팅'],
+  치과: ['임플란트', '치아교정', '충치 치료'],
+  정형외과: ['무릎 관절', '허리 디스크', '어깨 통증'],
+  신경외과: ['허리 디스크', '목 디스크'],
+  산부인과: ['산전 검사', '자궁 검진'],
+  소아청소년과: ['영유아 검진', '예방접종'],
+  이비인후과: ['비염 치료', '편도 수술'],
+  내과: ['건강검진', '위내시경'],
+  비뇨의학과: ['전립선 검사', '요로결석'],
+  한의원: ['한방 치료', '추나요법'],
+  재활의학과: ['도수치료', '재활 치료'],
+  마취통증의학과: ['통증 주사', '신경차단술'],
+  가정의학과: ['건강검진', '만성질환 관리'],
+};
+
+/** 진료과와 무관하게 환자가 따지는 것 — 대기·설명·비용. */
+const COMMON_NEEDS = ['대기 짧은', '설명 자세히 해주는'] as const;
+
+/**
+ * 진단용 질의 생성 (규칙 기반, LLM 호출 없음).
+ *
+ * 네 갈래로 만든다. 한 갈래만 보면 "우리 병원이 왜 안 나오는지"를 못 가른다.
+ *   ① 지역+진료과      — 가장 기본. 여기서도 안 나오면 기본 노출 자체가 없다
+ *   ② 지역+시술        — 돈이 걸린 결정. 실제 매출과 가장 가깝다
+ *   ③ 조건(대기·설명)  — 경쟁 병원의 약점을 파고드는 자리
+ *   ④ 보호자 관점      — 부모님·아이를 모시고 가는 검색. 문장이 완전히 다르다
+ */
 export function buildDiagnosisQueries(input: {
   readonly region: string;
   readonly specialty: string;
@@ -149,14 +194,35 @@ export function buildDiagnosisQueries(input: {
   const specialty = (input.specialty ?? '').trim();
   const name = (input.clinicName ?? '').trim();
   const recommend: string[] = [];
+  const needs = SPECIALTY_NEEDS[specialty] ?? [];
 
   if (region && specialty) {
+    // ★순서가 곧 우선순위다 — 상한(MAX_RECOMMEND_QUESTIONS)에서 잘리므로
+    //   **서로 다른 축이 앞에 오도록** 배치한다. 같은 축을 여러 개 넣으면
+    //   질문을 늘려도 "지역+진료과" 하나만 반복해서 묻는 셈이 된다.
+    // ① 기본 노출 — 여기서도 안 나오면 기본 GEO 자체가 없는 상태
     recommend.push(`${region} ${specialty} 추천해줘`);
+    // ② 시술·니즈 — 돈이 걸린 결정이라 실제 매출과 가장 가깝다
+    if (needs[0]) recommend.push(`${region}에서 ${needs[0]} 잘하는 ${specialty} 어디가 좋을까요?`);
+    // ③ 조건 — 대기·설명은 경쟁 병원이 가장 자주 지적받는 약점 자리다
+    recommend.push(
+      needs[1]
+        ? `${region} ${specialty} 중에 ${needs[1]} ${COMMON_NEEDS[0]} 곳 있나요?`
+        : `${region} ${specialty} 중에 ${COMMON_NEEDS[0]} 곳 있나요?`,
+    );
+    // ④ 보호자 관점 — 문장 형태가 완전히 다르다(상한이 늘면 여기부터 들어온다)
+    recommend.push(
+      needs[0]
+        ? `부모님 ${needs[0]} 해드리려는데 ${region}에서 ${COMMON_NEEDS[1]} ${specialty} 있을까요?`
+        : `부모님 모시고 갈 ${region} ${specialty} 중 ${COMMON_NEEDS[1]} 곳 추천해주세요.`,
+    );
+    // ⑤ 예비 — 상한 확대 시 사용
     recommend.push(`${region} ${specialty} 중에 잘하는 곳 세 군데만 알려줘`);
-    recommend.push(`${region}에서 ${specialty} 어디로 가는 게 좋을까?`);
+    if (needs[2]) recommend.push(`${region} ${needs[2]} 잘하는 곳 추천해주세요.`);
   } else if (specialty) {
     recommend.push(`${specialty} 잘하는 병원 추천해줘`);
     recommend.push(`${specialty} 어디로 가는 게 좋을까?`);
+    if (needs[0]) recommend.push(`${needs[0]} 잘하는 ${specialty} 추천해줘`);
   }
 
   const named = name ? (region ? `${region} ${name} 어떤 병원이야?` : `${name} 어떤 병원이야?`) : null;
