@@ -11,7 +11,8 @@ import {
   type CombinedLookup,
 } from './directory';
 import { createDirectorySearch, createDirectoryProbe, findDirectoryClinic } from './directory-db';
-import type { ClinicCandidate } from './types';
+import { refineSpecialties } from './specialty-refine';
+import type { ClinicCandidate, ClinicLookupOutcome } from './types';
 
 /**
  * 병원 특정의 **단일 진입점** — 행정안전부(정본) → 폴백 명부(심평원 공개자료) 순.
@@ -39,6 +40,12 @@ export async function lookupClinicWithFallback(
     region,
   });
 
+  // 행안부 결과의 진료과는 신고 순서라 대표 과목이 아닐 수 있다 → 심평원 명부로 보정.
+  // 폴백(명부) 결과는 이미 정확하므로 손대지 않는다.
+  const refined = combined.usedDirectory
+    ? combined
+    : { ...combined, outcome: await refineOutcomeSpecialty(combined.outcome) };
+
   if (combined.usedDirectory) {
     // 폴백이 실제로 화면을 살린 순간이다 — 행안부가 조용히 죽어 있었다는 증거이기도 하다.
     console.warn(
@@ -46,7 +53,27 @@ export async function lookupClinicWithFallback(
         `fallback=${combined.outcome.kind} name="${trace.name}" region="${trace.region}"`,
     );
   }
-  return combined;
+  return refined;
+}
+
+/**
+ * 조회 결과 안의 병원들만 골라 진료과를 보정한다.
+ * 후보를 담지 않는 종류(not_found 등)는 그대로 통과시킨다.
+ */
+async function refineOutcomeSpecialty(outcome: ClinicLookupOutcome): Promise<ClinicLookupOutcome> {
+  switch (outcome.kind) {
+    case 'resolved': {
+      const [clinic] = await refineSpecialties([outcome.clinic]);
+      return clinic ? { ...outcome, clinic } : outcome;
+    }
+    case 'ambiguous':
+    case 'needs_region':
+    case 'closed_only':
+    case 'region_miss':
+      return { ...outcome, candidates: await refineSpecialties(outcome.candidates) };
+    default:
+      return outcome;
+  }
 }
 
 /**
@@ -71,5 +98,9 @@ export async function resolveClinicForDiagnosis(
     }
     return clinic;
   }
-  return findClinicByMngNo(mngNo, name, { region });
+  // 진단 리포트·리드에 남는 진료과는 여기서 정해진다 — 보정을 반드시 태운다.
+  const clinic = await findClinicByMngNo(mngNo, name, { region });
+  if (!clinic) return null;
+  const [refined] = await refineSpecialties([clinic]);
+  return refined ?? clinic;
 }

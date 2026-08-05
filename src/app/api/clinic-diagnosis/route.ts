@@ -18,6 +18,9 @@ import {
   shareOnce,
 } from '@/content/lib/clinic-diagnosis/limits';
 import { cacheGet, cacheSet } from '@/content/lib/scoreboard/cache';
+import { hashClientIp } from '@/content/lib/clinic-diagnosis/email-lead';
+import { ANON_ID_COOKIE, isValidAnonId } from '@/content/lib/funnel-events';
+import { isBotUserAgent } from '@/content/lib/bot-user-agent';
 import type { ClinicCandidate, DiagnosisReport } from '@/content/lib/clinic-diagnosis/types';
 
 export const dynamic = 'force-dynamic';
@@ -129,7 +132,7 @@ export async function POST(req: NextRequest) {
     //   캐시된 토큰을 재사용하므로 리포트 행이 요청마다 늘어나지도 않는다.
     if (join.isLeader) {
       if (cacheable) cacheSet(cacheKey, report, DIAGNOSIS_CACHE_TTL_MS);
-      await saveLead(report.clinic, report);
+      await saveLead(report.clinic, report, readRequester(req));
     }
     const shared = share ? await getOrCreateShare(cacheKey, report, cacheable) : null;
 
@@ -148,11 +151,61 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * 요청자 귀속 정보 — 원본 IP·UA 는 저장하지 않는다.
+ *
+ * 필요한 이유(2026-08-05): 7/28 10분 사이에 19곳이 연속 진단된 기록이 남았는데
+ * 그게 우리 검증인지 외부의 대량 조회인지 사후에 가릴 수가 없었다. 진단은 핵심
+ * 리드 경로라 "누가 얼마나 쓰는가"를 모르면 지표도 대응도 성립하지 않는다.
+ */
+function readRequester(req: NextRequest): Requester {
+  const ua = req.headers.get('user-agent') ?? '';
+  const anon = req.cookies.get(ANON_ID_COOKIE)?.value ?? '';
+  const ip = extractClientIp(req.headers);
+  const salt = process.env.DIAGNOSIS_EMAIL_IP_SALT ?? '';
+  return {
+    // 쿠키가 없으면 null — 이 라우트는 쿠키를 발급하지 않는다(응답 경로가 여러 개라
+    // 일관되게 붙이기 어렵다). 랜딩을 거쳐 온 사용자만 방문 흐름과 이어진다.
+    anonId: isValidAnonId(anon) ? anon : null,
+    // ★솔트가 없으면 저장하지 않는다. 솔트 없는 IP 해시는 IPv4 전 대역을 미리
+    //   계산해 되돌릴 수 있어 익명화가 아니다(Codex 지적).
+    // ★IP 를 못 읽은 요청도 저장하지 않는다 — 전부 같은 해시가 되어 한 사람이
+    //   반복 조회한 것처럼 보인다.
+    ipHash: salt && ip && ip !== 'unknown' ? hashClientIp(ip, salt) : null,
+    isBot: isBotUserAgent(ua),
+  };
+}
+
+interface Requester {
+  readonly anonId: string | null;
+  readonly ipHash: string | null;
+  readonly isBot: boolean;
+}
+
+/**
+ * 061 의 새 컬럼이 아직 없어서 거부된 것인가.
+ * 아무 42703 이나 삼키면 트리거·뷰가 다른 컬럼을 잘못 참조하는 진짜 결함까지
+ * "마이그레이션 미적용"으로 오인해 조용히 넘어간다 — 세 컬럼 이름이 실제로
+ * 언급된 경우로만 좁힌다(Codex 지적).
+ */
+const NEW_COLUMNS = ['anon_id', 'ip_hash', 'is_bot'];
+
+function isUnknownColumn(error: { code?: string; message?: string }): boolean {
+  const code = error.code ?? '';
+  if (code !== 'PGRST204' && code !== '42703') return false;
+  const m = (error.message ?? '').toLowerCase();
+  return NEW_COLUMNS.some((c) => m.includes(c));
+}
+
 /** 영업 리드 적재 — 실패해도 진단 응답을 막지 않는다(테이블 미적용 포함). */
-async function saveLead(clinic: ClinicCandidate, report: DiagnosisReport): Promise<void> {
+async function saveLead(
+  clinic: ClinicCandidate,
+  report: DiagnosisReport,
+  requester: Requester,
+): Promise<void> {
   try {
     const admin = createAdminClient();
-    const { error } = await admin.from('clinic_diagnosis_leads').insert({
+    const base = {
       mng_no: clinic.mngNo,
       clinic_name: clinic.name.slice(0, 120),
       region: `${clinic.province} ${clinic.region}`.trim().slice(0, 60),
@@ -161,8 +214,25 @@ async function saveLead(clinic: ClinicCandidate, report: DiagnosisReport): Promi
       blog_id: report.blog.blogId,
       site_url: report.site.url,
       source: 'clinic-check',
+    };
+    const { error } = await admin.from('clinic_diagnosis_leads').insert({
+      ...base,
+      anon_id: requester.anonId,
+      ip_hash: requester.ipHash,
+      is_bot: requester.isBot,
     });
-    if (error) console.error('[clinic-diagnosis] 리드 적재 실패(무시):', error.message);
+    // 마이그레이션 061 적용 전에 배포되면 새 컬럼이 없어 insert 가 통째로 거부된다.
+    // 그 사이 리드를 잃지 않도록 기존 컬럼만으로 한 번 더 넣는다.
+    if (error && isUnknownColumn(error)) {
+      const retry = await admin.from('clinic_diagnosis_leads').insert(base);
+      if (retry.error) {
+        console.error('[clinic-diagnosis] 리드 적재 실패(무시):', retry.error.message);
+      } else {
+        console.warn('[clinic-diagnosis] 061 미적용 — 귀속 정보 없이 적재했다');
+      }
+    } else if (error) {
+      console.error('[clinic-diagnosis] 리드 적재 실패(무시):', error.message);
+    }
   } catch (e) {
     console.error('[clinic-diagnosis] 리드 적재 예외(무시):', e instanceof Error ? e.message : e);
   }
