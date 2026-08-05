@@ -100,27 +100,60 @@ test('경쟁 정보가 없는 옛 리포트도 안전하다', () => {
 
 /* ── 못 잰 축의 사유 표시 ───────────────────────────── */
 
-test('못 잰 축은 이유를 한 줄로 함께 낸다', () => {
-  const unknown = {
-    id: 'blog.exists',
-    axis: 'blog',
+/** 항목 문구(state)에 내부 정보가 섞여 있는 상황을 흉내 낸다. */
+const unknownWith = (axis: Finding['axis'], state: string): Finding =>
+  ({
+    id: `${axis}.exists`,
+    axis,
     tone: 'unknown',
-    label: '병원 블로그',
-    state:
-      '병원 이름이 블로그 이름에도 글 제목에도 나오지 않아 어느 것이 병원 블로그인지 특정하지 못했습니다. (후보 5개: a, b, c)',
+    label: '항목',
+    state,
     why: null,
     action: '',
     ourScope: true,
-  } as unknown as Finding;
-  const axes = scoreByAxis([unknown, f('a', 'site', 'good')]);
+  }) as unknown as Finding;
+
+test('못 잰 축은 이유와 다음 행동을 함께 낸다', () => {
+  const axes = scoreByAxis([unknownWith('blog', ''), f('a', 'site', 'good')]);
   const blog = axes.find((a) => a.axis === 'blog');
   assert.ok(blog?.unmeasured);
   assert.ok(blog?.unmeasuredReason, '사유가 있어야 한다');
-  assert.ok(!blog!.unmeasuredReason!.includes('('), '괄호 부연은 빼고 짧게');
-  assert.ok(blog!.unmeasuredReason!.length <= 47);
+  assert.ok(blog?.unmeasuredAction, '다음 행동이 있어야 한다');
+});
+
+test('항목 문구가 비어도 사유는 비지 않는다', () => {
+  // state 에 기대면 옛 리포트·빈 문자열에서 이 기능이 조용히 사라진다
+  for (const state of ['', '   ', '(후보 없음)']) {
+    const axes = scoreByAxis([unknownWith('place', state)]);
+    assert.ok(axes[0].unmeasuredReason, `state=${JSON.stringify(state)} 에서 사유가 비었다`);
+  }
+});
+
+test('내부 정보가 섞인 항목 문구는 화면 사유로 새어 나가지 않는다', () => {
+  // 이 점수표는 로그인 없는 공유 링크에 그대로 실린다
+  const axes = scoreByAxis([
+    unknownWith('site', '수집 실패: /srv/jobs/clinic-123/result.json — token=abc123'),
+  ]);
+  const reason = axes[0].unmeasuredReason ?? '';
+  assert.ok(!reason.includes('/srv/'), '내부 경로가 노출되면 안 된다');
+  assert.ok(!reason.includes('token'), '내부 값이 노출되면 안 된다');
+});
+
+test('축마다 다른 행동을 안내한다 (AI 축에 "주소를 알려주시면"은 틀린 안내)', () => {
+  const ai = scoreByAxis([unknownWith('ai', '')])[0];
+  const blog = scoreByAxis([unknownWith('blog', '')])[0];
+  assert.ok(!ai.unmeasuredAction!.includes('주소'), 'AI는 주소를 줘도 채워지지 않는다');
+  assert.ok(blog.unmeasuredAction!.includes('주소'));
+});
+
+test('문구가 손상된 옛 리포트에서도 죽지 않는다', () => {
+  const broken = { id: 'x', axis: 'social', tone: 'unknown', label: 'x', ourScope: true } as unknown as Finding;
+  const axes = scoreByAxis([broken]);
+  assert.ok(axes[0].unmeasuredReason);
 });
 
 test('점수가 매겨진 축에는 사유를 붙이지 않는다', () => {
   const axes = scoreByAxis([f('a', 'blog', 'good')]);
   assert.equal(axes.find((x) => x.axis === 'blog')?.unmeasuredReason, null);
+  assert.equal(axes.find((x) => x.axis === 'blog')?.unmeasuredAction, null);
 });

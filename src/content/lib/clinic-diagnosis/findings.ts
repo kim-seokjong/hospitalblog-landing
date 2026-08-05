@@ -1481,11 +1481,56 @@ export interface AxisScore extends DiagnosisScore {
    *
    * ★"측정 못 함"만 띄우면 원장은 그게 무슨 뜻인지 모른다. 우리가 못 본 것인지,
    *   병원이 안 하는 것인지, 뭘 해야 채워지는지가 그 자리에 있어야 빈칸이
-   *   정보를 받아내는 자리가 된다. 문구는 이미 각 항목이 갖고 있으므로
-   *   새로 짓지 않고 그대로 끌어온다(화면과 항목 설명이 어긋나지 않게).
+   *   정보를 받아내는 자리가 된다.
    */
   readonly unmeasuredReason: string | null;
+  /** 그래서 뭘 하면 채워지는지 (unmeasured 일 때만) — 축마다 다르다. */
+  readonly unmeasuredAction: string | null;
 }
+
+/**
+ * 못 잰 축에 띄울 문구 — **축마다 미리 정해 둔 문장만 쓴다.**
+ *
+ * ⚠️ 항목의 `state` 를 그대로 끌어다 쓰지 않는다(2026-08-05 교차검증).
+ *    이 점수표는 **로그인 없는 공유 링크**에 그대로 실린다. `state` 는 내부
+ *    수집 결과를 설명하려고 만든 문장이라 후보 목록·경로·오류 문구가 섞일 수
+ *    있고, 앞으로 문장을 만드는 곳이 늘어나면 그때마다 공개 화면으로 새어 나간다.
+ *    그리고 축마다 해야 할 일이 다르다 — AI 축은 주소를 줘도 채워지지 않는다.
+ */
+const AXIS_UNMEASURED: Readonly<
+  Record<Finding['axis'], { readonly reason: string; readonly action: string }>
+> = {
+  place: {
+    reason: '네이버 플레이스에서 이 병원 항목을 특정하지 못했습니다.',
+    action: '플레이스 주소를 알려주시면 채워 드려요.',
+  },
+  blog: {
+    reason: '어느 것이 병원 블로그인지 특정하지 못했습니다.',
+    action: '블로그 주소를 알려주시면 채워 드려요.',
+  },
+  site: {
+    reason: '홈페이지 주소를 확인하지 못했습니다.',
+    action: '홈페이지 주소를 알려주시면 채워 드려요.',
+  },
+  ai: {
+    reason: 'AI가 실제로 뭐라고 답하는지까지는 확인하지 못했습니다.',
+    action: '진료과와 지역을 채워 다시 진단하면 확인됩니다.',
+  },
+  social: {
+    reason: '인스타그램·유튜브 계정을 찾지 못했습니다.',
+    action: '계정 주소를 알려주시면 채워 드려요.',
+  },
+  compliance: {
+    reason: '검사할 글을 확보하지 못해 의료광고법 검토를 하지 못했습니다.',
+    action: '블로그 주소를 알려주시면 글까지 함께 봐 드려요.',
+  },
+};
+
+/** 표에 없는 축이 생겨도 빈칸으로 두지 않는다. */
+const AXIS_UNMEASURED_FALLBACK = {
+  reason: '이번 진단에서는 확인하지 못했습니다.',
+  action: '주소를 알려주시면 채워 드려요.',
+} as const;
 
 /**
  * 축별 점수 (2026-08-05 대표 지시 "다른 것들도 점수표로").
@@ -1506,27 +1551,16 @@ export function scoreByAxis(findings: readonly Finding[]): readonly AxisScore[] 
     const items = list.filter((f) => f?.axis === axis);
     const base = scoreFindings(items);
     const unmeasured = base.counted === 0;
-    // 못 잰 축은 그 이유를 항목 문구에서 그대로 가져온다(가장 먼저 걸린 것 하나만).
-    const firstUnknown = unmeasured ? items.find((f) => f?.tone === 'unknown') : undefined;
+    const copy = unmeasured ? (AXIS_UNMEASURED[axis] ?? AXIS_UNMEASURED_FALLBACK) : null;
     return {
       ...base,
       axis,
       label: AXIS_LABEL[axis] ?? axis,
       unmeasured,
-      unmeasuredReason: firstUnknown ? shortReason(firstUnknown.state) : null,
+      unmeasuredReason: copy?.reason ?? null,
+      unmeasuredAction: copy?.action ?? null,
     };
   });
-}
-
-/** 점수표 한 줄에 들어갈 길이로 줄인다 — 괄호 안 부연(후보 목록 등)은 뺀다. */
-function shortReason(state: string, limit = 46): string | null {
-  const text = (state ?? '')
-    .replace(/\([^)]*\)/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!text) return null;
-  const first = text.split(/(?<=[.!?])\s/)[0] ?? text;
-  return first.length > limit ? `${first.slice(0, limit - 1).trimEnd()}…` : first;
 }
 
 export function scoreFindings(findings: readonly Finding[]): DiagnosisScore {

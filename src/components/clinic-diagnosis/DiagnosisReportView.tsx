@@ -299,7 +299,8 @@ function ScoreBoard({
               */}
               {a.unmeasured && a.unmeasuredReason && (
                 <p className="ml-[7.5rem] mt-1 text-xs leading-relaxed text-[#a7aeb8]">
-                  {a.unmeasuredReason} — 주소를 알려주시면 채워 드려요.
+                  {a.unmeasuredReason}
+                  {a.unmeasuredAction ? ` — ${a.unmeasuredAction}` : ''}
                 </p>
               )}
             </li>
