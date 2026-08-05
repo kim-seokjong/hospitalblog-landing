@@ -1476,6 +1476,15 @@ export interface AxisScore extends DiagnosisScore {
   readonly label: string;
   /** 확인된 항목이 없어 점수를 낼 수 없는 축 — 0점과 구분해야 한다. */
   readonly unmeasured: boolean;
+  /**
+   * 왜 못 쟀는지 한 줄 (unmeasured 일 때만).
+   *
+   * ★"측정 못 함"만 띄우면 원장은 그게 무슨 뜻인지 모른다. 우리가 못 본 것인지,
+   *   병원이 안 하는 것인지, 뭘 해야 채워지는지가 그 자리에 있어야 빈칸이
+   *   정보를 받아내는 자리가 된다. 문구는 이미 각 항목이 갖고 있으므로
+   *   새로 짓지 않고 그대로 끌어온다(화면과 항목 설명이 어긋나지 않게).
+   */
+  readonly unmeasuredReason: string | null;
 }
 
 /**
@@ -1494,14 +1503,30 @@ export function scoreByAxis(findings: readonly Finding[]): readonly AxisScore[] 
     ...Array.from(seen).filter((a) => !AXIS_ORDER.includes(a)),
   ];
   return axes.map((axis) => {
-    const base = scoreFindings(list.filter((f) => f?.axis === axis));
+    const items = list.filter((f) => f?.axis === axis);
+    const base = scoreFindings(items);
+    const unmeasured = base.counted === 0;
+    // 못 잰 축은 그 이유를 항목 문구에서 그대로 가져온다(가장 먼저 걸린 것 하나만).
+    const firstUnknown = unmeasured ? items.find((f) => f?.tone === 'unknown') : undefined;
     return {
       ...base,
       axis,
       label: AXIS_LABEL[axis] ?? axis,
-      unmeasured: base.counted === 0,
+      unmeasured,
+      unmeasuredReason: firstUnknown ? shortReason(firstUnknown.state) : null,
     };
   });
+}
+
+/** 점수표 한 줄에 들어갈 길이로 줄인다 — 괄호 안 부연(후보 목록 등)은 뺀다. */
+function shortReason(state: string, limit = 46): string | null {
+  const text = (state ?? '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return null;
+  const first = text.split(/(?<=[.!?])\s/)[0] ?? text;
+  return first.length > limit ? `${first.slice(0, limit - 1).trimEnd()}…` : first;
 }
 
 export function scoreFindings(findings: readonly Finding[]): DiagnosisScore {

@@ -276,21 +276,32 @@ function ScoreBoard({
         <p className="text-sm font-bold text-[#202020]">어디가 부족한지</p>
         <ul className="mt-3 space-y-2.5">
           {axes.map((a) => (
-            <li key={a.axis} className="flex items-center gap-3">
-              <span className="w-24 shrink-0 text-sm text-[#5b6472]">{a.label}</span>
-              <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-[#f0f2f5]">
-                {!a.unmeasured && (
-                  <span
-                    className={`block h-full rounded-full ${
-                      a.grade === 'good' ? 'bg-emerald-500' : a.grade === 'fair' ? 'bg-amber-500' : 'bg-[#ff4628]'
-                    }`}
-                    style={{ width: `${Math.max(a.score, 3)}%` }}
-                  />
-                )}
-              </span>
-              <span className="w-20 shrink-0 text-right text-sm font-bold text-[#202020]">
-                {a.unmeasured ? <span className="text-xs font-normal text-[#a7aeb8]">측정 못 함</span> : `${a.score}점`}
-              </span>
+            <li key={a.axis}>
+              <div className="flex items-center gap-3">
+                <span className="w-24 shrink-0 text-sm text-[#5b6472]">{a.label}</span>
+                <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-[#f0f2f5]">
+                  {!a.unmeasured && (
+                    <span
+                      className={`block h-full rounded-full ${
+                        a.grade === 'good' ? 'bg-emerald-500' : a.grade === 'fair' ? 'bg-amber-500' : 'bg-[#ff4628]'
+                      }`}
+                      style={{ width: `${Math.max(a.score, 3)}%` }}
+                    />
+                  )}
+                </span>
+                <span className="w-20 shrink-0 text-right text-sm font-bold text-[#202020]">
+                  {a.unmeasured ? <span className="text-xs font-normal text-[#a7aeb8]">아직 못 봤어요</span> : `${a.score}점`}
+                </span>
+              </div>
+              {/*
+                왜 못 봤는지를 그 자리에 둔다 — "측정 못 함"만 있으면 원장은 우리가 못 본 건지
+                병원이 안 하는 건지 알 수 없다. 빈칸이 정보를 받아내는 자리가 되게 한다.
+              */}
+              {a.unmeasured && a.unmeasuredReason && (
+                <p className="ml-[7.5rem] mt-1 text-xs leading-relaxed text-[#a7aeb8]">
+                  {a.unmeasuredReason} — 주소를 알려주시면 채워 드려요.
+                </p>
+              )}
             </li>
           ))}
         </ul>

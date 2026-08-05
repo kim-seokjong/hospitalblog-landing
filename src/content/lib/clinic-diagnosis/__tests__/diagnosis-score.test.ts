@@ -97,3 +97,30 @@ test('경쟁 정보가 없는 옛 리포트도 안전하다', () => {
   assert.deepEqual(rankCompetitors([{}, { competitors: undefined }]), []);
   assert.deepEqual(extractClinicNames('', '가나의원'), []);
 });
+
+/* ── 못 잰 축의 사유 표시 ───────────────────────────── */
+
+test('못 잰 축은 이유를 한 줄로 함께 낸다', () => {
+  const unknown = {
+    id: 'blog.exists',
+    axis: 'blog',
+    tone: 'unknown',
+    label: '병원 블로그',
+    state:
+      '병원 이름이 블로그 이름에도 글 제목에도 나오지 않아 어느 것이 병원 블로그인지 특정하지 못했습니다. (후보 5개: a, b, c)',
+    why: null,
+    action: '',
+    ourScope: true,
+  } as unknown as Finding;
+  const axes = scoreByAxis([unknown, f('a', 'site', 'good')]);
+  const blog = axes.find((a) => a.axis === 'blog');
+  assert.ok(blog?.unmeasured);
+  assert.ok(blog?.unmeasuredReason, '사유가 있어야 한다');
+  assert.ok(!blog!.unmeasuredReason!.includes('('), '괄호 부연은 빼고 짧게');
+  assert.ok(blog!.unmeasuredReason!.length <= 47);
+});
+
+test('점수가 매겨진 축에는 사유를 붙이지 않는다', () => {
+  const axes = scoreByAxis([f('a', 'blog', 'good')]);
+  assert.equal(axes.find((x) => x.axis === 'blog')?.unmeasuredReason, null);
+});
