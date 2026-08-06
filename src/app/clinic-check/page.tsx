@@ -18,7 +18,7 @@ import { SITE_NAME } from '@/dev/lib/seo/site';
  * ⚠️ 제목에 '| 닥터포스트'를 직접 붙이지 않는다 — layout 의 title.template 이 붙인다.
  */
 
-const PAGE_TITLE = '병원 온라인 노출 무료진단 — 블로그·홈페이지·AI 검색 실측';
+const PAGE_TITLE = '병원 온라인 노출 무료진단 — 플레이스·블로그·홈페이지·AI 검색 실측';
 
 const PAGE_DESCRIPTION =
   '병원 이름만 넣으면 네이버 블로그 노출, 홈페이지 접속·검색 설정, AI 검색 인용 여부, 의료광고법에서 자주 지적되는 표현까지 공개 자료로 조회해 무료로 진단해 드립니다.';
@@ -103,8 +103,10 @@ export default function ClinicCheckPage() {
           <div className="mt-5 space-y-5 text-[15px] sm:text-base leading-relaxed text-[#4a4f55]">
             <p>
               닥터포스트 무료진단은 병원 이름 하나로{' '}
-              <b className="font-bold text-[#202020]">네이버 블로그 · AI 검색 · 홈페이지 · 의료광고법 표현</b>{' '}
-              네 축을 공개된 자료에서 실제로 조회해 지금 상태를 정리해 드립니다. 행정안전부가 공표한
+              <b className="font-bold text-[#202020]">
+                네이버 플레이스 · 네이버 블로그 · 인스타·유튜브 · 홈페이지 · AI 검색 · 의료광고법 표현
+              </b>{' '}
+              여섯 축을 공개된 자료에서 실제로 조회해 지금 상태를 정리해 드립니다. 행정안전부가 공표한
               의료기관 정보로 병원을 특정하기 때문에 원장님이 자료를 준비하실 필요가 없고,
               회원가입이나 결제도 필요하지 않습니다.
             </p>

@@ -284,7 +284,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-[15px] sm:text-lg text-[#4a4f55] mt-3 sm:mt-5 leading-relaxed">
-            블로그·홈페이지·AI 검색 노출·의료광고법 표현까지
+            네이버 플레이스·블로그·인스타·유튜브·홈페이지·AI 검색까지
             <br className="hidden sm:block" />
             공개된 자료로 실제로 조회해서 무료로 진단해 드려요.
           </p>

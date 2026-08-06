@@ -216,7 +216,7 @@ export default function ClinicCheckClient() {
             <br className="sm:hidden" /> 온라인 노출 성적을 알려드려요
           </h1>
           <p className="text-[#4a4f55] mt-3 text-[15px] sm:text-base leading-relaxed">
-            블로그·홈페이지·AI 검색 노출·의료광고법 표현까지
+            네이버 플레이스·블로그·인스타·유튜브·홈페이지·AI 검색까지
             <br className="hidden sm:block" />
             공개된 자료로 실제로 조회해서 무료로 진단해 드려요.
           </p>
@@ -292,7 +292,7 @@ export default function ClinicCheckClient() {
           <div className="flex items-center justify-center gap-2 py-12">
             <span className="w-5 h-5 border-2 border-[#ff4628] border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-[#5b6573]">
-              {lookupLoading ? '등록된 병원 정보를 찾는 중…' : '블로그·홈페이지·AI 검색을 실제로 조회하는 중… (최대 1분)'}
+              {lookupLoading ? '등록된 병원 정보를 찾는 중…' : '플레이스·블로그·홈페이지·AI 검색을 실제로 조회하는 중… (최대 1분)'}
             </span>
           </div>
         )}

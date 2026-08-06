@@ -21,6 +21,7 @@ import { cacheGet, cacheSet } from '@/content/lib/scoreboard/cache';
 import { hashClientIp } from '@/content/lib/clinic-diagnosis/email-lead';
 import { ANON_ID_COOKIE, isValidAnonId } from '@/content/lib/funnel-events';
 import { isBotUserAgent } from '@/content/lib/bot-user-agent';
+import { INTERNAL_COOKIE, INTERNAL_COOKIE_VALUE } from '@/content/lib/internal-traffic';
 import type { ClinicCandidate, DiagnosisReport } from '@/content/lib/clinic-diagnosis/types';
 
 export const dynamic = 'force-dynamic';
@@ -173,6 +174,12 @@ function readRequester(req: NextRequest): Requester {
     //   반복 조회한 것처럼 보인다.
     ipHash: salt && ip && ip !== 'unknown' ? hashClientIp(ip, salt) : null,
     isBot: isBotUserAgent(ua),
+    // ★내부 트래픽(우리·대표 본인) 표시 (2026-08-06).
+    //   funnel_events 는 이 쿠키로 내부를 걸러내는데 진단 리드는 안 걸러서,
+    //   같은 날 진단이 7건으로 잡히고 그중 6건이 우리였다(대표 2·나 4).
+    //   건수만 부풀리는 게 아니라 harvest_diagnosed 가 그 병원을 신규 리드로
+    //   영업DB에 올려버린다 — 우리가 테스트로 조회한 병원에 영업 메일이 나간다.
+    isInternal: req.cookies.get(INTERNAL_COOKIE)?.value === INTERNAL_COOKIE_VALUE,
   };
 }
 
@@ -180,6 +187,7 @@ interface Requester {
   readonly anonId: string | null;
   readonly ipHash: string | null;
   readonly isBot: boolean;
+  readonly isInternal: boolean;
 }
 
 /**
@@ -220,6 +228,7 @@ async function saveLead(
       anon_id: requester.anonId,
       ip_hash: requester.ipHash,
       is_bot: requester.isBot,
+      is_internal: requester.isInternal,
     });
     // 마이그레이션 061 적용 전에 배포되면 새 컬럼이 없어 insert 가 통째로 거부된다.
     // 그 사이 리드를 잃지 않도록 기존 컬럼만으로 한 번 더 넣는다.
