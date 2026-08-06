@@ -506,6 +506,8 @@ export default function AppPage() {
   const [blocked, setBlocked] = useState(false);
   // 무료 체험 잔여 횟수 (유료/관리자=null → 배지 미표시)
   const [freeCredits, setFreeCredits] = useState<number | null>(null);
+  /** 무료 크레딧 사용 기한 (migration 062). null = 무기한(기존 회원). */
+  const [freeCreditsDeadline, setFreeCreditsDeadline] = useState<Date | null>(null);
   // 세션 갱신 중 일시적 null → 홈 리다이렉트 방지용 (한 번이라도 로그인됐으면 true)
   const wasEverLoggedInRef = useRef(false);
   // 자동저장 디바운스 타이머
@@ -560,7 +562,7 @@ export default function AppPage() {
     }
     let cancelled = false;
     supabase.from('profiles')
-      .select('plan, usage_count, hospital_type, hospital_name, hospital_address, full_name, phone, position, plan_expires_at, free_credits')
+      .select('plan, usage_count, hospital_type, hospital_name, hospital_address, full_name, phone, position, plan_expires_at, free_credits, free_credits_expires_at')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -571,6 +573,7 @@ export default function AppPage() {
           full_name?: string | null; phone?: string | null; position?: string | null;
           plan_expires_at?: string | null;
           free_credits?: number | null;
+          free_credits_expires_at?: string | null;
         } | null;
 
         const incomplete =
@@ -592,12 +595,23 @@ export default function AppPage() {
           if (!isClientAdmin(user.email) && !incomplete && !isActivePlan(profile.plan, profile.plan_expires_at ?? null)) {
             // 무료 2회 크레딧(2026-07-04): 잔여가 있으면 차단하지 않고 체험 배지로 안내,
             // 소진했을 때만 결제 유도 차단 배너
+            // 기한(가입 후 7일, migration 062)이 지났으면 잔여가 남아 있어도 못 쓴다.
+            // NULL 은 무기한(기존 회원)이라 만료로 보면 안 된다.
+            const expiresAt = profile.free_credits_expires_at
+              ? new Date(profile.free_credits_expires_at)
+              : null;
+            const expired = expiresAt !== null && expiresAt.getTime() <= Date.now();
             const fc = profile.free_credits ?? 0;
-            if (fc > 0) {
+            if (fc > 0 && !expired) {
               setFreeCredits(fc);
+              setFreeCreditsDeadline(expiresAt);
             } else {
               setBlocked(true);
-              setError('무료 체험 2회를 모두 사용하셨어요. 구독하면 매달 계속 이용할 수 있어요.');
+              setError(
+                expired
+                  ? '가입 시 드린 무료 체험 2회의 사용 기한이 지났어요. 구독하면 바로 이어서 이용할 수 있어요.'
+                  : '무료 체험 2회를 모두 사용하셨어요. 구독하면 매달 계속 이용할 수 있어요.',
+              );
             }
           }
 
@@ -1355,6 +1369,16 @@ export default function AppPage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-[#eafaf0] border border-[#c9ead2] rounded-2xl px-4 py-3">
             <span className="inline-flex items-center gap-1.5 text-sm font-extrabold text-[#1c7c3d]">
               🎁 무료 체험 {freeCredits}회 남음
+              {freeCreditsDeadline && (
+                <span className="font-bold text-[#3f5468]">
+                  ·{' '}
+                  {freeCreditsDeadline.toLocaleDateString('ko-KR', {
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                  까지
+                </span>
+              )}
             </span>
             <span className="text-xs sm:text-sm text-[#3f5468]">
               키워드만 입력하면 의료광고법 검수까지 끝난 글이 60초 안에 나와요. 지금 바로 써보세요.

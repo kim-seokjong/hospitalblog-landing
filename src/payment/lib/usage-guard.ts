@@ -173,6 +173,9 @@ interface FreeCreditProfile {
 const FREE_CREDITS_TOTAL = 2
 const FREE_EXHAUSTED_MESSAGE =
   '무료 체험 2회를 모두 사용하셨어요. 요금제에서 구독하시면 매달 계속 이용할 수 있습니다.'
+/** 기한(가입 후 7일, migration 062)이 지난 경우 — 아직 안 쓴 회원이라 문구가 달라야 한다. */
+const FREE_EXPIRED_MESSAGE =
+  '가입 시 드린 무료 체험 2회의 사용 기한이 지났어요. 요금제에서 구독하시면 바로 이어서 이용할 수 있습니다.'
 
 async function consumeFreeCredit(
   admin: ReturnType<typeof createAdminClient>,
@@ -226,12 +229,15 @@ async function consumeFreeCredit(
 
   // ③ 원자적 차감 (잔여 > 0 조건부 UPDATE — 동시 요청 이중차감 방지)
   const { data, error } = await admin.rpc('consume_free_credit', { p_user_id: userId })
-  const result = data as { ok?: boolean; remaining?: number } | null
+  const result = data as { ok?: boolean; remaining?: number; reason?: string } | null
   if (error || !result?.ok) {
+    // 만료와 소진은 다른 사유다 (migration 062). 뭉뚱그리면 한 번도 안 쓴 회원에게
+    // "2회를 모두 사용하셨어요"라는 틀린 말이 나간다.
+    const expired = result?.reason === 'expired'
     return {
       ok: false,
       reason: 'plan_required',
-      message: FREE_EXHAUSTED_MESSAGE,
+      message: expired ? FREE_EXPIRED_MESSAGE : FREE_EXHAUSTED_MESSAGE,
       status: 402,
       userId,
     }

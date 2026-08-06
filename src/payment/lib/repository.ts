@@ -443,6 +443,15 @@ export async function activateUserPlan(params: {
       plan_expires_at: params.expiresAt,
       usage_count: 0,
       usage_reset_at: new Date().toISOString(),
+      // ★가입 무료 2회 회수 (2026-08-06).
+      //   무료 크레딧은 **결제를 해볼지 정하라고 주는 것**이라, 한 번이라도 결제하면
+      //   역할이 끝난다. 그런데 회수하는 코드가 어디에도 없어서, 유료로 쓰다 만료된
+      //   계정에 무료 2회가 그대로 남아 있었다(실측: 바르다권치과 — 유료로 9회 쓰고
+      //   7/8 만료인데 free_credits 2). 그 상태면 만료 뒤에도 무료로 2편을 더 뽑는다.
+      //   여기에 거는 이유 = 이 함수가 최초 결제·웹훅·정기결제 크론이 모두 지나는
+      //   단일 관문이라 어떤 결제 경로도 빠지지 않는다.
+      //   갱신 때도 0 을 다시 쓰지만 이미 0 이므로 무해하다.
+      free_credits: 0,
       updated_at: new Date().toISOString(),
     })
   if (error) throw new Error(`플랜 활성화 실패: ${error.message}`)
