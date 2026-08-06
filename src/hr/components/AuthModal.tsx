@@ -499,6 +499,18 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
           {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
           {message && <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg">{message}</p>}
 
+          {/* 가입 혜택과 기한 안내 (migration 062).
+              가입 완료 전용 화면이 없어 모달이 닫히면 바로 /app 으로 넘어간다 —
+              기한을 여기서 말하지 않으면 7일이 지나 만료된 뒤에야 알게 된다.
+              /app 체험 배지에도 같은 기한이 다시 보인다. */}
+          {mode === 'signup' && (
+            <p className="text-xs text-center text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 leading-relaxed">
+              가입하시면 <span className="font-bold text-gray-900">글 작성 2회를 무료로</span> 드려요.
+              <br />
+              <span className="font-bold text-gray-900">가입일로부터 7일 안에</span> 사용하시면 됩니다.
+            </p>
+          )}
+
           <button
             onClick={mode === 'login' ? handleLogin : handleSignup}
             disabled={loading}
