@@ -185,7 +185,7 @@ export default function LandingPage() {
 
       {/* 상단 컬러 스와치 바 */}
       <div className="flex h-2">
-        <i className="flex-1 bg-[#ff4628]" />
+        <i className="flex-1 bg-[#e52000]" />
         <i className="flex-1 bg-[#202020]" />
         <i className="flex-1 bg-[#b8c8d7]" />
       </div>
@@ -197,10 +197,10 @@ export default function LandingPage() {
             <Logo variant="light" />
           </a>
           <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-[#4a4f55]">
-            <a href="#features" className="hover:text-[#ff4628] transition-colors">기능</a>
-            <a href="#how" className="hover:text-[#ff4628] transition-colors">사용법</a>
-            <a href="#clinicflix" className="hover:text-[#ff4628] transition-colors">클리닉픽스</a>
-            <a href="#pricing" className="hover:text-[#ff4628] transition-colors">요금제</a>
+            <a href="#features" className="hover:text-[#e52000] transition-colors">기능</a>
+            <a href="#how" className="hover:text-[#e52000] transition-colors">사용법</a>
+            <a href="#clinicflix" className="hover:text-[#e52000] transition-colors">클리닉픽스</a>
+            <a href="#pricing" className="hover:text-[#e52000] transition-colors">요금제</a>
           </nav>
           <div className="flex items-center gap-2 flex-shrink-0">
             {authChecked && (
@@ -209,7 +209,7 @@ export default function LandingPage() {
                   <span className="text-xs text-[#8a93a0] hidden md:block">{user.email}</span>
                   <button
                     onClick={() => router.push('/app')}
-                    className="px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white text-xs md:text-sm font-bold rounded-lg transition-all hover:brightness-105 shadow-[0_8px_24px_-12px_rgba(255,70,40,0.5)]"
+                    className="px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white text-xs md:text-sm font-bold rounded-lg transition-all hover:brightness-105 shadow-[0_8px_24px_-12px_rgba(255,70,40,0.5)]"
                   >
                     앱 열기
                   </button>
@@ -224,13 +224,13 @@ export default function LandingPage() {
                 <>
                   <button
                     onClick={handleLogin}
-                    className="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-semibold text-[#4a4f55] hover:text-[#ff4628] transition-colors"
+                    className="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-semibold text-[#4a4f55] hover:text-[#e52000] transition-colors"
                   >
                     로그인
                   </button>
                   <button
                     onClick={handleStart}
-                    className="px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white text-xs md:text-sm font-bold rounded-lg transition-all hover:brightness-105 shadow-[0_8px_24px_-12px_rgba(255,70,40,0.5)]"
+                    className="px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white text-xs md:text-sm font-bold rounded-lg transition-all hover:brightness-105 shadow-[0_8px_24px_-12px_rgba(255,70,40,0.5)]"
                   >
                     회원가입하기
                   </button>
@@ -270,7 +270,7 @@ export default function LandingPage() {
         />
         <div className="relative max-w-3xl mx-auto px-5 sm:px-6 pt-9 sm:pt-20 pb-10 sm:pb-16 text-center">
           <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#202020] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full">
-            <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628]" />
+            <span className="w-[7px] h-[7px] rounded-full bg-[#e52000]" />
             무료 진단 · 회원가입 없이 30초
           </span>
 
@@ -280,7 +280,7 @@ export default function LandingPage() {
           >
             병원 이름만 넣으면
             <br />
-            <span className="text-[#ff4628]">온라인 노출 성적</span>을 알려드려요
+            <span className="text-[#e52000]">온라인 노출 성적</span>을 알려드려요
           </h1>
 
           <p className="text-[15px] sm:text-lg text-[#4a4f55] mt-3 sm:mt-5 leading-relaxed">
@@ -302,7 +302,7 @@ export default function LandingPage() {
                 onChange={(e) => handleDiagnoseChange(e.target.value)}
                 placeholder="병원 이름 (예: 브이비성형외과의원)"
                 autoComplete="organization"
-                className="w-full px-4 py-3.5 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] text-[15px]"
+                className="w-full px-4 py-3.5 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#e52000] text-[15px]"
                 style={{ colorScheme: 'light' }}
                 maxLength={60}
                 required
@@ -310,7 +310,7 @@ export default function LandingPage() {
               <button
                 type="submit"
                 disabled={diagnoseQuery.trim().length < 2}
-                className="flex-shrink-0 px-7 py-3.5 min-h-[44px] bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-shrink-0 px-7 py-3.5 min-h-[44px] bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white font-bold rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 무료 진단하기
               </button>
@@ -340,7 +340,7 @@ export default function LandingPage() {
           {/* 스크롤 유도 — 아래에 제품 설명이 이어진다는 표식 */}
           <a
             href="#product"
-            className="inline-flex flex-col items-center gap-1 mt-7 sm:mt-10 text-[13px] font-semibold text-[#5b6573] hover:text-[#ff4628] transition-colors"
+            className="inline-flex flex-col items-center gap-1 mt-7 sm:mt-10 text-[13px] font-semibold text-[#5b6573] hover:text-[#e52000] transition-colors"
           >
             닥터포스트가 어떤 서비스인지 보기
             <span aria-hidden="true" className="dp-float-a text-lg leading-none">↓</span>
@@ -363,7 +363,7 @@ export default function LandingPage() {
               */}
               <p className="mt-2.5 flex justify-center lg:justify-start">
                 <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#3f5468] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full text-center leading-relaxed">
-                  <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628] flex-none" />
+                  <span className="w-[7px] h-[7px] rounded-full bg-[#e52000] flex-none" />
                   Claude AI 작성 · 네이버·구글 SEO · AI 검색(GEO) 최적화
                 </span>
               </p>
@@ -373,7 +373,7 @@ export default function LandingPage() {
               >
                 잘 쓰는 건 기본,
                 <br />
-                <span className="text-[#ff4628]">안 걸리는 게</span> 실력입니다.
+                <span className="text-[#e52000]">안 걸리는 게</span> 실력입니다.
               </h2>
               <p className="text-base sm:text-[18px] text-[#4a4f55] mt-4 leading-relaxed">
                 키워드 한 줄이면 병원 블로그 글이 60초 만에 나옵니다.<br className="hidden sm:block" />
@@ -382,14 +382,14 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mt-7">
                 <button
                   onClick={handleStart}
-                  className="px-7 sm:px-8 py-3.5 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 hover:-translate-y-0.5"
+                  className="px-7 sm:px-8 py-3.5 bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white font-bold text-base rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 hover:-translate-y-0.5"
                 >
                   회원가입하고 글 생성 →
                 </button>
               </div>
               {/* 가입 혜택 배지 — 상시 혜택(프로모 아님) */}
               <p className="mt-4 flex justify-center lg:justify-start">
-                <span className="inline-block bg-[#ff4628]/10 border border-[#ff4628]/25 text-[#e63a1c] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
+                <span className="inline-block bg-[#e52000]/10 border border-[#e52000]/25 text-[#c91b00] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
                   🎁 가입하면 블로그 글 <b className="font-extrabold">2회 무료 생성</b> · 카드 등록 없음
                 </span>
               </p>
@@ -409,7 +409,7 @@ export default function LandingPage() {
               { num: '의료광고법', label: '발행 전 3중 검수' },
             ].map(({ num, label }) => (
               <div key={num} className="dp-lift bg-white border border-[#dbe2ea] rounded-2xl p-6">
-                <b className="block text-2xl sm:text-[30px] font-black text-[#ff4628]">{num}</b>
+                <b className="block text-2xl sm:text-[30px] font-black text-[#e52000]">{num}</b>
                 <span className="block text-sm font-semibold text-[#8a93a0] mt-1.5">{label}</span>
               </div>
             ))}
@@ -420,7 +420,7 @@ export default function LandingPage() {
       {/* 섹션 1: 문제 제기 */}
       <section className="py-20 sm:py-[110px] bg-[#eef2f6]">
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
-          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">병원 블로그의 현실</p>
+          <p className="text-center text-[13px] font-extrabold text-[#e52000] tracking-[2px]">병원 블로그의 현실</p>
           <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             이런 고민, 한 번쯤 있으셨죠?
           </h2>
@@ -449,7 +449,7 @@ export default function LandingPage() {
       {/* 섹션 2: 비교표 */}
       <section className="py-20 sm:py-[110px] bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
-          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">무엇이 다른가</p>
+          <p className="text-center text-[13px] font-extrabold text-[#e52000] tracking-[2px]">무엇이 다른가</p>
           <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             직접 쓸까, 맡길까, 아니면 닥터포스트
           </h2>
@@ -461,7 +461,7 @@ export default function LandingPage() {
                   <th className="text-center text-sm font-extrabold text-[#202020] bg-[#eef2f6] px-5 py-4 border-b border-[#dbe2ea]">　</th>
                   <th className="text-center text-sm font-extrabold text-[#202020] bg-[#eef2f6] px-5 py-4 border-b border-[#dbe2ea]">원장님이 직접</th>
                   <th className="text-center text-sm font-extrabold text-[#202020] bg-[#eef2f6] px-5 py-4 border-b border-[#dbe2ea]">외주 대행사</th>
-                  <th className="text-center text-sm font-extrabold text-white px-5 py-4 border-b border-[#dbe2ea] bg-gradient-to-br from-[#ff4628] to-[#e63a1c]">닥터포스트</th>
+                  <th className="text-center text-sm font-extrabold text-white px-5 py-4 border-b border-[#dbe2ea] bg-gradient-to-br from-[#e52000] to-[#c91b00]">닥터포스트</th>
                 </tr>
               </thead>
               <tbody>
@@ -511,7 +511,7 @@ export default function LandingPage() {
             ].map(({ problem, solution }) => (
               <div key={problem} className="flex items-center gap-3.5 bg-white border border-[#dbe2ea] rounded-2xl px-5 py-4">
                 <span className="flex-none bg-[#eef2f6] text-[#3f5468] font-bold text-[13px] px-3 py-2 rounded-lg min-w-[100px] sm:min-w-[110px] text-center">{problem}</span>
-                <span className="text-[#ff4628] font-black text-lg flex-none">→</span>
+                <span className="text-[#e52000] font-black text-lg flex-none">→</span>
                 <span className="font-bold text-sm text-[#202020] leading-snug">{solution}</span>
               </div>
             ))}
@@ -528,7 +528,7 @@ export default function LandingPage() {
           <p className="text-center text-[#4a4f55] mt-3 mb-10 sm:mb-12 text-base">복잡한 설정 없이 바로 사용하세요.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              { step: '1', title: '키워드 입력', desc: '병원 시술명이나 질환명을 입력하세요. 예) 레이저 토닝', accent: 'text-[#ff4628]' },
+              { step: '1', title: '키워드 입력', desc: '병원 시술명이나 질환명을 입력하세요. 예) 레이저 토닝', accent: 'text-[#e52000]' },
               { step: '2', title: 'AI 자동 작성', desc: 'Claude AI가 네이버 SEO에 맞춰 제목·본문·태그까지 생성해요.', accent: 'text-[#3f5468]' },
               { step: '3', title: '검수 통과 후 발행', desc: '의료광고법 검수를 통과한 글을 복사해 네이버 블로그에 붙여넣으면 끝이에요.', accent: 'text-[#202020]' },
             ].map(({ step, title, desc, accent }) => (
@@ -554,7 +554,7 @@ export default function LandingPage() {
                 </div>
                 <div className="flex-1 flex justify-center">
                   <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-md border border-[#dbe2ea] text-xs text-[#8a93a0]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#ff4628] animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#e52000] animate-pulse" />
                     닥터포스트 · 실시간 시연
                   </div>
                 </div>
@@ -664,11 +664,11 @@ export default function LandingPage() {
               return (
               <div key={plan.id} className={`relative p-7 sm:p-8 rounded-2xl bg-white flex flex-col ${
                 highlight
-                  ? 'border-2 border-[#ff4628] shadow-[0_20px_46px_-16px_rgba(255,70,40,0.34)]'
+                  ? 'border-2 border-[#e52000] shadow-[0_20px_46px_-16px_rgba(255,70,40,0.34)]'
                   : 'border border-[#dbe2ea]'
               }`}>
                 {highlight && (
-                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-extrabold text-white bg-gradient-to-br from-[#ff4628] to-[#e63a1c] px-4 py-1.5 rounded-full">
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-extrabold text-white bg-gradient-to-br from-[#e52000] to-[#c91b00] px-4 py-1.5 rounded-full">
                     가장 인기
                   </span>
                 )}
@@ -689,7 +689,7 @@ export default function LandingPage() {
                 <ul className="space-y-2.5 mb-8 flex-1">
                   {features.map((f) => (
                     <li key={f} className="flex items-center gap-2 text-sm text-[#4a4f55]">
-                      <span className="text-[#ff4628] font-black flex-shrink-0">✓</span> {f}
+                      <span className="text-[#e52000] font-black flex-shrink-0">✓</span> {f}
                     </li>
                   ))}
                 </ul>
@@ -697,7 +697,7 @@ export default function LandingPage() {
                   onClick={handlePricingClick}
                   className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
                     highlight
-                      ? 'bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white hover:brightness-105 shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)]'
+                      ? 'bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white hover:brightness-105 shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)]'
                       : 'bg-white border border-[#dbe2ea] text-[#202020] hover:bg-[#eef2f6]'
                   }`}
                 >
@@ -727,13 +727,13 @@ export default function LandingPage() {
           </p>
           <button
             onClick={handlePricingClick}
-            className="px-9 sm:px-10 py-3.5 sm:py-4 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.40)] hover:brightness-105 hover:-translate-y-0.5"
+            className="px-9 sm:px-10 py-3.5 sm:py-4 bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.40)] hover:brightness-105 hover:-translate-y-0.5"
           >
             시작하기 →
           </button>
           {/* 가입 혜택 배지 — 히어로와 동일 문구(상시 혜택, 프로모 아님), 다크 배경용 톤 */}
           <p className="mt-5 flex justify-center">
-            <span className="inline-block bg-[#ff4628]/15 border border-[#ff4628]/40 text-[#ffb4a8] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
+            <span className="inline-block bg-[#e52000]/15 border border-[#e52000]/40 text-[#ffb4a8] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
               🎁 가입하면 블로그 글 <b className="text-white font-extrabold">2회 무료 생성</b> · 카드 등록 없음
             </span>
           </p>
@@ -748,9 +748,9 @@ export default function LandingPage() {
         <p className="mb-1">통신판매업 신고번호: 제2026-대구수성구-0497호</p>
         <p className="mb-3">연락처: 070-8095-3320 · 이메일: terro6936@naver.com</p>
         <div className="flex flex-wrap justify-center gap-4">
-          <a href="/terms" className="hover:text-[#ff4628] transition-colors">이용약관</a>
-          <a href="/privacy" className="hover:text-[#ff4628] transition-colors">개인정보처리방침</a>
-          <a href="/refund" className="hover:text-[#ff4628] transition-colors">환불정책</a>
+          <a href="/terms" className="hover:text-[#e52000] transition-colors">이용약관</a>
+          <a href="/privacy" className="hover:text-[#e52000] transition-colors">개인정보처리방침</a>
+          <a href="/refund" className="hover:text-[#e52000] transition-colors">환불정책</a>
         </div>
       </footer>
 

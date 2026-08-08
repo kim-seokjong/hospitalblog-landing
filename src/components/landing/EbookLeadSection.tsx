@@ -19,7 +19,7 @@ export default function EbookLeadSection() {
   const [downloadUrl, setDownloadUrl] = useState('')
 
   const inputClass =
-    'w-full px-4 py-3 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] text-[15px]'
+    'w-full px-4 py-3 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#e52000] text-[15px]'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,7 +55,7 @@ export default function EbookLeadSection() {
             <h2 className="text-[26px] sm:text-[34px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
               병원 블로그,
               <br />
-              이 표현 쓰면 <span className="text-[#ff4628]">처분받습니다</span>
+              이 표현 쓰면 <span className="text-[#e52000]">처분받습니다</span>
             </h2>
             <p className="text-[#4a4f55] mt-4 text-[15px] sm:text-base leading-relaxed">
               보건복지부 공식 통계로 정리한 <b>의료광고법 핵심 요약판(무료 PDF)</b>을 보내드려요.
@@ -78,7 +78,7 @@ export default function EbookLeadSection() {
                   href={downloadUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block mt-5 px-7 py-3.5 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold rounded-xl shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 transition-all"
+                  className="inline-block mt-5 px-7 py-3.5 bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white font-bold rounded-xl shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 transition-all"
                 >
                   요약판 PDF 다운로드
                 </a>
@@ -125,11 +125,11 @@ export default function EbookLeadSection() {
                   <input type="checkbox" checked={marketingConsent} onChange={(e) => setMarketingConsent(e.target.checked)} className="mt-0.5" />
                   <span>(선택) 병원 마케팅 소식·서비스 안내 수신에 동의합니다.</span>
                 </label>
-                {status === 'error' && <p className="text-[13px] text-[#e63a1c]">{errorMsg}</p>}
+                {status === 'error' && <p className="text-[13px] text-[#c91b00]">{errorMsg}</p>}
                 <button
                   type="submit"
                   disabled={!consent || status === 'loading'}
-                  className="w-full py-3.5 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3.5 bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white font-bold rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {status === 'loading' ? '준비 중…' : '무료 요약판 받기'}
                 </button>

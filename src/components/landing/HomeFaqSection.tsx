@@ -51,7 +51,7 @@ export default function HomeFaqSection() {
                   </span>
                   <span
                     aria-hidden="true"
-                    className={`shrink-0 text-[#ff4628] transition-transform duration-200 ${
+                    className={`shrink-0 text-[#e52000] transition-transform duration-200 ${
                       isOpen ? 'rotate-180' : ''
                     }`}
                   >

@@ -135,10 +135,10 @@ export default function HeroMockup() {
                 {kwText}
                 {/* impeccable-disable-next-line blinking-cursor -- 제품 목업의 입력창 타이핑 시연이라
                     캐럿이 있는 쪽이 실제 화면에 가깝다. 히어로 장식용 가짜 프롬프트가 아니다. */}
-                <span className="ml-0.5 inline-block w-[2px] h-4 bg-[#ff4628] dp-blink" />
+                <span className="ml-0.5 inline-block w-[2px] h-4 bg-[#e52000] dp-blink" />
               </div>
               <span
-                className={`flex-none px-4 py-2.5 text-white text-sm font-bold rounded-lg transition-all bg-gradient-to-br from-[#ff4628] to-[#e63a1c] ${
+                className={`flex-none px-4 py-2.5 text-white text-sm font-bold rounded-lg transition-all bg-gradient-to-br from-[#e52000] to-[#c91b00] ${
                   generating ? 'scale-95 brightness-90' : ''
                 }`}
               >
@@ -167,7 +167,7 @@ export default function HeroMockup() {
                   style={{ transitionDelay: showBody ? `${si * 220}ms` : '0ms' }}
                 >
                   <p className="text-[12px] font-bold text-[#3f5468] flex items-center gap-1.5">
-                    <span className={`w-1 h-3 rounded-full ${si === 0 ? 'bg-[#ff4628]' : 'bg-[#b8c8d7]'}`} />
+                    <span className={`w-1 h-3 rounded-full ${si === 0 ? 'bg-[#e52000]' : 'bg-[#b8c8d7]'}`} />
                     {sec}
                   </p>
                   <div className="mt-1.5 space-y-1.5">
@@ -201,7 +201,7 @@ export default function HeroMockup() {
       <span className="dp-float-a absolute -top-3 -left-2 sm:-left-5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white border border-[#c9ead2] text-[12px] font-extrabold text-[#1c7c3d] shadow-[0_10px_26px_-12px_rgba(28,124,61,0.35)]">
         의료광고법 준수 ✓
       </span>
-      <span className="dp-float-b absolute top-[52%] -right-2 sm:-right-5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-[12px] font-extrabold text-white shadow-[0_10px_26px_-12px_rgba(255,70,40,0.5)]">
+      <span className="dp-float-b absolute top-[52%] -right-2 sm:-right-5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-br from-[#e52000] to-[#c91b00] text-[12px] font-extrabold text-white shadow-[0_10px_26px_-12px_rgba(255,70,40,0.5)]">
         ⚡ 60초 생성
       </span>
       <span className="dp-float-c absolute -bottom-3 left-4 sm:left-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#202020] text-[12px] font-extrabold text-white shadow-[0_10px_26px_-12px_rgba(32,32,32,0.5)]">

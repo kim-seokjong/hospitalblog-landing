@@ -60,7 +60,7 @@ export default function BlindTestSection() {
               key={name}
               className={`rounded-2xl p-6 sm:p-7 ${
                 highlight
-                  ? 'bg-[#2b2320] border-2 border-[#ff4628] shadow-[0_20px_46px_-16px_rgba(255,70,40,0.35)]'
+                  ? 'bg-[#2b2320] border-2 border-[#e52000] shadow-[0_20px_46px_-16px_rgba(255,70,40,0.35)]'
                   : 'bg-[#2a2a2a] border border-[#3a3a3a]'
               }`}
             >
@@ -74,7 +74,7 @@ export default function BlindTestSection() {
               {/* 스코어 바 */}
               <div className="mt-4 h-2.5 rounded-full bg-[#3a3a3a] overflow-hidden">
                 <div
-                  className={`h-full rounded-full ${highlight ? 'bg-gradient-to-r from-[#ff4628] to-[#ff6a52]' : 'bg-[#5a6470]'}`}
+                  className={`h-full rounded-full ${highlight ? 'bg-gradient-to-r from-[#e52000] to-[#ff6a52]' : 'bg-[#5a6470]'}`}
                   style={{ width: `${(score / max) * 100}%` }}
                 />
               </div>

@@ -15,7 +15,7 @@ import sampleText from '../../../public/clinicflix-samples/sample-text.json';
  * plans.ts 는 읽기 전용으로만 소비한다 (가격 하드코딩 금지).
  */
 
-const ACCENT = '#ff4628';
+const ACCENT = '#e52000';
 
 const SAMPLE_BASE = '/clinicflix-samples';
 
@@ -174,7 +174,7 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
           <button
             onClick={onCtaClick}
             className="mt-7 px-9 sm:px-10 py-3.5 sm:py-4 text-white font-bold text-base sm:text-lg rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.40)] hover:brightness-105 hover:-translate-y-0.5"
-            style={{ backgroundImage: `linear-gradient(135deg, ${ACCENT}, #e63a1c)` }}
+            style={{ backgroundImage: `linear-gradient(135deg, ${ACCENT}, #c91b00)` }}
           >
             시작하기 →
           </button>

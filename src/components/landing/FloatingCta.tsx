@@ -42,7 +42,7 @@ export default function FloatingCta({ onClick }: FloatingCtaProps) {
       <button
         onClick={onClick}
         tabIndex={visible ? 0 : -1}
-        className="w-full sm:w-auto px-6 sm:px-7 py-3.5 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold text-base rounded-2xl sm:rounded-full transition-all shadow-[0_16px_40px_-12px_rgba(255,70,40,0.55)] hover:brightness-105 hover:-translate-y-0.5"
+        className="w-full sm:w-auto px-6 sm:px-7 py-3.5 bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white font-bold text-base rounded-2xl sm:rounded-full transition-all shadow-[0_16px_40px_-12px_rgba(255,70,40,0.55)] hover:brightness-105 hover:-translate-y-0.5"
       >
         무료로 시작하기 →
       </button>
