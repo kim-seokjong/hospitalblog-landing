@@ -108,7 +108,8 @@ export default function HeroMockup() {
   return (
     <div className="relative mx-auto w-full max-w-[480px]" aria-hidden="true">
       {/* 브라우저 창 프레임 */}
-      <div className="relative rounded-2xl overflow-hidden border border-[#dbe2ea] bg-white shadow-[0_24px_60px_-24px_rgba(32,32,32,0.28)]">
+      {/* 목업 액자는 '떠 있는 쪽'을 택한다 — 1px 테두리와 넓은 그림자를 겹쳐 쓰지 않는다. */}
+      <div className="relative rounded-2xl overflow-hidden bg-white shadow-[0_24px_60px_-24px_rgba(32,32,32,0.28)]">
         {/* 상단 바 — dot 3개 */}
         <div className="flex items-center gap-3 px-4 py-3 bg-[#eef2f6] border-b border-[#dbe2ea]">
           <div className="flex items-center gap-1.5">
@@ -117,7 +118,7 @@ export default function HeroMockup() {
             <span className="w-3 h-3 rounded-full bg-green-400" />
           </div>
           <div className="flex-1 flex justify-center">
-            <span className="px-3 py-1 bg-white rounded-md border border-[#dbe2ea] text-[11px] text-[#8a93a0]">
+            <span className="px-3 py-1 bg-white rounded-md border border-[#dbe2ea] text-[12px] text-[#8a93a0]">
               hospitalblog.kr
             </span>
           </div>
@@ -128,10 +129,12 @@ export default function HeroMockup() {
         <div className="p-4 sm:p-5 space-y-4 bg-[#fafbfc] min-h-[300px]">
           {/* 키워드 입력창 (라이브 타이핑) */}
           <div>
-            <p className="text-[11px] font-bold text-[#8a93a0] mb-1.5">키워드 입력</p>
+            <p className="text-[12px] font-bold text-[#8a93a0] mb-1.5">키워드 입력</p>
             <div className="flex items-center gap-2">
               <div className="flex-1 flex items-center px-3.5 py-2.5 bg-white border border-[#dbe2ea] rounded-lg text-sm font-semibold text-[#202020] min-h-[42px]">
                 {kwText}
+                {/* impeccable-disable-next-line blinking-cursor -- 제품 목업의 입력창 타이핑 시연이라
+                    캐럿이 있는 쪽이 실제 화면에 가깝다. 히어로 장식용 가짜 프롬프트가 아니다. */}
                 <span className="ml-0.5 inline-block w-[2px] h-4 bg-[#ff4628] dp-blink" />
               </div>
               <span
@@ -145,7 +148,7 @@ export default function HeroMockup() {
           </div>
 
           {/* 생성된 글 카드 */}
-          <div className="relative bg-white border border-[#dbe2ea] rounded-xl p-4 shadow-[0_8px_24px_-16px_rgba(32,32,32,0.20)]">
+          <div className="relative bg-white border border-[#dbe2ea] rounded-xl p-4">
             <p
               className={`text-[15px] font-extrabold text-[#202020] leading-snug transition-all duration-500 ${
                 showTitle ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1.5'
@@ -184,7 +187,7 @@ export default function HeroMockup() {
 
             {/* 검수 통과 스탬프 — 생성 마지막에 탁 찍힘 */}
             <span
-              className={`absolute -top-2.5 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#eafaf0] border border-[#c9ead2] text-[11px] font-extrabold text-[#1c7c3d] shadow-sm transition-all duration-300 ${
+              className={`absolute -top-2.5 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#eafaf0] border border-[#c9ead2] text-[12px] font-extrabold text-[#1c7c3d] shadow-sm transition-all duration-300 ${
                 showBadge ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
               }`}
             >

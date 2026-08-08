@@ -52,7 +52,6 @@ export default function EbookLeadSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-center bg-[#fff7f5] border border-[#ffd9cf] rounded-3xl p-7 sm:p-12">
           {/* 왼쪽: 소개 */}
           <div>
-            <p className="text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">FREE GUIDE</p>
             <h2 className="text-[26px] sm:text-[34px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
               병원 블로그,
               <br />

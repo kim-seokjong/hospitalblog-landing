@@ -19,7 +19,6 @@ export default function HomeFaqSection() {
   return (
     <section id="faq" aria-labelledby="home-faq-heading" className="py-16 sm:py-[84px] bg-[#eef2f6]">
       <div className="max-w-3xl mx-auto px-5 sm:px-6">
-        <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">FAQ</p>
         <h2
           id="home-faq-heading"
           className="text-center text-[28px] sm:text-4xl font-black text-[#202020] mt-2.5 leading-tight"
@@ -37,7 +36,7 @@ export default function HomeFaqSection() {
             return (
               <div
                 key={faq.question}
-                className="bg-white border border-[#dbe2ea] rounded-2xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
+                className="bg-white border border-[#dbe2ea] rounded-2xl overflow-hidden"
               >
                 <button
                   type="button"

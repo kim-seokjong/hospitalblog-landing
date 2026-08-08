@@ -269,7 +269,7 @@ export default function LandingPage() {
           }}
         />
         <div className="relative max-w-3xl mx-auto px-5 sm:px-6 pt-9 sm:pt-20 pb-10 sm:pb-16 text-center">
-          <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#202020] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+          <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#202020] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full">
             <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628]" />
             무료 진단 · 회원가입 없이 30초
           </span>
@@ -302,7 +302,7 @@ export default function LandingPage() {
                 onChange={(e) => handleDiagnoseChange(e.target.value)}
                 placeholder="병원 이름 (예: 브이비성형외과의원)"
                 autoComplete="organization"
-                className="w-full px-4 py-3.5 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] text-[15px] shadow-[0_8px_24px_-16px_rgba(32,32,32,0.20)]"
+                className="w-full px-4 py-3.5 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#ff4628] text-[15px]"
                 style={{ colorScheme: 'light' }}
                 maxLength={60}
                 required
@@ -333,7 +333,7 @@ export default function LandingPage() {
             <span className="block mt-1 [text-wrap:balance]">진단은 회원가입 없이 무료입니다.</span>
           </p>
 
-          <p className="text-[11px] text-[#8a93a0] mt-2.5 leading-relaxed">
+          <p className="text-[12px] text-[#8a93a0] mt-2.5 leading-relaxed">
             행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 무료
           </p>
 
@@ -356,14 +356,13 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-center gap-10 lg:gap-12">
             <div className="text-center lg:text-left">
-              <p className="text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">Product</p>
               {/*
                 구 히어로 배지 복원 — 첫 화면을 진단으로 교체하면서 랜딩 전체에서
                 '네이버·구글·SEO·GEO' 표기가 함께 사라졌다(검색 문맥 손실). 히어로 구조는
                 그대로 두고 제품 섹션 소제목 위에 한 줄로 되살린다.
               */}
               <p className="mt-2.5 flex justify-center lg:justify-start">
-                <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#3f5468] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] text-center leading-relaxed">
+                <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#3f5468] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full text-center leading-relaxed">
                   <span className="w-[7px] h-[7px] rounded-full bg-[#ff4628] flex-none" />
                   Claude AI 작성 · 네이버·구글 SEO · AI 검색(GEO) 최적화
                 </span>
@@ -409,7 +408,7 @@ export default function LandingPage() {
               { num: '네이버·구글·AI', label: '3대 검색 최적화' },
               { num: '의료광고법', label: '발행 전 3중 검수' },
             ].map(({ num, label }) => (
-              <div key={num} className="dp-lift bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+              <div key={num} className="dp-lift bg-white border border-[#dbe2ea] rounded-2xl p-6">
                 <b className="block text-2xl sm:text-[30px] font-black text-[#ff4628]">{num}</b>
                 <span className="block text-sm font-semibold text-[#8a93a0] mt-1.5">{label}</span>
               </div>
@@ -435,10 +434,12 @@ export default function LandingPage() {
               { icon: '🧩', title: '뭘 써야 할지 막막해요', desc: '키워드·주제 선정부터 막혀서 시작조차 어렵습니다.' },
               { icon: '📉', title: '효과를 알 수가 없어요', desc: '글은 쌓이는데 실제로 환자 유입에 도움이 되는지 확인이 안 됩니다.' },
             ].map(({ icon, title, desc }) => (
-              <div key={title} className="bg-white border border-[#dbe2ea] border-l-[3px] border-l-[#ff4628] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] dp-lift">
-                <div className="w-11 h-11 rounded-xl bg-[#ffece7] text-[#ff4628] flex items-center justify-center text-xl mb-4">{icon}</div>
-                <h3 className="font-extrabold text-[#202020] text-lg">{title}</h3>
-                <p className="text-sm text-[#4a4f55] leading-relaxed mt-2">{desc}</p>
+              <div key={title} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 dp-lift">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl leading-none" aria-hidden>{icon}</span>
+                  <h3 className="font-extrabold text-[#202020] text-lg">{title}</h3>
+                </div>
+                <p className="text-sm text-[#4a4f55] leading-relaxed mt-2.5">{desc}</p>
               </div>
             ))}
           </div>
@@ -454,7 +455,7 @@ export default function LandingPage() {
           </h2>
           <p className="text-center text-[#4a4f55] mt-3 text-base">세 가지 방법을 한눈에 비교해보세요.</p>
           <div className="mt-10 sm:mt-12 -mx-5 sm:mx-0 px-5 sm:px-0 overflow-x-auto">
-            <table className="w-full min-w-[640px] border-separate border-spacing-0 bg-white border border-[#dbe2ea] rounded-2xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+            <table className="w-full min-w-[640px] border-separate border-spacing-0 bg-white border border-[#dbe2ea] rounded-2xl overflow-hidden">
               <thead>
                 <tr>
                   <th className="text-center text-sm font-extrabold text-[#202020] bg-[#eef2f6] px-5 py-4 border-b border-[#dbe2ea]">　</th>
@@ -495,7 +496,6 @@ export default function LandingPage() {
       {/* 섹션 3: 해결 매핑 */}
       <section className="py-20 sm:py-[110px] bg-[#eef2f6]">
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
-          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">SOLUTION</p>
           <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             닥터포스트는 이렇게 해결해요
           </h2>
@@ -509,7 +509,7 @@ export default function LandingPage() {
               { problem: '주제가 막막하다', solution: '시술명만 넣으면 제목·구성까지 제안' },
               { problem: '효과를 모르겠다', solution: '발행 이력·경쟁사 모니터링으로 흐름 파악' },
             ].map(({ problem, solution }) => (
-              <div key={problem} className="flex items-center gap-3.5 bg-white border border-[#dbe2ea] rounded-2xl px-5 py-4 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+              <div key={problem} className="flex items-center gap-3.5 bg-white border border-[#dbe2ea] rounded-2xl px-5 py-4">
                 <span className="flex-none bg-[#eef2f6] text-[#3f5468] font-bold text-[13px] px-3 py-2 rounded-lg min-w-[100px] sm:min-w-[110px] text-center">{problem}</span>
                 <span className="text-[#ff4628] font-black text-lg flex-none">→</span>
                 <span className="font-bold text-sm text-[#202020] leading-snug">{solution}</span>
@@ -522,30 +522,29 @@ export default function LandingPage() {
       {/* 사용법 */}
       <section id="how" className="py-20 sm:py-[110px] bg-white">
         <div className="max-w-4xl mx-auto px-5 sm:px-6">
-          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">How it works</p>
           <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             3단계로 끝납니다
           </h2>
           <p className="text-center text-[#4a4f55] mt-3 mb-10 sm:mb-12 text-base">복잡한 설정 없이 바로 사용하세요.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              { step: '1', title: '키워드 입력', desc: '병원 시술명이나 질환명을 입력하세요. 예) 레이저 토닝', iconClass: 'bg-[#ffece7] text-[#ff4628]' },
-              { step: '2', title: 'AI 자동 작성', desc: 'Claude AI가 네이버 SEO에 맞춰 제목·본문·태그까지 생성해요.', iconClass: 'bg-[#eef2f6] text-[#3f5468]' },
-              { step: '3', title: '검수 통과 후 발행', desc: '의료광고법 검수를 통과한 글을 복사해 네이버 블로그에 붙여넣으면 끝이에요.', iconClass: 'bg-[#ececec] text-[#202020]' },
-            ].map(({ step, title, desc, iconClass }) => (
-              <div key={step} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] dp-lift">
-                <div className={`w-11 h-11 rounded-xl ${iconClass} flex items-center justify-center text-xl font-extrabold mb-4`}>
-                  {step}
+              { step: '1', title: '키워드 입력', desc: '병원 시술명이나 질환명을 입력하세요. 예) 레이저 토닝', accent: 'text-[#ff4628]' },
+              { step: '2', title: 'AI 자동 작성', desc: 'Claude AI가 네이버 SEO에 맞춰 제목·본문·태그까지 생성해요.', accent: 'text-[#3f5468]' },
+              { step: '3', title: '검수 통과 후 발행', desc: '의료광고법 검수를 통과한 글을 복사해 네이버 블로그에 붙여넣으면 끝이에요.', accent: 'text-[#202020]' },
+            ].map(({ step, title, desc, accent }) => (
+              <div key={step} className="bg-white border border-[#dbe2ea] rounded-2xl p-6 dp-lift">
+                <div className="flex items-baseline gap-3">
+                  <span className={`text-[26px] font-black leading-none ${accent}`}>{step}</span>
+                  <h3 className="font-extrabold text-[#202020] text-lg">{title}</h3>
                 </div>
-                <h3 className="font-extrabold text-[#202020] text-lg mb-2">{title}</h3>
-                <p className="text-sm text-[#4a4f55] leading-relaxed">{desc}</p>
+                <p className="text-sm text-[#4a4f55] leading-relaxed mt-2.5">{desc}</p>
               </div>
             ))}
           </div>
 
           {/* 사용법 시연 영상 */}
           <div className="mt-12 relative">
-            <div className="relative rounded-2xl overflow-hidden border border-[#dbe2ea] shadow-[0_12px_30px_-14px_rgba(32,32,32,0.20)] bg-white">
+            <div className="relative rounded-2xl overflow-hidden shadow-[0_12px_30px_-14px_rgba(32,32,32,0.20)] bg-white">
               {/* 브라우저 상단 바 */}
               <div className="flex items-center gap-3 px-4 py-3 bg-[#eef2f6] border-b border-[#dbe2ea]">
                 <div className="flex items-center gap-1.5">
@@ -584,7 +583,6 @@ export default function LandingPage() {
       {/* 기능 섹션 */}
       <section id="features" className="py-20 sm:py-[110px] bg-[#eef2f6]">
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
-          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">Features</p>
           <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             블로그 운영에 필요한 모든 것
           </h2>
@@ -594,24 +592,24 @@ export default function LandingPage() {
           {/* 벤토 그리드 — 핵심 기능 2개(작성·검수)를 와이드 카드로 강조 (Attio 문법) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              { icon: "🛡️", title: "의료광고법 3중 검수", desc: "금지 표현 필터 · AI 검사 · 주간 점검 — 3중 검수를 통과한 글만 발행 단계로 갑니다. 걸리고 나서가 아니라, 올리기 전에 잡는 게 닥터포스트의 기준입니다.", iconClass: "bg-[#eef2f6] text-[#3f5468]", span: true },
-              { icon: "🖼️", title: "이미지 자동 생성", desc: "병원 특화 실사 이미지를 자동 생성해요.", iconClass: "bg-[#eef2f6] text-[#3f5468]", span: false },
-              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "네이버 C-Rank·D.I.A+ 로직에 맞춘 제목·본문·태그를 60초 안에 완성합니다. 병원 진료과목과 강점을 학습해 우리 병원 톤으로 씁니다.", iconClass: "bg-[#ffece7] text-[#ff4628]", span: true },
-              { icon: "🔍", title: "SEO·GEO 최적화", desc: "네이버·구글 SEO와 AI 검색(GEO) 기준으로 점수를 분석·최적화해요.", iconClass: "bg-[#ececec] text-[#202020]", span: false },
-              { icon: "📈", title: "네이버 트렌드", desc: "실시간 검색 트렌드를 분석해요.", iconClass: "bg-[#ffece7] text-[#ff4628]", span: false },
-              { icon: "📑", title: "독창성 검사", desc: "중복 콘텐츠를 자동으로 검사해요.", iconClass: "bg-[#ececec] text-[#202020]", span: false },
-            ].map(({ icon, title, desc, iconClass, span }) => (
+              { icon: "🛡️", title: "의료광고법 3중 검수", desc: "금지 표현 필터 · AI 검사 · 주간 점검 — 3중 검수를 통과한 글만 발행 단계로 갑니다. 걸리고 나서가 아니라, 올리기 전에 잡는 게 닥터포스트의 기준입니다.", span: true },
+              { icon: "🖼️", title: "이미지 자동 생성", desc: "병원 특화 실사 이미지를 자동 생성해요.", span: false },
+              { icon: "✍️", title: "AI 블로그 자동 작성", desc: "네이버 C-Rank·D.I.A+ 로직에 맞춘 제목·본문·태그를 60초 안에 완성합니다. 병원 진료과목과 강점을 학습해 우리 병원 톤으로 씁니다.", span: true },
+              { icon: "🔍", title: "SEO·GEO 최적화", desc: "네이버·구글 SEO와 AI 검색(GEO) 기준으로 점수를 분석·최적화해요.", span: false },
+              { icon: "📈", title: "네이버 트렌드", desc: "실시간 검색 트렌드를 분석해요.", span: false },
+              { icon: "📑", title: "독창성 검사", desc: "중복 콘텐츠를 자동으로 검사해요.", span: false },
+            ].map(({ icon, title, desc, span }) => (
               <div
                 key={title}
-                className={`bg-white border border-[#dbe2ea] rounded-2xl p-6 sm:p-7 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)] dp-lift ${
+                className={`bg-white border border-[#dbe2ea] rounded-2xl p-6 sm:p-7 dp-lift ${
                   span ? 'md:col-span-2' : ''
                 }`}
               >
-                <div className={`w-11 h-11 rounded-xl ${iconClass} flex items-center justify-center text-xl mb-4`}>
-                  {icon}
+                <div className="flex items-center gap-2.5">
+                  <span className={span ? 'text-2xl leading-none' : 'text-xl leading-none'} aria-hidden>{icon}</span>
+                  <h3 className={`font-extrabold text-[#202020] ${span ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{title}</h3>
                 </div>
-                <h3 className={`font-extrabold text-[#202020] mb-2 ${span ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{title}</h3>
-                <p className={`text-[#4a4f55] leading-relaxed ${span ? 'text-[15px] max-w-xl' : 'text-sm'}`}>{desc}</p>
+                <p className={`text-[#4a4f55] leading-relaxed mt-2.5 ${span ? 'text-[15px] max-w-xl' : 'text-sm'}`}>{desc}</p>
               </div>
             ))}
           </div>
@@ -633,7 +631,6 @@ export default function LandingPage() {
       {/* 요금 섹션 */}
       <section id="pricing" className="py-20 sm:py-[110px] bg-white">
         <div className="max-w-4xl mx-auto px-5 sm:px-6">
-          <p className="text-center text-[13px] font-extrabold text-[#ff4628] tracking-[2px] uppercase">Pricing</p>
           <h2 className="text-center text-[30px] sm:text-[44px] font-black text-[#202020] mt-2.5 leading-tight" style={{ letterSpacing: '-0.5px' }}>
             합리적인 요금제
           </h2>
@@ -668,7 +665,7 @@ export default function LandingPage() {
               <div key={plan.id} className={`relative p-7 sm:p-8 rounded-2xl bg-white flex flex-col ${
                 highlight
                   ? 'border-2 border-[#ff4628] shadow-[0_20px_46px_-16px_rgba(255,70,40,0.34)]'
-                  : 'border border-[#dbe2ea] shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]'
+                  : 'border border-[#dbe2ea]'
               }`}>
                 {highlight && (
                   <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-extrabold text-white bg-gradient-to-br from-[#ff4628] to-[#e63a1c] px-4 py-1.5 rounded-full">
@@ -687,7 +684,7 @@ export default function LandingPage() {
                   </span>
                   <span className="text-[#8a93a0] text-xs sm:text-sm">/ 월</span>
                 </p>
-                <p className="text-[11px] text-[#8a93a0] mb-1">매월 자동결제</p>
+                <p className="text-[12px] text-[#8a93a0] mb-1">매월 자동결제</p>
                 <p className="text-sm text-[#4a4f55] mb-5">{desc}</p>
                 <ul className="space-y-2.5 mb-8 flex-1">
                   {features.map((f) => (

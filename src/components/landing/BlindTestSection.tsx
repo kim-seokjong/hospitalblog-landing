@@ -86,9 +86,11 @@ export default function BlindTestSection() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 mt-8 sm:mt-10">
           {ADVANTAGES.map(({ icon, title, desc }) => (
             <div key={title} className="dp-lift bg-white/[0.045] border border-white/[0.09] rounded-2xl p-6">
-              <div className="w-11 h-11 rounded-xl bg-[#38302d] text-xl flex items-center justify-center mb-4">{icon}</div>
-              <h3 className="font-extrabold text-white text-lg">{title}</h3>
-              <p className="text-sm text-[#b9bdc2] leading-relaxed mt-2">{desc}</p>
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl leading-none" aria-hidden>{icon}</span>
+                <h3 className="font-extrabold text-white text-lg">{title}</h3>
+              </div>
+              <p className="text-sm text-[#b9bdc2] leading-relaxed mt-2.5">{desc}</p>
             </div>
           ))}
         </div>
