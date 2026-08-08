@@ -19,7 +19,7 @@ export default function EbookLeadSection() {
   const [downloadUrl, setDownloadUrl] = useState('')
 
   const inputClass =
-    'w-full px-4 py-3 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#e52000] text-[15px]'
+    'w-full px-4 py-3 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#666f7d] focus:outline-none focus:border-[#e52000] text-[15px]'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -82,7 +82,7 @@ export default function EbookLeadSection() {
                 >
                   요약판 PDF 다운로드
                 </a>
-                <p className="text-xs text-[#8a93a0] mt-4">
+                <p className="text-xs text-[#666f7d] mt-4">
                   전체판(45p)과 자동 검사가 궁금하시면 가입 시 글 2회 무료 생성으로 확인해 보세요.
                 </p>
               </div>
@@ -118,7 +118,7 @@ export default function EbookLeadSection() {
                   <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5" required />
                   <span>
                     (필수) 자료 제공을 위한 개인정보 수집·이용에 동의합니다.{' '}
-                    <a href="/privacy" target="_blank" className="underline text-[#8a93a0]">개인정보처리방침</a>
+                    <a href="/privacy" target="_blank" className="underline text-[#666f7d]">개인정보처리방침</a>
                   </span>
                 </label>
                 <label className="flex items-start gap-2 text-[13px] text-[#4a4f55] cursor-pointer">
@@ -133,7 +133,7 @@ export default function EbookLeadSection() {
                 >
                   {status === 'loading' ? '준비 중…' : '무료 요약판 받기'}
                 </button>
-                <p className="text-[11.5px] text-[#8a93a0] leading-relaxed">
+                <p className="text-[11.5px] text-[#666f7d] leading-relaxed">
                   입력하신 정보는 자료 제공과 (동의 시) 서비스 안내에만 사용해요.
                 </p>
               </form>

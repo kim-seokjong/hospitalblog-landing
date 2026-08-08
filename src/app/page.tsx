@@ -206,7 +206,7 @@ export default function LandingPage() {
             {authChecked && (
               user ? (
                 <>
-                  <span className="text-xs text-[#8a93a0] hidden md:block">{user.email}</span>
+                  <span className="text-xs text-[#666f7d] hidden md:block">{user.email}</span>
                   <button
                     onClick={() => router.push('/app')}
                     className="px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white text-xs md:text-sm font-bold rounded-lg transition-all hover:brightness-105 shadow-[0_8px_24px_-12px_rgba(255,70,40,0.5)]"
@@ -302,7 +302,7 @@ export default function LandingPage() {
                 onChange={(e) => handleDiagnoseChange(e.target.value)}
                 placeholder="병원 이름 (예: 브이비성형외과의원)"
                 autoComplete="organization"
-                className="w-full px-4 py-3.5 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#8a93a0] focus:outline-none focus:border-[#e52000] text-[15px]"
+                className="w-full px-4 py-3.5 rounded-xl border border-[#dbe2ea] bg-white text-[#202020] placeholder-[#666f7d] focus:outline-none focus:border-[#e52000] text-[15px]"
                 style={{ colorScheme: 'light' }}
                 maxLength={60}
                 required
@@ -333,7 +333,7 @@ export default function LandingPage() {
             <span className="block mt-1 [text-wrap:balance]">진단은 회원가입 없이 무료입니다.</span>
           </p>
 
-          <p className="text-[12px] text-[#8a93a0] mt-2.5 leading-relaxed">
+          <p className="text-[12px] text-[#666f7d] mt-2.5 leading-relaxed">
             행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 무료
           </p>
 
@@ -410,7 +410,7 @@ export default function LandingPage() {
             ].map(({ num, label }) => (
               <div key={num} className="dp-lift bg-white border border-[#dbe2ea] rounded-2xl p-6">
                 <b className="block text-2xl sm:text-[30px] font-black text-[#e52000]">{num}</b>
-                <span className="block text-sm font-semibold text-[#8a93a0] mt-1.5">{label}</span>
+                <span className="block text-sm font-semibold text-[#666f7d] mt-1.5">{label}</span>
               </div>
             ))}
           </div>
@@ -478,8 +478,8 @@ export default function LandingPage() {
                   return (
                     <tr key={label}>
                       <td className={`text-left text-sm font-bold text-[#202020] bg-[#fafbfc] px-5 py-4 ${cellBorder}`}>{label}</td>
-                      <td className={`text-center text-sm text-[#8a93a0] px-5 py-4 ${cellBorder}`}>{a}</td>
-                      <td className={`text-center text-sm text-[#8a93a0] px-5 py-4 ${cellBorder}`}>{b}</td>
+                      <td className={`text-center text-sm text-[#666f7d] px-5 py-4 ${cellBorder}`}>{a}</td>
+                      <td className={`text-center text-sm text-[#666f7d] px-5 py-4 ${cellBorder}`}>{b}</td>
                       <td className={`text-center text-sm font-extrabold text-[#202020] bg-[#fff6f4] border-l border-r border-[#ffece7] px-5 py-4 ${cellBorder}`}>{dp}</td>
                     </tr>
                   );
@@ -553,7 +553,7 @@ export default function LandingPage() {
                   <span className="w-3 h-3 rounded-full bg-green-400" />
                 </div>
                 <div className="flex-1 flex justify-center">
-                  <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-md border border-[#dbe2ea] text-xs text-[#8a93a0]">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-md border border-[#dbe2ea] text-xs text-[#666f7d]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#e52000] animate-pulse" />
                     닥터포스트 · 실시간 시연
                   </div>
@@ -573,7 +573,7 @@ export default function LandingPage() {
             </div>
 
             {/* 하단 캡션 */}
-            <p className="mt-4 text-center text-xs text-[#8a93a0]">
+            <p className="mt-4 text-center text-xs text-[#666f7d]">
               실제 사용 화면입니다 · 키워드 입력부터 발행까지 60초
             </p>
           </div>
@@ -682,9 +682,9 @@ export default function LandingPage() {
                     </span>
                     <span className="text-[#202020] text-sm font-bold ml-1">원</span>
                   </span>
-                  <span className="text-[#8a93a0] text-xs sm:text-sm">/ 월</span>
+                  <span className="text-[#666f7d] text-xs sm:text-sm">/ 월</span>
                 </p>
-                <p className="text-[12px] text-[#8a93a0] mb-1">매월 자동결제</p>
+                <p className="text-[12px] text-[#666f7d] mb-1">매월 자동결제</p>
                 <p className="text-sm text-[#4a4f55] mb-5">{desc}</p>
                 <ul className="space-y-2.5 mb-8 flex-1">
                   {features.map((f) => (
@@ -707,7 +707,7 @@ export default function LandingPage() {
               );
             })}
           </div>
-          <p className="text-center text-xs text-[#8a93a0] mt-6">
+          <p className="text-center text-xs text-[#666f7d] mt-6">
             모든 플랜은 월 단위 구독이며, 언제든지 해지 가능합니다.
           </p>
         </div>
@@ -741,7 +741,7 @@ export default function LandingPage() {
       </section>
 
       {/* 푸터 */}
-      <footer className="bg-white border-t border-[#dbe2ea] py-9 text-center text-xs text-[#8a93a0] leading-relaxed px-4">
+      <footer className="bg-white border-t border-[#dbe2ea] py-9 text-center text-xs text-[#666f7d] leading-relaxed px-4">
         <p className="mb-1">© 2026 광고진정성. All rights reserved.</p>
         <p className="mb-1">상호: 광고진정성 · 대표: 김석종 · 사업자등록번호: 570-60-00560</p>
         <p className="mb-1">주소: 대구광역시 수성구 청호로422 2층</p>

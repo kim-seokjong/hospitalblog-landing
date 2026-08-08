@@ -157,7 +157,7 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
             />
           </div>
 
-          <p className="mt-6 text-center text-xs text-[#8a93a0] leading-relaxed">
+          <p className="mt-6 text-center text-xs text-[#666f7d] leading-relaxed">
             * 위 콘텐츠는 클리닉픽스가 실제 생성한 샘플입니다. 영상·이미지는 AI로 제작되었으며,
             완성된 콘텐츠는 다운로드 후 직접 게시합니다. (자동 발행 기능 아님)
           </p>
@@ -215,7 +215,7 @@ function SampleVideo() {
       <figcaption className="flex items-center gap-2 mb-4">
         <span className="text-lg">🎬</span>
         <span className="font-extrabold text-[#202020]">영상(쇼츠)</span>
-        <span className="ml-auto text-[12px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
+        <span className="ml-auto text-[12px] font-bold text-[#666f7d] bg-[#eef2f6] px-2 py-1 rounded-md">
           9:16 · AI 생성 영상
         </span>
       </figcaption>
@@ -231,7 +231,7 @@ function SampleVideo() {
           className="w-full aspect-[9/16] object-cover"
         />
       </div>
-      <p className="mt-3 text-center text-xs text-[#8a93a0]">
+      <p className="mt-3 text-center text-xs text-[#666f7d]">
         한국어 내레이션 포함 · 소리를 켜고 재생해보세요
       </p>
     </figure>
@@ -247,7 +247,7 @@ function CardnewsCarousel() {
       <figcaption className="flex items-center gap-2 mb-4">
         <span className="text-lg">🗂️</span>
         <span className="font-extrabold text-[#202020]">카드뉴스</span>
-        <span className="ml-auto text-[12px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
+        <span className="ml-auto text-[12px] font-bold text-[#666f7d] bg-[#eef2f6] px-2 py-1 rounded-md">
           4:5 · 슬라이드 {total}장
         </span>
       </figcaption>
@@ -292,7 +292,7 @@ function CardnewsCarousel() {
           />
         ))}
       </div>
-      <p className="mt-2 text-center text-xs text-[#8a93a0]">옆으로 넘겨보세요</p>
+      <p className="mt-2 text-center text-xs text-[#666f7d]">옆으로 넘겨보세요</p>
     </figure>
   );
 }
@@ -308,7 +308,7 @@ function ThreadsSample({ posts, hashtags }: ThreadsSampleProps) {
       <figcaption className="flex items-center gap-2 mb-4">
         <span className="text-lg">💬</span>
         <span className="font-extrabold text-[#202020]">쓰레드</span>
-        <span className="ml-auto text-[12px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
+        <span className="ml-auto text-[12px] font-bold text-[#666f7d] bg-[#eef2f6] px-2 py-1 rounded-md">
           {posts.length}개 글
         </span>
       </figcaption>
@@ -352,7 +352,7 @@ function InstagramCaption({ hospital, caption, hashtags }: InstagramCaptionProps
       <figcaption className="flex items-center gap-2 mb-4">
         <span className="text-lg">📸</span>
         <span className="font-extrabold text-[#202020]">인스타 피드 캡션</span>
-        <span className="ml-auto text-[12px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
+        <span className="ml-auto text-[12px] font-bold text-[#666f7d] bg-[#eef2f6] px-2 py-1 rounded-md">
           캡션 + 해시태그
         </span>
       </figcaption>
