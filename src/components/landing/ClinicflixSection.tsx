@@ -95,7 +95,7 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
             {OUTPUT_KINDS.map(({ icon, label }) => (
               <span
                 key={label}
-                className="inline-flex items-center gap-1.5 bg-white border border-[#dbe2ea] text-[#202020] text-[13px] font-bold px-3.5 py-2 rounded-full shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
+                className="inline-flex items-center gap-1.5 bg-white border border-[#dbe2ea] text-[#202020] text-[13px] font-bold px-3.5 py-2 rounded-full"
               >
                 <span>{icon}</span>
                 {label}
@@ -106,10 +106,7 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
 
         {/* ── How it works ── */}
         <div className="mt-14 sm:mt-16">
-          <p className="text-center text-[13px] font-extrabold tracking-[2px] uppercase" style={{ color: ACCENT }}>
-            How it works
-          </p>
-          <h3 className="text-center text-[22px] sm:text-3xl font-black text-[#202020] mt-2 leading-tight">
+          <h3 className="text-center text-[22px] sm:text-3xl font-black text-[#202020] leading-tight">
             원소스 1개 → 멀티채널 산출물
           </h3>
           <p className="text-center text-[#4a4f55] mt-3 text-sm sm:text-base">
@@ -119,16 +116,15 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
             {STEPS.map(({ step, title, desc }) => (
               <div
                 key={step}
-                className="bg-white border border-[#dbe2ea] rounded-2xl p-6 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]"
+                className="bg-white border border-[#dbe2ea] rounded-2xl p-6"
               >
-                <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center text-xl font-extrabold mb-4 text-white"
-                  style={{ background: ACCENT }}
-                >
-                  {step}
+                <div className="flex items-baseline gap-3">
+                  <span className="text-[26px] font-black leading-none" style={{ color: ACCENT }}>
+                    {step}
+                  </span>
+                  <h4 className="font-extrabold text-[#202020] text-lg">{title}</h4>
                 </div>
-                <h4 className="font-extrabold text-[#202020] text-lg mb-2">{title}</h4>
-                <p className="text-sm text-[#4a4f55] leading-relaxed">{desc}</p>
+                <p className="text-sm text-[#4a4f55] leading-relaxed mt-2.5">{desc}</p>
               </div>
             ))}
           </div>
@@ -136,10 +132,7 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
 
         {/* ── Live sample showcase ── */}
         <div className="mt-16 sm:mt-20">
-          <p className="text-center text-[13px] font-extrabold tracking-[2px] uppercase" style={{ color: ACCENT }}>
-            Live sample
-          </p>
-          <h3 className="text-center text-[22px] sm:text-3xl font-black text-[#202020] mt-2 leading-tight">
+          <h3 className="text-center text-[22px] sm:text-3xl font-black text-[#202020] leading-tight">
             이 블로그 1편으로 만든 결과물
           </h3>
           <p className="text-center text-[#4a4f55] mt-3 text-sm sm:text-base">
@@ -218,11 +211,11 @@ function SampleVideo() {
   }, []);
 
   return (
-    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5">
       <figcaption className="flex items-center gap-2 mb-4">
         <span className="text-lg">🎬</span>
         <span className="font-extrabold text-[#202020]">영상(쇼츠)</span>
-        <span className="ml-auto text-[11px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
+        <span className="ml-auto text-[12px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
           9:16 · AI 생성 영상
         </span>
       </figcaption>
@@ -250,11 +243,11 @@ function CardnewsCarousel() {
   const total = CARDNEWS_IMAGES.length;
 
   return (
-    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5">
       <figcaption className="flex items-center gap-2 mb-4">
         <span className="text-lg">🗂️</span>
         <span className="font-extrabold text-[#202020]">카드뉴스</span>
-        <span className="ml-auto text-[11px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
+        <span className="ml-auto text-[12px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
           4:5 · 슬라이드 {total}장
         </span>
       </figcaption>
@@ -311,11 +304,11 @@ interface ThreadsSampleProps {
 
 function ThreadsSample({ posts, hashtags }: ThreadsSampleProps) {
   return (
-    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5">
       <figcaption className="flex items-center gap-2 mb-4">
         <span className="text-lg">💬</span>
         <span className="font-extrabold text-[#202020]">쓰레드</span>
-        <span className="ml-auto text-[11px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
+        <span className="ml-auto text-[12px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
           {posts.length}개 글
         </span>
       </figcaption>
@@ -355,11 +348,11 @@ interface InstagramCaptionProps {
 
 function InstagramCaption({ hospital, caption, hashtags }: InstagramCaptionProps) {
   return (
-    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5 shadow-[0_8px_24px_-12px_rgba(32,32,32,0.16)]">
+    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5">
       <figcaption className="flex items-center gap-2 mb-4">
         <span className="text-lg">📸</span>
         <span className="font-extrabold text-[#202020]">인스타 피드 캡션</span>
-        <span className="ml-auto text-[11px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
+        <span className="ml-auto text-[12px] font-bold text-[#8a93a0] bg-[#eef2f6] px-2 py-1 rounded-md">
           캡션 + 해시태그
         </span>
       </figcaption>

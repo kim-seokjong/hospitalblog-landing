@@ -37,7 +37,24 @@ export default function RevealInit() {
       { threshold: 0.08, rootMargin: '0px 0px -6% 0px' },
     );
     targets.forEach((t) => io.observe(t));
-    return () => io.disconnect();
+
+    // 안전장치 — 페이지를 그리기만 하고 스크롤하지 않는 쪽을 위한 것.
+    // AI 크롤러·스크린샷 수집기·미리보기 봇은 첫 화면만 렌더하고 끝내므로
+    // 그 아래 섹션을 영영 opacity:0 으로 본다. 사람 눈에는 안 보이는 문제지만
+    // 우리가 파는 것이 검색·AI 노출이라 빈 페이지로 읽히면 치명적이다.
+    // 사람은 대개 1초 안에 스크롤을 시작하므로, 스크롤이 한 번이라도 있으면
+    // 타이머를 취소해 등장 효과를 그대로 살린다.
+    const failsafe = window.setTimeout(() => {
+      targets.forEach((t) => t.classList.add('dp-in'));
+    }, 1200);
+    const cancelFailsafe = () => window.clearTimeout(failsafe);
+    window.addEventListener('scroll', cancelFailsafe, { passive: true, once: true });
+
+    return () => {
+      io.disconnect();
+      window.clearTimeout(failsafe);
+      window.removeEventListener('scroll', cancelFailsafe);
+    };
   }, []);
 
   return null;
