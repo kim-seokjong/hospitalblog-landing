@@ -101,27 +101,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'internal-path' });
   }
 
-  // 4) 레이트리밋 (공개 엔드포인트 남용 방어)
-  const decision = consumeFunnelQuota(getQuotaStore(), {
-    ip: extractClientIp(req.headers),
-    limits: readFunnelLimits(),
-  });
-  if (!decision.allowed) {
-    // 조용히 성공처럼 처리 — 남용 방어일 뿐, 정상 사용자에게 에러를 노출하지 않는다.
-    return NextResponse.json({ ok: true, throttled: true });
-  }
-
-  /**
-   * 5) anon_id 확보 — 우선순위 판정은 순수 함수(resolveAnonId)에 있다.
-   *    **클라 제공값 > 쿠키 > 새로 발급**. 이유는 그 함수 주석 참조
-   *    (쿠키 우선이면 기존 방문자의 쿠키와 localStorage 가 영구히 어긋난다).
-   *    쿠키는 아래에서 항상 확정값으로 다시 심어 둘이 수렴하게 한다.
-   */
-  const existing = req.cookies.get(ANON_ID_COOKIE)?.value;
-  const { anonId } = resolveAnonId(existing, validation.value.anonId, generateAnonId);
-  const isNewAnon = anonId !== existing;
-
-  // 6) 로그인 사용자면 user_id 귀속 (선택 — 익명 이벤트는 null)
+  // 4) 로그인 사용자면 user_id 귀속 (선택 — 익명 이벤트는 null)
   let userId: string | null = null;
   try {
     const supabase = await createServerSupabaseClient();
@@ -133,15 +113,40 @@ export async function POST(req: NextRequest) {
     userId = null;
   }
 
-  // 7) 내부 트래픽 제외 ②: 계정 기반 (env FUNNEL_INTERNAL_USER_IDS).
+  // 5) 내부 트래픽 제외 ②: 계정 기반 (env FUNNEL_INTERNAL_USER_IDS).
   //    최근 7일 로그인 사용자 이벤트 44건이 전부 대표 본인 계정이었다 — 그대로 두면
   //    "회원 활동" 지표가 우리 자신을 세는 꼴이 된다.
   //    ⚠️ 제외 대상은 **env 로만** 온다. 목록이 비면 아무도 제외되지 않는다(실제 고객이
   //      휩쓸리는 것이 최악의 실패 모드라, 기본값을 "전부 기록" 쪽에 둔다).
   //    여기서도 anon_id 쿠키를 발급하지 않는다(적재하지 않는데 ID 만 심을 이유가 없다).
+  //
+  // ★레이트리밋보다 **먼저** 판정한다(2026-08-10, Codex 지적). 순서가 반대였을 때는
+  //   쿠키 없는 브라우저로 로그인한 내부 계정이 적재는 건너뛰면서 IP·전체 쿼터는
+  //   계속 깎았다. 한도에 닿으면 그 뒤로 **실제 외부 사용자의 이벤트가 조용히 버려진다.**
+  //   세션 쿠키가 없는 익명 요청은 auth 조회가 즉시 null 이라 남용 방어는 그대로다.
   if (isInternalUserId(userId, readInternalUserIds())) {
     return NextResponse.json({ ok: true, skipped: 'internal' });
   }
+
+  // 6) 레이트리밋 (공개 엔드포인트 남용 방어)
+  const decision = consumeFunnelQuota(getQuotaStore(), {
+    ip: extractClientIp(req.headers),
+    limits: readFunnelLimits(),
+  });
+  if (!decision.allowed) {
+    // 조용히 성공처럼 처리 — 남용 방어일 뿐, 정상 사용자에게 에러를 노출하지 않는다.
+    return NextResponse.json({ ok: true, throttled: true });
+  }
+
+  /**
+   * 7) anon_id 확보 — 우선순위 판정은 순수 함수(resolveAnonId)에 있다.
+   *    **클라 제공값 > 쿠키 > 새로 발급**. 이유는 그 함수 주석 참조
+   *    (쿠키 우선이면 기존 방문자의 쿠키와 localStorage 가 영구히 어긋난다).
+   *    쿠키는 아래에서 항상 확정값으로 다시 심어 둘이 수렴하게 한다.
+   */
+  const existing = req.cookies.get(ANON_ID_COOKIE)?.value;
+  const { anonId } = resolveAnonId(existing, validation.value.anonId, generateAnonId);
+  const isNewAnon = anonId !== existing;
 
   // 8) 적재 (그레이스풀 — 실패해도 UX 안 막음)
   await recordFunnelEvent({

@@ -1697,10 +1697,20 @@ export function lockedActionCount(findings: readonly Finding[]): number {
   return splitActionGate(findings).locked.length;
 }
 
+/**
+ * 저장된 옛 리포트를 방어한다 — 배열이 아닐 수도, **원소가 null 일 수도** 있다.
+ * 배열 여부만 보고 원소를 안 보면 `finding.axis` · `f.tone` 에서 TypeError 가 나고
+ * 공유 페이지가 통째로 500 이 된다(2026-08-10, Codex 지적).
+ * 손상된 원소는 버린다 — 하나 때문에 리포트 전체를 못 보는 것이 더 나쁘다.
+ */
+function validFindings(findings: unknown): readonly Finding[] {
+  if (!Array.isArray(findings)) return [];
+  return findings.filter((f): f is Finding => Boolean(f) && typeof f === 'object');
+}
+
 export function groupFindings(findings: readonly Finding[]): GroupedFindings {
   const buckets: Record<FindingGroup, Finding[]> = { bad: [], improve: [], good: [], unknown: [] };
-  // 저장된 옛 리포트가 배열이 아닐 수 있다 — 여기서 죽으면 공유 링크가 통째로 500 이 된다.
-  (Array.isArray(findings) ? findings : []).forEach((finding) => {
+  validFindings(findings).forEach((finding) => {
     buckets[findingGroupOf(finding)].push(finding);
   });
 
@@ -1785,7 +1795,7 @@ export interface ChannelSection {
  */
 export function groupFindingsByChannel(findings: readonly Finding[]): readonly ChannelSection[] {
   const byAxis = new Map<Finding['axis'], { finding: Finding; index: number }[]>();
-  (Array.isArray(findings) ? findings : []).forEach((finding, index) => {
+  validFindings(findings).forEach((finding, index) => {
     const list = byAxis.get(finding.axis);
     if (list) list.push({ finding, index });
     else byAxis.set(finding.axis, [{ finding, index }]);
@@ -1880,14 +1890,15 @@ export function summarizeFindings(findings: readonly Finding[]): {
   readonly warn: number;
   readonly unknown: number;
 } {
+  const safe = validFindings(findings);
   return {
-    good: findings.filter((f) => f.tone === 'good').length,
-    warn: findings.filter((f) => f.tone === 'warn').length,
-    unknown: findings.filter((f) => f.tone === 'unknown').length,
+    good: safe.filter((f) => f.tone === 'good').length,
+    warn: safe.filter((f) => f.tone === 'warn').length,
+    unknown: safe.filter((f) => f.tone === 'unknown').length,
   };
 }
 
 /** 리포트 전체가 "확인된 것이 하나도 없는" 상태인지 — 화면에서 안내를 바꾼다. */
 export function isEmptyReport(report: DiagnosisReport): boolean {
-  return report.findings.every((f) => f.tone === 'unknown');
+  return validFindings(report?.findings).every((f) => f.tone === 'unknown');
 }
