@@ -89,6 +89,12 @@ export async function POST(req: NextRequest) {
     if (cacheable) {
       const cached = cacheGet<DiagnosisReport>(cacheKey);
       if (cached) {
+        // ★리드는 캐시 여부와 무관하게 남긴다 (2026-08-10, Codex 지적).
+        //   예전에는 캐시 미스의 리더만 saveLead 를 탔다. 그러면 우리가 테스트로 한 번
+        //   조회한 병원을 TTL(7일) 안에 **진짜 외부 병원이 조회해도 기록이 통째로 사라진다.**
+        //   진단은 영업 리드 확보가 목적이므로, 캐시는 조회 비용을 아끼는 장치일 뿐
+        //   "누가 진단했는가"를 버리는 근거가 될 수 없다.
+        await saveLead(cached.clinic, cached, readRequester(req));
         const shared = share ? await getOrCreateShare(cacheKey, cached, cacheable) : null;
         return NextResponse.json({
           report: cached,
@@ -124,17 +130,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3) 캐시 저장·리드 적재는 리더만. 공유 링크는 **모든 경로**에서 확보한다.
+    // 3) 캐시 저장은 리더만. **공유 링크와 리드 적재는 모든 경로**에서 한다.
     //
-    // ★ 왜 바꿨나. 예전에는 리더만 공유 링크를 받아서, 캐시 히트·팔로워로 들어온
-    //   사용자는 shareUrl 이 null 이었다. 결과를 메일로 보내는 동선(1순위)은 이
-    //   토큰으로 서버가 리포트를 다시 읽는 구조라, 토큰이 없으면 그 사용자는
-    //   메일을 요청할 수 없다 — 이메일 확보가 캐시 여부에 따라 갈리면 안 된다.
+    // ★ 공유 링크 — 예전에는 리더만 받아서, 캐시 히트·팔로워로 들어온 사용자는
+    //   shareUrl 이 null 이었다. 결과를 메일로 보내는 동선(1순위)은 이 토큰으로
+    //   서버가 리포트를 다시 읽는 구조라, 토큰이 없으면 그 사용자는 메일을 요청할 수
+    //   없다 — 이메일 확보가 캐시 여부에 따라 갈리면 안 된다.
     //   캐시된 토큰을 재사용하므로 리포트 행이 요청마다 늘어나지도 않는다.
-    if (join.isLeader) {
-      if (cacheable) cacheSet(cacheKey, report, DIAGNOSIS_CACHE_TTL_MS);
-      await saveLead(report.clinic, report, readRequester(req));
-    }
+    //
+    // ★ 리드 — 같은 이유로 팔로워도 남긴다(2026-08-10). 팔로워는 리더와 **다른 사람**이고,
+    //   진단의 목적이 영업 리드 확보이므로 동시에 들어왔다는 이유로 한 명을 버릴 수 없다.
+    if (join.isLeader && cacheable) cacheSet(cacheKey, report, DIAGNOSIS_CACHE_TTL_MS);
+    await saveLead(report.clinic, report, readRequester(req));
     const shared = share ? await getOrCreateShare(cacheKey, report, cacheable) : null;
 
     return NextResponse.json({
@@ -196,7 +203,9 @@ interface Requester {
  * "마이그레이션 미적용"으로 오인해 조용히 넘어간다 — 세 컬럼 이름이 실제로
  * 언급된 경우로만 좁힌다(Codex 지적).
  */
-const NEW_COLUMNS = ['anon_id', 'ip_hash', 'is_bot'];
+// 061(anon_id·ip_hash·is_bot) + 063(is_internal). 새 컬럼을 추가할 때마다 여기에 넣는다 —
+// 빠뜨리면 그 컬럼이 없는 DB 에서 insert 가 통째로 실패하고 폴백도 안 타 리드가 영구 유실된다.
+const NEW_COLUMNS = ['anon_id', 'ip_hash', 'is_bot', 'is_internal'];
 
 function isUnknownColumn(error: { code?: string; message?: string }): boolean {
   const code = error.code ?? '';
