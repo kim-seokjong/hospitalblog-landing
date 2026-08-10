@@ -12,6 +12,7 @@ import {
   readFunnelLimits,
   consumeFunnelQuota,
   funnelKstDayKey,
+  hasSupabaseSessionCookie,
   shouldRecordOnceEvent,
   shouldRecordFirstPostEvent,
   EVENT_META_KEYS,
@@ -383,4 +384,26 @@ test('consumeFunnelQuota: 날짜 경계 넘으면 카운터 초기화', () => {
 test('funnelKstDayKey: KST 경계', () => {
   assert.equal(funnelKstDayKey(Date.parse('2026-07-21T15:00:00Z')), '2026-07-22');
   assert.equal(funnelKstDayKey(Date.parse('2026-07-21T14:59:00Z')), '2026-07-21');
+});
+
+// ── Supabase 세션 쿠키 판정 (2026-08-10) ───────────────────────────────────
+// funnel-event 가 내부 계정을 걸러내려고 레이트리밋 **앞에서** auth 를 조회한다.
+// 쿠키가 없는데도 조회하면, 가짜 세션 쿠키를 붙인 요청이 한도에 걸리지 않고
+// 매번 Supabase Auth 로 나간다. 이 판정이 그 경로를 막는 유일한 가드다.
+
+test('hasSupabaseSessionCookie: 세션 쿠키가 없으면 false — auth 조회를 건너뛴다', () => {
+  assert.equal(hasSupabaseSessionCookie([]), false);
+  assert.equal(hasSupabaseSessionCookie(['dp_anon_id', 'dp_internal']), false);
+});
+
+test('hasSupabaseSessionCookie: sb-<ref>-auth-token 과 분할 청크를 모두 잡는다', () => {
+  assert.equal(hasSupabaseSessionCookie(['sb-abcdefgh-auth-token']), true);
+  // 토큰이 크면 .0 / .1 로 쪼개져 내려온다 — 청크만 남은 요청도 세션 있음으로 봐야 한다.
+  assert.equal(hasSupabaseSessionCookie(['sb-abcdefgh-auth-token.1']), true);
+  assert.equal(hasSupabaseSessionCookie(['dp_anon_id', 'sb-xyz-auth-token.0']), true);
+});
+
+test('hasSupabaseSessionCookie: 비슷하지만 다른 쿠키에 속지 않는다', () => {
+  assert.equal(hasSupabaseSessionCookie(['sb-abcdefgh-refresh']), false);
+  assert.equal(hasSupabaseSessionCookie(['my-auth-token']), false);
 });

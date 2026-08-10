@@ -15,6 +15,7 @@ import {
   collectUnchecked,
   findingGroupOf,
   groupFindings,
+  isEmptyReport,
   groupFindingsByChannel,
   normalizeStoredFindings,
   summarizeFindings,
@@ -1040,4 +1041,60 @@ test('findings 가 배열이 아니어도 죽지 않는다 (깨진 옛 리포트
   const grouped = groupFindings(undefined as unknown as readonly Finding[]);
   assert.deepEqual(grouped.bad, []);
   assert.deepEqual(groupFindingsByChannel(undefined as unknown as readonly Finding[]), []);
+});
+
+// ── 손상된 저장 리포트 방어 (2026-08-10) ───────────────────────────────────
+// 공유 리포트는 DB 에 저장된 옛 JSON 을 그대로 읽는다. 원소가 null 이거나 필드 타입이
+// 깨져 있으면 화면이 통째로 500 이 났다. 손상 원소만 버리고 나머지는 살려야 한다.
+
+const SOUND_FINDING = {
+  id: 'x1',
+  axis: 'blog',
+  label: '블로그',
+  tone: 'warn',
+  state: '최근 글이 없습니다',
+  why: '검색에서 밀립니다',
+  action: '주 1회 발행',
+  ourScope: true,
+} as unknown as Finding;
+
+test('groupFindings: null 원소가 섞여도 죽지 않고 멀쩡한 항목은 남는다', () => {
+  const dirty = [null, SOUND_FINDING, undefined] as unknown as Finding[];
+  const grouped = groupFindings(dirty);
+  const total =
+    grouped.bad.length + grouped.improve.length + grouped.good.length + grouped.unknown.length;
+  assert.equal(total, 1);
+});
+
+test('groupFindings: findings 가 배열이 아니어도 빈 결과를 돌려준다', () => {
+  const grouped = groupFindings(null as unknown as Finding[]);
+  assert.equal(grouped.bad.length + grouped.improve.length, 0);
+});
+
+test('groupFindingsByChannel: axis 가 문자열이 아닌 항목은 버린다(React 렌더 크래시 방지)', () => {
+  const dirty = [
+    { ...SOUND_FINDING, axis: {} },
+    SOUND_FINDING,
+  ] as unknown as Finding[];
+  const sections = groupFindingsByChannel(dirty);
+  const kept = sections.flatMap((s: ChannelSection) => s.findings);
+  assert.equal(kept.length, 1);
+  // 남은 섹션 라벨은 전부 문자열이어야 한다 — 객체가 올라가면 화면에서 터진다.
+  for (const s of sections) assert.equal(typeof s.label, 'string');
+});
+
+test('summarizeFindings: 손상 원소를 세지 않는다', () => {
+  const dirty = [null, { ...SOUND_FINDING, tone: 'good' }] as unknown as Finding[];
+  assert.deepEqual(summarizeFindings(dirty), { good: 1, warn: 0, unknown: 0 });
+});
+
+test('isEmptyReport: findings 가 깨져 있어도 던지지 않는다', () => {
+  assert.equal(isEmptyReport({ findings: null } as never), true);
+  assert.equal(isEmptyReport({ findings: [null] } as never), true);
+});
+
+test('validFindings: 옛 스키마라 필드가 비어도 항목을 버리지 않는다', () => {
+  // 필드 존재를 강요하면 손상 방어가 데이터 손실로 바뀐다.
+  const legacy = [{ axis: 'site', tone: 'unknown' }] as unknown as Finding[];
+  assert.equal(summarizeFindings(legacy).unknown, 1);
 });

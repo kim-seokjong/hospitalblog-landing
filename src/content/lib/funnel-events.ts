@@ -111,6 +111,22 @@ export function isValidAnonId(value: unknown): value is string {
 }
 
 /**
+ * Supabase 세션 쿠키가 하나라도 붙어 있는가 — `sb-<project-ref>-auth-token[.N]`.
+ *
+ * 왜 필요한가 (2026-08-10): funnel-event 가 내부 계정을 걸러내려고 레이트리밋보다 먼저
+ * `supabase.auth.getUser()` 를 부른다. auth-js 는 세션 토큰이 없으면 네트워크 요청 없이
+ * 즉시 반환하므로 익명 요청에는 비용이 없지만, **아무 값이나 담은 가짜 세션 쿠키를 붙이면**
+ * 매 요청이 Supabase Auth 로 나간다 — 레이트리밋 앞이라 한도에 걸리지도 않는다.
+ * 그래서 라우트는 이 함수로 쿠키 유무를 먼저 보고, 없으면 auth 조회를 통째로 건너뛴다.
+ *
+ * ⚠️이건 인증이 아니라 **호출을 아끼는 판정**이다. true 여도 세션이 유효하다는 뜻이 아니고,
+ *   유효성은 그대로 auth-js 가 판단한다. 여기서 신원을 결정하지 말 것.
+ */
+export function hasSupabaseSessionCookie(cookieNames: readonly string[]): boolean {
+  return cookieNames.some((name) => name.startsWith('sb-') && name.includes('-auth-token'));
+}
+
+/**
  * 이 요청에 쓸 anon_id 를 정한다 — **클라 제공값 > 쿠키 > 새로 발급**.
  *
  * ★ 왜 클라가 우선인가 (2026-08-04, 교차검증으로 순서를 뒤집음).

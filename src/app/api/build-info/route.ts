@@ -19,8 +19,12 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-/** 모듈 평가 시각 = 이 서버 인스턴스가 뜬 시각. */
-const STARTED_AT = new Date().toISOString();
+/**
+ * 모듈 평가 시각 = 이 서버 **인스턴스**가 뜬 시각.
+ * ⚠️배포 시각이 아니다. 서버리스라 같은 배포에서도 콜드 스타트·리전마다 값이 달라진다.
+ *   이 값의 변화를 새 배포로 해석하면 오탐이다 — 배포 판정은 반드시 commit 으로 한다.
+ */
+const INSTANCE_STARTED_AT = new Date().toISOString();
 
 export async function GET() {
   const body = {
@@ -28,9 +32,8 @@ export async function GET() {
     commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local',
     branch: process.env.VERCEL_GIT_COMMIT_REF ?? 'local',
     env: process.env.VERCEL_ENV ?? 'development',
-    // 모듈 평가 시각 = 이 인스턴스가 뜬 시각. 배포 시각과 정확히 같지는 않다(콜드스타트마다
-    // 갱신된다). 배포 판정은 commit 으로 하고, 이건 참고값이다.
-    startedAt: STARTED_AT,
+    // 이름에 instance 를 박아 둔다 — 'startedAt' 이면 소비자가 배포 시각으로 오해한다.
+    instanceStartedAt: INSTANCE_STARTED_AT,
   };
   return NextResponse.json(body, {
     headers: { 'cache-control': 'no-store, max-age=0' },

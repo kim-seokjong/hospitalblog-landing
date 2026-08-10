@@ -7,6 +7,7 @@ import {
   generateAnonId,
   resolveAnonId,
   consumeFunnelQuota,
+  hasSupabaseSessionCookie,
   readFunnelLimits,
   funnelKstDayKey,
   ANON_ID_COOKIE,
@@ -102,15 +103,21 @@ export async function POST(req: NextRequest) {
   }
 
   // 4) 로그인 사용자면 user_id 귀속 (선택 — 익명 이벤트는 null)
+  //    ★세션 쿠키가 없으면 auth 조회를 아예 건너뛴다(2026-08-10, Codex 지적).
+  //      auth-js 는 토큰이 없으면 네트워크 없이 즉시 반환하지만, **가짜 세션 쿠키를 붙이면**
+  //      요청마다 Supabase Auth 로 나간다. 이 블록이 레이트리밋보다 앞이라 한도로도 못 막는다.
+  //      쿠키 유무만 먼저 보면 그 경로가 닫히고, 정상 익명 트래픽의 비용도 줄어든다.
   let userId: string | null = null;
-  try {
-    const supabase = await createServerSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    userId = user?.id ?? null;
-  } catch {
-    userId = null;
+  if (hasSupabaseSessionCookie(req.cookies.getAll().map((c) => c.name))) {
+    try {
+      const supabase = await createServerSupabaseClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      userId = user?.id ?? null;
+    } catch {
+      userId = null;
+    }
   }
 
   // 5) 내부 트래픽 제외 ②: 계정 기반 (env FUNNEL_INTERNAL_USER_IDS).

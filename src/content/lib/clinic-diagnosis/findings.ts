@@ -1697,15 +1697,32 @@ export function lockedActionCount(findings: readonly Finding[]): number {
   return splitActionGate(findings).locked.length;
 }
 
+/** 화면이 그대로 텍스트로 뿌리는 필드 — 여기에 객체가 들어오면 React 가 렌더 중 터진다. */
+const RENDERED_TEXT_FIELDS = ['id', 'axis', 'label', 'tone', 'state', 'action', 'why'] as const;
+
 /**
  * 저장된 옛 리포트를 방어한다 — 배열이 아닐 수도, **원소가 null 일 수도** 있다.
  * 배열 여부만 보고 원소를 안 보면 `finding.axis` · `f.tone` 에서 TypeError 가 나고
  * 공유 페이지가 통째로 500 이 된다(2026-08-10, Codex 지적).
  * 손상된 원소는 버린다 — 하나 때문에 리포트 전체를 못 보는 것이 더 나쁘다.
+ *
+ * ★"객체이기만 하면 통과"로는 부족하다(2026-08-10 2차 지적). `axis` 가 객체인 항목이
+ *   섞이면 Map 키와 `section.label` 을 타고 화면까지 올라가 "Objects are not valid as a
+ *   React child" 로 죽는다 — 500 을 막으려던 가드가 렌더 단계로 문제를 미룰 뿐이다.
+ *
+ * ⚠️단, 필드 존재를 강요하지는 않는다. 옛 스키마에 없던 필드를 필수로 잡으면 **멀쩡한
+ *   항목이 통째로 사라진다** — 손상 방어가 데이터 손실로 바뀌는 쪽이 더 나쁘다.
+ *   그래서 분류에 반드시 필요한 axis·tone 만 문자열을 요구하고, 나머지는 "없어도 되지만
+ *   있으면 문자열이어야 한다"로 둔다.
  */
 function validFindings(findings: unknown): readonly Finding[] {
   if (!Array.isArray(findings)) return [];
-  return findings.filter((f): f is Finding => Boolean(f) && typeof f === 'object');
+  return findings.filter((f): f is Finding => {
+    if (!f || typeof f !== 'object' || Array.isArray(f)) return false;
+    const row = f as Record<string, unknown>;
+    if (typeof row.axis !== 'string' || typeof row.tone !== 'string') return false;
+    return RENDERED_TEXT_FIELDS.every((key) => row[key] == null || typeof row[key] === 'string');
+  });
 }
 
 export function groupFindings(findings: readonly Finding[]): GroupedFindings {
