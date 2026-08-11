@@ -167,20 +167,27 @@ function ContactFloatingButton() {
   );
 }
 
+/** 배너에 나열하는 취급 매체 — 온라인을 먼저 둔다.
+ *  오프라인을 앞에 두면 오프라인 전문업체로 읽힌다(8/11 대표 지적). */
+const HM_SERVICES = [
+  { k: '네이버 플레이스', v: '지역 검색에서 먼저 보이게' },
+  { k: '블로그 · 콘텐츠', v: '검색과 AI가 읽는 글' },
+  { k: '홈페이지', v: '검색해서 들어왔을 때 받을 준비' },
+  { k: '버스 · 지하철 · 전광판', v: '진료 반경 안에서 이름을 심기' },
+];
+
 /**
- * 광고,진정성 배너 — 닥포 앱 좌측.
+ * 광고,진정성 배너 — 닥포 앱 좌측(폭 384px, sticky).
  *
- * 2026-08-11 전면 교체. 두 번 고쳤다.
+ * 2026-08-11 세 번 고쳤다.
  *  1차: 검은 배경·빨간 그림자·HOT 태그·이모지가 밝은 앱(#eaeef4)에서 혼자 튀었다.
- *  2차: 시각만 바꾸고 메시지는 옛 배너의 "OFFLINE MARKETING" 축을 그대로 들고 왔다.
- *       그건 두 군데가 틀렸다 —
+ *  2차: 시각만 바꾸고 옛 "OFFLINE MARKETING" 축을 그대로 들고 왔다. 두 군데가 사실과 달랐다 —
  *       ① 닥터포스트는 블로그 자동화이지 **온라인 전부가 아니다.**
- *          "온라인만으로 부족하니 오프라인" 이라는 문장은 닥포가 온라인을 다 덮는다는 전제다.
  *       ② 광고,진정성은 오프라인 전문이 아니라 **병의원 전문 마케팅대행사**다.
- *          온·오프라인을 둘 다 집행하고, 핵심 가치는 "그 병원에 맞는 매체를 골라준다"이다.
- *       → 라벨·사진·카피·CTA 에서 오프라인 편향을 걷어냈다.
- * ⚠️사진은 특정 매체(버스 등)를 크게 잡지 않는다. 한 매체가 화면을 지배하면
- *   그 매체 전문업체로 읽힌다.
+ *          온·오프라인을 둘 다 집행하고, 강점은 "그 병원에 맞는 매체를 골라준다"이다.
+ *  3차: 장식을 걷어내다 보니 카드가 너무 짧아졌다("이전처럼 크게" — 대표).
+ *       → 사진을 키우고 **취급 매체 목록**을 넣어 세로를 채웠다. 톤은 그대로 조용하게 둔다.
+ * ⚠️사진은 특정 매체를 크게 잡지 않는다. 한 매체가 화면을 지배하면 그 매체 전문업체로 읽힌다.
  */
 function HospitalMarketingBanner() {
   return (
@@ -195,24 +202,38 @@ function HospitalMarketingBanner() {
       <img
         src="/banner/clinic-street.jpg"
         alt="병원이 있는 동네 거리"
-        className="w-full h-[132px] object-cover"
+        className="w-full h-[196px] object-cover"
         loading="lazy"
       />
 
-      <div className="p-4">
+      <div className="p-5">
         <div className="text-[11px] font-semibold text-[#73808f]">병의원 전문 마케팅대행사</div>
-        <div className="mt-0.5 text-[17px] font-extrabold tracking-tight text-[#171d3e]">
+        <div className="mt-1 text-[19px] font-extrabold tracking-tight text-[#171d3e]">
           광고<span className="text-[#e8492f]">,</span>진정성
         </div>
 
-        <p className="mt-2.5 text-[12.5px] leading-relaxed text-[#5b6573]">
+        <p className="mt-3 text-[13px] leading-relaxed text-[#5b6573]">
           병원마다 맞는 광고가 다릅니다.
           위치와 진료과, 규모를 보고 필요한 매체만 골라 집행합니다.
         </p>
 
-        <div className="mt-3 flex items-center gap-1 text-[12px] font-bold text-[#171d3e]">
+        <ul className="mt-4 pt-4 border-t border-[#eef1f6] space-y-3">
+          {HM_SERVICES.map((s) => (
+            <li key={s.k}>
+              <div className="text-[12.5px] font-bold text-[#202020]">{s.k}</div>
+              <div className="mt-0.5 text-[11.5px] leading-snug text-[#8b95a4]">{s.v}</div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-5 flex items-center justify-center gap-1 rounded-xl bg-[#171d3e]
+                        py-3 text-[13px] font-bold text-white">
           병원 마케팅 상담
           <span className="transition-transform group-hover:translate-x-0.5">→</span>
+        </div>
+
+        <div className="mt-3 text-center text-[10.5px] text-[#a3adbb]">
+          대구 수성구 청호로 422 · 070-8095-3320
         </div>
       </div>
     </a>
