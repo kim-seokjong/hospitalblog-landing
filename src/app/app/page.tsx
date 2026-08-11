@@ -167,259 +167,52 @@ function ContactFloatingButton() {
   );
 }
 
-const OFFLINE_BANNER_CSS = `
-.obr-banner {
-  width:100%;
-  background:#0a0a0a;
-  border-radius:16px;
-  overflow:hidden;
-  box-shadow:0 0 0 1px rgba(255,0,0,0.2), 0 20px 60px rgba(0,0,0,0.8);
-  font-family:'Noto Sans KR', system-ui, sans-serif;
-}
-.obr-top-bar {
-  height:4px;
-  background:linear-gradient(90deg, #E53935, #FF5722, #FFD700);
-}
-.obr-header {
-  padding:24px 20px 16px;
-  position:relative;
-}
-.obr-badge {
-  display:inline-block;
-  background:rgba(229,57,53,0.15);
-  border:1px solid rgba(229,57,53,0.4);
-  color:#FF5252;
-  font-size:10px;
-  font-weight:700;
-  letter-spacing:1.5px;
-  padding:3px 10px;
-  border-radius:20px;
-  margin-bottom:12px;
-}
-.obr-headline {
-  font-size:26px;
-  font-weight:900;
-  color:#fff;
-  line-height:1.15;
-  margin-bottom:8px;
-}
-.obr-headline .obr-accent {
-  color:#E53935;
-  position:relative;
-}
-.obr-headline .obr-accent::after {
-  content:'';
-  position:absolute;
-  bottom:-2px; left:0; right:0;
-  height:3px;
-  background:#E53935;
-  border-radius:2px;
-}
-.obr-sub { font-size:11px; color:rgba(255,255,255,0.5); line-height:1.6; }
-
-/* 비주얼 씬 */
-.obr-visual {
-  margin:0 16px;
-  border-radius:12px;
-  overflow:hidden;
-  background:linear-gradient(135deg, #1a0000 0%, #2d0000 50%, #1a0a00 100%);
-  height:110px;
-  position:relative;
-  border:1px solid rgba(229,57,53,0.2);
-}
-.obr-road2 {
-  position:absolute; bottom:0; left:0; right:0; height:24px;
-  background:#1a1a1a;
-}
-.obr-road-lines {
-  position:absolute; bottom:10px; left:0; right:0; height:3px;
-  background:repeating-linear-gradient(90deg, #FFD700 0,#FFD700 20px,transparent 20px,transparent 36px);
-  animation:obr-move 1s linear infinite;
-}
-@keyframes obr-move { to { background-position:-36px 0; } }
-
-/* 래핑된 버스 */
-.obr-bus2 {
-  position:absolute; bottom:24px;
-  animation:obr-drive 4s linear infinite;
-}
-@keyframes obr-drive { from{left:-100px} to{left:340px} }
-.obr-bus2-body {
-  width:88px; height:32px;
-  background:linear-gradient(180deg,#B71C1C,#C62828);
-  border-radius:6px 8px 2px 2px;
-  position:relative;
-}
-.obr-bus2-text {
-  position:absolute; top:6px; left:8px; right:8px; height:14px;
-  background:white; border-radius:2px;
-  display:flex; align-items:center; justify-content:center;
-  font-size:6px; font-weight:900; color:#B71C1C; letter-spacing:0.5px;
-}
-.obr-bus2-win {
-  position:absolute; top:22px; left:10px; right:10px; height:7px;
-  background:rgba(100,180,255,0.3); border-radius:1px;
-}
-.obr-bus2-wheel {
-  position:absolute; bottom:-5px;
-  width:10px; height:10px;
-  background:#111; border-radius:50%; border:2px solid #333;
-  animation:obr-spin 0.3s linear infinite;
-}
-@keyframes obr-spin { to{transform:rotate(360deg)} }
-
-/* 전광판 */
-.obr-billboard {
-  position:absolute; top:8px; right:20px;
-  width:70px; height:45px;
-  background:#000;
-  border:2px solid #FFD700;
-  border-radius:4px;
-  display:flex; flex-direction:column;
-  align-items:center; justify-content:center;
-  box-shadow:0 0 15px rgba(255,215,0,0.4);
-  overflow:hidden;
-}
-.obr-billboard-screen {
-  font-size:6px; font-weight:900; color:#FFD700;
-  white-space:nowrap;
-  animation:obr-scroll 3s linear infinite;
-}
-@keyframes obr-scroll { from{transform:translateX(70px)} to{transform:translateX(-90px)} }
-.obr-billboard-stand {
-  position:absolute; bottom:-8px; left:50%; transform:translateX(-50%);
-  width:4px; height:10px; background:#555;
-}
-
-/* 광고 아이템 */
-.obr-items { padding:14px 16px; display:flex; flex-direction:column; gap:6px; }
-.obr-item {
-  display:flex; align-items:center; gap:10px;
-  padding:10px 12px;
-  background:rgba(255,255,255,0.03);
-  border:1px solid rgba(255,255,255,0.06);
-  border-radius:10px;
-  position:relative; overflow:hidden;
-}
-.obr-item::before {
-  content:'';
-  position:absolute; left:0; top:0; bottom:0; width:3px;
-  background:var(--c);
-}
-.obr-item-icon {
-  font-size:18px;
-  width:32px; text-align:center;
-}
-.obr-item-text { flex:1; }
-.obr-item-name { font-size:12px; font-weight:700; color:#fff; margin-bottom:2px; }
-.obr-item-desc { font-size:10px; color:rgba(255,255,255,0.4); }
-.obr-item-tag {
-  font-size:9px; font-weight:700; padding:2px 7px;
-  border-radius:10px; background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.4);
-}
-
-.obr-cta { padding:0 16px 16px; }
-.obr-cta-button {
-  width:100%; padding:14px;
-  background:linear-gradient(90deg,#E53935,#C62828);
-  border:none; border-radius:12px;
-  font-size:13px; font-weight:900; color:#fff;
-  cursor:pointer; letter-spacing:0.5px;
-  box-shadow:0 4px 20px rgba(229,57,53,0.35);
-  display:flex; align-items:center; justify-content:center; gap:8px;
-}
-.obr-foot {
-  padding:10px 16px 14px;
-  display:flex; align-items:center; justify-content:center; gap:8px;
-  border-top:1px solid rgba(255,255,255,0.05);
-}
-.obr-foot-name { font-size:11px; font-weight:700; color:rgba(255,255,255,0.4); letter-spacing:1px; }
-.obr-foot-divider { color:rgba(255,0,0,0.4); }
-.obr-foot-sub { font-size:10px; color:rgba(255,255,255,0.2); }
-`;
-
+/**
+ * 광고,진정성 배너 — 닥포 앱 좌측.
+ *
+ * 2026-08-11 전면 교체. 두 번 고쳤다.
+ *  1차: 검은 배경·빨간 그림자·HOT 태그·이모지가 밝은 앱(#eaeef4)에서 혼자 튀었다.
+ *  2차: 시각만 바꾸고 메시지는 옛 배너의 "OFFLINE MARKETING" 축을 그대로 들고 왔다.
+ *       그건 두 군데가 틀렸다 —
+ *       ① 닥터포스트는 블로그 자동화이지 **온라인 전부가 아니다.**
+ *          "온라인만으로 부족하니 오프라인" 이라는 문장은 닥포가 온라인을 다 덮는다는 전제다.
+ *       ② 광고,진정성은 오프라인 전문이 아니라 **병의원 전문 마케팅대행사**다.
+ *          온·오프라인을 둘 다 집행하고, 핵심 가치는 "그 병원에 맞는 매체를 골라준다"이다.
+ *       → 라벨·사진·카피·CTA 에서 오프라인 편향을 걷어냈다.
+ * ⚠️사진은 특정 매체(버스 등)를 크게 잡지 않는다. 한 매체가 화면을 지배하면
+ *   그 매체 전문업체로 읽힌다.
+ */
 function HospitalMarketingBanner() {
   return (
     <a
-      href="http://www.hospitalmarketing.kr/"
+      href="https://hospitalmarketing.kr/?utm_source=doctorpost&utm_medium=app_banner&utm_campaign=sidebar"
       target="_blank"
       rel="noopener noreferrer"
-      className="ad-banner-hm relative block w-full no-underline cursor-pointer"
+      className="group block w-full no-underline rounded-2xl overflow-hidden bg-white
+                 border border-[#dfe3ea] shadow-[0_8px_24px_-16px_rgba(32,32,32,0.18)]
+                 transition-shadow hover:shadow-[0_12px_32px_-14px_rgba(32,32,32,0.26)]"
     >
-      <style>{OFFLINE_BANNER_CSS}</style>
-      <div className="obr-banner">
-        <div className="obr-top-bar" />
+      <img
+        src="/banner/clinic-street.jpg"
+        alt="병원이 있는 동네 거리"
+        className="w-full h-[132px] object-cover"
+        loading="lazy"
+      />
 
-        <div className="obr-header">
-          <div className="obr-badge">OFFLINE MARKETING</div>
-          <div className="obr-headline">
-            온라인 이후엔<br />
-            <span className="obr-accent">오프라인</span>입니다
-          </div>
-          <div className="obr-sub">지역 환자를 직접 만나는<br />오프라인 광고 솔루션</div>
+      <div className="p-4">
+        <div className="text-[11px] font-semibold text-[#73808f]">병의원 전문 마케팅대행사</div>
+        <div className="mt-0.5 text-[17px] font-extrabold tracking-tight text-[#171d3e]">
+          광고<span className="text-[#e8492f]">,</span>진정성
         </div>
 
-        <div className="obr-visual">
-          {/* 전광판 */}
-          <div className="obr-billboard">
-            <div className="obr-billboard-screen">광고진정성 병의원마케팅</div>
-            <div className="obr-billboard-stand" />
-          </div>
-          {/* 버스 */}
-          <div className="obr-bus2" style={{ left: '-100px' }}>
-            <div className="obr-bus2-body">
-              <div className="obr-bus2-text">광고진정성 · 병의원 전문</div>
-              <div className="obr-bus2-win" />
-              <div className="obr-bus2-wheel" style={{ left: '8px' }} />
-              <div className="obr-bus2-wheel" style={{ left: '68px' }} />
-            </div>
-          </div>
-          <div className="obr-road2"><div className="obr-road-lines" /></div>
-        </div>
+        <p className="mt-2.5 text-[12.5px] leading-relaxed text-[#5b6573]">
+          병원마다 맞는 광고가 다릅니다.
+          위치와 진료과, 규모를 보고 필요한 매체만 골라 집행합니다.
+        </p>
 
-        <div className="obr-items">
-          <div className="obr-item" style={{ ['--c']: '#FFD700' } as React.CSSProperties}>
-            <div className="obr-item-icon">📺</div>
-            <div className="obr-item-text">
-              <div className="obr-item-name">전광판 · LED</div>
-              <div className="obr-item-desc">고가시성 대형 디스플레이 광고</div>
-            </div>
-            <div className="obr-item-tag">HOT</div>
-          </div>
-          <div className="obr-item" style={{ ['--c']: '#2196F3' } as React.CSSProperties}>
-            <div className="obr-item-icon">🚌</div>
-            <div className="obr-item-text">
-              <div className="obr-item-name">버스 래핑</div>
-              <div className="obr-item-desc">지역 생활권 반복 노출</div>
-            </div>
-            <div className="obr-item-tag">추천</div>
-          </div>
-          <div className="obr-item" style={{ ['--c']: '#FDD835' } as React.CSSProperties}>
-            <div className="obr-item-icon">🚕</div>
-            <div className="obr-item-text">
-              <div className="obr-item-name">택시 래핑</div>
-              <div className="obr-item-desc">근거리 타겟 밀착 광고</div>
-            </div>
-            <div className="obr-item-tag">인기</div>
-          </div>
-          <div className="obr-item" style={{ ['--c']: '#FF5722' } as React.CSSProperties}>
-            <div className="obr-item-icon">📦</div>
-            <div className="obr-item-text">
-              <div className="obr-item-name">택배차량 래핑</div>
-              <div className="obr-item-desc">주거지역 생활 밀착 노출</div>
-            </div>
-            <div className="obr-item-tag">NEW</div>
-          </div>
-        </div>
-
-        <div className="obr-cta">
-          <div className="obr-cta-button">오프라인 광고 상담받기 →</div>
-        </div>
-
-        <div className="obr-foot">
-          <div className="obr-foot-name">광고진정성</div>
-          <div className="obr-foot-divider">|</div>
-          <div className="obr-foot-sub">병의원 전문 마케팅</div>
+        <div className="mt-3 flex items-center gap-1 text-[12px] font-bold text-[#171d3e]">
+          병원 마케팅 상담
+          <span className="transition-transform group-hover:translate-x-0.5">→</span>
         </div>
       </div>
     </a>
