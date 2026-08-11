@@ -35,6 +35,11 @@ export const FUNNEL_EVENTS = [
   // 분모(diagnosis_report_view)와 분자(diagnosis_email_submitted)를 붙여서 본다.
   // diagnosis_email_submitted 는 서버가 발송·적재에 성공했을 때만 기록한다(위조 불가).
   'diagnosis_email_submitted',
+  // 전환 버튼이 **화면에 실제로 들어왔는지** (2026-08-11 추가).
+  // 8/11 실측: 결과 도달 17건에 diagnosis_cta_click 0건이었다. 버튼은 결과 맨 아래에 있어서
+  // "거기까지 안 갔다"와 "보고도 안 눌렀다"를 구분할 수 없었다 — 분모가 없으면 문구를 고쳐도
+  // 나아졌는지 알 수 없다. 노출을 세야 클릭률이 지표가 된다.
+  'diagnosis_cta_view',
   'diagnosis_cta_click',
   // 요금제 페이지 도달 (2026-07-29 추가). 랜딩~가입 사이가 통째로 비어 있어서
   // "요금을 보러 가지도 않는다"와 "요금을 보고 나간다"를 구분할 수 없었다.
@@ -65,9 +70,10 @@ export const PUBLIC_FUNNEL_EVENTS = [
   'diagnosis_submit',
   'diagnosis_run',
   'diagnosis_report_view',
-  // 결과 하단 전환 버튼 클릭 = 의도 이벤트 → 공개 허용.
+  // 결과 하단 전환 버튼 노출·클릭 = 의도 이벤트 → 공개 허용.
   // diagnosis_email_submitted 는 여기 없다: 실제 발송·적재 성공을 서버만 알 수 있고,
   // 이메일 확보율이 이 개편의 핵심 지표라 위조된 분자를 받아서는 안 된다.
+  'diagnosis_cta_view',
   'diagnosis_cta_click',
   // 요금제 페이지 도달 = 비회원이 브라우저에서 일으키는 **저신뢰 의도 이벤트**라
   // landing_view 와 같은 등급으로 공개 허용한다. 위조되어도 요금 조회 수가 부풀 뿐
@@ -281,6 +287,7 @@ const EVENT_META_VALIDATORS: Record<FunnelEvent, Record<string, MetaValidator>> 
   // 대표가 수동 발송하므로, "확보했지만 안 나간 건"을 지표에서 구분할 수 있어야 한다.
   // 수신 주소는 당연히 meta 에 넣지 않는다(PII 는 리드 테이블에만).
   diagnosis_email_submitted: { path: pathMeta, source: tokenMeta, sent: boolMeta },
+  diagnosis_cta_view: { path: pathMeta, source: tokenMeta },
   diagnosis_cta_click: { path: pathMeta, source: tokenMeta },
   // landing_view 와 **동일한 3키**. referrer_host 까지 받는 이유: 요금 페이지는 랜딩·
   // 진단 결과·외부 검색 등 여러 경로로 도달하는데, 유입 출처를 모르면 "어디서 요금을

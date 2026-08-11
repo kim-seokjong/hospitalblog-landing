@@ -43,6 +43,7 @@ test('isPublicFunnelEvent: 방문·진단·가입시작(저신뢰 의도) 만 tr
       'diagnosis_submit',
       'diagnosis_run',
       'diagnosis_report_view',
+      'diagnosis_cta_view',
       'diagnosis_cta_click',
       'pricing_view',
       'signup_start',
@@ -76,6 +77,8 @@ test('FUNNEL_EVENTS: 진단 단계가 방문과 가입 시작 사이에 온다',
       'diagnosis_run',
       'diagnosis_report_view',
       'diagnosis_email_submitted',
+      // 노출(view) → 클릭 순서. 클릭률의 분모가 노출이라 바로 앞에 온다.
+      'diagnosis_cta_view',
       'diagnosis_cta_click',
       // 요금 확인은 가입 시작 **직전** 단계다 — 랜딩~가입 사이의 빈칸을 메운다.
       'pricing_view',
