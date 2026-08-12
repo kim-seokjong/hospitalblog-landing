@@ -210,7 +210,13 @@ export interface DiagnosisFlowDeps {
   /** 조회를 실제로 시작했을 때 (퍼널 기록). */
   readonly onLookupStarted?: () => void;
   /** 최신 흐름의 결과가 화면에 올라갔을 때 (퍼널 기록·스크롤). */
-  readonly onReportShown?: () => void;
+  /**
+   * 결과가 실제로 화면에 걸렸을 때. 인자는 그 리포트의 공유 토큰(없으면 null).
+   * ★계측 중복 판정 단위로 쓴다 — 한 방문에서 병원을 바꿔 다시 진단하면
+   *   이 콜백이 다시 불리는데, 토큰이 있어야 '다른 리포트'임을 구분할 수 있다.
+   *   ⚠️토큰을 외부(광고 플랫폼 등)로 **전송**하면 안 된다. 로컬 판정에만 쓴다.
+   */
+  readonly onReportShown?: (shareToken: string | null) => void;
 }
 
 /**
@@ -230,6 +236,7 @@ async function runDiagnosisInFlow(
 ): Promise<void> {
   deps.dispatch({ type: 'diagnosis:start', flowId, mngNo: clinic.mngNo });
   let shown = false;
+  let shownToken: string | null = null;
   try {
     const data = await deps.requestDiagnosis({ clinic, detail });
     if (!data.report) {
@@ -247,13 +254,14 @@ async function runDiagnosisInFlow(
       shareToken: typeof data.shareToken === 'string' ? data.shareToken : null,
     });
     shown = deps.currentFlowId() === flowId;
+    shownToken = typeof data.shareToken === 'string' ? data.shareToken : null;
   } catch {
     deps.dispatch({ type: 'diagnosis:failed', flowId, message: NETWORK_ERROR_MESSAGE });
   } finally {
     // 성공·실패·경합 무관하게 이 흐름의 진단 로딩은 반드시 여기서 풀린다.
     deps.dispatch({ type: 'diagnosis:settled', flowId });
   }
-  if (shown) deps.onReportShown?.();
+  if (shown) deps.onReportShown?.(shownToken);
 }
 
 /** 사용자가 병원을 직접 골라(후보 선택·블로그 교체·상세 입력) 시작하는 진단. */

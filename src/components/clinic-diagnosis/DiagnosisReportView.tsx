@@ -715,7 +715,12 @@ export default function DiagnosisReportView({
       )}
 
       {/* 결과 맨 아래 전환 — 바로 가입·무료 2편으로 (제품 소개로 우회하지 않는다) */}
-      <DiagnosisCta headline={cta.headline} sub={cta.sub} hospitalName={clinic.name} />
+      <DiagnosisCta
+        headline={cta.headline}
+        sub={cta.sub}
+        hospitalName={clinic.name}
+        shareToken={shareToken}
+      />
 
       <p className="text-[11px] text-[#8a93a0] text-center leading-relaxed mt-7">
         본 진단은 행정안전부 공표 정보와 네이버 공개 API, 그리고 공개된 블로그 글·홈페이지를 각각 한 번씩 열어 만든 특정 시점의 참고 자료예요.

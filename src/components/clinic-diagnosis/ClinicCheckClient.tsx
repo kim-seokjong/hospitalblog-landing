@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { trackFunnel } from '@/dev/lib/funnel';
+import { DIAGNOSIS_PIXEL_EVENT, trackDiagnosisOnce } from '@/dev/lib/meta-pixel';
 import Logo from '@/components/landing/Logo';
 import DiagnosisReportView from './DiagnosisReportView';
 import ClinicCandidatePicker from './ClinicCandidatePicker';
@@ -136,10 +137,24 @@ export default function ClinicCheckClient() {
         return res.ok ? data : { error: data.error };
       },
       // 퍼널: 진단 실행 도달 (랜딩 제출 대비 이동 중 이탈을 여기서 읽는다).
-      onLookupStarted: () => trackFunnel('diagnosis_run'),
-      onReportShown: () => {
+      onLookupStarted: () => {
+        trackFunnel('diagnosis_run');
+        // ★메타 픽셀에도 같이 보낸다 (2026-08-12).
+        //   우리 광고의 도착지는 전부 무료진단인데 메타는 진단 퍼널을 하나도 못 보고
+        //   있었다(붙어 있던 건 sample·pricing·가입·결제뿐). 그러면 광고를 돌려도
+        //   '클릭'까지만 최적화된다 — 돈이 새는 자리다.
+        //   재진단할 때마다 세지 않도록 방문당 한 번만 보낸다.
+        trackDiagnosisOnce(DIAGNOSIS_PIXEL_EVENT.started, 'visit');
+      },
+      onReportShown: (reportToken: string | null) => {
         // 퍼널: 결과까지 실제로 도달 (진단 실행 대비 실패율을 여기서 읽는다).
         trackFunnel('diagnosis_report_view');
+        // 결과 도달 = 지금 우리가 가진 유일한 '볼륨 있는' 전환 신호다.
+        // 가입은 8월 0건이라 메타가 학습할 수 없다(주당 수십 건이 필요하다).
+        // ⚠️블로그 후보 교체·상세 재진단마다 이 콜백이 다시 불린다 → 리포트 단위로 한 번.
+        //   방문 단위로 묶으면 한 탭에서 두 번째 병원을 진단했을 때 그 성과가 통째로 빠진다.
+        //   토큰은 판정에만 쓰고 **메타로 보내지 않는다**(파라미터 없음).
+        trackDiagnosisOnce(DIAGNOSIS_PIXEL_EVENT.reportViewed, reportToken ?? 'no-token');
         setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
       },
     }),

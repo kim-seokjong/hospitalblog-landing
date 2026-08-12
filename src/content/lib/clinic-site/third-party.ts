@@ -88,6 +88,37 @@ export function shouldRenderTag(tag: RootLayoutTag, isClinicSite: boolean): bool
   return isClinicSite ? isAllowedOnClinicSite(tag) : true;
 }
 
+/**
+ * URL **경로 자체에 접근 토큰이 들어 있는** 페이지들.
+ *
+ * `/clinic-check/r/{token}` 은 그 토큰만 있으면 리포트를 열 수 있는 주소다 —
+ * 즉 토큰은 개인정보이기 이전에 **접근 권한(capability)** 이다.
+ * 메타 픽셀은 이벤트 파라미터와 별개로 **현재 문서 주소를 그대로 함께 보낸다.**
+ * 그래서 이 페이지에서 픽셀이 돌면 우리가 광고 플랫폼에 리포트 열쇠를 넘기게 된다.
+ *
+ * ⚠️Vercel Analytics 도 마찬가지다. 처음엔 "동적 라우트를 패턴으로만 보고한다"고
+ *   판단했는데 **틀렸다.** 설치본(@vercel/analytics 2.0.1)은
+ *   `pageview({ route, path })` 로 **패턴과 실제 경로를 둘 다** 보낸다
+ *   (`dist/react/index.mjs`). 즉 토큰이 그대로 나간다 → 함께 막는다.
+ *   ★새 외부 태그를 추가할 때는 "그 태그가 raw URL 을 보내는가"를 **패키지 구현으로
+ *     확인**하고, 보낸다면 아래 SENDS_RAW_URL 에 넣을 것. 문서·추측으로 판단하지 말 것.
+ */
+const TOKEN_BEARING_PATH_PREFIXES: readonly string[] = ['/clinic-check/r/'];
+
+/** 경로에 접근 토큰이 실려 있어 raw URL 을 외부로 보내면 안 되는 페이지인가. */
+export function isTokenBearingPath(pathname: string | null | undefined): boolean {
+  if (typeof pathname !== 'string') return false;
+  return TOKEN_BEARING_PATH_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+/** raw URL 을 외부로 전송하는 태그 — 토큰 경로에서 렌더하면 안 된다. */
+const SENDS_RAW_URL: readonly RootLayoutTag[] = ['meta-pixel', 'vercel-analytics'];
+
+/** 이 태그를 토큰 경로에서 렌더해도 되는가. */
+export function isAllowedOnTokenBearingPath(tag: RootLayoutTag): boolean {
+  return !SENDS_RAW_URL.includes(tag);
+}
+
 /** 고객 병원 블로그에서 차단되는 태그 목록 (테스트·감사용). */
 export function clinicSiteBlockedTags(): RootLayoutTag[] {
   return (Object.keys(POLICY) as RootLayoutTag[]).filter((tag) => !POLICY[tag].allowedOnClinicSite);

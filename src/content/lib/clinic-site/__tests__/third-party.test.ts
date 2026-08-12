@@ -5,6 +5,8 @@ import {
   allRootLayoutTags,
   clinicSiteBlockedTags,
   isAllowedOnClinicSite,
+  isAllowedOnTokenBearingPath,
+  isTokenBearingPath,
   shouldRenderTag,
   tagPolicyReason,
   type RootLayoutTag,
@@ -206,4 +208,45 @@ test('shouldRenderTag: 타입 안전하게 전 태그를 커버한다', () => {
   for (const tag of tags) {
     assert.equal(typeof shouldRenderTag(tag, true), 'boolean');
   }
+});
+
+// ---------------------------------------------------------------------------
+// 토큰이 실린 주소 (2026-08-12)
+//   /clinic-check/r/{token} 은 토큰만 있으면 리포트가 열리는 주소다.
+//   메타 픽셀은 이벤트와 별개로 문서 주소를 함께 보내므로, 여기서 픽셀이 돌면
+//   우리가 광고 플랫폼에 리포트 열쇠를 넘기게 된다.
+// ---------------------------------------------------------------------------
+
+test('★ 공유 리포트 주소에서는 메타 픽셀을 렌더하지 않는다 (토큰 유출 차단)', () => {
+  assert.equal(isTokenBearingPath('/clinic-check/r/abc123'), true);
+  assert.equal(isAllowedOnTokenBearingPath('meta-pixel'), false);
+});
+
+test('토큰 경로 판정 — 진단 입력 화면·홈은 해당 없음', () => {
+  assert.equal(isTokenBearingPath('/clinic-check'), false);
+  assert.equal(isTokenBearingPath('/clinic-check?name=OO의원'), false);
+  assert.equal(isTokenBearingPath('/'), false);
+  assert.equal(isTokenBearingPath(null), false);
+  assert.equal(isTokenBearingPath(undefined), false);
+});
+
+test('★ 공유 리포트 주소에서는 Vercel Analytics 도 렌더하지 않는다', () => {
+  // 처음엔 "동적 라우트를 패턴으로만 보고한다"고 봤는데 틀렸다.
+  // @vercel/analytics 2.0.1 은 pageview({ route, path }) 로 실제 경로도 함께 보낸다.
+  assert.equal(isAllowedOnTokenBearingPath('vercel-analytics'), false);
+});
+
+test('raw URL 을 안 보내는 태그는 토큰 경로에서도 유지된다', () => {
+  assert.equal(isAllowedOnTokenBearingPath('notification-bell'), true);
+  assert.equal(isAllowedOnTokenBearingPath('portone-browser-sdk'), true);
+});
+
+test('★ raw URL 을 보내는 태그 목록에 빠진 것이 없는지 — 새 태그 추가 시 함께 검토', () => {
+  // 이 테스트는 "검토했다"는 기록이다. 새 외부 태그가 늘면 여기서 걸려
+  // raw URL 전송 여부를 판단하게 만든다.
+  const known: RootLayoutTag[] = [
+    'saas-json-ld', 'meta-pixel', 'portone-browser-sdk',
+    'vercel-analytics', 'notification-bell',
+  ];
+  assert.deepEqual(allRootLayoutTags().sort(), known.sort());
 });

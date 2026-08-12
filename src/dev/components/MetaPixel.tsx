@@ -3,6 +3,7 @@
 import Script from 'next/script';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, Suspense } from 'react';
+import { safePageView } from '@/dev/lib/meta-pixel';
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
@@ -12,9 +13,10 @@ function PixelPageView() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (typeof window.fbq !== 'function') return;
-    // 경로 변경 시 PageView 이벤트 발송 (SPA 라우팅 대응)
-    window.fbq('track', 'PageView');
+    // 경로 변경 시 PageView 이벤트 발송 (SPA 라우팅 대응).
+    // ★직접 window.fbq 를 부르지 않는다 — 던지면 React effect 오류가 되고,
+    //   토큰이 실린 주소에서 걸러지지도 않는다. 두 방어가 다 들어 있는 래퍼를 쓴다.
+    safePageView();
   }, [pathname, searchParams]);
 
   return null;

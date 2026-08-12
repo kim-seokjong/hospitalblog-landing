@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useId, useState } from 'react';
+import { DIAGNOSIS_PIXEL_EVENT, trackDiagnosisOnce } from '@/dev/lib/meta-pixel';
 
 /**
  * 진단 결과를 메일로 보내드릴까요 — **이 개편의 1순위 동선**.
@@ -81,6 +82,13 @@ export default function DiagnosisEmailCapture({
       }
       // 발송 인프라가 없으면 접수만 된다 — 사용자에게 사실대로 알린다.
       setStatus(data.sent ? 'sent' : 'queued');
+      // ★메타 픽셀 (2026-08-12) — 광고 최적화 목표로 쓸 유일한 '진짜 리드'다.
+      //   이메일 주소를 남긴 사람이고, 우리 영업 목표(미팅이 아니라 이메일)와 정확히 같다.
+      //   ⚠️이메일 주소를 절대 보내지 않는다. 이벤트가 일어났다는 사실만 보낸다.
+      //   ⚠️접수(queued)도 리드로 센다. 발송 실패는 우리 인프라 사정이지 사용자 의사가 아니다.
+      //   ⚠️리포트에 이메일 폼이 **두 군데** 있다(상단·하단). 상태가 서로 독립이라
+      //     같은 사람이 두 번 제출할 수 있다 → 리포트 토큰 기준으로 한 번만 보낸다.
+      trackDiagnosisOnce(DIAGNOSIS_PIXEL_EVENT.emailSubmitted, shareToken);
     } catch {
       setError('네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.');
       setStatus('error');

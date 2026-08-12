@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import AuthModal from '@/hr/components/AuthModal';
 import { createClient } from '@/dev/lib/supabase/client';
 import { trackFunnel } from '@/dev/lib/funnel';
+import { DIAGNOSIS_PIXEL_EVENT, trackDiagnosisOnce } from '@/dev/lib/meta-pixel';
 
 /**
  * 결과 맨 아래 전환 버튼.
@@ -24,9 +25,15 @@ interface DiagnosisCtaProps {
   readonly sub: string;
   /** 가입 폼에 미리 채울 병원명. */
   readonly hospitalName: string;
+  /**
+   * 이 리포트의 공유 토큰 — **계측 중복 판정에만** 쓴다.
+   * ⚠️광고 플랫폼으로 전송하지 않는다. 한 방문에서 병원을 바꿔 다시 진단했을 때
+   *   두 번째 리포트의 CTA 클릭이 통째로 빠지는 것을 막기 위한 로컬 키다.
+   */
+  readonly shareToken?: string | null;
 }
 
-export default function DiagnosisCta({ headline, sub, hospitalName }: DiagnosisCtaProps) {
+export default function DiagnosisCta({ headline, sub, hospitalName, shareToken }: DiagnosisCtaProps) {
   const [showAuth, setShowAuth] = useState(false);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -72,6 +79,11 @@ export default function DiagnosisCta({ headline, sub, hospitalName }: DiagnosisC
 
   const handleClick = useCallback(async () => {
     trackFunnel('diagnosis_cta_click');
+    // 결과를 끝까지 읽고 가입으로 넘어가려 한 사람 — 결과 도달보다 한 단계 더 깊다.
+    // ⚠️표준 InitiateCheckout 을 쓰지 않는다. 그건 실제 결제 시작(BillingButton)이
+    //   쓰고 있어서, 여기 얹으면 구매 가능성이 전혀 다른 두 행동이 한 지표가 된다.
+    // ⚠️모달을 닫았다 다시 누르는 경우가 있어 리포트당 한 번만 보낸다.
+    trackDiagnosisOnce(DIAGNOSIS_PIXEL_EVENT.ctaClicked, shareToken ?? 'no-token');
     // 이미 로그인한 사용자에게 가입 모달을 다시 띄우지 않는다.
     try {
       const { data } = await supabase.auth.getUser();
@@ -83,7 +95,7 @@ export default function DiagnosisCta({ headline, sub, hospitalName }: DiagnosisC
       /* 세션 확인 실패는 무시 — 가입 모달로 진행한다 */
     }
     setShowAuth(true);
-  }, [router, supabase]);
+  }, [router, supabase, shareToken]);
 
   const handleSuccess = useCallback(
     (completedMode: 'login' | 'signup') => {

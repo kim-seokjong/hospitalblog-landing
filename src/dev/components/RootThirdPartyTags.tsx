@@ -7,7 +7,12 @@ import { Analytics } from '@vercel/analytics/next';
 import MetaPixel from './MetaPixel';
 import NotificationBellSlot from '@/hr/components/NotificationBellSlot';
 import { isClinicSiteBrowserContext } from '@/content/lib/clinic-site/slug';
-import { shouldRenderTag, type RootLayoutTag } from '@/content/lib/clinic-site/third-party';
+import {
+  isAllowedOnTokenBearingPath,
+  isTokenBearingPath,
+  shouldRenderTag,
+  type RootLayoutTag,
+} from '@/content/lib/clinic-site/third-party';
 
 /**
  * 루트 레이아웃의 서드파티 태그 묶음 — **클라이언트에서** 병원 블로그 여부를 판정한다.
@@ -40,7 +45,12 @@ export default function RootThirdPartyTags() {
   if (!mounted) return null;
 
   const clinicSite = isClinicSiteBrowserContext(window.location.hostname, pathname);
-  const showTag = (tag: RootLayoutTag): boolean => shouldRenderTag(tag, clinicSite);
+  // 공유 리포트처럼 **주소에 접근 토큰이 들어 있는** 페이지에서는 raw URL 을 밖으로
+  // 보내는 태그를 뺀다. 메타 픽셀은 이벤트와 별개로 문서 주소를 함께 보내므로,
+  // 그대로 두면 리포트 열쇠가 광고 플랫폼으로 넘어간다 (third-party.ts 주석 참조).
+  const tokenPath = isTokenBearingPath(pathname);
+  const showTag = (tag: RootLayoutTag): boolean =>
+    shouldRenderTag(tag, clinicSite) && (!tokenPath || isAllowedOnTokenBearingPath(tag));
 
   return (
     <>
