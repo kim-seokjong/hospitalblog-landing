@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL, proofreadContent } from '@/content/lib/anthropic';
-import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT, checkCompliance, autoFix } from '@/content/lib/medical-compliance';
+import {
+  MEDICAL_COMPLIANCE_SYSTEM_PROMPT,
+  CLINICAL_OBSERVATION_LIMITS,
+  checkCompliance,
+  autoFix,
+} from '@/content/lib/medical-compliance';
 import { reviewComplianceWithAI, type AiComplianceReview } from '@/content/lib/medical-compliance-ai';
 import { diffAutoFixedViolations } from '@/content/lib/compliance-report';
 import { stripAiCliches } from '@/content/lib/anti-ai';
@@ -361,6 +366,8 @@ ${MEDICAL_COMPLIANCE_SYSTEM_PROMPT}
 
 이 정도의 부드러움·구체성·1인칭 관찰을 모든 단락에 녹이세요.
 
+${CLINICAL_OBSERVATION_LIMITS}
+
 【네이버 SEO 구조 규칙 — 핵심】
 - 선택된 제목이 약속하는 내용을 본문에서 반드시 충족할 것
 - 제목 형식(질문형/가이드형 등)에 맞는 본문 구조를 사용할 것
@@ -468,7 +475,8 @@ ${formatGuide}
 【전문성 작성 기준】
 - 의학적 원인을 해부학적·생리학적으로 설명 (단순 나열 금지)
 - 진단 기준 또는 증상 판별 기준을 구체적으로 서술
-- 치료 방법은 보존적 → 비수술적 → 수술적 순서로 단계 안내
+- 치료 선택지는 설명 편의상 보존적·비수술적·수술적 방법으로 구분해 안내하되,
+  모든 환자에게 그 순서로 적용된다고 단정하지 말고 진단·중증도·응급성·금기에 따라 달라짐을 함께 밝힐 것
 - 예방·관리는 임상 근거가 있는 구체적 행동 지침으로 제시
 
 【작성 조건】
