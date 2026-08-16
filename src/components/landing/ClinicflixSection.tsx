@@ -45,6 +45,14 @@ const CARDNEWS_IMAGES = [
   `${SAMPLE_BASE}/cardnews-6.jpg`,
 ];
 
+// 2026-08-16 신설: 블로그 본문에 들어가는 실사 이미지 샘플.
+// 시술 장면은 의료법 제56조 제2항 제6호로 노출이 금지되므로 상담·문진·공간 컷만 쓴다.
+const BLOG_IMAGES = [
+  { src: `${SAMPLE_BASE}/blog-image-1.jpg`, alt: '상담실에서 시술 전 확인 사항을 설명하는 장면', caption: '상담' },
+  { src: `${SAMPLE_BASE}/blog-image-2.jpg`, alt: '접수 데스크에서 안내를 받는 장면', caption: '접수' },
+  { src: `${SAMPLE_BASE}/blog-image-3.jpg`, alt: '진료실에서 상담을 기다리는 장면', caption: '진료실' },
+];
+
 const OUTPUT_KINDS = [
   { icon: '🎬', label: '영상(쇼츠)' },
   { icon: '🗂️', label: '카드뉴스' },
@@ -143,8 +151,15 @@ export default function ClinicflixSection({ onCtaClick }: ClinicflixSectionProps
             {/* 영상 */}
             <SampleVideo />
 
-            {/* 카드뉴스 캐러셀 */}
-            <CardnewsCarousel />
+            {/* 오른쪽 열: 카드뉴스 아래에 블로그 실사 이미지를 이어 붙인다.
+                영상이 9:16이라 왼쪽 열이 길어지면서 생기던 여백을 채운다.
+                ⚠️min-w-0 필수 — grid/flex 아이템의 기본값이 min-width:auto라
+                안쪽 overflow-x-auto 캐러셀이 콘텐츠 폭만큼 셀을 밀어내 페이지에
+                가로 스크롤이 생긴다(2026-08-16 실측 242px 넘침). */}
+            <div className="grid gap-6 min-w-0">
+              <CardnewsCarousel />
+              <BlogImagesSample />
+            </div>
 
             {/* 쓰레드 */}
             <ThreadsSample posts={sample.threads.posts} hashtags={sample.threads.hashtags} />
@@ -232,7 +247,7 @@ function SampleVideo() {
         />
       </div>
       <p className="mt-3 text-center text-xs text-[#666f7d]">
-        한국어 내레이션 포함 · 소리를 켜고 재생해보세요
+        한국어 음성 포함 · 소리를 켜고 재생해보세요
       </p>
     </figure>
   );
@@ -243,7 +258,8 @@ function CardnewsCarousel() {
   const total = CARDNEWS_IMAGES.length;
 
   return (
-    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5">
+    // min-w-0: 안쪽 가로 스크롤 캐러셀이 셀을 밀어내지 않게 한다 (위 주석 참조)
+    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5 min-w-0">
       <figcaption className="flex items-center gap-2 mb-4">
         <span className="text-lg">🗂️</span>
         <span className="font-extrabold text-[#202020]">카드뉴스</span>
@@ -293,6 +309,68 @@ function CardnewsCarousel() {
         ))}
       </div>
       <p className="mt-2 text-center text-xs text-[#666f7d]">옆으로 넘겨보세요</p>
+    </figure>
+  );
+}
+
+function BlogImagesSample() {
+  const [active, setActive] = useState(0);
+  const total = BLOG_IMAGES.length;
+
+  // 카드뉴스와 같은 가로 스크롤 캐러셀. 세로로 쌓으면 오른쪽 열이 영상보다 길어져
+  // 이번엔 왼쪽 아래가 비어버린다(2026-08-16). 두 칸 높이를 맞추려고 슬라이드로 둔다.
+  return (
+    <figure className="bg-white border border-[#dbe2ea] rounded-2xl p-5 min-w-0">
+      <figcaption className="flex items-center gap-2 mb-4">
+        <span className="text-lg">🖼️</span>
+        <span className="font-extrabold text-[#202020]">블로그 AI 실사 이미지</span>
+        <span className="ml-auto text-[12px] font-bold text-[#666f7d] bg-[#eef2f6] px-2 py-1 rounded-md">
+          3:2 · {total}장
+        </span>
+      </figcaption>
+
+      <div
+        className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const idx = Math.round(el.scrollLeft / (el.scrollWidth / total));
+          setActive(Math.min(total - 1, Math.max(0, idx)));
+        }}
+      >
+        {BLOG_IMAGES.map(({ src, alt, caption }) => (
+          <div key={src} className="snap-center shrink-0 w-[220px] sm:w-[240px]">
+            <div className="rounded-xl overflow-hidden border border-[#dbe2ea] bg-[#eef2f6]">
+              {/* next/image 미사용 리포지토리 — native img + lazy load */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={src}
+                alt={alt}
+                loading="lazy"
+                decoding="async"
+                className="w-full aspect-[3/2] object-cover"
+              />
+            </div>
+            <p className="mt-1.5 text-center text-[11px] text-[#666f7d]">{caption}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-center gap-1.5 mt-2">
+        {BLOG_IMAGES.map(({ src }, i) => (
+          <span
+            key={src}
+            className="h-1.5 rounded-full transition-all"
+            style={{
+              width: i === active ? 18 : 6,
+              background: i === active ? ACCENT : '#dbe2ea',
+            }}
+          />
+        ))}
+      </div>
+
+      <p className="mt-2 text-center text-xs text-[#666f7d] leading-relaxed">
+        옆으로 넘겨보세요 · 상담·접수·진료실 컷을 만들고 시술 장면은 만들지 않습니다.
+      </p>
     </figure>
   );
 }
