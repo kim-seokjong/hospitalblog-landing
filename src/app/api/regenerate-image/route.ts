@@ -60,8 +60,13 @@ async function translateToFluxPrompt(koreanDesc: string): Promise<string> {
 2. 인물: Korean people, East Asian appearance
 3. 조명: natural indoor lighting, soft diffused daylight, true-to-life colors (cinematic light, studio light 금지)
 4. 피부 실사 섹션: "Skin realism focus: visible pores, fine micro-texture, organic acne marks (non-repeating), uneven pigmentation, subtle redness, natural oil sheen only on high points, visible peach fuzz and very fine vellus hair. No symmetry correction."
-5. 카메라: phone camera realism, subtle sensor grain, slight edge softness
-6. 금지: "No retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"
+5. 카메라: modern flagship smartphone in 2026, main 24mm lens, computational HDR, crisp micro contrast, sharp focus edge to edge, clean and noise free, level horizon, steady framing
+   ※ "sensor grain"·"edge softness"·"candid composition"은 쓰지 마라 — 요즘 폰이 아니라 옛날 폰 사진이 된다.
+     리얼함은 4번(피부 질감)으로 만들고 화질은 깨끗하게 간다.
+6. ★배경 생활감: 실제로 쓰이는 공간처럼 채운다(가운·카디건, 꺼진 모니터, 서류 트레이, 손소독제,
+   화분, 스테인리스 트레이, 페달 휴지통, 접은 천, 스툴). 텅 빈 방은 스톡 사진처럼 읽힌다.
+   ⛔글자가 읽히는 물건은 넣지 마라 — 라벨 병·인쇄된 서류·포스트잇·명찰·켜진 모니터. 종이는 빈 것으로.
+7. 금지: "No retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo, no labelled bottles, no printed documents, no sticky notes, no name badge"
 
 - 영어로만 출력 (80~120단어)
 - 병원·의료 맥락 유지

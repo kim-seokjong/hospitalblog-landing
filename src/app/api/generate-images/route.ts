@@ -220,8 +220,18 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
 3. 인물: Korean people, East Asian appearance, Korean patient / doctor / medical staff (동양적 얼굴 비율 명시)
 4. 조명: natural indoor lighting, soft diffused daylight, true-to-life colors, accurate white balance (cinematic light, studio light 절대 금지)
 5. 피부 실사 섹션 반드시 포함: "Skin realism focus: visible pores, fine micro-texture, organic acne marks (non-repeating), uneven pigmentation, subtle redness, natural oil sheen only on high points, visible peach fuzz and very fine vellus hair. No symmetry correction."
-6. 카메라: phone camera realism, subtle sensor grain, slight edge softness, candid composition
-7. 금지(영문 negative 포함): "No before-after comparison, no split frame, no side-by-side comparison, no dramatic transformation, no retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo"
+6. 카메라: modern flagship smartphone in 2026, main 24mm lens, computational HDR, crisp micro contrast, sharp focus edge to edge, clean and noise free, level horizon, steady framing
+   ※ "sensor grain"(노이즈)·"edge softness"(선명도 저하)·"candid composition"(흐트러진 구도)은 쓰지 마라.
+     리얼함을 그렇게 만들면 요즘 폰이 아니라 옛날 폰 사진이 되고, 화면이 탁해진다.
+     리얼함은 피부 질감(5번)으로 만들고, 화질은 최신 폰 기준으로 깨끗하게 간다.
+7. ★배경 생활감(2026-08-17 신설): 실제로 쓰이고 있는 공간처럼 채운다. 텅 빈 방은 모델하우스로 읽히고,
+   그러면 스톡 사진처럼 보여 글까지 만들어낸 티가 난다.
+   넣을 것 예시 — 의자 등받이에 걸친 가운이나 카디건, 꺼진 모니터와 키보드, 서류 트레이,
+   손소독제 펌프, 화분, 스테인리스 트레이, 페달 휴지통, 접어 둔 천, 굴러다니는 볼펜, 스툴.
+   ⛔**단 화면에 글자가 읽히는 물건은 넣지 마라** — AI는 글자를 못 그려서 깨진 글자가 그대로 남는다.
+   피할 것: 라벨 붙은 약병, 인쇄면이 보이는 서류, 포스트잇, 명찰, 켜져 있는 모니터 화면, 벽 안내문.
+   종이는 빈 것으로, 모니터는 꺼진 화면으로 지정한다.
+8. 금지(영문 negative 포함): "No before-after comparison, no split frame, no side-by-side comparison, no dramatic transformation, no retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo, no labelled bottles, no printed documents, no sticky notes, no name badge"
 
 - 영어로만 출력, 각 프롬프트 100~150단어 (시술 단서 포함으로 약간 길게)
 - 의료 현장의 실제 모습 (병원 인테리어, 의료진, 장비, 환자 치료, 시술 도구)
@@ -241,7 +251,7 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
   const toolUse = res.content.find(b => b.type === 'tool_use');
   if (!toolUse || toolUse.type !== 'tool_use') {
     return targets.slice(0, count).map(d =>
-      `ultra-realistic, ${d}, Korean medical staff and patients, East Asian appearance, phone camera realism, slight sensor grain, natural indoor lighting, soft diffused daylight, visible pores, subsurface scattering skin, no AI glow, no plastic skin, no studio light, no illustration, no cartoon`
+      `ultra-realistic, ${d}, Korean medical staff and patients, East Asian appearance, photographed on a modern flagship smartphone in 2026, main 24mm lens, computational HDR, crisp micro contrast, sharp focus edge to edge, clean and noise free, level horizon, natural indoor lighting, soft diffused daylight, visible pores, subsurface scattering skin, no AI glow, no plastic skin, no studio light, no illustration, no cartoon`
     );
   }
   const input = toolUse.input as { prompts: string[] };
