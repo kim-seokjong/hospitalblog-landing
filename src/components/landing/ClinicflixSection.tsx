@@ -50,7 +50,7 @@ const CARDNEWS_IMAGES = [
 const BLOG_IMAGES = [
   { src: `${SAMPLE_BASE}/blog-image-1.jpg`, alt: '상담실에서 시술 전 확인 사항을 설명하는 장면', caption: '상담' },
   { src: `${SAMPLE_BASE}/blog-image-2.jpg`, alt: '접수 데스크에서 안내를 받는 장면', caption: '접수' },
-  { src: `${SAMPLE_BASE}/blog-image-3.jpg`, alt: '진료실에서 상담을 기다리는 장면', caption: '진료실' },
+  { src: `${SAMPLE_BASE}/blog-image-3.jpg`, alt: '진료실에서 안내를 받는 장면', caption: '진료실' },
 ];
 
 const OUTPUT_KINDS = [
