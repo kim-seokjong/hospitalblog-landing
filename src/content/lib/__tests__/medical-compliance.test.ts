@@ -1259,3 +1259,35 @@ test('checkCompliance(9R): 권유 어미가 붙으면 여전히 차단된다', (
     );
   }
 });
+
+// ── 2026-W34: 해시태그형 소비자 오인 표현 ─────────────────────────
+// 근거: 2026-07-15 인스타 병원 계정 실측에서 본문이 아니라 해시태그에 최상급이 들어가는
+//       형태(#○○잘하는곳)가 반복 확인됐다. 그때 사람이 위험으로 판정한 글을 엔진은 0건으로 통과시켰다.
+// ⚠️severity 를 준 패턴은 warnings 가 아니라 violations 로 들어간다(checkCompliance 구조).
+const hasRule = (r: { violations: { rule?: string; severity?: string }[] }, re: RegExp) =>
+  r.violations.find((v) => re.test(v.rule ?? ''));
+
+test('소비자 오인: 해시태그 최상급을 잡는다', () => {
+  for (const s of ['#대구성형외과잘하는곳', '대구에서 잘하는 곳', '지역 1등 병원', '넘버원 클리닉']) {
+    assert.ok(hasRule(checkCompliance(s), /오인|우월성/), `못 잡음: ${s}`);
+  }
+});
+
+test('소비자 오인: 1등급은 잡지 않는다(오탐 방지)', () => {
+  // '1등급'은 검진 결과·의료기기 등급 표기로 정상 사용된다.
+  assert.equal(hasRule(checkCompliance('건강검진 결과 1등급을 받았습니다.'), /오인|우월성/), undefined);
+});
+
+// ── 2026-W34: 재생의료 용어(표적 단속 분야) ───────────────────────
+test('재생의료: 줄기세포·엑소좀을 표면화한다', () => {
+  for (const s of ['줄기세포 치료', '줄기세포', '엑소좀 시술 안내', 'PRP 주사']) {
+    assert.ok(hasRule(checkCompliance(s), /재생의료/), `못 잡음: ${s}`);
+  }
+});
+
+test('재생의료: 차단이 아니라 표시다(HIGH/CRITICAL 아님)', () => {
+  // 실제로 시행하는 진료를 사실대로 적는 글이 많다 — 발행을 막으면 안 된다.
+  const hit = hasRule(checkCompliance('저희 병원은 줄기세포 치료를 시행하고 있습니다.'), /재생의료/);
+  assert.ok(hit, '재생의료 경고가 없음');
+  assert.ok(hit.severity !== 'CRITICAL' && hit.severity !== 'HIGH', '차단 등급이면 안 된다');
+});
