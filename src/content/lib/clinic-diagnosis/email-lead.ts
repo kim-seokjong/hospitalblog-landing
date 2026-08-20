@@ -180,7 +180,7 @@ export function evaluateEmailLeadQuota(
  *   사유는 서버 로그에만 남긴다. 캡 숫자도 문구에 박지 않는다.
  */
 export function emailLimitMessage(_reason: EmailLeadLimitReason): string {
-  return '지금은 메일을 보내드릴 수 없어요. 잠시 후 또는 내일 다시 시도해 주세요. 급하시면 070-8095-3320 으로 연락 주세요.';
+  return '지금은 메일을 보내드릴 수 없어요. 잠시 후 또는 내일 다시 시도해 주세요. 급하시면 010-2558-1115 으로 연락 주세요.';
 }
 
 /**
@@ -612,7 +612,7 @@ export function buildDiagnosisEmail(input: DiagnosisEmailInput): DiagnosisEmailC
   </p>
   <p style="margin:0;font-size:11px;line-height:1.8;color:#8a93a0">
     이 메일은 진단 결과를 받아보시겠다고 직접 요청하셔서 1회 발송된 메일입니다. 광고성 정보는 보내지 않습니다.<br>
-    광고진정성 · 대구광역시 수성구 청호로422 2층 · 070-8095-3320
+    광고진정성 · 대구광역시 수성구 청호로422 2층 · 010-2558-1115
   </p>
 </div>
 </body></html>`;

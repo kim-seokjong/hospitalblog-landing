@@ -233,7 +233,7 @@ function HospitalMarketingBanner() {
         </div>
 
         <div className="mt-3 text-center text-[10.5px] text-[#a3adbb]">
-          대구 수성구 청호로 422 · 070-8095-3320
+          대구 수성구 청호로 422 · 010-2558-1115
         </div>
       </div>
     </a>

@@ -32,7 +32,7 @@ export function buildOrganizationJsonLd(): JsonLdData {
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'customer support',
-      telephone: '+82-70-8095-3320',
+      telephone: '+82-10-2558-1115',
       email: 'terro6936@naver.com',
       availableLanguage: 'Korean',
     },
