@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import {
   buildAlertText,
   buildReport,
+  isRestrictedKey,
   judgeDeps,
+  resendErrorCode,
   summarizeGeneration,
   type DepResult,
 } from '../deps-health.ts';
@@ -65,6 +67,24 @@ test('깨진 시각 문자열은 무시한다', () => {
 test('미래 시각이 와도 음수가 나오지 않는다', () => {
   const now = Date.parse('2026-08-22T00:00:00Z');
   assert.equal(summarizeGeneration('2026-09-01T00:00:00Z', null, now).daysSince, 0);
+});
+
+test('오류 코드는 name 필드에서만 꺼낸다', () => {
+  assert.equal(resendErrorCode({ name: 'restricted_api_key', message: '...' }), 'restricted_api_key');
+  assert.equal(resendErrorCode({ statusCode: 400, name: 'validation_error' }), 'validation_error');
+  assert.equal(resendErrorCode(null), '');
+  assert.equal(resendErrorCode('문자열'), '');
+  assert.equal(resendErrorCode({ message: 'API key is invalid' }), '', 'message 는 쓰지 않는다');
+});
+
+test('401 은 권한 부족 — 발송 전용 키로 본다 (8/21 실제로 발송에 성공했다)', () => {
+  assert.equal(isRestrictedKey(401), true);
+});
+
+test('400(잘못된 키)·5xx 는 진짜 실패다', () => {
+  assert.equal(isRestrictedKey(400), false);
+  assert.equal(isRestrictedKey(403), false);
+  assert.equal(isRestrictedKey(500), false);
 });
 
 test('checkedAt 은 넘긴 시각을 그대로 쓴다', () => {

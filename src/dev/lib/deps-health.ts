@@ -87,7 +87,36 @@ export function buildReport(
   };
 }
 
-const LABELS: Record<DepStatus, string> = { ok: '정상', fail: '실패', skipped: '미설정' };
+/**
+ * Resend 오류 응답 분류.
+ *
+ * ★ 왜 필요한가 (2026-08-22).
+ *   도메인 조회가 401 로 막혀 "메일 죽음"으로 판정했는데, 같은 키로 8/21 진단 메일이
+ *   **실제로 발송에 성공**해 있었다. Resend 의 **발송 전용(restricted) 키**는 메일은
+ *   보내지만 `/domains` 조회는 못 한다. 이걸 실패로 적으면 매일 헛경보가 울리고,
+ *   그러면 진짜 경고를 안 보게 된다.
+ *   ⇒ "확인할 수 없음"과 "고장"을 갈라야 한다.
+ *
+ * ⛔본문에서 오류 코드(name)와 메시지만 본다 — 키가 섞여 나올 경로를 만들지 않는다.
+ */
+export function resendErrorCode(body: unknown): string {
+  if (typeof body !== 'object' || body === null) return '';
+  const name = (body as { name?: unknown }).name;
+  return typeof name === 'string' ? name : '';
+}
+
+/**
+ * 발송 전용 키라서 조회가 막힌 것인가 — 그렇다면 고장이 아니다.
+ *
+ * ⚠️401 은 전부 "확인 불가"로 본다. 잘못된 키는 400(validation_error)으로 오고,
+ *   401 은 **권한 부족**을 뜻하기 때문이다. 오류 코드는 note 에 그대로 실어
+ *   판단 근거를 남긴다 — 나중에 다른 401 이 오면 그 코드를 보고 다시 정한다.
+ */
+export function isRestrictedKey(status: number): boolean {
+  return status === 401;
+}
+
+const LABELS: Record<DepStatus, string> = { ok: '정상', fail: '실패', skipped: '확인 불가' };
 
 /** 실패한 항목만 사람이 읽는 문장으로. 실패가 없으면 빈 문자열 — 조용히 넘어가라는 뜻이다. */
 export function buildAlertText(report: DepsHealthReport): string {

@@ -93,8 +93,22 @@ export function buildDomainAlertText(verdict: DomainHealthVerdict, at: Date): st
 }
 
 export type DomainCheckOutcome =
-  | { readonly ran: false; readonly skipped: 'no-api-key' }
+  | { readonly ran: false; readonly skipped: 'no-api-key' | 'restricted-key' }
   | { readonly ran: true; readonly verdict: DomainHealthVerdict; readonly alerted: boolean };
+
+/**
+ * 발송 전용(restricted) 키 — 메일은 나가지만 `/domains` 조회 권한이 없다.
+ *
+ * ★ 2026-08-22: 401 을 "메일 죽음"으로 읽었는데, 같은 키로 8/21 진단 메일이 **실제로
+ *   발송에 성공**해 있었다. 이걸 실패로 알리면 매주 헛경보가 울리고 그러면 진짜
+ *   경고를 안 보게 된다. 잘못된 키는 400 으로 오고 401 은 권한 부족이다.
+ */
+export class RestrictedKeyError extends Error {
+  constructor() {
+    super('restricted-key');
+    this.name = 'RestrictedKeyError';
+  }
+}
 
 export interface DomainCheckDeps {
   readonly env?: EnvLike;
@@ -111,6 +125,7 @@ async function defaultFetchDomains(apiKey: string): Promise<unknown> {
     headers: { Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
+  if (res.status === 401) throw new RestrictedKeyError();
   if (!res.ok) {
     // 본문은 읽지 않는다 — 키가 섞여 나올 여지를 만들지 않는다.
     throw new Error(`HTTP ${res.status}`);
@@ -134,6 +149,10 @@ export async function runResendDomainCheck(deps: DomainCheckDeps = {}): Promise<
     const payload = await (deps.fetchDomains ?? defaultFetchDomains)(apiKey);
     verdict = evaluateDomains(payload);
   } catch (e) {
+    if (e instanceof RestrictedKeyError) {
+      console.warn('[email/domain-health] 발송 전용 키 — 도메인 상태는 확인하지 못합니다(발송은 별개).');
+      return { ran: false, skipped: 'restricted-key' };
+    }
     const reason = e instanceof Error ? e.message : '알 수 없는 오류';
     verdict = {
       healthy: false,

@@ -5,6 +5,8 @@ import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 import { evaluateDomains } from '@/payment/email/domain-health';
 import {
   buildReport,
+  isRestrictedKey,
+  resendErrorCode,
   summarizeGeneration,
   type DepResult,
   type DepsHealthReport,
@@ -104,8 +106,18 @@ async function checkResend(): Promise<DepResult> {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    // 본문은 실패 시 읽지 않는다 — 키가 섞여 나올 여지를 만들지 않는다.
-    if (!res.ok) return { name, status: 'fail', note: `도메인 조회 HTTP ${res.status}` };
+    if (!res.ok) {
+      // 본문에서 오류 코드만 꺼낸다 — 키가 섞여 나올 여지를 만들지 않는다.
+      const code = resendErrorCode(await res.json().catch(() => null));
+      if (isRestrictedKey(res.status)) {
+        return {
+          name,
+          status: 'skipped',
+          note: `발송 전용 키라 도메인 상태를 확인할 수 없습니다 (401 ${code || '코드 없음'})`,
+        };
+      }
+      return { name, status: 'fail', note: `도메인 조회 HTTP ${res.status} ${code}`.trim() };
+    }
     const verdict = evaluateDomains(await res.json());
     return { name, status: verdict.healthy ? 'ok' : 'fail', note: verdict.note };
   } catch (e) {
