@@ -187,13 +187,44 @@ function readRequester(req: NextRequest): Requester {
     //   건수만 부풀리는 게 아니라 harvest_diagnosed 가 그 병원을 신규 리드로
     //   영업DB에 올려버린다 — 우리가 테스트로 조회한 병원에 영업 메일이 나간다.
     isInternal: req.cookies.get(INTERNAL_COOKIE)?.value === INTERNAL_COOKIE_VALUE,
+    utmSource: readUtmSource(req),
   };
+}
+
+/**
+ * 어느 캠페인을 타고 왔는가 (2026-08-25 신설).
+ *
+ * 콜드메일은 진단 링크에 `?utm_source=mail0825s2&utm_medium=outbound` 를 이미 붙여
+ * 보내고 있었다. 그런데 이 라우트가 그걸 한 번도 읽지 않아서 리드의 `source` 가
+ * 전부 `clinic-check` 하나였다 — **하루 50통을 보내면서 그게 진단으로 이어지는지
+ * 잴 수단이 없었다.**
+ *
+ * ★진단 요청은 같은 페이지에서 나가는 POST 라 **`referer` 에 원래 쿼리가 그대로
+ *   남는다.** 클라이언트를 고치지 않고 서버에서만 읽을 수 있는 이유다.
+ * ⚠️값은 그대로 믿지 않는다 — 길이를 자르고 안전한 문자만 남긴다(리드 테이블에
+ *   외부 입력이 그대로 들어가는 자리다).
+ */
+function readUtmSource(req: NextRequest): string | null {
+  const raw =
+    req.nextUrl.searchParams.get('utm_source') ??
+    (() => {
+      const ref = req.headers.get('referer') ?? '';
+      if (!ref) return null;
+      try {
+        return new URL(ref).searchParams.get('utm_source');
+      } catch {
+        return null;
+      }
+    })();
+  const cleaned = (raw ?? '').trim().replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 40);
+  return cleaned || null;
 }
 
 interface Requester {
   readonly anonId: string | null;
   readonly ipHash: string | null;
   readonly isBot: boolean;
+  readonly utmSource: string | null;
   readonly isInternal: boolean;
 }
 
@@ -230,7 +261,11 @@ async function saveLead(
       phone: clinic.phone.slice(0, 30),
       blog_id: report.blog.blogId,
       site_url: report.site.url,
-      source: 'clinic-check',
+      // ★기존 값을 유지한 채 뒤에만 붙인다(`clinic-check:mail0825s2`).
+      //   `clinic-check` 로 시작하는 건 그대로라 지금까지의 집계가 안 깨진다.
+      source: requester.utmSource
+        ? `clinic-check:${requester.utmSource}`.slice(0, 60)
+        : 'clinic-check',
     };
     const { error } = await admin.from('clinic_diagnosis_leads').insert({
       ...base,
