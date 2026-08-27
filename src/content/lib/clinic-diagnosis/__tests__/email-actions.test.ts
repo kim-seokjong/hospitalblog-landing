@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDiagnosisEmail, MEDLAW_GUIDE_PATH } from '../email-lead.ts';
+import { buildDiagnosisEmail, COMPANY_DECK_PATH, MEDLAW_GUIDE_PATH } from '../email-lead.ts';
 import type { DiagnosisLeadSummary } from '../conversion.ts';
 
 /**
@@ -75,6 +75,42 @@ test('의료광고법 가이드 요약본 링크가 함께 나간다', () => {
   assert.match(html, /가이드 요약본/);
   assert.ok(html.includes(MEDLAW_GUIDE_PATH), '요약본 경로가 링크로 들어가야 한다');
   assert.match(html, /https:\/\/www\.hospitalblog\.kr\/downloads\//);
+});
+
+/**
+ * 광고진정성 회사소개서 (2026-08-27 대표 지시).
+ *
+ * 이 메일은 그동안 **닥터포스트 이야기만** 실어 보냈다. 진단을 받아본 원장은 우리를
+ * '블로그 자동화 툴 회사'로만 알고 끝났다 — 오프라인까지 직접 집행하는 회사라는 걸
+ * 알 길이 없었다. 그래서 회사소개서를 함께 보낸다.
+ */
+test('광고진정성 회사소개서 링크가 함께 나간다', () => {
+  const { html } = build(summary({ actions: [{ label: 'A', action: '가', ourScope: false }] }));
+  assert.ok(html.includes(COMPANY_DECK_PATH), '회사소개서 경로가 링크로 들어가야 한다');
+  assert.match(html, /병의원 전문 광고회사/);
+  // ★온·오프라인을 둘 다 한다는 사실이 이 블록의 존재 이유다 — 빠지면 넣은 의미가 없다.
+  assert.match(html, /오프라인/);
+});
+
+/**
+ * ★순서 — 원장이 메일을 여는 이유는 **진단 결과**지 회사 소개가 아니다.
+ *   약속한 것을 먼저 주고 그 다음에 우리를 소개한다. 위로 올리지 말 것.
+ */
+test('회사소개는 진단 결과 링크보다 아래에 온다', () => {
+  const { html } = build(summary({ actions: [{ label: 'A', action: '가', ourScope: false }] }));
+  assert.ok(
+    html.indexOf('진단 결과 전체 보기') < html.indexOf(COMPANY_DECK_PATH),
+    '회사소개서가 진단 결과 버튼보다 먼저 나오면 안 된다',
+  );
+});
+
+/**
+ * ⚠️ 자사 홍보물이라 기준이 **표시광고법**이다(병원 글의 의료법 56조가 아니다).
+ *    효과·순위·절감액을 말하는 순간 그 자체가 리스크다.
+ */
+test('회사소개 문구에 효과·순위·절감액 표현이 없다', () => {
+  const { html } = build(summary({ actions: [{ label: 'A', action: '가', ourScope: false }] }));
+  assert.doesNotMatch(html, /1위|최고|최상급|보장|절감액|매출 상승|100%/);
 });
 
 /**

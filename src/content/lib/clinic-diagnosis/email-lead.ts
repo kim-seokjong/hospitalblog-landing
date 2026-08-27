@@ -277,6 +277,20 @@ export function formatKstDate(iso: unknown): string {
 /** 의료광고법 가이드 요약본 — 이메일을 남긴 분께 함께 드리는 자료(리드마그넷용). */
 export const MEDLAW_GUIDE_PATH = '/downloads/dp-medlaw-guide-lite-x7k2m.pdf';
 
+/**
+ * 광고진정성 회사소개서 — 진단 메일에 함께 나간다(2026-08-27 대표 지시).
+ *
+ * ★왜 필요한가: 이 메일은 그동안 **닥터포스트(SaaS) 이야기만** 실어 보냈다.
+ *   진단을 받아본 원장은 우리를 '블로그 자동화 툴 회사'로만 알고 끝났고,
+ *   버스·지하철·전광판까지 직접 집행하는 종합 대행사라는 걸 알 길이 없었다.
+ *
+ * ⚠️원본은 17장 PPTX(2.4MB)다. **첨부하지 않고 PDF 링크로 준다** — 첨부한 대용량
+ *   PPTX 는 스팸함으로 가기 쉽고, 원장 대부분이 휴대폰으로 열어서 PPTX 는 안 열린다.
+ * ⚠️자사 홍보물이므로 기준이 **표시광고법**이다(병원 글의 의료법 56조가 아니다)
+ *   [[feedback_two_ad_law_standards]]. 점수·절감액·자사 1위 표현은 넣지 않는다.
+ */
+export const COMPANY_DECK_PATH = '/downloads/adsincerity-company-v1-q9r4t.pdf';
+
 /** 결과 주소에서 도메인만 딴다. 파싱 실패하면 운영 도메인으로 떨어진다. */
 function originOf(reportUrl: string): string {
   try {
@@ -590,6 +604,22 @@ export function buildDiagnosisEmail(input: DiagnosisEmailInput): DiagnosisEmailC
     <a href="${guideUrl}" style="color:#ff4628;font-weight:700;text-decoration:underline">요약본 내려받기 (PDF)</a>
   </p>`;
 
+  /**
+   * 광고진정성 회사소개 — 진단 결과 **아래**에 둔다(2026-08-27 대표 지시).
+   *
+   * ★순서가 중요하다. 원장이 열어보는 이유는 진단 결과지 회사 소개가 아니다.
+   *   먼저 약속한 것을 주고, 그 다음에 우리를 소개한다.
+   * ⚠️표시광고법 기준 — 효과·순위·절감액을 말하지 않는다. **무엇을 하는 회사인지**만.
+   */
+  const deckUrl = escapeHtml(`${originOf(input.reportUrl)}${COMPANY_DECK_PATH}`);
+  const companyHtml = `<p style="margin:0 0 24px;padding:16px 18px;background:#f7f9fb;border:1px solid #dbe2ea;border-radius:10px;font-size:13.5px;line-height:1.8;color:#3c4653">
+    <b style="color:#202020">진단을 보내드린 광고진정성은 병의원 전문 광고회사입니다.</b><br>
+    블로그·홈페이지 같은 온라인뿐 아니라 버스·지하철·전광판 같은 오프라인 매체까지
+    직접 집행하고, 사전심의가 필요한 매체는 저희가 접수부터 맡습니다.
+    닥터포스트는 저희가 만든 블로그 자동화 서비스입니다.<br>
+    <a href="${deckUrl}" style="color:#ff4628;font-weight:700;text-decoration:underline">회사소개서 보기 (PDF)</a>
+  </p>`;
+
   const html = `<!doctype html>
 <html lang="ko"><body style="margin:0;padding:0;background:#f7f9fb">
 <div style="max-width:600px;margin:0 auto;padding:32px 20px;background:#ffffff;color:#202020;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif">
@@ -605,6 +635,7 @@ export function buildDiagnosisEmail(input: DiagnosisEmailInput): DiagnosisEmailC
     <a href="${url}" style="display:inline-block;padding:14px 28px;background:#ff4628;color:#ffffff;font-weight:700;font-size:15px;border-radius:10px;text-decoration:none">진단 결과 전체 보기</a>
   </p>
   <p style="margin:0 0 20px;font-size:12px;line-height:1.8;color:#5b6573">링크가 열리지 않으면 주소를 직접 붙여넣어 주세요:<br><span style="word-break:break-all;color:#8a93a0">${url}</span> (30일 후 만료)</p>
+  ${companyHtml}
   <hr style="border:none;border-top:1px solid #dbe2ea;margin:0 0 16px">
   <p style="margin:0 0 12px;font-size:11px;line-height:1.8;color:#8a93a0">
     본 진단은 행정안전부 공표 정보와 네이버 공개 API, 공개된 블로그 글·홈페이지를 각각 한 번씩 열어 만든 특정 시점의 참고 자료입니다.
