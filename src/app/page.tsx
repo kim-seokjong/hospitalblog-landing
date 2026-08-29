@@ -337,6 +337,14 @@ export default function LandingPage() {
             행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 무료
           </p>
 
+          {/*
+            진단 결과 활용 고지 (2026-08-29 대표 지시).
+            /clinic-check 의 같은 자리와 문구를 맞춘다 — 두 곳에 있으므로 한쪽만 고치면 어긋난다.
+          */}
+          <p className="text-[11px] text-[#8a93a0] mt-1.5 leading-relaxed">
+            무료 진단 결과는 닥터포스트 홍보에 활용될 수 있어요.
+          </p>
+
           {/* 스크롤 유도 — 아래에 제품 설명이 이어진다는 표식 */}
           <a
             href="#product"

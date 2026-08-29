@@ -303,6 +303,15 @@ export default function ClinicCheckClient() {
           행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 무료
         </p>
 
+        {/*
+          진단 결과 활용 고지 (2026-08-29 대표 지시).
+          무료 진단으로 얻은 결과를 사례·통계 등 홍보에 쓸 수 있다는 것을 **미리** 알린다.
+          ⚠️위 출처 안내보다 한 단계 작고 옅게 — 진단을 막는 문구가 아니라 고지다.
+        */}
+        <p className="text-[10.5px] text-[#a8b0bb] text-center mt-1.5 leading-relaxed">
+          무료 진단 결과는 닥터포스트 홍보에 활용될 수 있어요.
+        </p>
+
         {busy && (
           <div className="flex items-center justify-center gap-2 py-12">
             <span className="w-5 h-5 border-2 border-[#ff4628] border-t-transparent rounded-full animate-spin" />
