@@ -162,7 +162,7 @@ export default function UserList() {
               >
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <span className="text-sm font-semibold text-[#202020]">
-                    {u.full_name ?? '(이름 미입력)'}
+                    {u.full_name || '(이름 미입력)'}
                   </span>
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${PLAN_BADGE[plan] ?? PLAN_BADGE.free}`}
@@ -182,10 +182,10 @@ export default function UserList() {
                     <span className="text-[#5b6573]">이메일:</span> {u.email ?? '-'}
                   </div>
                   <div>
-                    <span className="text-[#5b6573]">연락처:</span> {u.phone ?? '-'}
+                    <span className="text-[#5b6573]">연락처:</span> {u.phone || '-'}
                   </div>
                   <div>
-                    <span className="text-[#5b6573]">병원:</span> {u.hospital_name ?? '-'}
+                    <span className="text-[#5b6573]">병원:</span> {u.hospital_name || '-'}
                     {u.position && <span className="text-[#5b6573]"> · {u.position}</span>}
                   </div>
                   <div>

@@ -210,10 +210,10 @@ export default function MemberTable({ members }: MemberTableProps) {
                         </span>
                         <div>
                           <div className="font-medium">
-                            {m.hospital_name ?? '-'}
+                            {m.hospital_name || '-'}
                           </div>
                           <div className="text-xs text-[#5b6573]">
-                            {m.full_name ?? '-'}
+                            {m.full_name || '-'}
                           </div>
                         </div>
                       </div>
@@ -257,15 +257,15 @@ export default function MemberTable({ members }: MemberTableProps) {
                           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
                             <div>
                               <dt className="text-xs uppercase text-[#5b6573]">연락처</dt>
-                              <dd className="mt-0.5 text-[#202020] break-words">{m.phone ?? '-'}</dd>
+                              <dd className="mt-0.5 text-[#202020] break-words">{m.phone || '-'}</dd>
                             </div>
                             <div>
                               <dt className="text-xs uppercase text-[#5b6573]">직책</dt>
-                              <dd className="mt-0.5 text-[#202020] break-words">{m.position ?? '-'}</dd>
+                              <dd className="mt-0.5 text-[#202020] break-words">{m.position || '-'}</dd>
                             </div>
                             <div>
                               <dt className="text-xs uppercase text-[#5b6573]">병원유형</dt>
-                              <dd className="mt-0.5 text-[#202020] break-words">{m.hospital_type ?? '-'}</dd>
+                              <dd className="mt-0.5 text-[#202020] break-words">{m.hospital_type || '-'}</dd>
                             </div>
                             <div className="sm:col-span-2 lg:col-span-1">
                               <dt className="text-xs uppercase text-[#5b6573]">주소</dt>

@@ -31,7 +31,9 @@ export default function PricingSection() {
   return (
     <section id="pricing" className="py-12 sm:py-20 bg-white">
       <div className="max-w-5xl mx-auto px-4">
-        <h2 className="text-2xl sm:text-3xl font-bold text-center text-[#202020] mb-2">요금제</h2>
+        {/* ★h1 이다 — /pricing 페이지 전체를 대표하는 제목이 없어 h1 이 0개였다(2026-08-31 주간점검).
+            글자 크기·정렬은 그대로라 화면은 바뀌지 않는다. */}
+        <h1 className="text-2xl sm:text-3xl font-bold text-center text-[#202020] mb-2">요금제</h1>
         <p className="text-center text-sm sm:text-base text-[#5b6573] mb-3">
           병원 규모에 맞는 플랜을 선택하세요
         </p>

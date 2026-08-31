@@ -14,8 +14,8 @@ const MAX_MESSAGE_LEN = 1000;
 const SEARCH_RESULT_LIMIT = 8;
 
 function memberLabel(m: MemberRow): string {
-  const hospital = m.hospital_name ?? '병원명 없음';
-  const name = m.full_name ?? '담당자 없음';
+  const hospital = m.hospital_name || '병원명 없음';
+  const name = m.full_name || '담당자 없음';
   return `${hospital} · ${name}`;
 }
 

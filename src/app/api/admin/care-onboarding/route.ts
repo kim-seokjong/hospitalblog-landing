@@ -84,7 +84,7 @@ export async function GET() {
         plan: string | null
         plan_expires_at: string | null
       }>) {
-        names.set(p.id, p.hospital_name ?? '(병원명 미입력)')
+        names.set(p.id, p.hospital_name || '(병원명 미입력)')
         plans.set(p.id, { plan: p.plan, expiresAt: p.plan_expires_at })
       }
     }

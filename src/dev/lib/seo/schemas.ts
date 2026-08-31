@@ -97,8 +97,10 @@ export function buildPricingJsonLd(): JsonLdData {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: `${SITE_NAME} 구독`,
+    // ⚠️'프로'는 판매 중단(hidden) 이라 뺐다. offers 는 아래에서 hidden 을 걸러 내는데
+    //   이 설명문만 낡아 있었다(2026-08-31 주간점검).
     description:
-      '병원 블로그·영상·멀티채널 콘텐츠 자동 생성 월 구독 서비스. 스탠다드·프로 및 번들 요금제 제공.',
+      '병원 블로그·영상·멀티채널 콘텐츠 자동 생성 월 구독 서비스. 스탠다드·케어 및 올인원 요금제 제공.',
     brand: { '@type': 'Brand', name: SITE_NAME },
     offers: Object.values(PLANS).filter((plan) => !plan.hidden).map((plan) => ({
       '@type': 'Offer',

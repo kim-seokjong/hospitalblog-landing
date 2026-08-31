@@ -205,8 +205,10 @@ function readRequester(req: NextRequest): Requester {
  *   외부 입력이 그대로 들어가는 자리다).
  */
 function readUtmSource(req: NextRequest): string | null {
+  // ⚠️`??` 가 아니라 `||` 다 — `?utm_source=` 처럼 **빈 값**으로 들어오면 `??` 는
+  //   그 빈 문자열을 통과시켜 referer 폴백을 죽인다(2026-08-31 주간점검).
   const raw =
-    req.nextUrl.searchParams.get('utm_source') ??
+    req.nextUrl.searchParams.get('utm_source') ||
     (() => {
       const ref = req.headers.get('referer') ?? '';
       if (!ref) return null;

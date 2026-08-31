@@ -1313,7 +1313,7 @@ export default function AppPage() {
                 {/* 온보딩 첫 글 — 원클릭 시작 카드 (신규 무료 회원, 흐름 미진입 시).
                     진료과 기반 추천 키워드로 "가입→빈 화면" 대신 "가입→첫 글 시작"을 유도. */}
                 {!loadingContent && !loadingTitles && (() => {
-                  const onboardingKeywords = getOnboardingKeywords(userPlan?.hospital_type ?? hospitalType);
+                  const onboardingKeywords = getOnboardingKeywords(userPlan?.hospital_type || hospitalType);
                   const eligible =
                     !onboardingDismissed &&
                     titles.length === 0 &&

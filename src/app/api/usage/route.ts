@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient, createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { isAdmin } from '@/hr/lib/admin';
 
 export async function GET(req: NextRequest) {
   try {
-    // 인증 확인
+    // ★관리자 전용. 이 응답은 user_id 필터 없이 usage_logs 전체를 집계하므로
+    //   전사 AI 원가·기능별 호출량이 그대로 나간다. 로그인만으로 열면 안 된다.
+    //   (2026-08-31 주간점검: 인증만 있고 권한 검사가 없어 일반 회원도 열람 가능했다)
     const userSupabase = await createServerSupabaseClient();
     const { data: { user } } = await userSupabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    if (!user?.email || !isAdmin(user.email)) {
+      return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
