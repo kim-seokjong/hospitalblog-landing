@@ -218,6 +218,24 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
 1. 장면 도입: ultra-realistic photograph / clinical close-up / medium shot / equipment-focused shot 중 하나 명시
 2. 시술 식별 단서: 위 Procedure Visual Reference의 핵심 요소(도구, 부위, 시술 단계, 의료진 동작 등)를 자연스럽게 녹여 작성. before-after 비교 형식은 사용 금지
 3. 인물: Korean people, East Asian appearance, Korean patient / doctor / medical staff (동양적 얼굴 비율 명시)
+3-1. ★★계절 일관성(2026-09-06 신설 — 대표 지적):
+   **한 화면 안의 계절이 갈리면 안 된다.** 창밖 나뭇잎, 의료진 복장, 환자 복장 셋이 따로 놀면
+   실제로 있을 수 없는 사진이 된다. 실제로 접수 컷에서 「창밖 초록 + 접수원 반팔 + 환자 코트」가,
+   진료실 컷에서 「간호사 반팔 + 환자 긴팔」이 나왔다.
+   ⇒ 프롬프트 맨 앞에 계절을 **한 번 못박고**, 그 계절 기준으로 셋을 전부 맞춰 쓴다.
+     · 따뜻한 계절: "early autumn, warm season" + 창밖 green trees +
+       의료진 "SHORT-SLEEVED scrubs" + 환자도 "SHORT-SLEEVED top, bare forearms" +
+       마무리에 "no coats, no jackets, no long sleeves on anyone"
+     · 추운 계절: "winter" + 창밖 bare branches + 의료진 "long-sleeved scrubs under a white coat" +
+       환자 "knit sweater" + 겉옷은 **입은 채가 아니라 의자 등받이에 걸쳐 둔다**
+   ⛔실내인데 환자만 외투를 입고 있는 구도는 만들지 마라.
+3-2. ★표정은 「연기」가 아니라 「무심함」으로(2026-09-06 신설):
+   "smiling at the camera" 같은 지시는 그 순간 스톡사진이 된다.
+   ⇒ "Neither is performing for a camera, expressions are ordinary and unremarkable,
+      a routine moment in the middle of a normal consultation" 처럼
+   **아무도 연기하지 않는 상태**를 적는다.
+   ⚠️두 사람이 접촉하는 장면(시술·검진)에서 표정을 세게 지시하면 **과장돼 위협적으로 보인다.**
+     실측에서 환자가 놀란 얼굴로 나와 못 쓰게 됐다. 접촉 장면일수록 표정은 약하게.
 4. 조명: natural indoor lighting, soft diffused daylight, true-to-life colors, accurate white balance (cinematic light, studio light 절대 금지)
 5. 피부 실사 섹션 반드시 포함: "Skin realism focus: visible pores, fine micro-texture, organic acne marks (non-repeating), uneven pigmentation, subtle redness, natural oil sheen only on high points, visible peach fuzz and very fine vellus hair. No symmetry correction."
 6. 카메라: modern flagship smartphone in 2026, main 24mm lens, computational HDR, crisp micro contrast, sharp focus edge to edge, clean and noise free, level horizon, steady framing
@@ -228,10 +246,24 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
    그러면 스톡 사진처럼 보여 글까지 만들어낸 티가 난다.
    넣을 것 예시 — 의자 등받이에 걸친 가운이나 카디건, 꺼진 모니터와 키보드, 서류 트레이,
    손소독제 펌프, 화분, 스테인리스 트레이, 페달 휴지통, 접어 둔 천, 굴러다니는 볼펜, 스툴.
-   ⛔**단 화면에 글자가 읽히는 물건은 넣지 마라** — AI는 글자를 못 그려서 깨진 글자가 그대로 남는다.
-   피할 것: 라벨 붙은 약병, 인쇄면이 보이는 서류, 포스트잇, 명찰, 켜져 있는 모니터 화면, 벽 안내문.
-   종이는 빈 것으로, 모니터는 꺼진 화면으로 지정한다.
-8. 금지(영문 negative 포함): "No before-after comparison, no split frame, no side-by-side comparison, no dramatic transformation, no retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no text, no logo, no labelled bottles, no printed documents, no sticky notes, no name badge"
+   ⚠️**글자 규칙이 2026-09-06 에 바뀌었다.** 예전에는 "글자가 읽히는 물건은 전부 빼라"였는데,
+   그건 "soul_2" 기준이었다. **"gpt_image_2" 는 한글을 제대로 그린다**(실측 확인).
+   ⇒ 크기로 가른다:
+     ✅**화면에서 크게 잡히는 글자는 넣어도 된다.** 문진표·안내판처럼 주인공이 되는 것.
+       한글 문구를 프롬프트에 **정확히 적고** "Every Korean character must be correctly spelled
+       and crisply printed at a readable size, real typography not scribbles" 를 덧붙인다.
+       ★대표 지적(9/6): *"상담에 빈 종이 말고 진짜 문진하는 거"* — 백지를 놓으면 문진 장면이 안 된다.
+       실제로 「문진표 / 성명 / 생년월일 / 연락처 / 현재 불편하신 곳 / 복용 중인 약」이 정확히 나왔다.
+     ⛔**작게 들어갈 글자는 여전히 빼라.** 글자가 작으면 오타가 난다
+       (실측: 「성영」·「생년밀일」·「연악처」). 라벨 붙은 약병, 배경의 서류 더미, 포스트잇,
+       명찰, 켜져 있는 모니터, 멀리 있는 벽 안내문 — 전부 작게 들어가므로 넣지 않는다.
+       모니터는 꺼진 화면으로, 배경 종이는 빈 것으로 지정한다.
+   ⛔"nano_banana_pro" 는 같은 프롬프트에서 한글이 뭉개졌다. 글자가 필요하면 "gpt-image-2" 를 쓴다.
+8. 금지(영문 negative 포함): "No before-after comparison, no split frame, no side-by-side comparison, no dramatic transformation, no retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no logo, no labelled bottles, no sticky notes, no name badge"
+   ⚠️"no text" 와 "no printed documents" 는 **뺐다**(2026-09-06). 7번에서 문진표처럼
+     크게 잡히는 한글을 일부러 넣기 때문에, 여기서 전부 금지하면 서로 싸운다.
+     작은 글자를 막는 것은 이 목록이 아니라 **7번의 「크기로 가른다」 규칙**이 한다.
+   ⛔단 그 장면에 큰 글자를 안 넣기로 했다면 그 프롬프트에는 "no text" 를 다시 넣어라.
 
 - 영어로만 출력, 각 프롬프트 100~150단어 (시술 단서 포함으로 약간 길게)
 - 의료 현장의 실제 모습 (병원 인테리어, 의료진, 장비, 환자 치료, 시술 도구)
@@ -304,6 +336,14 @@ async function generateOneOpenAIImage(prompt: string): Promise<string> {
       model: OPENAI_IMAGE_MODEL,
       prompt,
       n: 1,
+      // ⛔**medium 고정이다. high 로 올리지 마라** — 2026-05-10 대표가 직접 비교하고 내린 결정.
+      //   high ≈ ₩260·132초/장 vs medium ≈ ₩55·50초/장 = **비용 5배·시간 3배**인데
+      //   대표 판정은 "큰 차이 없네"였다. [[project_doctorpost_image_quality]]
+      //   ⚠️2026-09-06 에 내가 이 줄을 high 로 바꿨다가 되돌렸다. 위 기록을 안 읽고 바꿨다.
+      //     그날 대기실 컷을 확대해 보면 잔머리 차이가 보이긴 했다 — 5월 테스트는 거울 셀카였다.
+      //     그래도 **바꾸지 않는다.** 판단은 대표가 이미 내렸고 비용이 5배다.
+      //   ⇒ 품질 이슈가 있으면 이 값이 아니라 **프롬프트(buildFluxPrompts)를 고친다.**
+      //     같은 날 계절 정합성·표정·한글 문진표를 그렇게 고쳤고, 그것만으로 결과가 달라졌다.
       size: '1024x1024',
       quality: 'medium',
     }),

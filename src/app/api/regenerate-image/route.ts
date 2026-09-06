@@ -89,6 +89,8 @@ async function generateWithOpenAI(prompt: string): Promise<string> {
       model: OPENAI_IMAGE_MODEL,
       prompt,
       n: 1,
+      // ⛔medium 고정. high 로 올리지 마라 — 비용 5배·시간 3배인데 대표 판정은 "큰 차이 없네"였다
+      //   (2026-05-10). [[project_doctorpost_image_quality]] · generate-images 쪽 주석 참조.
       size: '1024x1024',
       quality: 'medium',
     }),
