@@ -248,16 +248,22 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
    손소독제 펌프, 화분, 스테인리스 트레이, 페달 휴지통, 접어 둔 천, 굴러다니는 볼펜, 스툴.
    ⚠️**글자 규칙이 2026-09-06 에 바뀌었다.** 예전에는 "글자가 읽히는 물건은 전부 빼라"였는데,
    그건 "soul_2" 기준이었다. **"gpt_image_2" 는 한글을 제대로 그린다**(실측 확인).
-   ⇒ 크기로 가른다:
-     ✅**화면에서 크게 잡히는 글자는 넣어도 된다.** 문진표·안내판처럼 주인공이 되는 것.
-       한글 문구를 프롬프트에 **정확히 적고** "Every Korean character must be correctly spelled
-       and crisply printed at a readable size, real typography not scribbles" 를 덧붙인다.
-       ★대표 지적(9/6): *"상담에 빈 종이 말고 진짜 문진하는 거"* — 백지를 놓으면 문진 장면이 안 된다.
-       실제로 「문진표 / 성명 / 생년월일 / 연락처 / 현재 불편하신 곳 / 복용 중인 약」이 정확히 나왔다.
-     ⛔**작게 들어갈 글자는 여전히 빼라.** 글자가 작으면 오타가 난다
-       (실측: 「성영」·「생년밀일」·「연악처」). 라벨 붙은 약병, 배경의 서류 더미, 포스트잇,
-       명찰, 켜져 있는 모니터, 멀리 있는 벽 안내문 — 전부 작게 들어가므로 넣지 않는다.
-       모니터는 꺼진 화면으로, 배경 종이는 빈 것으로 지정한다.
+   ⇒ **크기가 아니라 「무엇을 적느냐」로 가른다**(9/7 대표 지적으로 고침):
+     ⛔**글자를 크고 또렷하게 만들지 마라.** 처음엔 「크게 잡으면 오타가 없다」로 갔는데
+       대표가 *"문진표가 너무 잘 보이잖아. 어색해"* 라고 했다. 실제 상담 사진에서 서류는
+       비스듬히 놓여 있고 대충 읽히지, 카메라를 향해 펼쳐져 있지 않다.
+     ✅**서류는 「배경 소품」으로 둔다.** 책상에 눕혀 얕은 각도로, 프레임의 주인공이 아니게.
+       `lying flat at a shallow angle, the natural size of a real document on a desk,
+        never enlarged or turned toward the camera` 를 덧붙인다.
+     ✅**정자체를 요구하지 말고 「인쇄 표 + 손글씨」를 섞어라.** 그래야 실제 차트처럼 읽힌다.
+       실측에서 「진료기록부」 양식이 가장 자연스러웠다. 백지는 상담 장면이 안 된다.
+       ⛔손글씨만 있는 종이는 버려라 — **한글 손글씨는 뭉개져서 가짜 티가 난다.**
+       ⛔짧은 필드명에 정자체를 요구하면 오타가 난다(실측: 「성영」·「생년밀일」·「연악처」).
+     ⛔여전히 빼야 할 것: 라벨 붙은 약병, 포스트잇, 명찰, 켜져 있는 모니터, 벽 안내문.
+       모니터는 꺼진 화면으로 지정한다.
+   ★★**원본 사진이 이미 좋은데 일부만 고치는 경우에는 프롬프트로 재현하지 말고
+     그 사진을 참조 이미지(`medias`, role `image`)로 넣고 「그것만 바꿔라」라고 지시하라.**
+     구도·인물·조명·소품이 그대로 남는다. 상담 컷을 그렇게 고쳤다.
    ⛔"nano_banana_pro" 는 같은 프롬프트에서 한글이 뭉개졌다. 글자가 필요하면 "gpt-image-2" 를 쓴다.
 8. 금지(영문 negative 포함): "No before-after comparison, no split frame, no side-by-side comparison, no dramatic transformation, no retouching, no smoothing, no beauty filters, no AI glow, no plastic skin, no studio light, no cinematic lighting, no illustration, no cartoon, no 3D render, no logo, no labelled bottles, no sticky notes, no name badge"
    ⚠️"no text" 와 "no printed documents" 는 **뺐다**(2026-09-06). 7번에서 문진표처럼
