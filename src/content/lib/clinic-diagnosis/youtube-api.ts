@@ -8,16 +8,14 @@ import type { SocialLink } from './types.ts';
  * ★ 인스타와 달리 유튜브는 **이름으로 채널을 찾는 공식 API 가 있다**(search.list,
  *   type=channel). 하루 10,000 쿼터 무료다. 그래서 크롤링 없이 정면으로 찾는다.
  *
- * ⏰**2026-09-09 현재 키가 설정돼 있지 않다.** 로컬·프로덕션 어디에도 없어서
- *   지금은 홈페이지·블로그·플레이스에 **링크가 걸린 경우만** 유튜브가 잡힌다.
- *   (`.env.example` 은 이 저장소에서 gitignore 라 안내를 여기 남긴다.)
+ * ★**키는 Vercel 에 있다** — `YOUTUBE_API_KEY` (Production and Preview, 2026-07-10 추가).
+ *   즉 **실서비스에서는 이름 검색이 이미 돈다.**
  *
- *   발급: Google Cloud Console → API 및 서비스 → 사용 설정 → "YouTube Data API v3"
- *         → 사용자 인증 정보 → API 키 만들기. **결제 등록 없이** 된다.
- *   쿼터: 무료 하루 10,000. 진단 1건이 최대 102 를 쓰므로 하루 약 98건.
- *   ⚠️키를 만들면 **API 제한을 YouTube Data API v3 하나로 걸어 둘 것** —
- *     키가 새더라도 피해가 그 안에서 끝난다.
- *   설정 위치: Vercel 프로젝트 환경변수 `YOUTUBE_API_KEY` (Production).
+ * ⚠️**로컬 `.env.local` 에는 없다.** 그래서 브리지(`sales-diagnosis-bridge.mjs`)로
+ *   로컬에서 돌린 진단은 유튜브 축이 링크 탐지만 하고 끝난다.
+ *   ⛔2026-09-09 에 이걸 보고 "키가 어디에도 없다"고 잘못 판단했다.
+ *     **로컬 파일로 프로덕션을 판정하지 말 것** — 환경이 셋이다(Vercel·Railway·로컬).
+ *   로컬에서 유튜브까지 확인하려면 Vercel 에서 값을 받아 `.env.local` 에 넣고 돌린다.
  *
  * ★ 키가 없으면 아무 일도 하지 않는다.
  *   `YOUTUBE_API_KEY` 가 없으면 지금처럼 **링크 탐지만** 하고 진단은 그대로 돈다.
