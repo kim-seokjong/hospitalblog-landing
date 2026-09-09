@@ -130,11 +130,55 @@ export async function searchLocalPlaces(
  * 다른 지역 병원만 올라오는 경우 대비). 지역 일치 검증은 두 경로 모두에 적용되므로
  * 순서를 바꿔도 "다른 지역 병원의 홈페이지를 붙이는" 일은 생기지 않는다.
  */
-export async function findClinicSiteUrl(
+/**
+ * 지역검색이 준 대표 링크의 **종류**.
+ *
+ * ⛔2026-09-09 실측: 표본 8곳 중 **3곳의 대표 링크가 홈페이지가 아니었다.**
+ *     글로미의원      → instagram.com/glowme_clinic
+ *     아산더본의원    → blog.naver.com/asan_thebone
+ *     연센트럴치과의원 → blog.naver.com/hellodentkim1
+ *   그런데 진단은 종류를 안 보고 이걸 **홈페이지로 재고 점수까지 매겼다.**
+ *   인스타 페이지에 대고 "검색·AI가 읽을 6가지 중 2가지" 라고 말한 셈이다.
+ *
+ * ★「못 봤다」와 「잘못 봤다」는 다르다. 뒤쪽이 훨씬 나쁘다 — 원장이 화면을 보고
+ *   "이건 우리 홈페이지가 아닌데" 하는 순간 진단 전체의 신뢰가 없어진다.
+ */
+export type LocalLinkKind = 'site' | 'blog' | 'social' | 'none';
+
+/** 대표 링크가 홈페이지인가, 블로그인가, SNS 인가 (순수 함수). */
+export function classifyLocalLink(rawUrl: string): LocalLinkKind {
+  const url = (rawUrl ?? '').trim().toLowerCase();
+  if (!url) return 'none';
+  const host = url.replace(/^https?:\/\//, '').split(/[/?#]/)[0] ?? '';
+  if (!host || !host.includes('.')) return 'none';
+  if (/(^|\.)blog\.naver\.com$|(^|\.)blog\.me$|(^|\.)tistory\.com$|(^|\.)brunch\.co\.kr$|(^|\.)post\.naver\.com$/.test(host)) {
+    return 'blog';
+  }
+  if (/(^|\.)instagram\.com$|(^|\.)facebook\.com$|(^|\.)youtube\.com$|(^|\.)youtu\.be$|(^|\.)cafe\.naver\.com$|(^|\.)pf\.kakao\.com$|(^|\.)band\.us$|(^|\.)x\.com$|(^|\.)twitter\.com$/.test(host)) {
+    return 'social';
+  }
+  // ⚠️modoo.at·네이버 스마트스토어 같은 「네이버가 만들어 주는 페이지」는 홈페이지로 본다.
+  //   병원이 그걸 홈페이지로 쓰고 있으면 실제로 그게 홈페이지다.
+  return 'site';
+}
+
+export interface ClinicLocalLink {
+  readonly url: string;
+  readonly kind: LocalLinkKind;
+}
+
+/**
+ * 병원 대표 링크를 찾는다 — **종류까지 함께** 돌려준다.
+ *
+ * 질의 순서가 중요하다(실측):
+ *   "중구 브이비성형외과의원" → 결과 0건
+ *   "브이비성형외과의원"      → 1건 (vb.vbeauty.co.kr)
+ */
+export async function findClinicLocalLink(
   clinicName: string,
   regionHint: string,
   options: FindSiteOptions = {},
-): Promise<string | null> {
+): Promise<ClinicLocalLink | null> {
   const env = options.env ?? (process.env as NaverSearchEnv);
   const fetchImpl = options.fetchImpl ?? fetch;
 
@@ -143,7 +187,23 @@ export async function findClinicSiteUrl(
     const places = await searchLocalPlaces(query.slice(0, 60), { env, fetchImpl, timeoutMs: options.timeoutMs });
     if (!places || places.length === 0) continue;
     const matched = pickMatchingPlace(places, clinicName, regionHint);
-    if (matched?.link) return matched.link;
+    if (matched?.link) return { url: matched.link, kind: classifyLocalLink(matched.link) };
   }
   return null;
+}
+
+/**
+ * 병원 **홈페이지** 주소만 돌려준다. 블로그·SNS 면 null 이다.
+ *
+ * ⚠️이 함수는 예전 이름을 그대로 두되 **동작이 바뀌었다**(2026-09-09).
+ *   버려진 블로그·SNS 주소는 호출부가 `findClinicLocalLink` 로 따로 받아
+ *   블로그·소셜 축의 근거로 돌려 쓴다 — 정보를 버리지 않는다.
+ */
+export async function findClinicSiteUrl(
+  clinicName: string,
+  regionHint: string,
+  options: FindSiteOptions = {},
+): Promise<string | null> {
+  const found = await findClinicLocalLink(clinicName, regionHint, options);
+  return found && found.kind === 'site' ? found.url : null;
 }

@@ -3,7 +3,7 @@ import { extractTargetKeywords } from '../blog-check-keywords.ts';
 import { fetchKeywordSerps } from '../blog-check-serp.ts';
 import { checkCompliance } from '../medical-compliance.ts';
 import { discoverClinicBlog, extractBlogId, type NaverSearchEnv } from './blog-discovery.ts';
-import { findClinicSiteUrl } from './naver-local.ts';
+import { findClinicLocalLink, type ClinicLocalLink } from './naver-local.ts';
 import { EMPTY_PLACE_RESULT, measurePlace, PLACE_DEADLINE_MS } from './place.ts';
 import { auditSite, EMPTY_SITE_AXIS } from './site-audit.ts';
 import { runAiCitation, EMPTY_AI_AXIS, type OwnedAssets } from './ai-citation.ts';
@@ -435,19 +435,34 @@ async function measureBlog(
 }
 
 /** 홈페이지 축 측정 — 주소를 못 찾으면 요청 자체를 하지 않는다. */
-async function measureSite(clinic: ClinicCandidate, options: RunDiagnosisOptions): Promise<SiteAxis> {
+/**
+ * 홈페이지 축 — **대표 링크의 종류를 가려서** 홈페이지일 때만 잰다(2026-09-09).
+ *
+ * 버려진 링크(블로그·SNS)는 `otherLink` 로 함께 돌려준다. 호출부가 블로그·소셜 축의
+ * 근거로 쓴다 — 정보를 버리지 않는다.
+ */
+async function measureSite(
+  clinic: ClinicCandidate,
+  options: RunDiagnosisOptions,
+): Promise<{ axis: SiteAxis; otherLink: ClinicLocalLink | null }> {
   const env = options.env ?? (process.env as DiagnosisEnv);
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const manual = (options.manualSiteUrl ?? '').trim();
   if (manual) {
-    if (!normalizeSiteUrl(manual)) return { ...EMPTY_SITE_AXIS, source: 'manual' };
-    return auditSite(manual, { fetchImpl, source: 'manual' });
+    if (!normalizeSiteUrl(manual)) {
+      return { axis: { ...EMPTY_SITE_AXIS, source: 'manual' }, otherLink: null };
+    }
+    return { axis: await auditSite(manual, { fetchImpl, source: 'manual' }), otherLink: null };
   }
 
-  const found = await findClinicSiteUrl(clinic.name, clinic.region, { env, fetchImpl });
-  if (!found) return { ...EMPTY_SITE_AXIS, source: null };
-  return auditSite(found, { fetchImpl, source: 'naver' });
+  const found = await findClinicLocalLink(clinic.name, clinic.region, { env, fetchImpl });
+  if (!found) return { axis: { ...EMPTY_SITE_AXIS, source: null }, otherLink: null };
+  if (found.kind !== 'site') {
+    // ⛔블로그·인스타를 홈페이지로 재지 않는다. "못 봤다"로 남기고 근거는 넘긴다.
+    return { axis: { ...EMPTY_SITE_AXIS, source: null }, otherLink: found };
+  }
+  return { axis: await auditSite(found.url, { fetchImpl, source: 'naver' }), otherLink: null };
 }
 
 /**
@@ -497,7 +512,7 @@ export async function runClinicDiagnosis(
   const fetchImpl = options.fetchImpl ?? fetch;
 
   // 1단계 — 블로그·홈페이지·플레이스는 서로 독립이라 병렬로 돈다.
-  const [blogResult, site, place] = await Promise.all([
+  const [blogResult, siteResult, place] = await Promise.all([
     measureBlog(clinic, options, now).catch((error: unknown) => {
       logAxisFailure('blog', error);
       return {
@@ -509,7 +524,7 @@ export async function runClinicDiagnosis(
     }),
     measureSite(clinic, options).catch((error: unknown) => {
       logAxisFailure('site', error);
-      return EMPTY_SITE_AXIS;
+      return { axis: EMPTY_SITE_AXIS, otherLink: null as ClinicLocalLink | null };
     }),
     /**
      * 플레이스 — 네이버 화면을 직접 읽는 유일한 축이라 **가장 잘 깨진다.**
@@ -543,12 +558,39 @@ export async function runClinicDiagnosis(
    */
   let blogResolved = blogResult;
   if (!blogResolved.axis.blogId) {
-    const placeBlogId = firstPlaceBlogId(place.channels);
-    if (placeBlogId) {
+    /**
+     * 순서 = 신뢰 순.
+     *   ① 플레이스 등록 블로그 — 병원이 직접 넣은 값
+     *   ② 지역검색 대표 링크가 블로그였던 경우 — 홈페이지 축이 쓰지 않고 넘긴 것
+     *     (⛔예전엔 이걸 홈페이지로 재고 있었다. 이제 버리는 대신 여기로 돌린다.)
+     */
+    const fallbackId =
+      firstPlaceBlogId(place.channels) ??
+      (siteResult.otherLink?.kind === 'blog' ? extractBlogId(siteResult.otherLink.url) : null);
+    if (fallbackId) {
       try {
-        blogResolved = await measureBlog(clinic, { ...options, manualBlogId: placeBlogId }, now);
+        blogResolved = await measureBlog(clinic, { ...options, manualBlogId: fallbackId }, now);
       } catch (error: unknown) {
         logAxisFailure('blog', error);
+      }
+    }
+  }
+
+  /**
+   * 홈페이지를 못 찾았으면 **플레이스에 등록된 홈페이지**로 한 번 더 본다(2026-09-09).
+   *
+   * 지역검색 대표 링크가 인스타·블로그인 병원이 표본 8곳 중 3곳이었고, 그 셋 다
+   * 플레이스에는 진짜 홈페이지가 등록돼 있었다(글로미의원 → glowmeclinic.co.kr).
+   * ⚠️죽은 링크는 쓰지 않는다.
+   */
+  let site = siteResult.axis;
+  if (!site.url) {
+    const placeHome = (place.channels ?? []).find((c) => c.kind === 'homepage' && !c.dead);
+    if (placeHome && normalizeSiteUrl(placeHome.url)) {
+      try {
+        site = await auditSite(placeHome.url, { fetchImpl, source: 'naver' });
+      } catch (error: unknown) {
+        logAxisFailure('site', error);
       }
     }
   }
@@ -629,7 +671,14 @@ export async function runClinicDiagnosis(
         // ★플레이스에 업주가 직접 등록해 둔 채널 — 추정이 아니라 등록값이다.
         //   이걸 넣기 전에는 「홈페이지에 인스타 링크를 안 건 병원」을 검색으로
         //   추정하다 남의 계정을 잡을 위험을 감수했다.
-        placeLinks: placeChannelsToSocialLinks(place.channels),
+        placeLinks: mergeSocialLinks(
+          placeChannelsToSocialLinks(place.channels),
+          // 지역검색 대표 링크가 인스타였던 경우 — 홈페이지 축이 안 쓰고 넘긴 것.
+          // 이것도 병원이 네이버에 등록한 값이라 검색 추정보다 믿을 수 있다.
+          siteResult.otherLink?.kind === 'social'
+            ? extractSocialLinks(siteResult.otherLink.url, 'place')
+            : [],
+        ),
         siteHost: owned.siteHost,
         blogId: owned.blogId,
       },
