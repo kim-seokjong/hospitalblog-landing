@@ -231,13 +231,36 @@ function FindingCard({ finding, locked = false }: { finding: Finding; locked?: b
 function ScoreBoard({
   findings,
   competitors,
+  clinicName,
+  selfMentions,
 }: {
   findings: readonly Finding[];
   competitors: readonly { readonly name: string; readonly count: number }[];
+  /** 우리 병원 이름 — 경쟁 목록 맨 아래 우리 자리를 놓는 데 쓴다. */
+  clinicName?: string;
+  /** 우리 병원이 AI 답변에 나온 횟수. 못 쟀으면 null(줄을 아예 안 그린다). */
+  selfMentions?: number | null;
 }) {
   const total = scoreFindings(findings);
   const axes = scoreByAxis(findings);
   if (total.counted === 0) return null;
+
+  /**
+   * ★급한 순으로 세운다 (2026-09-09).
+   *
+   * 고정 순서로 두면 「지금 손해 보는 축」이 화면 아래에 깔린다. 원장이 위에서부터
+   * 읽는다는 전제로, **손해가 큰 축을 위로** 올린다.
+   *   ① 급한 것(losing) 많은 순  ② 점수 낮은 순  ③ 못 본 축은 맨 아래
+   * ⚠️정렬만 바꾼다. 점수 계산은 손대지 않는다.
+   */
+  /** 막대 길이 기준 — 1위 언급 수. 0 이면 나눗셈이 깨지므로 최소 1. */
+  const topCount = Math.max(1, ...competitors.map((c) => c.count));
+
+  const orderedAxes = [...axes].sort((a, b) => {
+    if (a.unmeasured !== b.unmeasured) return a.unmeasured ? 1 : -1;
+    if (b.losing !== a.losing) return b.losing - a.losing;
+    return a.score - b.score;
+  });
 
   const tone =
     total.grade === 'good'
@@ -273,9 +296,10 @@ function ScoreBoard({
       </div>
 
       <div className="mt-6 border-t border-[#eef1f5] pt-5">
-        <p className="text-sm font-bold text-[#202020]">어디가 부족한지</p>
+        <p className="text-sm font-bold text-[#202020]">어디부터 손봐야 하나</p>
+        <p className="mt-1 text-xs text-[#8a93a0]">급한 순서대로 놓았습니다.</p>
         <ul className="mt-3 space-y-2.5">
-          {axes.map((a) => (
+          {orderedAxes.map((a) => (
             <li key={a.axis}>
               <div className="flex items-center gap-3">
                 <span className="w-24 shrink-0 text-sm text-[#5b6472]">{a.label}</span>
@@ -289,8 +313,24 @@ function ScoreBoard({
                     />
                   )}
                 </span>
-                <span className="w-20 shrink-0 text-right text-sm font-bold text-[#202020]">
-                  {a.unmeasured ? <span className="text-xs font-normal text-[#a7aeb8]">아직 못 봤어요</span> : `${a.score}점`}
+                {/*
+                  ★점수만 두면 **전부 0점일 때 막대가 다 같아 보여 정보가 없다**(2026-09-09 실측).
+                    그래서 「고쳐야 할 것 N개」를 점수 자리에 함께 세운다 —
+                    같은 0점이라도 2개인 축과 1개인 축은 다르고, 원장이 알고 싶은 건 그쪽이다.
+                */}
+                <span className="w-28 shrink-0 text-right">
+                  {a.unmeasured ? (
+                    <span className="text-xs text-[#a7aeb8]">아직 못 봤어요</span>
+                  ) : (
+                    <>
+                      <span className="text-sm font-bold text-[#202020]">{a.score}점</span>
+                      {a.losing > 0 && (
+                        <span className="ml-1.5 text-xs font-bold text-[#ff4628]">
+                          급한 것 {a.losing}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </span>
               </div>
               {/*
@@ -315,14 +355,46 @@ function ScoreBoard({
             같은 질문에 AI가 답하면서 함께 언급한 의료기관입니다. 저희가 평가한 것이 아니라
             답변에 나온 횟수만 세었습니다.
           </p>
+          {/*
+            ★막대로 보인다 (2026-09-09).
+              숫자만 늘어놓으면 "목록"으로 읽히고 만다. 길이 차이로 보여야
+              **내 자리를 저기가 가져갔다**가 눈에 박힌다.
+            ★그리고 맨 아래 **우리 병원 줄**을 둔다 — 이 표에서 가장 중요한 것은
+              남이 몇 번 나왔는지가 아니라 **우리가 0회라는 사실**이다.
+          */}
           <ul className="mt-3 space-y-2">
             {competitors.map((c, i) => (
               <li key={c.name} className="flex items-center gap-3 text-sm">
                 <span className="w-5 shrink-0 text-right text-xs text-[#a7aeb8]">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate text-[#202020]">{c.name}</span>
-                <span className="shrink-0 text-xs text-[#8a93a0]">{c.count}회 언급</span>
+                <span className="w-32 shrink-0 truncate text-[#202020]">{c.name}</span>
+                <span className="h-2 flex-1 overflow-hidden rounded-full bg-[#f0f2f5]">
+                  <span
+                    className="block h-full rounded-full bg-[#9aa4b2]"
+                    style={{ width: `${Math.round((c.count / topCount) * 100)}%` }}
+                  />
+                </span>
+                <span className="w-14 shrink-0 text-right text-xs text-[#8a93a0]">{c.count}회</span>
               </li>
             ))}
+            {typeof selfMentions === 'number' && (
+              <li className="flex items-center gap-3 border-t border-[#f0f2f5] pt-2.5 text-sm">
+                <span className="w-5 shrink-0" />
+                <span className="w-32 shrink-0 truncate font-bold text-[#ff4628]">
+                  {clinicName || '우리 병원'}
+                </span>
+                <span className="h-2 flex-1 overflow-hidden rounded-full bg-[#f0f2f5]">
+                  {selfMentions > 0 && (
+                    <span
+                      className="block h-full rounded-full bg-[#ff4628]"
+                      style={{ width: `${Math.round((selfMentions / topCount) * 100)}%` }}
+                    />
+                  )}
+                </span>
+                <span className="w-14 shrink-0 text-right text-xs font-bold text-[#ff4628]">
+                  {selfMentions}회
+                </span>
+              </li>
+            )}
           </ul>
         </div>
       )}
@@ -536,7 +608,12 @@ export default function DiagnosisReportView({
       )}
 
       {/* 종합 점수 · 축별 점수 · 대신 나온 병원 — 채널 요약보다 먼저 본다(숫자 하나가 먼저). */}
-      <ScoreBoard findings={findings} competitors={competitors} />
+      <ScoreBoard
+        findings={findings}
+        competitors={competitors}
+        clinicName={report.clinic?.name}
+        selfMentions={report.ai?.checked ? (report.ai.mentionedCount ?? 0) : null}
+      />
 
       {/*
         요약 — **채널 4칸**. 어느 영역이 약한지가 한눈에 보여야 한다.
