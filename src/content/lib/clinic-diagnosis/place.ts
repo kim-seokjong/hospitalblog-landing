@@ -252,7 +252,46 @@ export interface PlaceProfile {
   readonly keywordFieldFound: boolean;
   /** 업종 필드를 찾았는가 — 상세 파싱이 통째로 깨졌는지 판정하는 데 쓴다. */
   readonly categoryFieldFound: boolean;
+  /**
+   * 업주가 플레이스에 **직접 등록한 채널** (홈페이지·블로그·인스타그램·유튜브 …).
+   *
+   * ★ 2026-09-09 대표 지적으로 신설. 우리는 이 HTML 을 이미 받아오면서
+   *   업종·키워드 두 필드만 쓰고 버리고 있었다. 채널이 같은 응답 안에 있다 —
+   *   **추가 호출 0회**로 얻는 정보다.
+   *
+   * ★ 왜 값이 큰가.
+   *   지금 인스타는 네이버 웹문서 검색으로 **추정**한다(social-search.ts). 그 방식은
+   *   같은 진료과 남의 계정을 잡는 오탐 위험이 상시 있다(실측: 「한피부과의원
+   *   인스타그램」 1위가 무관한 계정). 반면 이 목록은 **병원이 자기 손으로 등록한
+   *   것**이라 오탐이 없다. 블로그도 마찬가지다 — 자동 탐색 점수판을 거치지 않는다.
+   */
+  readonly channels: readonly PlaceChannel[];
+  /**
+   * 채널 블록(`HomepageRepr`) **자체를 찾았는가.**
+   *
+   * ⚠️ keywordFieldFound 와 같은 이유다. "채널을 안 걸었다" 와 "마크업이 바뀌어
+   *    못 읽었다" 를 뭉치면, 걸어 둔 원장에게 "안 거셨다" 고 말하게 된다.
+   */
+  readonly channelFieldFound: boolean;
 }
+
+/** 플레이스에 등록된 채널 하나. */
+export interface PlaceChannel {
+  /** 네이버가 붙인 한글 라벨 그대로 ('홈페이지' · '블로그' · '인스타그램' …). 없으면 ''. */
+  readonly label: string;
+  /** 우리가 아는 종류로 접은 값. 모르는 라벨이면 'other'. */
+  readonly kind: PlaceChannelKind;
+  readonly url: string;
+  /**
+   * 네이버가 **죽은 링크로 판정**했는가.
+   *
+   * ★ 이것만으로도 진단 항목이 된다 — 병원이 걸어 둔 주소가 안 열리는데
+   *   원장은 모르는 경우가 흔하다. 우리가 따로 두드리지 않고도 말할 수 있다.
+   */
+  readonly dead: boolean;
+}
+
+export type PlaceChannelKind = 'homepage' | 'blog' | 'instagram' | 'youtube' | 'other';
 
 /**
  * 플레이스 상세 HTML → 업종 + 등록 키워드.
@@ -261,9 +300,61 @@ export interface PlaceProfile {
  *   **그 병원이 실제로 내건 항목**이 설득력이 있다. "임플란트를 걸어 두셨는데
  *   범어동 임플란트로는 첫 화면에 안 보입니다" 는 반박이 안 된다.
  */
+/** 라벨 → 우리가 아는 종류. 모르면 'other'(버리지 않는다 — 화면엔 라벨 그대로 쓴다). */
+export function placeChannelKind(label: string, url: string): PlaceChannelKind {
+  const l = (label ?? '').replace(/\s+/g, '');
+  const u = (url ?? '').toLowerCase();
+  // ★라벨을 먼저 본다. 병원이 「블로그」로 등록해 둔 자리에 티스토리를 넣기도 한다.
+  if (l.includes('인스타') || u.includes('instagram.com')) return 'instagram';
+  if (l.includes('유튜브') || u.includes('youtube.com') || u.includes('youtu.be')) return 'youtube';
+  if (l.includes('블로그') || u.includes('blog.naver.com')) return 'blog';
+  if (l.includes('홈페이지')) return 'homepage';
+  return 'other';
+}
+
+/** `/` 같은 JSON 이스케이프를 되돌린다 — 플레이스 HTML 은 URL 을 이 형태로 싣는다. */
+function unescapeJsonUrl(raw: string): string {
+  return decodeJsonString(raw).replace(/\\\//g, '/');
+}
+
+/**
+ * 플레이스 상세 HTML → **등록 채널 목록**.
+ *
+ * 실측 구조(2026-09-09):
+ *   {"__typename":"HomepageRepr","url":"https://…","landingUrl":"…",
+ *    "isDeadUrl":false,"type":"홈페이지","typeI18n":"홈페이지","order":0,…}
+ *
+ * ⚠️ 같은 URL 이 `repr`(대표 링크)로 한 번 더 실린다 — **URL 기준으로 중복을 지운다.**
+ *    안 지우면 "인스타 2개" 같은 없는 사실이 리포트에 나간다.
+ * ⚠️ `landingUrl` 은 선택 필드다(없는 병원이 있다). 정규식을 그 존재에 의존시키지 않는다.
+ */
+export function parsePlaceChannels(html: string): { channels: PlaceChannel[]; found: boolean } {
+  if (!html) return { channels: [], found: false };
+  const re =
+    /"__typename":"HomepageRepr","url":"([^"]+)"(?:,"landingUrl":"[^"]*")?,"isDeadUrl":(true|false),"type":"([^"]*)"/g;
+  const channels: PlaceChannel[] = [];
+  const seen = new Set<string>();
+  let found = false;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    found = true;
+    const url = unescapeJsonUrl(m[1] ?? '');
+    if (!url) continue;
+    const key = url.replace(/\/+$/, '').toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const label = decodeJsonString(m[3] ?? '');
+    channels.push({ label, kind: placeChannelKind(label, url), url, dead: m[2] === 'true' });
+  }
+  return { channels, found };
+}
+
 export function parsePlaceProfile(html: string): PlaceProfile {
   if (!html) {
-    return { category: '', keywords: [], keywordFieldFound: false, categoryFieldFound: false };
+    return {
+      category: '', keywords: [], keywordFieldFound: false, categoryFieldFound: false,
+      channels: [], channelFieldFound: false,
+    };
   }
   const categoryMatch = /"category":"([^"]{1,40})"/.exec(html);
   const listMatch = /"keywordList":\[([^\]]*)\]/.exec(html);
@@ -274,11 +365,14 @@ export function parsePlaceProfile(html: string): PlaceProfile {
         .map((s) => decodeJsonString(s.trim().replace(/^"|"$/g, '')))
         .filter(Boolean)
     : [];
+  const parsedChannels = parsePlaceChannels(html);
   return {
     category: decodeJsonString(categoryMatch?.[1] ?? ''),
     keywords,
     keywordFieldFound: listMatch !== null,
     categoryFieldFound: categoryMatch !== null,
+    channels: parsedChannels.channels,
+    channelFieldFound: parsedChannels.found,
   };
 }
 
@@ -489,6 +583,10 @@ export interface PlaceAxisResult {
   readonly profileChecked: boolean;
   /** keywordList 필드 자체를 찾았는가 — 빈 등록과 파싱 실패를 가른다. */
   readonly keywordFieldFound: boolean;
+  /** 업주가 플레이스에 등록해 둔 채널 목록 (홈페이지·블로그·인스타 …). */
+  readonly channels: readonly PlaceChannel[];
+  /** 채널 블록 자체를 찾았는가 — "안 걸었다"와 "못 읽었다"를 가른다. */
+  readonly channelFieldFound: boolean;
   readonly measuredKeywords: readonly PlaceKeywordPick[];
   readonly lowVolumeKeywords: readonly PlaceKeywordPick[];
   readonly overLimitKeywords: readonly PlaceKeywordPick[];
@@ -507,6 +605,8 @@ export const EMPTY_PLACE_RESULT: PlaceAxisResult = {
   registeredKeywords: [],
   profileChecked: false,
   keywordFieldFound: false,
+  channels: [],
+  channelFieldFound: false,
   measuredKeywords: [],
   lowVolumeKeywords: [],
   overLimitKeywords: [],
@@ -725,6 +825,8 @@ export async function measurePlace(
     keywords: [],
     keywordFieldFound: false,
     categoryFieldFound: false,
+    channels: [],
+    channelFieldFound: false,
   };
   const scopes = buildPlaceScopes(input);
   const regionTokens = scopes.map((s) => s.region);
@@ -789,6 +891,8 @@ export async function measurePlace(
     registeredKeywords: profile.keywords,
     profileChecked,
     keywordFieldFound: profile.keywordFieldFound,
+    channels: profile.channels,
+    channelFieldFound: profile.channelFieldFound,
     measuredKeywords: measured,
     lowVolumeKeywords: lowVolume,
     overLimitKeywords: overLimit,

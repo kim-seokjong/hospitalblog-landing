@@ -58,6 +58,8 @@ export const SOCIAL_PLATFORM_LABEL: Readonly<Record<SocialPlatform, string>> = {
 export const SOCIAL_SOURCE_LABEL: Readonly<Record<SocialSource, string>> = {
   site: '홈페이지 링크',
   blog: '블로그 링크',
+  // ★「등록」이라고 쓴다 — 우리가 찾은 게 아니라 병원이 직접 넣은 값이다.
+  place: '플레이스 등록',
   naver_search: '네이버 검색',
   youtube_api: '유튜브 검색',
 };
@@ -296,6 +298,11 @@ export interface BuildSocialAxisInput {
   /** 블로그 글 본문·요약을 실제로 받아 봤는가. */
   readonly scannedBlog: boolean;
   readonly blogLinks: readonly SocialLink[];
+  /**
+   * 업주가 네이버 플레이스에 **직접 등록한** 채널 (2026-09-09 신설).
+   * 추정이 아니라 등록값이라 가장 믿을 수 있다 — 있으면 검색 우회로를 아예 안 탄다.
+   */
+  readonly placeLinks?: readonly SocialLink[];
   /** 네이버 검색·유튜브 API 로 찾은 계정. 링크로 못 찾았을 때만 채워진다. */
   readonly searchLinks?: readonly SocialLink[];
   /** 네이버 웹문서 검색을 실제로 돌렸는가. */
@@ -313,14 +320,46 @@ export interface BuildSocialAxisInput {
  *
  * 링크 우선순위: 홈페이지 → 블로그 → 검색. 같은 계정이면 앞선 출처를 근거로 남긴다.
  */
+/**
+ * 플레이스 등록 채널 → 소셜 링크 (2026-09-09 신설).
+ *
+ * ⚠️ **죽은 링크로 판정된 것은 제외한다.** 네이버가 이미 안 열린다고 표시한 주소를
+ *    "운영 중" 근거로 쓰면 없는 사실을 말하는 것이 된다.
+ *    (죽었다는 사실 자체는 플레이스 축이 따로 보고한다.)
+ * ⚠️ 홈페이지·기타 라벨은 여기서 다루지 않는다 — 이 함수는 **소셜 축**용이다.
+ */
+export function placeChannelsToSocialLinks(
+  channels: readonly { kind: string; url: string; dead: boolean }[] | undefined,
+): readonly SocialLink[] {
+  const out: SocialLink[] = [];
+  for (const c of channels ?? []) {
+    if (!c || c.dead) continue;
+    if (c.kind !== 'instagram' && c.kind !== 'youtube') continue;
+    // 판정 로직을 한 곳으로 모은다 — 주소 형태 해석은 extractSocialLinks 가 진실원천이다.
+    for (const link of extractSocialLinks(c.url, 'place')) {
+      if (link.kind === 'channel') out.push(link);
+    }
+  }
+  return mergeSocialLinks(out);
+}
+
 export function buildSocialAxis(input: BuildSocialAxisInput): SocialAxis {
   const searchedNaver = Boolean(input.searchedNaver);
   const searchedYoutube = Boolean(input.searchedYoutube);
+  const placeLinks = input.placeLinks ?? [];
+  /**
+   * ★플레이스 채널을 읽은 것도 「훑었다」로 센다(2026-09-09).
+   *   안 그러면 홈페이지·블로그를 못 찾은 병원에서 `scanned=false` 가 되어
+   *   **플레이스에 인스타를 걸어 둔 사실을 알고도 축이 통째로 비어 나간다.**
+   */
   const scanned =
-    Boolean(input.scannedSite) || Boolean(input.scannedBlog) || searchedNaver || searchedYoutube;
+    Boolean(input.scannedSite) || Boolean(input.scannedBlog) ||
+    placeLinks.length > 0 || searchedNaver || searchedYoutube;
   if (!scanned) return EMPTY_SOCIAL_AXIS;
 
-  const links = mergeSocialLinks(input.siteLinks ?? [], input.blogLinks ?? [], input.searchLinks ?? []);
+  // 순서 = 신뢰 순. 업주가 직접 등록한 플레이스 채널을 앞에 둔다.
+  const links = mergeSocialLinks(
+    placeLinks, input.siteLinks ?? [], input.blogLinks ?? [], input.searchLinks ?? []);
   const presenceOf = (platform: SocialPlatform): SocialPresence =>
     links.some((l) => l.platform === platform && l.kind === 'channel') ? 'found' : 'not_found';
 

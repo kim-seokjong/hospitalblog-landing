@@ -119,12 +119,17 @@ test('키워드가 없는 상세도 깨지지 않는다', () => {
     keywords: [],
     keywordFieldFound: false,
     categoryFieldFound: true,
+    // 2026-09-09 신설 — 채널 블록이 없는 상세다.
+    channels: [],
+    channelFieldFound: false,
   });
   assert.deepEqual(parsePlaceProfile(''), {
     category: '',
     keywords: [],
     keywordFieldFound: false,
     categoryFieldFound: false,
+    channels: [],
+    channelFieldFound: false,
   });
 });
 

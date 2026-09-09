@@ -249,7 +249,14 @@ export type SocialPresence = 'found' | 'not_found' | 'unknown';
  *
  * ⚠️ 이 필드가 생기기 전에 저장된 리포트에는 없다 → 항상 옵셔널로 읽는다.
  */
-export type SocialSource = 'site' | 'blog' | 'naver_search' | 'youtube_api';
+/**
+ * 링크를 어디서 얻었는가.
+ *
+ * ★`place` = 업주가 **네이버 플레이스에 직접 등록한** 채널(2026-09-09 신설).
+ *   `naver_search` 는 우리가 검색으로 **추정**한 것이라 오탐 위험이 있지만,
+ *   `place` 는 병원이 자기 손으로 넣은 값이라 그 위험이 없다 — 가장 믿을 수 있는 출처다.
+ */
+export type SocialSource = 'site' | 'blog' | 'place' | 'naver_search' | 'youtube_api';
 
 export interface SocialLink {
   readonly platform: SocialPlatform;

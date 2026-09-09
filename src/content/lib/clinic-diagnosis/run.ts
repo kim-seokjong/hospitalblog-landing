@@ -2,7 +2,7 @@ import { fetchBlogCheckFeed, fetchLatestBodies } from '../blog-check-rss.ts';
 import { extractTargetKeywords } from '../blog-check-keywords.ts';
 import { fetchKeywordSerps } from '../blog-check-serp.ts';
 import { checkCompliance } from '../medical-compliance.ts';
-import { discoverClinicBlog, type NaverSearchEnv } from './blog-discovery.ts';
+import { discoverClinicBlog, extractBlogId, type NaverSearchEnv } from './blog-discovery.ts';
 import { findClinicSiteUrl } from './naver-local.ts';
 import { EMPTY_PLACE_RESULT, measurePlace, PLACE_DEADLINE_MS } from './place.ts';
 import { auditSite, EMPTY_SITE_AXIS } from './site-audit.ts';
@@ -18,6 +18,7 @@ import {
   EMPTY_SOCIAL_AXIS,
   extractSocialLinks,
   mergeSocialLinks,
+  placeChannelsToSocialLinks,
 } from './social-detect.ts';
 import { searchSocialAccounts } from './social-search.ts';
 import {
@@ -231,6 +232,8 @@ export interface MeasureSocialInput {
   /** 블로그 글에서 찾은 링크. */
   readonly blogLinks: readonly SocialLink[];
   readonly scannedBlog: boolean;
+  /** 플레이스에 업주가 직접 등록한 채널에서 온 링크 (있으면 검색 우회로를 안 탄다). */
+  readonly placeLinks?: readonly SocialLink[];
   /** 확인된 병원 홈페이지 호스트 — 검색 결과 검증(계정 아이디 대조)에 쓴다. */
   readonly siteHost: string | null;
   /** 확인된 병원 블로그 id — 검색 결과가 병원 소유인지 판단에 쓴다. */
@@ -253,7 +256,9 @@ export async function measureSocial(
   input: MeasureSocialInput,
   options: { env: DiagnosisEnv; fetchImpl: typeof fetch; now: number },
 ): Promise<SocialAxis> {
-  const direct = mergeSocialLinks(input.siteLinks ?? [], input.blogLinks ?? []);
+  const placeLinks = input.placeLinks ?? [];
+  // 플레이스 등록값을 맨 앞에 둔다 — 추정보다 우선한다.
+  const direct = mergeSocialLinks(placeLinks, input.siteLinks ?? [], input.blogLinks ?? []);
   const hasInstagram = direct.some((l) => l.platform === 'instagram' && l.kind === 'channel');
 
   let searchLinks: readonly SocialLink[] = [];
@@ -291,6 +296,7 @@ export async function measureSocial(
   return buildSocialAxis({
     scannedSite: input.scannedSite,
     siteLinks: input.siteLinks ?? [],
+    placeLinks,
     scannedBlog: input.scannedBlog,
     blogLinks: input.blogLinks ?? [],
     searchLinks,
@@ -462,6 +468,24 @@ function logAxisFailure(
 }
 
 /**
+ * 플레이스 등록 채널에서 **블로그 id** 하나를 뽑는다 (순수 함수).
+ *
+ * ⚠️죽은 링크로 표시된 것은 쓰지 않는다 — 안 열리는 블로그로 진단하면 "글이 없다"는
+ *   틀린 결론이 난다.
+ * ⚠️네이버 블로그만 받는다. 티스토리 등은 우리 RSS 경로가 다루지 못한다.
+ */
+export function firstPlaceBlogId(
+  channels: readonly { kind: string; url: string; dead: boolean }[] | undefined,
+): string | null {
+  for (const c of channels ?? []) {
+    if (!c || c.dead || c.kind !== 'blog') continue;
+    const id = extractBlogId(c.url);
+    if (id) return id;
+  }
+  return null;
+}
+
+/**
  * 진단 1건 실행. 절대 throw 하지 않는다 — 축별 실패는 축 내부에서 흡수된다.
  */
 export async function runClinicDiagnosis(
@@ -505,8 +529,32 @@ export async function runClinicDiagnosis(
     }),
   ]);
 
+  /**
+   * ★블로그를 못 찾았을 때만, 플레이스에 **업주가 등록해 둔 블로그**로 한 번 더 본다
+   *   (2026-09-09 대표 지적으로 신설).
+   *
+   *   자동 탐색은 검색 점수판이라 「블로거명에도 제목에도 병원 이름이 없는」 블로그를
+   *   못 찾는다. 그런데 그 병원이 플레이스에는 블로그를 걸어 둔 경우가 있다 —
+   *   추정이 아니라 **등록값**이라 점수판을 거칠 이유가 없다.
+   *
+   *   ⚠️이게 살아나면 **의료광고법 축도 같이 산다.** 그 축은 블로그 글을 검사하므로
+   *     블로그를 못 찾으면 통째로 안 돈다(6축 중 하나가 조용히 비는 자리였다).
+   *   ⚠️못 찾았을 때만 돈다 — 이미 찾은 병원의 진단 시간은 그대로다.
+   */
+  let blogResolved = blogResult;
+  if (!blogResolved.axis.blogId) {
+    const placeBlogId = firstPlaceBlogId(place.channels);
+    if (placeBlogId) {
+      try {
+        blogResolved = await measureBlog(clinic, { ...options, manualBlogId: placeBlogId }, now);
+      } catch (error: unknown) {
+        logAxisFailure('blog', error);
+      }
+    }
+  }
+
   const owned: OwnedAssets = {
-    blogId: blogResult.axis.blogId,
+    blogId: blogResolved.axis.blogId,
     siteHost: site.url ? (normalizeSiteUrl(site.url)?.hostname ?? null) : null,
   };
 
@@ -538,7 +586,7 @@ export async function runClinicDiagnosis(
   const pasted = (options.pastedBody ?? '').trim();
   const sources: readonly ComplianceSource[] = pasted
     ? [
-        ...blogResult.sources,
+        ...blogResolved.sources,
         {
           title: '직접 입력한 글',
           link: 'manual:pasted',
@@ -547,7 +595,7 @@ export async function runClinicDiagnosis(
           bodyKind: 'full' as const,
         },
       ]
-    : blogResult.sources;
+    : blogResolved.sources;
   /**
    * ⚠️ 순수 함수라도 감싼다 — 정규식·본문 형태 때문에 던질 여지가 있고, 여기서 던지면
    *    나머지 세 축을 다 측정해 놓고 진단 전체가 실패한다(팔로워까지 함께).
@@ -576,8 +624,12 @@ export async function runClinicDiagnosis(
         clinicName: clinic.name,
         siteLinks: site.socialLinks ?? [],
         scannedSite: siteBodyFetched(site),
-        blogLinks: blogResult.socialLinks,
-        scannedBlog: blogResult.scanned,
+        blogLinks: blogResolved.socialLinks,
+        scannedBlog: blogResolved.scanned,
+        // ★플레이스에 업주가 직접 등록해 둔 채널 — 추정이 아니라 등록값이다.
+        //   이걸 넣기 전에는 「홈페이지에 인스타 링크를 안 건 병원」을 검색으로
+        //   추정하다 남의 계정을 잡을 위험을 감수했다.
+        placeLinks: placeChannelsToSocialLinks(place.channels),
         siteHost: owned.siteHost,
         blogId: owned.blogId,
       },
@@ -587,7 +639,7 @@ export async function runClinicDiagnosis(
     logAxisFailure('social', error);
   }
 
-  const axes = { blog: blogResult.axis, site, ai, compliance, social, place };
+  const axes = { blog: blogResolved.axis, site, ai, compliance, social, place };
   return {
     version: 1,
     runAt: new Date(now).toISOString(),
