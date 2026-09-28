@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { useSearchParams } from 'next/navigation';
 import { trackFunnel } from '@/dev/lib/funnel';
 import { DIAGNOSIS_PIXEL_EVENT, trackDiagnosisOnce } from '@/dev/lib/meta-pixel';
-import Logo from '@/components/landing/Logo';
+import { ClinicCheckHeroText, ClinicCheckTopBar } from './ClinicCheckHero';
 import DiagnosisReportView from './DiagnosisReportView';
 import ClinicCandidatePicker from './ClinicCandidatePicker';
 import BlogGuessPicker from './BlogGuessPicker';
@@ -209,33 +209,10 @@ export default function ClinicCheckClient() {
 
   return (
     <div className="min-h-screen bg-white text-[#202020]">
-      <div className="flex h-2">
-        <i className="flex-1 bg-[#ff4628]" />
-        <i className="flex-1 bg-[#202020]" />
-        <i className="flex-1 bg-[#b8c8d7]" />
-      </div>
-      <header className="sticky top-0 z-40 border-b border-[#dbe2ea] bg-white/85 backdrop-blur-md">
-        <div className="max-w-4xl mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
-          <a href="/" aria-label="닥터포스트 홈" className="flex items-center min-w-0">
-            <Logo variant="light" />
-          </a>
-          <span className="text-xs sm:text-sm font-bold text-[#4a4f55]">병원 온라인 노출 무료진단</span>
-        </div>
-      </header>
+      <ClinicCheckTopBar />
 
       <main className="max-w-4xl mx-auto px-5 sm:px-6 py-10 sm:py-14">
-        <div className="text-center">
-          <p className="text-[13px] font-extrabold text-[#ff4628] tracking-[2px]">FREE CHECK</p>
-          <h1 className="text-[26px] sm:text-[40px] font-black leading-tight mt-2.5" style={{ letterSpacing: '-0.5px' }}>
-            병원 이름만 넣으면
-            <br className="sm:hidden" /> 온라인 노출 성적을 알려드려요
-          </h1>
-          <p className="text-[#4a4f55] mt-3 text-[15px] sm:text-base leading-relaxed">
-            네이버 플레이스·블로그·인스타·유튜브·홈페이지·AI 검색까지
-            <br className="hidden sm:block" />
-            공개된 자료로 실제로 조회해서 무료로 진단해 드려요.
-          </p>
-        </div>
+        <ClinicCheckHeroText />
 
         <form
           onSubmit={(e) => {

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import ClinicCheckClient from '@/components/clinic-diagnosis/ClinicCheckClient';
+import { ClinicCheckShell } from '@/components/clinic-diagnosis/ClinicCheckHero';
 import JsonLd from '@/dev/lib/seo/JsonLd';
 import { buildFaqPageJsonLd, type FaqEntry } from '@/dev/lib/seo/schemas';
 import { SITE_NAME } from '@/dev/lib/seo/site';
@@ -77,7 +78,8 @@ const CLINIC_CHECK_FAQS: readonly FaqEntry[] = [
 export default function ClinicCheckPage() {
   return (
     <>
-      <Suspense fallback={null}>
+      {/* fallback 이 초기 HTML 에 들어간다 — 검색 로봇이 h1·히어로를 읽는 자리(2026-09-28) */}
+      <Suspense fallback={<ClinicCheckShell />}>
         <ClinicCheckClient />
       </Suspense>
 
