@@ -415,6 +415,39 @@ test('checkCompliance(W29): 신규 상품명은 filteredContent 에서 치환되
   assert.ok(r.violations.length >= 3);
 });
 
+// ═══════════════════════════════════════════════════════════════
+// 2026-W40 주간 리서치 반영 — 기존 등록 약명의 변형 표기 3종
+// ═══════════════════════════════════════════════════════════════
+for (const name of ['파운데요', '오르포글리프론']) {
+  test(`detectProductNames(W40): "${name}" 단독 → MEDIUM 검출`, () => {
+    const { violations } = detectProductNames(`${name}에 대해 알아보겠습니다.`);
+    const hit = violations.find((v) => v.word === name);
+    assert.ok(hit, `${name} 이 검출되어야 함`);
+    assert.equal(hit?.severity, 'MEDIUM');
+  });
+}
+
+test('detectProductNames(W40): 영문 "Foundayo" 단독 → MEDIUM 검출', () => {
+  const { violations } = detectProductNames('Foundayo 성분과 작용 원리를 설명합니다.');
+  const hit = violations.find((v) => v.word === 'Foundayo');
+  assert.ok(hit);
+  assert.equal(hit?.severity, 'MEDIUM');
+});
+
+test('detectProductNames(W40): 변형 표기는 원표기와 서로 오탐 없이 독립 매칭', () => {
+  const a = detectProductNames('오르포글리프론 임상 결과를 소개합니다.').violations;
+  assert.ok(a.some((v) => v.word === '오르포글리프론'));
+  assert.ok(!a.some((v) => v.word === '오포글리프론'));
+  const b = detectProductNames('파운데요 출시 소식입니다.').violations;
+  assert.ok(b.some((v) => v.word === '파운데요'));
+  assert.ok(!b.some((v) => v.word === '파운다요'));
+});
+
+test('detectProductNames(W40): 일반 단어 "파운데이션"은 검출하지 않음', () => {
+  const { violations } = detectProductNames('파운데이션 바르는 법을 알려 드립니다.');
+  assert.ok(!violations.some((v) => v.word === '파운데요'));
+});
+
 // ── 실손·실비: WARNING(검출·표시만) — 4개 승인 표현 + 붙여쓰기 변형 ──
 test('checkCompliance(W29): 실손·실비 표현 4종 → 실손 경고 검출', () => {
   for (const text of [

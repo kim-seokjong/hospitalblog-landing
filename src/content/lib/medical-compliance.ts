@@ -709,6 +709,9 @@ export const PRESCRIPTION_DRUG_NAMES: readonly string[] = [
   // 에페글레나타이드: 한미약품 국산 1호 GLP-1(허가 신청 완료). 약칭 '에페'는 2글자 오탐 위험으로 미등록.
   // 기존 항목과 접두·포함 관계 없음(부분문자열 충돌 없음 — 테스트로 보증).
   '레타트루타이드', '레타트루티드', '에페글레나타이드',
+  // 2026-W40 주간 리서치 반영 (대표 승인 2026-09-28) — 기존 등록분의 언론 변형 표기.
+  // 파운데요(파운다요 변형)·오르포글리프론(오포글리프론 성분명 변형). 기존 항목과 포함 관계 없음(테스트로 보증).
+  '파운데요', '오르포글리프론',
 ];
 
 /**
@@ -724,6 +727,8 @@ export const PRESCRIPTION_DRUG_NAMES_EN: readonly string[] = [
   'Qsymia', 'Phentermine', 'Rybelsus', 'CagriSema', 'Orforglipron',
   // 2026-W29 주간 리서치 반영 (사람 승인 완료) — 한글 신규 등록분의 영문 대응
   'Retatrutide', 'Efpeglenatide',
+  // 2026-W40 주간 리서치 반영 (대표 승인 2026-09-28) — 파운다요 영문 상품명
+  'Foundayo',
 ];
 
 /**
