@@ -35,8 +35,33 @@ interface DiagnosisCtaProps {
 
 export default function DiagnosisCta({ headline, sub, hospitalName, shareToken }: DiagnosisCtaProps) {
   const [showAuth, setShowAuth] = useState(false);
+  /** 이미 로그인한 사람에게는 「무료 2편」을 약속하지 않는다(소진·만료·재가입 회수 가능). */
+  // null = 아직 확인 전 · 확인 실패. 이때도 무료 약속은 보이지 않게 한다(Codex 2라운드).
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    let alive = true;
+    supabase.auth
+      .getUser()
+      .then(({ data, error }) => {
+        if (!alive) return;
+        if (data.user) {
+          setSignedIn(true);
+          return;
+        }
+        // 세션이 없다는 정상 응답일 때만 비로그인으로 본다. 그 밖의 오류(네트워크 등)는
+        // 확인 실패(null)로 남겨 무료 약속을 띄우지 않는다.
+        if (!error || error.name === 'AuthSessionMissingError') setSignedIn(false);
+      })
+      .catch(() => {
+        /* 세션 확인 실패 = null 유지(무료 약속을 띄우지 않는다). 버튼 동작은 같다 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [supabase]);
   const rootRef = useRef<HTMLElement | null>(null);
   const viewSent = useRef(false);
 
@@ -98,10 +123,11 @@ export default function DiagnosisCta({ headline, sub, hospitalName, shareToken }
   }, [router, supabase, shareToken]);
 
   const handleSuccess = useCallback(
-    (completedMode: 'login' | 'signup') => {
+    (completedMode: 'login' | 'signup', info?: { freeGranted: boolean | null }) => {
       setShowAuth(false);
       // 신규 가입은 무료 2편 안내가 붙은 화면으로 — 소개 페이지를 다시 읽히지 않는다.
-      router.push(completedMode === 'signup' ? '/app?welcome=free' : '/app');
+      // 무료 2편이 실제로 남았다고 확인된 경우에만 무료 안내를 띄운다(재가입 회수·확인 실패는 일반 /app).
+      router.push(completedMode === 'signup' && info?.freeGranted === true ? '/app?welcome=free' : '/app');
     },
     [router],
   );
@@ -121,18 +147,29 @@ export default function DiagnosisCta({ headline, sub, hospitalName, shareToken }
         </div>
       )}
 
+      {/*
+        ★2026-10-05: 버튼 글자를 「누르면 무엇을 받는가」로 바꿨다.
+          60일 실측 — 이 버튼까지 내려온 16명 중 클릭 1명(같은 화면의 메일 받기는 4명).
+          버튼에 문제 문장(headline)만 있고, 받는 것(무료 2편)은 아래 회색 작은 글씨뿐이었다.
+          원장 자기 숫자가 든 headline 은 버리지 않고 버튼 바로 위 굵은 줄로 올린다.
+          판정 = funnel_events 의 diagnosis_cta_click / diagnosis_cta_view.
+      */}
       <div className="rounded-2xl border border-[#dbe2ea] bg-[#f7f9fb] px-4 py-5 sm:px-6 sm:py-6 text-center">
-        <p className="text-[13px] sm:text-[14px] font-bold text-[#3c4653] leading-relaxed">{sub}</p>
+        <p className="text-[15px] sm:text-[16px] font-black text-[#202020] leading-snug">{headline}</p>
+        <p className="text-[13px] sm:text-[14px] font-bold text-[#3c4653] leading-relaxed mt-1.5">{sub}</p>
         <button
           type="button"
           onClick={() => void handleClick()}
           className="w-full sm:w-auto mt-3.5 px-7 py-4 min-h-[44px] bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-black rounded-xl text-[15px] sm:text-[16px] leading-snug shadow-[0_12px_30px_-14px_rgba(255,70,40,0.45)] transition-all hover:brightness-105"
         >
-          {headline}
+          {signedIn === false ? '우리 병원 첫 글 2편, 무료로 받아보기 →' : signedIn ? '닥터포스트에서 이어서 글 쓰기 →' : '닥터포스트로 글 써 보기 →'}
         </button>
-        <p className="text-[11.5px] text-[#8a93a0] mt-2.5 leading-relaxed">
-          가입하면 글 2편을 무료로 만들어 볼 수 있어요. 결제 정보는 입력하지 않습니다.
-        </p>
+        {signedIn === false && (
+          <p className="text-[11.5px] text-[#8a93a0] mt-2.5 leading-relaxed">
+            무료 혜택을 받은 적 없는 연락처·이메일로 처음 가입할 때 · 가입 후 7일 안에 2편 무료 · 결제 정보는 입력하지 않습니다 ·
+            의료광고법 점검을 거친 글로 드려요.
+          </p>
+        )}
       </div>
     </section>
   );

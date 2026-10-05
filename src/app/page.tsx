@@ -128,7 +128,7 @@ export default function LandingPage() {
 
   const [pendingPricingRedirect, setPendingPricingRedirect] = useState(false);
 
-  const handleAuthSuccess = (completedMode: 'login' | 'signup') => {
+  const handleAuthSuccess = (completedMode: 'login' | 'signup', info?: { freeGranted: boolean | null }) => {
     setShowAuthModal(false);
     if (pendingPricingRedirect) {
       setPendingPricingRedirect(false);
@@ -136,7 +136,8 @@ export default function LandingPage() {
     } else if (completedMode === 'signup') {
       // 신규 가입: 무료 2회 크레딧(2026-07-04 정책)으로 바로 생성 경험 → 소진 시 결제 유도.
       // (구 퍼널: /pricing 직행 — 무료 2회 도입으로 사용자(대표) 지시에 따라 변경)
-      router.push('/app?welcome=free');
+      // 무료 2편이 실제로 남았다고 확인된 경우에만 「무료 체험」 안내를 띄운다(재가입 회수·확인 실패는 일반 /app).
+      router.push(info?.freeGranted === true ? '/app?welcome=free' : '/app');
     } else {
       router.push('/app');
     }

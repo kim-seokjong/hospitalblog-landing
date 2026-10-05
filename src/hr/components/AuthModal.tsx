@@ -8,7 +8,8 @@ import { trackFunnel } from '@/dev/lib/funnel';
 interface AuthModalProps {
   onClose: () => void;
   /** 인증 성공 시 호출. 신규 가입('signup')이면 요금제로 유도하는 등 후속 라우팅에 사용. */
-  onSuccess: (completedMode: 'login' | 'signup') => void;
+  /** 신규 가입이면 info.freeGranted 로 무료 2편이 실제로 부여됐는지 알린다(재가입은 회수 — false, 확인 실패 null). */
+  onSuccess: (completedMode: 'login' | 'signup', info?: { freeGranted: boolean | null }) => void;
   initialMode?: 'login' | 'signup';
   closable?: boolean;
   /** 외부(딥링크 등)에서 회원가입 병원명을 미리 채울 때 사용. 사용자가 자유롭게 수정 가능. */
@@ -247,6 +248,9 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
       return;
     }
 
+    const registerJson = (await registerRes.json().catch(() => null)) as { freeGranted?: unknown } | null;
+    const freeGranted = typeof registerJson?.freeGranted === 'boolean' ? registerJson.freeGranted : null;
+
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     if (signInError) {
       // 가입은 완료됐지만 자동 로그인 실패 → 로그인 탭으로 안내
@@ -260,7 +264,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     // signup_complete 는 서버(/api/auth/register)가 프로필 생성 성공 시 service-role 로
     // 기록한다 — 익명 클라이언트 위조 방지(공개 엔드포인트는 이 이벤트를 거부).
 
-    onSuccess('signup');
+    onSuccess('signup', { freeGranted });
     onClose();
     setLoading(false);
   };
@@ -505,9 +509,11 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
               /app 체험 배지에도 같은 기한이 다시 보인다. */}
           {mode === 'signup' && (
             <p className="text-xs text-center text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 leading-relaxed">
-              가입하시면 <span className="font-bold text-gray-900">글 작성 2회를 무료로</span> 드려요.
+              처음 가입하시면 <span className="font-bold text-gray-900">글 작성 2회를 무료로</span> 드려요.
               <br />
               <span className="font-bold text-gray-900">가입일로부터 7일 안에</span> 사용하시면 됩니다.
+              <br />
+              <span className="text-gray-500">이미 무료 혜택을 받은 연락처·이메일은 제외됩니다.</span>
             </p>
           )}
 

@@ -130,6 +130,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 무료 2편이 실제로 남았는지 — 화면이 「무료 체험」 안내를 띄울지 판정하는 데만 쓴다.
+    // 정책 적용 실패(크레딧 유지)·재가입 회수(0) 어느 쪽이든 DB 값이 진실이다. 읽기 실패면 null.
+    let freeGranted: boolean | null = null;
+    const { data: creditRow, error: creditErr } = await supabaseAdmin
+      .from('profiles')
+      .select('free_credits')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!creditErr && creditRow) freeGranted = (creditRow.free_credits ?? 0) > 0;
+
     if (!targetUser.email_confirmed_at) {
       await supabaseAdmin.auth.admin.updateUserById(userId, { email_confirm: true });
     }
@@ -144,7 +154,7 @@ export async function POST(req: NextRequest) {
       meta: { hospital_type: hospitalType },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, freeGranted });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('register POST 예외:', userId ?? '(userId 없음)', msg);
