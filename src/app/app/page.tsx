@@ -91,6 +91,11 @@ function parseGenPrefs(raw: string): Partial<GenPrefs> {
 const TOPIC_PREFILL_KEY = 'dp_topic_prefill';
 // 온보딩 완주 가이드 — 첫 글을 완성하면 다시 보이지 않는다
 const WELCOME_DONE_KEY = 'dp_welcome_done_v1';
+/**
+ * 가이드 배너를 닫았다는 표시는 **계정별**로 둔다. 브라우저 하나에 키 하나면, 같은 PC 에서 예전 계정이
+ * 닫은 뒤 새로 가입한 계정이 무료 체험 안내를 못 본다(2026-10-06 Codex).
+ */
+const welcomeDoneKey = (userId: string) => `${WELCOME_DONE_KEY}:${userId}`;
 // 온보딩 첫 글 원클릭 카드 — 사용자가 닫으면 다시 보이지 않는다(넛지 과다 방지)
 const ONBOARDING_FIRST_POST_KEY = 'dp_onboarding_first_post_dismissed_v1';
 
@@ -276,6 +281,8 @@ export default function AppPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  /** userPlan 이 어느 계정의 것인지 — 계정 전환 직후 한 렌더 동안 이전 계정 플랜을 새 계정 것으로 읽지 않게. */
+  const planOwnerRef = useRef<string | null>(null);
   const [userPlan, setUserPlan] = useState<{ plan: string; usage_count: number; hospital_type?: string | null; plan_expires_at?: string | null } | null>(null);
   const [hospitalName, setHospitalName] = useState('');
   const [profileRegion, setProfileRegion] = useState('');
@@ -402,6 +409,7 @@ export default function AppPage() {
         if (incomplete) setShowAuthModal(true);
 
         if (profile) {
+          planOwnerRef.current = user.id;
           setUserPlan({ plan: profile.plan, usage_count: profile.usage_count, hospital_type: profile.hospital_type, plan_expires_at: profile.plan_expires_at });
 
           // 미구독(free)·만료 회원: 생성 시도를 기다리지 않고 진입 즉시 구독 안내 배너 노출
@@ -503,28 +511,41 @@ export default function AppPage() {
   }, []);
 
   // 온보딩 완주 가이드: ?welcome=1(결제 직후)·?welcome=free(무료 가입) 감지 → 첫 글 가이드 배너. URL은 즉시 정리.
+  // 계정이 바뀌면 이전 계정의 배너 상태를 먼저 비운다(아래 두 effect 는 「보일지」만 켠다).
+  // userPlan 도 비운다 — 새 계정의 플랜이 오기 전에 이전 계정 플랜으로 「유료 환영」을 띄우지 않게
+  //   (플랜 조회 effect 가 user 변경에 다시 채운다).
   useEffect(() => {
+    setShowWelcome(false);
+    setWelcomePaid(false);
+    setUserPlan(null);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return; // 누구의 배너인지 알아야 닫음 여부를 읽는다 — URL 은 그때까지 그대로 둔다
     try {
-      if (localStorage.getItem(WELCOME_DONE_KEY)) return;
       const params = new URLSearchParams(window.location.search);
-      if (params.get('welcome') === '1' || params.get('welcome') === 'free') {
-        setShowWelcome(true);
-        setWelcomePaid(params.get('welcome') === '1');
-        params.delete('welcome');
-        const qs = params.toString();
-        window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
-      }
+      const welcome = params.get('welcome');
+      if (welcome !== '1' && welcome !== 'free') return;
+      // 닫힘 여부와 무관하게 쿼리는 먼저 소비한다 — 남겨 두면 다른 계정으로 바뀐 뒤에 잘못 뜬다.
+      params.delete('welcome');
+      const qs = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+      if (localStorage.getItem(welcomeDoneKey(user.id))) return;
+      setShowWelcome(true);
+      setWelcomePaid(welcome === '1');
     } catch {
       // storage/URL 접근 실패는 무시 — 가이드는 부가 기능
     }
-  }, []);
+  }, [user]);
 
   // 활성 유료 플랜인데 아직 글 0건이면(결제 후 이탈했다 돌아온 경우 포함) 가이드 배너 노출.
   // isPaidPlanId 가 아니라 isActivePlan 인 이유: 만료된 유료 플랜에 "구독을 시작하셨네요"를
   // 보여주면 거짓이고, 만료 회원은 아래 미구독 차단 배너가 따로 안내한다 (Codex 지적 반영).
   useEffect(() => {
+    if (!user) return;
     try {
-      if (localStorage.getItem(WELCOME_DONE_KEY)) return;
+      if (localStorage.getItem(welcomeDoneKey(user.id))) return;
+      if (planOwnerRef.current !== user.id) return; // 이전 계정의 플랜이면 판단하지 않는다
       if (userPlan && isActivePlan(userPlan.plan, userPlan.plan_expires_at ?? null) && (userPlan.usage_count ?? 0) === 0) {
         setShowWelcome(true);
         setWelcomePaid(true);
@@ -532,11 +553,12 @@ export default function AppPage() {
     } catch {
       // 무시
     }
-  }, [userPlan]);
+  }, [userPlan, user]);
 
   const dismissWelcome = () => {
     setShowWelcome(false);
-    try { localStorage.setItem(WELCOME_DONE_KEY, '1'); } catch { /* 무시 */ }
+    if (!user) return;
+    try { localStorage.setItem(welcomeDoneKey(user.id), '1'); } catch { /* 무시 */ }
   };
 
   // 온보딩 첫 글 카드 닫힘 여부 복원 (한 번 닫으면 넛지 반복 안 함)
@@ -647,6 +669,7 @@ export default function AppPage() {
     if (!user) return;
     supabase.from('profiles').select('plan, usage_count, hospital_type, plan_expires_at').eq('id', user.id).single()
       .then(({ data }) => {
+        if (data) planOwnerRef.current = user.id;
         if (data) setUserPlan(data as { plan: string; usage_count: number; hospital_type?: string | null; plan_expires_at?: string | null });
       });
   };
