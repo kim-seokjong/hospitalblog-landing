@@ -45,6 +45,7 @@ test('isPublicFunnelEvent: 방문·진단·가입시작(저신뢰 의도) 만 tr
       'diagnosis_report_view',
       'diagnosis_cta_view',
       'diagnosis_cta_click',
+      'diagnosis_offer_click',
       'pricing_view',
       'signup_start',
     ],
@@ -55,6 +56,7 @@ test('isPublicFunnelEvent: 방문·진단·가입시작(저신뢰 의도) 만 tr
   assert.equal(isPublicFunnelEvent('diagnosis_run'), true);
   assert.equal(isPublicFunnelEvent('diagnosis_report_view'), true);
   assert.equal(isPublicFunnelEvent('diagnosis_cta_click'), true);
+  assert.equal(isPublicFunnelEvent('diagnosis_offer_click'), true);
   // 요금 확인 = 비회원 브라우저가 일으키는 저신뢰 의도 이벤트 → 공개 허용.
   assert.equal(isPublicFunnelEvent('pricing_view'), true);
   assert.equal(isPublicFunnelEvent('signup_start'), true);
@@ -80,6 +82,7 @@ test('FUNNEL_EVENTS: 진단 단계가 방문과 가입 시작 사이에 온다',
       // 노출(view) → 클릭 순서. 클릭률의 분모가 노출이라 바로 앞에 온다.
       'diagnosis_cta_view',
       'diagnosis_cta_click',
+      'diagnosis_offer_click',
       // 요금 확인은 가입 시작 **직전** 단계다 — 랜딩~가입 사이의 빈칸을 메운다.
       'pricing_view',
       'signup_start',

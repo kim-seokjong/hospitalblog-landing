@@ -6,23 +6,24 @@ import AuthModal from '@/hr/components/AuthModal';
 import { createClient } from '@/dev/lib/supabase/client';
 import { trackFunnel } from '@/dev/lib/funnel';
 import { DIAGNOSIS_PIXEL_EVENT, trackDiagnosisOnce } from '@/dev/lib/meta-pixel';
+import type { ServiceOffer } from '@/content/lib/clinic-diagnosis/conversion';
 
 /**
  * 결과 맨 아래 전환 버튼.
  *
- * ★ 버튼을 제품 소개(/ 또는 /pricing)로 보내지 않는다. 여기까지 읽고 누른 사람은
- *   이미 설득된 사람이라, 소개를 다시 읽히면 식는다. 바로 가입 → 무료 2편으로 보낸다
- *   (가입 무료 2회 크레딧 정책, 마이그 033 — 가입 후 /app?welcome=free).
+ * ★2026-10-08 부터 주 버튼 = 「맡기기」 견적(hospitalmarketing.kr/services · 상품은 진단 맨 위 경고로 고른다).
+ *   셀프 가입(무료 2편)은 보조 링크로 남긴다 — 9월 셀프 가입 두 곳이 한 번도 쓰지 않았다.
+ *   두 버튼 모두 제품 소개(/ 또는 /pricing)로 우회하지 않는다. 여기까지 읽은 사람은 이미 설득된 사람이다.
  *
- * 문구(headline/sub)는 부모가 진단 결과에서 계산해 넘긴다(conversion.ts).
+ * 문구(headline·offer)는 부모가 진단 결과에서 계산해 넘긴다(conversion.ts).
  * 이 컴포넌트는 문구를 만들지 않는다 — 계산 로직은 순수 모듈에서 테스트된다.
  */
 
 interface DiagnosisCtaProps {
   /** 원장이 방금 본 자기 숫자가 들어간 버튼 문구. */
   readonly headline: string;
-  /** 버튼 위 한 줄 요약. */
-  readonly sub: string;
+  /** 맡기기 견적 — 상품·가격·링크(conversion.ts buildServiceOffer). */
+  readonly offer: ServiceOffer;
   /** 가입 폼에 미리 채울 병원명. */
   readonly hospitalName: string;
   /**
@@ -33,7 +34,7 @@ interface DiagnosisCtaProps {
   readonly shareToken?: string | null;
 }
 
-export default function DiagnosisCta({ headline, sub, hospitalName, shareToken }: DiagnosisCtaProps) {
+export default function DiagnosisCta({ headline, offer, hospitalName, shareToken }: DiagnosisCtaProps) {
   const [showAuth, setShowAuth] = useState(false);
   /** 이미 로그인한 사람에게는 「무료 2편」을 약속하지 않는다(소진·만료·재가입 회수 가능). */
   // null = 아직 확인 전 · 확인 실패. 이때도 무료 약속은 보이지 않게 한다(Codex 2라운드).
@@ -102,12 +103,22 @@ export default function DiagnosisCta({ headline, sub, hospitalName, shareToken }
     return () => observer.disconnect();
   }, []);
 
+  /**
+   * ★2026-10-08 — 주 버튼은 「맡기기」 견적(hospitalmarketing.kr/services)이다.
+   *   셀프 가입으로 온 9월 두 곳이 한 번도 쓰지 않아서, 결과를 본 원장을 **만들어 주는 상품**으로 보낸다.
+   *   계측은 새 이벤트 diagnosis_offer_click(+pick). diagnosis_cta_click 은 계속 「셀프 가입」 클릭이다
+   *   (한 이름에 두 행동을 섞으면 과거 데이터와 전환율이 같이 망가진다 — 코덱스 10/8).
+   *   실제 신청은 광고진정성 텔레그램 알림의 유입 줄 `dp-diagnosis` 로 센다.
+   */
+  const handleOfferClick = useCallback(() => {
+    trackFunnel('diagnosis_offer_click', { pick: offer.pick });
+    // ⚠️메타 픽셀 ctaClicked 는 옮기지 않는다 — 셀프 가입 클릭 이력이라 의미가 바뀌면 맞춤 전환이 섞인다(코덱스 10/8 2차).
+  }, [offer.pick]);
+
+  /** 보조 링크 — 직접 써 보실 분은 기존처럼 가입·무료 2편으로. */
   const handleClick = useCallback(async () => {
     trackFunnel('diagnosis_cta_click');
-    // 결과를 끝까지 읽고 가입으로 넘어가려 한 사람 — 결과 도달보다 한 단계 더 깊다.
-    // ⚠️표준 InitiateCheckout 을 쓰지 않는다. 그건 실제 결제 시작(BillingButton)이
-    //   쓰고 있어서, 여기 얹으면 구매 가능성이 전혀 다른 두 행동이 한 지표가 된다.
-    // ⚠️모달을 닫았다 다시 누르는 경우가 있어 리포트당 한 번만 보낸다.
+    // 리포트당 한 번만(모달을 닫았다 다시 누르는 경우). 표준 InitiateCheckout 은 결제 시작 전용이라 쓰지 않는다.
     trackDiagnosisOnce(DIAGNOSIS_PIXEL_EVENT.ctaClicked, shareToken ?? 'no-token');
     // 이미 로그인한 사용자에게 가입 모달을 다시 띄우지 않는다.
     try {
@@ -156,18 +167,29 @@ export default function DiagnosisCta({ headline, sub, hospitalName, shareToken }
       */}
       <div className="rounded-2xl border border-[#dbe2ea] bg-[#f7f9fb] px-4 py-5 sm:px-6 sm:py-6 text-center">
         <p className="text-[15px] sm:text-[16px] font-black text-[#202020] leading-snug">{headline}</p>
-        <p className="text-[13px] sm:text-[14px] font-bold text-[#3c4653] leading-relaxed mt-1.5">{sub}</p>
+        <p className="text-[13px] sm:text-[14px] font-bold text-[#3c4653] leading-relaxed mt-1.5">
+          이 결과, 직접 고치지 않으셔도 됩니다. {offer.line}
+        </p>
+        <a
+          href={offer.href}
+          target="_blank"
+          rel="noopener"
+          onClick={handleOfferClick}
+          className="inline-block w-full sm:w-auto mt-3.5 px-7 py-4 min-h-[44px] bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-black rounded-xl text-[15px] sm:text-[16px] leading-snug shadow-[0_12px_30px_-14px_rgba(255,70,40,0.45)] transition-all hover:brightness-105"
+        >
+          {offer.name} 맡기고 견적 받기 →
+        </a>
+        <p className="text-[12px] text-[#5b6573] mt-2 leading-relaxed">{offer.price} · 신청만으로는 비용이 생기지 않습니다</p>
         <button
           type="button"
           onClick={() => void handleClick()}
-          className="w-full sm:w-auto mt-3.5 px-7 py-4 min-h-[44px] bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-black rounded-xl text-[15px] sm:text-[16px] leading-snug shadow-[0_12px_30px_-14px_rgba(255,70,40,0.45)] transition-all hover:brightness-105"
+          className="mt-2 min-h-[44px] px-3 text-[12.5px] font-bold text-[#3c4653] underline underline-offset-2 hover:text-[#202020]"
         >
-          {signedIn === false ? '우리 병원 첫 글 2편, 무료로 받아보기 →' : signedIn ? '닥터포스트에서 이어서 글 쓰기 →' : '닥터포스트로 글 써 보기 →'}
+          {signedIn === false ? '직접 써 보시려면: 우리 병원 첫 글 2편 무료로 받아보기' : signedIn ? '닥터포스트에서 직접 이어서 쓰기' : '닥터포스트로 직접 써 보기'}
         </button>
         {signedIn === false && (
-          <p className="text-[11.5px] text-[#8a93a0] mt-2.5 leading-relaxed">
-            무료 혜택을 받은 적 없는 연락처·이메일로 처음 가입할 때 · 가입 후 7일 안에 2편 무료 · 결제 정보는 입력하지 않습니다 ·
-            의료광고법 점검을 거친 글로 드려요.
+          <p className="text-[11px] text-[#8a93a0] mt-1.5 leading-relaxed">
+            무료 혜택을 받은 적 없는 연락처·이메일로 처음 가입할 때 · 가입 후 7일 안에 2편 무료 · 결제 정보는 입력하지 않습니다
           </p>
         )}
       </div>

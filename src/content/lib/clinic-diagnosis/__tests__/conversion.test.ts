@@ -4,6 +4,9 @@ import {
   DOCTORPOST_SCOPE,
   FALLBACK_CTA_HEADLINE,
   buildConversionCta,
+  buildServiceOffer,
+  offerHeadline,
+  serviceHref,
   buildDiagnosisLeadSummary,
   countDoctorpostScope,
   doctorpostLine,
@@ -386,4 +389,87 @@ test('옛 리포트도 화면 목록·CTA·메일 요약이 같은 집합을 센
   assert.equal(cta.badCount, screen.bad.length);
   assert.equal(summary.goodCount, screen.good.length, '중복 카드가 개수에 남으면 안 된다');
   assert.equal(summary.goodCount, 0);
+});
+
+/* ── 결과 맨 아래 「맡기기」 제안 (2026-10-08) ───────────────── */
+
+test('buildServiceOffer: 블로그 경고가 가장 위면 블로그 발행 대행', () => {
+  const offer = buildServiceOffer(report({ findings: [finding({ id: 'blog.freshness', tone: 'warn' })] }));
+  assert.equal(offer.pick, 'blog');
+  assert.equal(offer.basis, 'blog.freshness');
+  assert.equal(offer.href, 'https://hospitalmarketing.kr/services?pick=blog&utm_source=dp-diagnosis#apply');
+});
+
+test('buildServiceOffer: 홈페이지·AI 경고가 가장 위면 홈페이지 제작', () => {
+  const offer = buildServiceOffer(
+    report({ findings: [finding({ id: 'site.https', axis: 'site', tone: 'warn', ourScope: false })] }),
+  );
+  assert.equal(offer.pick, 'homepage');
+  assert.equal(offer.basis, 'site.https');
+  const ai = buildServiceOffer(report({ findings: [finding({ id: 'ai.known', axis: 'ai', tone: 'warn' })] }));
+  assert.equal(ai.pick, 'homepage');
+});
+
+test('buildServiceOffer: 의료광고법 경고는 블로그(발행 전 검수가 들어 있는 상품)', () => {
+  const offer = buildServiceOffer(
+    report({ findings: [finding({ id: 'compliance.prohibited', axis: 'compliance', tone: 'warn' })] }),
+  );
+  assert.equal(offer.pick, 'blog');
+});
+
+test('buildServiceOffer: 잘하고 있는 항목은 근거가 되지 않고, 경고가 없으면 블로그 기본', () => {
+  const offer = buildServiceOffer(report({ findings: [finding({ id: 'site.https', axis: 'site', tone: 'good' })] }));
+  assert.equal(offer.pick, 'blog');
+  assert.equal(offer.basis, null);
+  assert.ok(offer.fallbackHeadline.length > 0);
+});
+
+test('buildServiceOffer: 옛 리포트(필드가 빠진 행)에서도 죽지 않는다', () => {
+  const broken = { ...report(), findings: undefined, compliance: undefined } as unknown as DiagnosisReport;
+  assert.equal(buildServiceOffer(broken).pick, 'blog');
+});
+
+test('serviceHref: 가격·상품 페이지와 같은 pick 값만 쓴다', () => {
+  assert.equal(serviceHref('homepage'), 'https://hospitalmarketing.kr/services?pick=homepage&utm_source=dp-diagnosis#apply');
+});
+
+test('offerHeadline: 문구 상품과 버튼 상품이 다르면 상품 기본 문구(208일 아래 홈페이지 견적 방지)', () => {
+  const r = report({
+    blog: { ...EMPTY_BLOG, daysSinceLatest: 208 },
+    findings: [
+      finding({ id: 'site.https', axis: 'site', tone: 'warn', ourScope: false }),
+      finding({ id: 'blog.freshness', tone: 'warn', ourScope: true }),
+    ],
+  });
+  const offer = buildServiceOffer(r);
+  const cta = buildConversionCta(r);
+  if (offer.pick === 'homepage') {
+    assert.equal(offerHeadline(cta, offer), offer.fallbackHeadline);
+  } else {
+    assert.equal(offerHeadline(cta, offer), cta.headline);
+  }
+});
+
+test('offerHeadline: 같은 상품이면 원장 자기 숫자 문구를 쓴다', () => {
+  const r = report({ blog: { ...EMPTY_BLOG, daysSinceLatest: 208 }, findings: [finding({ id: 'blog.freshness', tone: 'warn' })] });
+  assert.equal(offerHeadline(buildConversionCta(r), buildServiceOffer(r)), '208일 밀린 글, 이번 주부터 채우기');
+});
+
+test('buildServiceOffer: id 가 빠진 저장 항목이 있어도 죽지 않는다', () => {
+  const broken = report({ findings: [{ axis: 'site', tone: 'warn', label: 'x' } as unknown as Finding, finding({ id: 'ai.known', axis: 'ai', tone: 'warn' })] });
+  assert.doesNotThrow(() => buildServiceOffer(broken));
+});
+
+test('buildServiceOffer: 맨 위 경고가 우리가 팔지 않는 축이면 아래 경고로 넘어가지 않고 블로그 기본', () => {
+  // place 는 정렬상 맨 뒤라, 맨 위에 서려면 같은 묶음에 더 앞선 경고가 없어야 한다 — social 을 아래에 둔다.
+  const offer = buildServiceOffer(
+    report({
+      findings: [
+        finding({ id: 'place.presence', axis: 'place', tone: 'warn' }),
+        finding({ id: 'social.presence', axis: 'social', tone: 'warn' }),
+      ],
+    }),
+  );
+  assert.equal(offer.pick, 'blog');
+  assert.equal(offer.basis, null);
 });

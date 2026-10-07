@@ -41,6 +41,9 @@ export const FUNNEL_EVENTS = [
   // 나아졌는지 알 수 없다. 노출을 세야 클릭률이 지표가 된다.
   'diagnosis_cta_view',
   'diagnosis_cta_click',
+  // 2026-10-08 — 결과 맨 아래 「맡기기」 견적 버튼(hospitalmarketing.kr/services) 클릭.
+  //   diagnosis_cta_click 은 그대로 「셀프 가입」 클릭이다(이날부터 보조 링크). 두 행동을 한 이름에 섞지 않는다.
+  'diagnosis_offer_click',
   // 요금제 페이지 도달 (2026-07-29 추가). 랜딩~가입 사이가 통째로 비어 있어서
   // "요금을 보러 가지도 않는다"와 "요금을 보고 나간다"를 구분할 수 없었다.
   // 가입 시작 **직전** 단계로 둔다 — /admin 퍼널 카드가 이 순서대로 표시한다.
@@ -75,6 +78,9 @@ export const PUBLIC_FUNNEL_EVENTS = [
   // 이메일 확보율이 이 개편의 핵심 지표라 위조된 분자를 받아서는 안 된다.
   'diagnosis_cta_view',
   'diagnosis_cta_click',
+  // 2026-10-08 — 결과 맨 아래 「맡기기」 견적 버튼(hospitalmarketing.kr/services) 클릭.
+  //   diagnosis_cta_click 은 그대로 「셀프 가입」 클릭이다(이날부터 보조 링크). 두 행동을 한 이름에 섞지 않는다.
+  'diagnosis_offer_click',
   // 요금제 페이지 도달 = 비회원이 브라우저에서 일으키는 **저신뢰 의도 이벤트**라
   // landing_view 와 같은 등급으로 공개 허용한다. 위조되어도 요금 조회 수가 부풀 뿐
   // 가입·결제 전환 지표(서버 전용 이벤트)는 오염되지 않는다.
@@ -289,6 +295,8 @@ const EVENT_META_VALIDATORS: Record<FunnelEvent, Record<string, MetaValidator>> 
   diagnosis_email_submitted: { path: pathMeta, source: tokenMeta, sent: boolMeta },
   diagnosis_cta_view: { path: pathMeta, source: tokenMeta },
   diagnosis_cta_click: { path: pathMeta, source: tokenMeta },
+  // pick = 고른 상품(blog·homepage) — 어느 상품 견적으로 갔는지 센다.
+  diagnosis_offer_click: { path: pathMeta, source: tokenMeta, pick: tokenMeta },
   // landing_view 와 **동일한 3키**. referrer_host 까지 받는 이유: 요금 페이지는 랜딩·
   // 진단 결과·외부 검색 등 여러 경로로 도달하는데, 유입 출처를 모르면 "어디서 요금을
   // 보러 왔나"를 답할 수 없다. 병원명 같은 PII 는 여기서도 받지 않는다.

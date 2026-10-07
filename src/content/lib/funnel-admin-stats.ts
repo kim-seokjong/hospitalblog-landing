@@ -67,7 +67,8 @@ export const FUNNEL_STAGE_LABELS: Record<FunnelEvent, string> = {
   diagnosis_report_view: '진단 결과',
   diagnosis_email_submitted: '진단 메일 신청',
   diagnosis_cta_view: '진단 CTA 노출',
-  diagnosis_cta_click: '진단 CTA 클릭',
+  diagnosis_cta_click: '진단 CTA 클릭(셀프 가입)',
+  diagnosis_offer_click: '진단 맡기기 견적 클릭',
   pricing_view: '요금 확인',
   signup_start: '가입 시작',
   signup_complete: '가입 완료',
@@ -166,3 +167,15 @@ export function aggregateFunnelStats(
     totalEvents,
   };
 }
+
+/**
+ * 바로 앞 단계가 아니라 **다른 단계로 나눠야 하는** 비율의 분모 (2026-10-08).
+ *   진단 결과 끝의 두 버튼(셀프 가입 diagnosis_cta_click · 맡기기 diagnosis_offer_click)은
+ *   **나란히 놓인 갈래**라 둘 다 노출(diagnosis_cta_view)로 나눈다. 앞 단계로 나누면
+ *   맡기기 클릭이 셀프 가입 클릭 대비로 찍힌다(가입 0 이면 「-」 — 코덱스 10/8).
+ */
+export const FUNNEL_RATE_BASE: Partial<Record<FunnelEvent, FunnelEvent>> = {
+  diagnosis_offer_click: 'diagnosis_cta_view',
+  // 견적 클릭이 사이에 끼면서 요금 확인의 앞 단계가 바뀌었다 — 10/8 이전과 같은 분모(셀프 가입 클릭)를 유지한다.
+  pricing_view: 'diagnosis_cta_click',
+};

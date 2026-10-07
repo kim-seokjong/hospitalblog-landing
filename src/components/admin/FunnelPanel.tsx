@@ -19,6 +19,8 @@ import {
 } from 'recharts';
 import {
   FUNNEL_MEASUREMENT_START,
+  FUNNEL_RATE_BASE,
+  FUNNEL_STAGE_LABELS,
   type FunnelStats,
 } from '@/content/lib/funnel-admin-stats';
 
@@ -42,6 +44,11 @@ function formatCount(n: number): string {
  * ⚠️ 코호트 전환율이 아니다 — 각 단계는 독립 고유 집계(익명↔가입 주체 불연속)라
  * 기존 회원 결제 등으로 100%를 넘을 수 있다. 화면에서 '참고용'으로 명시한다.
  */
+/** 분모 단계 이름 — FUNNEL_RATE_BASE 로 바로 앞이 아닌 단계로 나눌 때 화면에 밝힌다. */
+function FUNNEL_STAGE_LABEL_OF(stage: keyof typeof FUNNEL_STAGE_LABELS | undefined): string {
+  return stage ? FUNNEL_STAGE_LABELS[stage] : '';
+}
+
 function stageRate(count: number, prev: number | null): string {
   if (prev === null) return '';
   if (prev <= 0) return '-';
@@ -159,7 +166,10 @@ export default function FunnelPanel({ stats, ok, truncated }: FunnelPanelProps) 
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
               {stats.weekly.map((stage, i) => {
-                const prev = i > 0 ? stats.weekly[i - 1].count : null;
+                const base = FUNNEL_RATE_BASE[stage.stage];
+                const prev = base
+                  ? (stats.weekly.find((x) => x.stage === base)?.count ?? null)
+                  : i > 0 ? stats.weekly[i - 1].count : null;
                 const rate = stageRate(stage.count, prev);
                 return (
                   <div
@@ -174,7 +184,9 @@ export default function FunnelPanel({ stats, ok, truncated }: FunnelPanelProps) 
                     </p>
                     {rate && (
                       <p className="mt-1 text-xs text-emerald-600">
-                        전 단계 수 대비 {rate}
+                        {FUNNEL_RATE_BASE[stage.stage]
+                          ? `${FUNNEL_STAGE_LABEL_OF(FUNNEL_RATE_BASE[stage.stage])} 대비 ${rate}`
+                          : `전 단계 수 대비 ${rate}`}
                       </p>
                     )}
                   </div>

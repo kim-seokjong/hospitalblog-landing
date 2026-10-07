@@ -22,7 +22,7 @@ import {
 import { rankCompetitors } from '@/content/lib/clinic-diagnosis/ai-citation';
 import { riskOf } from '@/content/lib/clinic-diagnosis/compliance-scan';
 import { summarizeQuestions } from '@/content/lib/clinic-diagnosis/citation-questions';
-import { buildConversionCta, doctorpostLine } from '@/content/lib/clinic-diagnosis/conversion';
+import { buildConversionCta, buildServiceOffer, doctorpostLine, offerHeadline } from '@/content/lib/clinic-diagnosis/conversion';
 import DiagnosisEmailCapture from './DiagnosisEmailCapture';
 import DiagnosisCta from './DiagnosisCta';
 
@@ -522,6 +522,8 @@ export default function DiagnosisReportView({
   const clinic = report.clinic;
   /** 결과 맨 아래 전환 문구 — 원장이 방금 본 자기 숫자로 만든다(값이 없으면 기본 문구). */
   const cta = buildConversionCta(report);
+  /** 결과 맨 아래 「맡기기」 견적 — 화면 맨 위 경고의 축으로 상품을 고른다(2026-10-08). */
+  const offer = buildServiceOffer(report);
   const emailToken = typeof shareToken === 'string' && shareToken.length > 0 ? shareToken : null;
   /**
    * 해결방법 공개 범위.
@@ -791,10 +793,10 @@ export default function DiagnosisReportView({
         </div>
       )}
 
-      {/* 결과 맨 아래 전환 — 바로 가입·무료 2편으로 (제품 소개로 우회하지 않는다) */}
+      {/* 결과 맨 아래 전환 — 2026-10-08 부터 「맡기기」 견적이 주 버튼, 셀프 가입(무료 2편)은 보조 링크 */}
       <DiagnosisCta
-        headline={cta.headline}
-        sub={cta.sub}
+        headline={offerHeadline(cta, offer)}
+        offer={offer}
         hospitalName={clinic.name}
         shareToken={shareToken}
       />

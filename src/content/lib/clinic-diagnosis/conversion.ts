@@ -224,6 +224,92 @@ export function buildConversionCta(report: DiagnosisReport): ConversionCta {
   };
 }
 
+/* ── 결과 맨 아래 「맡기기」 제안 (2026-10-08) ─────────────────
+ *
+ * ★ 왜 바꿨나. 이 버튼은 지금까지 셀프 도구 가입(무료 2편)으로만 보냈다.
+ *   그런데 9월 가입 두 곳이 **한 번도 쓰지 않았다** — 원장이 직접 써야 하는 도구 앞에서 멈춘다.
+ *   광고진정성은 10/7 부터 「만들어 주는 것」(블로그 발행 대행·홈페이지 제작)을 판다.
+ *   ⇒ 진단은 무료 입구로 그대로 두고, 결과 끝에서 **맡기는 견적**으로 보낸다. 셀프 가입은 보조 링크.
+ *
+ * 고르는 규칙 — 화면에서 **가장 위에 보인 경고 항목 하나**의 축으로 정한다(전환 문구와 같은 순서).
+ *   blog.* · compliance.* → 블로그 발행 대행 (병원 블로그 글 + 발행 전 의료광고법 검수)
+ *   site.* · ai.*          → 홈페이지 제작   (병원 홈페이지·진료 정보 정리)
+ *   그 밖의 축(place·social 등)이 맨 위거나 경고가 없으면 블로그(주력 상품).
+ * ⚠️가격은 hospitalmarketing.kr/services 와 같아야 한다. 바꾸면 두 곳을 같이 고친다.
+ * ⚠️효과·노출을 약속하는 말을 쓰지 않는다(표시광고법 — 자사 홍보물).
+ */
+
+export type ServicePick = 'blog' | 'homepage';
+
+export interface ServiceOffer {
+  readonly pick: ServicePick;
+  readonly name: string;
+  readonly price: string;
+  readonly line: string;
+  /** 경고가 하나도 없을 때 화면 굵은 줄로 쓰는 문구. */
+  readonly fallbackHeadline: string;
+  readonly href: string;
+  /** 고른 근거 항목 id. 경고가 없으면 null. */
+  readonly basis: string | null;
+}
+
+export const SERVICES_URL = 'https://hospitalmarketing.kr/services';
+/** 견적 신청 알림의 「유입」 줄에 찍히는 값 — 닥포 쪽 `clinic-check` 리드와 섞이지 않게 따로 둔다. */
+export const SERVICE_UTM_SOURCE = 'dp-diagnosis';
+
+const SERVICE_CATALOG: Readonly<Record<ServicePick, Omit<ServiceOffer, 'href' | 'basis' | 'pick'>>> = {
+  blog: {
+    name: '블로그 발행 대행',
+    price: '월 20편 40만 원 · 부가세 별도',
+    line: '주제 기획부터 원고, 의료광고법 검수, 병원 블로그 발행까지 저희가 합니다.',
+    fallbackHeadline: '병원 블로그, 매달 맡겨 두기',
+  },
+  homepage: {
+    name: '병원 홈페이지 제작',
+    price: '전체 제작 120만 원 · 진료 항목 페이지 29만 원부터 · 부가세 별도',
+    line: '진료과 템플릿으로 병원 홈페이지를 만들고, 진료 정보를 검색과 AI가 읽기 쉬운 구조로 정리합니다.',
+    fallbackHeadline: '병원 홈페이지, 만들어서 올려 드립니다',
+  },
+};
+
+/** 항목 id → 상품. ⚠️저장된 옛 리포트는 id 가 빠져 있을 수 있다 — 문자열일 때만 본다(코덱스 10/8). */
+export function pickFor(id: unknown): ServicePick | null {
+  if (typeof id !== 'string') return null;
+  const axis = id.split('.')[0];
+  if (axis === 'blog' || axis === 'compliance') return 'blog';
+  if (axis === 'site' || axis === 'ai') return 'homepage';
+  return null;
+}
+
+export function serviceHref(pick: ServicePick): string {
+  return `${SERVICES_URL}?pick=${pick}&utm_source=${SERVICE_UTM_SOURCE}#apply`;
+}
+
+export function buildServiceOffer(report: DiagnosisReport): ServiceOffer {
+  const groups = groupFindings(readFindings(report));
+  let pick: ServicePick = 'blog';
+  let basis: string | null = null;
+  // ★**맨 위 경고 하나**로만 정한다. 우리가 팔지 않는 축(플레이스·SNS 등, 또는 id 없는 옛 항목)이
+  //   맨 위면 다음 경고로 넘어가지 않고 기본(블로그)으로 둔다 — 아래쪽 경고가 상품을 정하면
+  //   원장이 본 맨 위 문제와 버튼이 어긋난다(코덱스 10/8 2차).
+  const top = [...groups.bad, ...groups.improve].find((f) => f.tone === 'warn');
+  const topPick = top ? pickFor(top.id) : null;
+  if (top && topPick !== null) {
+    pick = topPick;
+    basis = top.id;
+  }
+  return { pick, basis, href: serviceHref(pick), ...SERVICE_CATALOG[pick] };
+}
+
+/**
+ * 굵은 줄 = 원장 자기 숫자가 든 전환 문구. 단 **그 문구가 가리키는 상품이 버튼 상품과 같을 때만.**
+ *   다르면(예: 홈페이지 경고가 맨 위인데 문구는 블로그 208일) 상품 쪽 기본 문구를 쓴다 —
+ *   「208일 밀린 글」 아래 「홈페이지 제작 견적」이 붙는 어긋남을 막는다(코덱스 10/8).
+ */
+export function offerHeadline(cta: Pick<ConversionCta, 'headline' | 'basis'>, offer: ServiceOffer): string {
+  return cta.basis !== null && pickFor(cta.basis) === offer.pick ? cta.headline : offer.fallbackHeadline;
+}
+
 /* ── 영업이 쓸 진단 요약 ─────────────────────────────────── */
 
 /**
