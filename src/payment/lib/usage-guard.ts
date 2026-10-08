@@ -1,6 +1,7 @@
 import { createAdminClient, createServerSupabaseClient } from '@/dev/lib/supabase/server'
 import { isAdmin } from '@/hr/lib/admin'
 import { PLANS, isPaidPlanId } from './plans'
+import { FREE_TRIAL_DAILY_TITLE_CAP, freeTrialPreBodyVerdict } from './free-trial-gate'
 
 export type UsageGuardFailReason =
   | 'unauthenticated'
@@ -297,6 +298,66 @@ export type PlanGateResult = PlanGateSuccess | PlanGateFailure
  * 이미지 라우트(generate-images, regenerate-image)처럼 차감 책임이 다른 라우트에
  * 있는 경우에 사용한다. 비인증·비결제 사용자의 외부 API 비용 발생을 차단한다.
  */
+/**
+ * 본문 전 단계용 게이트 — 유료 플랜이거나, 무료 체험이 남아 있는 계정.
+ * 쓰는 곳: generate-titles · keywords/recommend · keyword-trend (본문을 쓰려면 반드시 지나는 단계).
+ * 이미지·태그 같은 **본문 뒤 부속 기능**은 그대로 requirePaidPlan(본문 1회 이상)을 쓴다.
+ */
+export async function requirePlanOrFreeTrial(opts: { capTitles?: boolean } = {}): Promise<PlanGateResult> {
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { ok: false, reason: 'unauthenticated', message: '로그인이 필요합니다.', status: 401 }
+  }
+  if (isAdmin(user.email)) return { ok: true, userId: user.id, isAdmin: true }
+
+  const admin = createAdminClient()
+  const { data: profile, error } = await admin
+    .from('profiles')
+    .select('plan, free_credits, free_credits_expires_at')
+    .eq('id', user.id)
+    .single()
+  if (error || !profile) {
+    return { ok: false, reason: 'no_profile', message: '프로필 정보를 불러올 수 없습니다.', status: 403 }
+  }
+  // 유료 플랜은 기존 판정(만료 포함) 그대로
+  if (isPaidPlanId(profile.plan)) return requirePaidPlan()
+
+  const verdict = freeTrialPreBodyVerdict(profile as { free_credits?: number | null; free_credits_expires_at?: string | null })
+  if (verdict !== 'ok') {
+    return {
+      ok: false,
+      reason: 'plan_required',
+      message:
+        verdict === 'expired' ? FREE_EXPIRED_MESSAGE
+          : verdict === 'exhausted' ? FREE_EXHAUSTED_MESSAGE
+            : '구독 플랜이 필요합니다. 요금제 페이지에서 결제 후 이용해주세요.',
+      status: 402,
+    }
+  }
+
+  // 하루 상한 — 본문을 안 쓰고 제목만 반복하는 비용 방어. 조회 실패는 통과(체험을 막는 쪽이 더 나쁘다).
+  //   제목 라우트에서만 센다(키워드 추천까지 같이 막지 않게 — 코덱스 10/8 2차).
+  //   ⚠️조회 후 통과라 동시 요청 몇 건은 넘을 수 있다 — 연타 방지용 느슨한 상한이다(원자 선점은 마이그레이션이 필요해 보류).
+  if (!opts.capTitles) return { ok: true, userId: user.id, isAdmin: false }
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { count } = await admin
+    .from('usage_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('feature', 'generate-titles')
+    .gte('created_at', since)
+  if (typeof count === 'number' && count >= FREE_TRIAL_DAILY_TITLE_CAP) {
+    return {
+      ok: false,
+      reason: 'plan_required',
+      message: '오늘 무료 체험으로 쓸 수 있는 제목 생성 횟수를 다 쓰셨어요. 내일 다시 이용하시거나 요금제에서 구독해 주세요.',
+      status: 429,
+    }
+  }
+  return { ok: true, userId: user.id, isAdmin: false }
+}
+
 export async function requirePaidPlan(): Promise<PlanGateResult> {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()

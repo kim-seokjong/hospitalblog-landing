@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requirePaidPlan } from '@/payment/lib/usage-guard';
+import { requirePlanOrFreeTrial } from '@/payment/lib/usage-guard';
 
 export async function POST(req: NextRequest) {
-  const gate = await requirePaidPlan();
+  const gate = await requirePlanOrFreeTrial();
   if (!gate.ok) {
     return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
   }

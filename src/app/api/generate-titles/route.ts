@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 import { MEDICAL_COMPLIANCE_SYSTEM_PROMPT } from '@/content/lib/medical-compliance';
 import { logUsage } from '@/dev/lib/usage-logger';
-import { requirePaidPlan } from '@/payment/lib/usage-guard';
+import { requirePlanOrFreeTrial } from '@/payment/lib/usage-guard';
 import { searchNaverBlogs, buildCompetitorInsightText } from '@/dev/lib/naver-search';
 import { buildGoogleTitlesSystemPrompt, buildGoogleTitlesUserPrompt } from '@/content/lib/google-prompts';
 import { fetchRecentPublishedTopics, buildRecentTopicsSection } from '@/content/lib/recent-topics';
@@ -11,7 +11,7 @@ import type { BlogTitle, TargetSite } from '@/types';
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  const gate = await requirePaidPlan();
+  const gate = await requirePlanOrFreeTrial({ capTitles: true });
   if (!gate.ok) {
     return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
   }
