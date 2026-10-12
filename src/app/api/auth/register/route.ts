@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRegistrationNonce } from '@/hr/lib/registration-nonce';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { suggestClinicProfile } from '@/content/lib/clinic-profile';
 import { applyReturningUserFreeBenefitPolicy } from '@/payment/lib/free-benefit';
@@ -9,6 +10,7 @@ export const dynamic = 'force-dynamic';
 
 const SIGNUP_WINDOW_MS = 5 * 60 * 1000;
 
+
 export async function POST(req: NextRequest) {
   // catch 블록에서도 best-effort 롤백을 시도할 수 있도록 try 밖에 선언.
   let userId: string | undefined;
@@ -16,6 +18,9 @@ export async function POST(req: NextRequest) {
   // 프로필이 이미 정상 저장된 뒤 발생한 예외(예: 이메일 confirm 단계)에서는
   // 롤백으로 멀쩡한 가입을 지우면 안 되므로, 커밋 여부를 추적한다.
   let profileCommitted = false;
+  // ⛔롤백 삭제는 존재·5분 창·프로필 미등록·가입자 확인 번호를 **모두 통과한 뒤에만** 허용한다.
+  //   catch 경로도 이 표시를 본다 — 검사 도중 예외가 나서 catch 로 떨어지면 지우지 않는다(Codex 10/12 재검토).
+  let rollbackAllowed = false;
 
   try {
     const body = await req.json();
@@ -61,6 +66,17 @@ export async function POST(req: NextRequest) {
     if (existing?.full_name) {
       return NextResponse.json({ error: '이미 등록된 프로필입니다.' }, { status: 409 });
     }
+
+    // 가입자 확인: signUp 때 메타데이터에 넣은 SHA-256(번호)와 요청의 원본 번호가 맞아야 한다.
+    //   userId 만 알아낸 제3자는 원본 번호를 모른다 ⇒ 남의 신규 계정에 프로필을 쓰거나 지울 수 없다.
+    const nonceCheck = checkRegistrationNonce(targetUser.user_metadata?.registration_nonce_hash, body.registrationNonce);
+    if (nonceCheck === 'mismatch') {
+      return NextResponse.json({ error: '가입 확인 정보가 맞지 않습니다. 다시 시도해주세요.' }, { status: 403 });
+    }
+    if (nonceCheck === 'legacy') {
+      console.warn('register 가입자 확인 해시 없음(옛 화면 가입) — 직전 규칙으로 처리:', userId);
+    }
+    rollbackAllowed = true;
 
     // 필수 프로필 필드(성함/연락처/병원명/직책/병원유형) 검증 — 시스템 경계(서버)에서 최종 차단.
     // 빈값이면 방금 생성된(위 검사를 통과한) auth 계정을 롤백 삭제해 유령 계정이 남지 않게 한다.
@@ -169,7 +185,7 @@ export async function POST(req: NextRequest) {
     console.error('register POST 예외:', userId ?? '(userId 없음)', msg);
 
     // best-effort 롤백: 프로필이 아직 커밋되지 않은 상태에서만 유령 auth 계정 삭제.
-    if (userId && supabaseAdmin && !profileCommitted) {
+    if (userId && supabaseAdmin && rollbackAllowed && !profileCommitted) {
       try {
         const { error: rollbackErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
         if (rollbackErr) {

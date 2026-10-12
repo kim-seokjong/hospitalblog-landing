@@ -72,6 +72,54 @@ function mapCategoryToHospitalType(category: string): string {
   return '';
 }
 
+/**
+ * 가입자 확인 번호 — 같은 이메일 재시도 때 같은 값을 쓰도록 이 브라우저에 **이메일별로** 하루 보관한다.
+ * 다른 이메일을 시도해도 덮어쓰지 않는다(Codex 4라운드). 가입이 끝나면 지운다. 저장이 막혀도 새 번호로 진행.
+ */
+const SIGNUP_NONCE_KEY = 'dp_signup_nonce_v2';
+const SIGNUP_NONCE_TTL_MS = 24 * 60 * 60 * 1000;
+const SIGNUP_NONCE_MAX = 5;
+type NonceMap = Record<string, { n: string; t: number }>;
+
+function readNonceMap(): NonceMap {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SIGNUP_NONCE_KEY) || '{}') as unknown;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const now = Date.now();
+    const out: NonceMap = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const e = v as { n?: unknown; t?: unknown };
+      if (typeof e?.n === 'string' && /^[0-9a-f]{64}$/.test(e.n) && typeof e.t === 'number' && now - e.t < SIGNUP_NONCE_TTL_MS) {
+        out[k] = { n: e.n, t: e.t };
+      }
+    }
+    return out;
+  } catch { return {}; }
+}
+
+function writeNonceMap(map: NonceMap): void {
+  // 오래된 것부터 버려 최대 개수만 남긴다.
+  const kept = Object.entries(map).sort((a, b) => b[1].t - a[1].t).slice(0, SIGNUP_NONCE_MAX);
+  try { localStorage.setItem(SIGNUP_NONCE_KEY, JSON.stringify(Object.fromEntries(kept))); } catch { /* 저장 불가 — 그래도 진행 */ }
+}
+
+function loadOrCreateSignupNonce(email: string): string {
+  const key = email.trim().toLowerCase();
+  const map = readNonceMap();
+  if (map[key]) return map[key].n;
+  const fresh = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+  writeNonceMap({ ...map, [key]: { n: fresh, t: Date.now() } });
+  return fresh;
+}
+
+function forgetSignupNonce(email: string): void {
+  const key = email.trim().toLowerCase();
+  const map = readNonceMap();
+  if (!map[key]) return;
+  const { [key]: _done, ...rest } = map;
+  writeNonceMap(rest);
+}
+
 export default function AuthModal({ onClose, onSuccess, initialMode = 'login', closable = true, initialHospitalName = '' }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
 
@@ -202,9 +250,27 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     // signup_complete(전환 확정)는 위조 방지를 위해 서버(/api/auth/register)에서만 기록한다.
     trackFunnel('signup_start', { hospital_type: hospitalType });
 
+    // 가입자 확인용 일회용 번호 — 계정 메타데이터에는 **해시만** 저장하고, 원본은 /api/auth/register 로만 보낸다.
+    //   서버는 원본을 해시해 메타데이터와 같을 때만 프로필 저장·롤백 삭제를 한다(남의 userId 로 호출하는 것을 막는다, 2026-10-12).
+    //   ⚠️원본을 메타데이터에 두면 안 된다 — 미확인 계정에 같은 이메일로 signUp 하면 Supabase 가 기존 메타데이터를 돌려준다(Codex 2라운드).
+    //   ★같은 이메일로 다시 시도할 때는 같은 번호를 쓴다 — 첫 시도가 /register 전에 끊기면 계정에는 첫 번호의 해시가 남고,
+    //     Supabase 는 미확인 중복 가입 때 메타데이터를 갱신하지 않으므로 새 번호로는 영영 403 이 된다(Codex 3라운드).
+    let registrationNonce: string;
+    let registrationNonceHash: string;
+    try {
+      registrationNonce = loadOrCreateSignupNonce(email);
+      const nonceDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(registrationNonce));
+      registrationNonceHash = Array.from(new Uint8Array(nonceDigest), (b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      setError('이 브라우저에서는 가입을 진행할 수 없습니다. 최신 크롬·사파리 등에서 다시 시도해 주세요.');
+      setLoading(false);
+      return;
+    }
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
+      options: { data: { registration_nonce_hash: registrationNonceHash } },
     });
 
     if (signUpError) {
@@ -235,7 +301,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
     const registerRes = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, fullName, phone, hospitalName, hospitalAddress, position, hospitalType }),
+      body: JSON.stringify({ userId, registrationNonce, fullName, phone, hospitalName, hospitalAddress, position, hospitalType }),
     });
 
     if (!registerRes.ok) {
@@ -248,6 +314,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', c
       return;
     }
 
+    forgetSignupNonce(email); // 가입 완료 — 보관한 확인 번호는 더 쓸 일이 없다
     const registerJson = (await registerRes.json().catch(() => null)) as { freeGranted?: unknown } | null;
     const freeGranted = typeof registerJson?.freeGranted === 'boolean' ? registerJson.freeGranted : null;
 
