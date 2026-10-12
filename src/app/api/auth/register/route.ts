@@ -33,16 +33,10 @@ export async function POST(req: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
-    // 필수 프로필 필드(성함/연락처/병원명/직책/병원유형) 검증 — 시스템 경계(서버)에서 최종 차단.
-    // 빈값이면 방금 생성된 auth 계정을 롤백 삭제해 유령 계정이 남지 않게 한다.
-    if (!fullName || !phone || !hospitalName || !position || !hospitalType) {
-      const { error: rollbackErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
-      if (rollbackErr) {
-        console.error('register rollback(deleteUser) 실패 — 필수항목 누락 경로:', userId, rollbackErr.message);
-      }
-      return NextResponse.json({ error: '필수 항목이 누락되었습니다.' }, { status: 400 });
-    }
-
+    // ⛔⛔삭제(롤백)는 아래 세 검사를 모두 통과한 계정에만 한다(2026-10-12 Codex 지적·실코드 확인).
+    //   이 라우트는 로그인 없이 호출된다. 예전엔 필수 항목 검사가 맨 앞에서 deleteUser 를 불러,
+    //   남의 userId 만 넣고 필드를 비우면 **기존 회원 계정이 지워졌다.**
+    //   ⇒ ①존재 ②가입 5분 이내 ③프로필 미등록 — 방금 가입 중인 계정만 지울 수 있다.
     const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.getUserById(userId);
     if (userErr || !userData?.user) {
       return NextResponse.json({ error: '사용자를 찾을 수 없습니다.' }, { status: 404 });
@@ -50,17 +44,32 @@ export async function POST(req: NextRequest) {
     const targetUser = userData.user;
 
     const ageMs = Date.now() - new Date(targetUser.created_at).getTime();
-    if (ageMs > SIGNUP_WINDOW_MS) {
+    if (!Number.isFinite(ageMs) || ageMs > SIGNUP_WINDOW_MS) {
       return NextResponse.json({ error: '가입 처리 시간이 만료되었습니다. 다시 시도해주세요.' }, { status: 403 });
     }
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingErr } = await supabaseAdmin
       .from('profiles')
       .select('id, full_name')
       .eq('id', userId)
       .maybeSingle();
+    if (existingErr) {
+      // 프로필 유무를 모르면 지우지도, 덮어쓰지도 않는다.
+      console.error('register 프로필 조회 실패:', userId, existingErr.message);
+      return NextResponse.json({ error: '잠시 후 다시 시도해주세요.' }, { status: 503 });
+    }
     if (existing?.full_name) {
       return NextResponse.json({ error: '이미 등록된 프로필입니다.' }, { status: 409 });
+    }
+
+    // 필수 프로필 필드(성함/연락처/병원명/직책/병원유형) 검증 — 시스템 경계(서버)에서 최종 차단.
+    // 빈값이면 방금 생성된(위 검사를 통과한) auth 계정을 롤백 삭제해 유령 계정이 남지 않게 한다.
+    if (!fullName || !phone || !hospitalName || !position || !hospitalType) {
+      const { error: rollbackErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (rollbackErr) {
+        console.error('register rollback(deleteUser) 실패 — 필수항목 누락 경로:', userId, rollbackErr.message);
+      }
+      return NextResponse.json({ error: '필수 항목이 누락되었습니다.' }, { status: 400 });
     }
 
     // 가입 시점에 병원 소개문·키워드를 자동 생성한다(기존 회원의 "강점 자동생성"과 동일 결과).
