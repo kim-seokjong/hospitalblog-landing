@@ -110,7 +110,7 @@ ${body ? body.slice(0, 2000) : ''}
 
     const data = toolUse.input as CardNewsData;
 
-    logUsage({
+    await logUsage({
       feature: 'generate-cardnews-slides',
       api_provider: 'anthropic',
       input_tokens: res.usage.input_tokens,

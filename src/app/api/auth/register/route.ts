@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     // ⛔⛔삭제(롤백)는 아래 세 검사를 모두 통과한 계정에만 한다(2026-10-12 Codex 지적·실코드 확인).
     //   이 라우트는 로그인 없이 호출된다. 예전엔 필수 항목 검사가 맨 앞에서 deleteUser 를 불러,
     //   남의 userId 만 넣고 필드를 비우면 **기존 회원 계정이 지워졌다.**
-    //   ⇒ ①존재 ②가입 5분 이내 ③프로필 미등록 — 방금 가입 중인 계정만 지울 수 있다.
+    //   ⇒ ①존재 ②프로필 미등록 ③가입자 확인 번호 ④가입 5분 이내(번호가 맞는 미확인 계정은 예외) — 가입 중인 본인 계정만 지울 수 있다.
     const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.getUserById(userId);
     if (userErr || !userData?.user) {
       return NextResponse.json({ error: '사용자를 찾을 수 없습니다.' }, { status: 404 });
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     const targetUser = userData.user;
 
     const ageMs = Date.now() - new Date(targetUser.created_at).getTime();
-    if (!Number.isFinite(ageMs) || ageMs > SIGNUP_WINDOW_MS) {
+    if (!Number.isFinite(ageMs)) {
       return NextResponse.json({ error: '가입 처리 시간이 만료되었습니다. 다시 시도해주세요.' }, { status: 403 });
     }
 
@@ -75,6 +75,13 @@ export async function POST(req: NextRequest) {
     }
     if (nonceCheck === 'legacy') {
       console.warn('register 가입자 확인 해시 없음(옛 화면 가입) — 직전 규칙으로 처리:', userId);
+    }
+    // 5분 창 — 2026-10-13 대표 결정 ④: 가입 중간에 그만둔 사람이 5분 뒤 다시 시도하면 영영 막혔다
+    //   (Supabase 가 같은 이메일의 미확인 계정을 그대로 돌려주는데 created_at 은 첫 시도 그대로다).
+    //   ⇒ 확인 번호가 맞고(ok) 이메일 미확인·프로필 미등록인 계정 = 본인이 이어서 가입하는 중 ⇒ 창이 지나도 받는다.
+    //   번호가 없는 옛 계정(legacy)은 직전 규칙(5분) 그대로.
+    if (ageMs > SIGNUP_WINDOW_MS && !(nonceCheck === 'ok' && !targetUser.email_confirmed_at)) {
+      return NextResponse.json({ error: '가입 처리 시간이 만료되었습니다. 다시 시도해주세요.' }, { status: 403 });
     }
     rollbackAllowed = true;
 

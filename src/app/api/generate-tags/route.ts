@@ -67,7 +67,7 @@ searchVolume은 높음/중간/낮음 중 하나.`;
 
     const parsed = JSON.parse(jsonMatch[0]) as TagResult;
 
-    logUsage({
+    await logUsage({
       feature: 'generate-tags',
       api_provider: 'anthropic',
       input_tokens: response.usage.input_tokens,

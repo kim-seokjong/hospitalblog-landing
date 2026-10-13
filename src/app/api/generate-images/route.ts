@@ -282,7 +282,7 @@ ${targets.slice(0, count).map((d, i) => `${i + 1}. ${d}`).join('\n')}
     }],
   });
 
-  logUsage({
+  await logUsage({
     feature: 'generate-images',
     api_provider: 'anthropic',
     input_tokens: res.usage.input_tokens,
@@ -448,7 +448,7 @@ async function generateWithOpenAIImages(
   }
 
   if (images.length > 0) {
-    logUsage({ feature: 'generate-images', api_provider: 'openai', image_count: images.length, user_id: userId ?? null, user_agent: userAgent ?? null });
+    await logUsage({ feature: 'generate-images', api_provider: 'openai', image_count: images.length, user_id: userId ?? null, user_agent: userAgent ?? null });
   }
 
   return { images, errors };
@@ -509,7 +509,7 @@ async function generateCardnewsImages(
   }
 
   if (images.length > 0) {
-    logUsage({
+    await logUsage({
       feature: 'generate-images',
       api_provider: 'fal',
       image_count: images.length,

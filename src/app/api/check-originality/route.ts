@@ -160,7 +160,7 @@ originalityScore 기준: 80이상=통과, 60~79=수정권장, 60미만=재작성
       suggestions: Array.isArray(raw.suggestions) ? raw.suggestions : [],
     };
 
-    logUsage({
+    await logUsage({
       feature: 'check-originality',
       api_provider: 'anthropic',
       input_tokens: analysisRes.usage.input_tokens,

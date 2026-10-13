@@ -708,7 +708,8 @@ ${formatGuide}
       description: m.replace(/\[이미지\s*\d+:\s*/, '').replace(']', '').trim(),
     }));
 
-    logUsage({
+    // ★await — 무료 체험 계정의 이미지·태그 허용은 이 로그로 판정한다(usage-guard freeTrialAccessoryGate).
+    await logUsage({
       feature: 'generate-content',
       api_provider: 'anthropic',
       input_tokens: response.usage.input_tokens,

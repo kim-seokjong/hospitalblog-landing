@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnthropicClient, MODEL } from '@/content/lib/anthropic';
 import { requirePaidPlan } from '@/payment/lib/usage-guard';
+import { logUsage } from '@/dev/lib/usage-logger';
 import type { SlideStyleConfig } from '@/types';
 
 function hexToRgb(hex: string): string {
@@ -54,6 +55,16 @@ export async function POST(req: NextRequest) {
 요청한 느낌을 살리되, 텍스트 가독성이 높아야 합니다.
 배경은 단색이나 그라디언트로 제안해주세요.`,
       }],
+    });
+
+    // 무료 체험 부속 기능 상한이 이 로그를 센다(10/13 Codex 지적 — 로그가 없어 무제한이었다)
+    await logUsage({
+      feature: 'generate-style',
+      api_provider: 'anthropic',
+      input_tokens: res.usage.input_tokens,
+      output_tokens: res.usage.output_tokens,
+      user_id: gate.userId,
+      user_agent: req.headers.get('user-agent') ?? null,
     });
 
     const toolUse = res.content.find(b => b.type === 'tool_use');

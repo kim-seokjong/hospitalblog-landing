@@ -30,9 +30,13 @@ const gates = {
   allow: at('rollbackAllowed = true'),
 }
 
-test('가입자 확인 번호 검사는 존재·시간 창·프로필 검사 뒤, 롤백 허용 표시보다 앞', () => {
-  assert.ok(gates.nonce > Math.max(gates.exists, gates.window, gates.profile))
-  assert.ok(gates.allow > gates.nonce, '롤백 허용 표시가 번호 검사보다 앞에서 켜진다')
+// 10/13: 5분 창은 번호 판정 결과를 써야 해서(번호가 맞는 미확인 계정은 창이 지나도 이어서 가입) 번호 검사 뒤로 옮겼다.
+test('가입자 확인 번호 검사는 존재·프로필 검사 뒤, 5분 창은 번호 뒤, 둘 다 롤백 허용 표시보다 앞', () => {
+  assert.ok(gates.nonce > Math.max(gates.exists, gates.profile))
+  assert.ok(gates.window > gates.nonce, '5분 창 검사가 번호 판정보다 앞에 있다 — 예외 조건을 쓸 수 없다')
+  assert.ok(gates.allow > Math.max(gates.nonce, gates.window), '롤백 허용 표시가 번호·5분 창 검사보다 앞에서 켜진다')
+  assert.match(body, /ageMs > SIGNUP_WINDOW_MS && !\(nonceCheck === 'ok' && !targetUser\.email_confirmed_at\)/,
+    '5분 창 예외는 번호가 맞고(ok) 이메일 미확인인 계정에만 — legacy 는 예외가 아니다')
   assert.equal(body.split('rollbackAllowed = true').length - 1, 1, '롤백 허용 표시를 켜는 곳은 한 곳뿐이어야 한다')
 })
 

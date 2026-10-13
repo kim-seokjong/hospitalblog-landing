@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
     let url: string;
     if (style === 'cardnews' || provider === 'fal') {
       url = await generateWithFal(englishPrompt);
-      logUsage({ feature: 'regenerate-image', api_provider: 'fal', image_count: 1, user_id: gate.userId, user_agent: req.headers.get('user-agent') ?? null });
+      await logUsage({ feature: 'regenerate-image', api_provider: 'fal', image_count: 1, user_id: gate.userId, user_agent: req.headers.get('user-agent') ?? null });
     } else {
       // 같은 프롬프트 반복 시 다른 장면이 나오도록 변형 지시 추가
       const sceneVariants = [
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
       ];
       const variant = sceneVariants[Math.floor(Math.random() * sceneVariants.length)];
       url = await generateWithOpenAI(`${englishPrompt} ${variant}`);
-      logUsage({ feature: 'regenerate-image', api_provider: 'openai', image_count: 1, user_id: gate.userId, user_agent: req.headers.get('user-agent') ?? null });
+      await logUsage({ feature: 'regenerate-image', api_provider: 'openai', image_count: 1, user_id: gate.userId, user_agent: req.headers.get('user-agent') ?? null });
     }
 
     // 영속화 — generate-images 와 동일하게 clinic-assets 로 옮겨 영구 public URL 로.

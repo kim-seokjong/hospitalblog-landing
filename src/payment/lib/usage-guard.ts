@@ -1,7 +1,13 @@
 import { createAdminClient, createServerSupabaseClient } from '@/dev/lib/supabase/server'
 import { isAdmin } from '@/hr/lib/admin'
 import { PLANS, isPaidPlanId } from './plans'
-import { FREE_TRIAL_DAILY_TITLE_CAP, freeTrialPreBodyVerdict } from './free-trial-gate'
+import {
+  FREE_TRIAL_ACCESSORY_FEATURES,
+  FREE_TRIAL_ACCESSORY_WINDOW_MS,
+  FREE_TRIAL_DAILY_TITLE_CAP,
+  freeTrialAccessoryVerdict,
+  freeTrialPreBodyVerdict,
+} from './free-trial-gate'
 
 export type UsageGuardFailReason =
   | 'unauthenticated'
@@ -351,11 +357,57 @@ export async function requirePlanOrFreeTrial(opts: { capTitles?: boolean } = {})
     return {
       ok: false,
       reason: 'plan_required',
-      message: '오늘 무료 체험으로 쓸 수 있는 제목 생성 횟수를 다 쓰셨어요. 내일 다시 이용하시거나 요금제에서 구독해 주세요.',
+      // 한도는 「오늘 0시」가 아니라 최근 24시간 기준이다 — 문구도 그대로 말한다(10/13 대표 결정 ③)
+      message: `무료 체험 제목 생성은 24시간에 ${FREE_TRIAL_DAILY_TITLE_CAP}회까지예요. 가장 처음 만든 때로부터 24시간이 지나면 다시 쓸 수 있고, 요금제에서 구독하시면 바로 이어서 이용할 수 있습니다.`,
       status: 429,
     }
   }
   return { ok: true, userId: user.id, isAdmin: false }
+}
+
+const PLAN_REQUIRED_MESSAGE = '구독 플랜이 필요합니다. 요금제 페이지에서 결제 후 이용해주세요.'
+
+async function freeTrialAccessoryGate(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  freeCredits: number | null | undefined,
+): Promise<PlanGateResult> {
+  // 크레딧을 한 번도 안 쓴 계정은 로그를 볼 필요도 없다
+  if (typeof freeCredits !== 'number' || freeCredits >= FREE_CREDITS_TOTAL) {
+    return { ok: false, reason: 'plan_required', message: PLAN_REQUIRED_MESSAGE, status: 402 }
+  }
+  const since = new Date(Date.now() - FREE_TRIAL_ACCESSORY_WINDOW_MS).toISOString()
+  const countFeature = (features: readonly string[]) =>
+    admin
+      .from('usage_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .in('feature', features as string[])
+      .gte('created_at', since)
+  const [bodies, accessories] = await Promise.all([
+    countFeature(['generate-content']),
+    countFeature(FREE_TRIAL_ACCESSORY_FEATURES),
+  ])
+  // 비용 문턱이라 조회 실패는 닫는다(제목 상한과 반대) — 유료 계정은 이 경로를 지나지 않는다
+  if (bodies.error || accessories.error || typeof bodies.count !== 'number' || typeof accessories.count !== 'number') {
+    console.error('무료 체험 부속 기능 판정 조회 실패:', userId, bodies.error?.message ?? accessories.error?.message)
+    return { ok: false, reason: 'no_profile', message: '잠시 후 다시 시도해주세요.', status: 503 }
+  }
+  const verdict = freeTrialAccessoryVerdict({
+    freeCredits,
+    recentBodies: bodies.count,
+    recentAccessories: accessories.count,
+  })
+  if (verdict === 'ok') return { ok: true, userId, isAdmin: false }
+  return {
+    ok: false,
+    reason: 'plan_required',
+    message:
+      verdict === 'capped'
+        ? '무료 체험으로 쓸 수 있는 이미지·부가 기능 횟수를 다 쓰셨어요. 요금제에서 구독하시면 계속 이용할 수 있습니다.'
+        : PLAN_REQUIRED_MESSAGE,
+    status: 402,
+  }
 }
 
 export async function requirePaidPlan(): Promise<PlanGateResult> {
@@ -388,19 +440,9 @@ export async function requirePaidPlan(): Promise<PlanGateResult> {
   }
 
   if (!isPaidPlanId(profile.plan)) {
-    // 무료 체험 계정: 본문을 최소 1회 생성한 계정(free_credits < 2)은 그 글의
-    // 부속 기능(이미지 등)을 허용 — 반쪽 체험은 전환이 안 된다. 본문을 한 번도
-    // 안 쓴 계정은 차단(외부 API 비용 방어).
-    const fc = (profile as { free_credits?: number | null }).free_credits
-    if (typeof fc === 'number' && fc < FREE_CREDITS_TOTAL) {
-      return { ok: true, userId: user.id, isAdmin: false }
-    }
-    return {
-      ok: false,
-      reason: 'plan_required',
-      message: '구독 플랜이 필요합니다. 요금제 페이지에서 결제 후 이용해주세요.',
-      status: 402,
-    }
+    // 무료 체험 계정: 최근에 실제로 쓴 무료 본문이 있을 때만 그 글의 부속 기능(이미지 등)을
+    // 본문당 상한까지 허용 — 반쪽 체험은 전환이 안 되지만, 소진·회수 계정의 무제한 사용은 막는다(10/13).
+    return freeTrialAccessoryGate(admin, user.id, (profile as { free_credits?: number | null }).free_credits)
   }
 
   if (!profile.plan_expires_at || new Date(profile.plan_expires_at) <= new Date()) {

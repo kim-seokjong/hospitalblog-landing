@@ -8,6 +8,7 @@ export type FeatureType =
   | 'generate-cardnews-slides'
   | 'check-originality'
   | 'regenerate-image'
+  | 'generate-style'
   | 'free-sample';
 
 export type ApiProvider = 'anthropic' | 'fal' | 'pexels' | 'openai';
@@ -40,15 +41,18 @@ export function calcCost(entry: UsageEntry): number {
   return 0;
 }
 
-/** API 응답 속도에 영향 없도록 비동기로 저장 */
-export function logUsage(entry: UsageEntry): void {
+/**
+ * API 응답 속도에 영향 없도록 비동기로 저장 — 대부분은 기다리지 않고 부른다(fire-and-forget).
+ * ★판정에 쓰이는 로그(무료 본문 = 부속 기능 허용 근거, 10/13)는 호출한 쪽이 await 한다 — 서버리스는 응답 뒤 작업을 잃을 수 있다.
+ *   실패해도 reject 하지 않는다.
+ */
+export function logUsage(entry: UsageEntry): Promise<void> {
   const cost_usd = calcCost(entry);
 
-  // fire-and-forget
-  (async () => {
+  return (async () => {
     try {
       const supabase = createAdminClient();
-      await supabase.from('usage_logs').insert({
+      const { error } = await supabase.from('usage_logs').insert({
         feature: entry.feature,
         api_provider: entry.api_provider,
         input_tokens: entry.input_tokens ?? 0,
@@ -58,6 +62,7 @@ export function logUsage(entry: UsageEntry): void {
         user_id: entry.user_id ?? null,
         user_agent: entry.user_agent ?? null,
       });
+      if (error) console.error('[usage-logger] 저장 실패:', error.message);
     } catch (err) {
       console.error('[usage-logger] 저장 실패:', err);
     }
