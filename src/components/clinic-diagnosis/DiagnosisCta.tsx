@@ -185,11 +185,11 @@ export default function DiagnosisCta({ headline, offer, hospitalName, shareToken
           onClick={() => void handleClick()}
           className="mt-2 min-h-[44px] px-3 text-[12.5px] font-bold text-[#3c4653] underline underline-offset-2 hover:text-[#202020]"
         >
-          {signedIn === false ? '직접 써 보시려면: 우리 병원 첫 글 2편 무료로 받아보기' : signedIn ? '닥터포스트에서 직접 이어서 쓰기' : '닥터포스트로 직접 써 보기'}
+          {signedIn === false ? '직접 써 보시려면: 우리 병원 첫 글 2편 제공받기' : signedIn ? '닥터포스트에서 직접 이어서 쓰기' : '닥터포스트로 직접 써 보기'}
         </button>
         {signedIn === false && (
           <p className="text-[11px] text-[#8a93a0] mt-1.5 leading-relaxed">
-            무료 혜택을 받은 적 없는 연락처·이메일로 처음 가입할 때 · 가입 후 7일 안에 2편 무료 · 결제 정보는 입력하지 않습니다
+            체험 혜택을 받은 적 없는 연락처·이메일로 처음 가입할 때 · 가입 후 7일 안에 2편 제공 · 결제 정보는 입력하지 않습니다
           </p>
         )}
       </div>

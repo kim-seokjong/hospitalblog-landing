@@ -272,7 +272,7 @@ export default function LandingPage() {
         <div className="relative max-w-3xl mx-auto px-5 sm:px-6 pt-9 sm:pt-20 pb-10 sm:pb-16 text-center">
           <span className="inline-flex items-center gap-2 bg-white border border-[#dbe2ea] text-[#202020] font-bold text-[12px] sm:text-[13px] px-4 py-1.5 rounded-full">
             <span className="w-[7px] h-[7px] rounded-full bg-[#e52000]" />
-            무료 진단 · 회원가입 없이 30초
+            진단 제공 · 회원가입 없이 30초
           </span>
 
           <h1
@@ -287,7 +287,7 @@ export default function LandingPage() {
           <p className="text-[15px] sm:text-lg text-[#4a4f55] mt-3 sm:mt-5 leading-relaxed">
             네이버 플레이스·블로그·인스타·유튜브·홈페이지·AI 검색까지
             <br className="hidden sm:block" />
-            공개된 자료로 실제로 조회해서 무료로 진단해 드려요.
+            공개된 자료로 실제로 조회한 진단을 비용 없이 제공해 드려요.
           </p>
 
           {/* 병원명 입력 → /clinic-check 자동 실행. 지역은 필요할 때만 진단 화면에서 추가로 묻는다. */}
@@ -313,7 +313,7 @@ export default function LandingPage() {
                 disabled={diagnoseQuery.trim().length < 2}
                 className="flex-shrink-0 px-7 py-3.5 min-h-[44px] bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white font-bold rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                무료 진단하기
+                진단 받아보기
               </button>
             </div>
           </form>
@@ -331,11 +331,11 @@ export default function LandingPage() {
             <span className="block [text-wrap:balance]">
               닥터포스트는 <b className="font-extrabold text-[#202020]">의료광고법에 맞춰 병원 블로그를 자동으로 써주는</b> 서비스예요.
             </span>
-            <span className="block mt-1 [text-wrap:balance]">진단은 회원가입 없이 무료입니다.</span>
+            <span className="block mt-1 [text-wrap:balance]">진단은 비용 없이 제공되고, 회원가입도 필요 없어요.</span>
           </p>
 
           <p className="text-[12px] text-[#666f7d] mt-2.5 leading-relaxed">
-            행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 무료
+            행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 비용 없음
           </p>
 
           {/*
@@ -343,7 +343,7 @@ export default function LandingPage() {
             /clinic-check 의 같은 자리와 문구를 맞춘다 — 두 곳에 있으므로 한쪽만 고치면 어긋난다.
           */}
           <p className="text-[11px] text-[#8a93a0] mt-1.5 leading-relaxed">
-            무료 진단 결과는 닥터포스트 홍보에 활용될 수 있어요.
+            진단 결과는 닥터포스트 홍보에 활용될 수 있어요.
           </p>
 
           {/* 스크롤 유도 — 아래에 제품 설명이 이어진다는 표식 */}
@@ -399,7 +399,7 @@ export default function LandingPage() {
               {/* 가입 혜택 배지 — 상시 혜택(프로모 아님) */}
               <p className="mt-4 flex justify-center lg:justify-start">
                 <span className="inline-block bg-[#e52000]/10 border border-[#e52000]/25 text-[#c91b00] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
-                  🎁 가입하면 블로그 글 <b className="font-extrabold">2회 무료 생성</b> · 카드 등록 없음
+                  🎁 가입하면 블로그 글 <b className="font-extrabold">2회 생성 혜택</b> · 카드 등록 없음
                 </span>
               </p>
             </div>
@@ -743,7 +743,7 @@ export default function LandingPage() {
           {/* 가입 혜택 배지 — 히어로와 동일 문구(상시 혜택, 프로모 아님), 다크 배경용 톤 */}
           <p className="mt-5 flex justify-center">
             <span className="inline-block bg-[#e52000]/15 border border-[#e52000]/40 text-[#ffb4a8] font-semibold text-sm sm:text-[15px] leading-relaxed px-4 sm:px-5 py-2 rounded-full text-center">
-              🎁 가입하면 블로그 글 <b className="text-white font-extrabold">2회 무료 생성</b> · 카드 등록 없음
+              🎁 가입하면 블로그 글 <b className="text-white font-extrabold">2회 생성 혜택</b> · 카드 등록 없음
             </span>
           </p>
         </div>

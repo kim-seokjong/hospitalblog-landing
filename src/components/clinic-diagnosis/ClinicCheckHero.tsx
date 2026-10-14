@@ -22,7 +22,7 @@ export function ClinicCheckTopBar() {
           <a href="/" aria-label="닥터포스트 홈" className="flex items-center min-w-0">
             <Logo variant="light" />
           </a>
-          <span className="text-xs sm:text-sm font-bold text-[#4a4f55]">병원 온라인 노출 무료진단</span>
+          <span className="text-xs sm:text-sm font-bold text-[#4a4f55]">병원 온라인 노출 진단 제공</span>
         </div>
       </header>
     </>
@@ -40,7 +40,7 @@ export function ClinicCheckHeroText() {
       <p className="text-[#4a4f55] mt-3 text-[15px] sm:text-base leading-relaxed">
         네이버 플레이스·블로그·인스타·유튜브·홈페이지·AI 검색까지
         <br className="hidden sm:block" />
-        공개된 자료로 실제로 조회해서 무료로 진단해 드려요.
+        공개된 자료로 실제로 조회한 진단을 비용 없이 제공해 드려요.
       </p>
     </div>
   );

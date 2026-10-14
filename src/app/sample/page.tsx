@@ -156,7 +156,7 @@ function SamplePageInner() {
             className="text-sm font-semibold text-white px-4 py-2 rounded-lg"
             style={{ background: CORAL }}
           >
-            무료로 시작하기
+            가입하고 시작하기
           </button>
         </div>
       </header>
@@ -167,7 +167,7 @@ function SamplePageInner() {
           className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-full mb-5"
           style={{ background: '#fff0ed', color: CORAL }}
         >
-          가입 전 무료 맞춤 샘플
+          가입 전, 비용 없이 보는 맞춤 샘플
         </div>
 
         {clinicResolved && !clinic && (
@@ -200,7 +200,7 @@ function SamplePageInner() {
               className="text-sm font-semibold text-white px-4 py-2 rounded-lg"
               style={{ background: CORAL }}
             >
-              무료로 가입하고 직접 만들어보기
+              가입하고 직접 만들어보기
             </button>
           </div>
         )}
@@ -346,7 +346,7 @@ function SampleView({ sample, onSignup }: { sample: FreeSample; onSignup: () => 
           className="text-base font-bold text-white px-7 py-3.5 rounded-xl w-full sm:w-auto"
           style={{ background: CORAL }}
         >
-          무료로 가입하고 전체 기능 열기
+          가입하고 전체 기능 열기
         </button>
       </div>
     </div>
@@ -368,7 +368,7 @@ function NoClinicView({ onStart }: { onStart: () => void }) {
         className="text-base font-bold text-white px-7 py-3.5 rounded-xl w-full sm:w-auto"
         style={{ background: CORAL }}
       >
-        무료로 시작하기
+        가입하고 시작하기
       </button>
     </div>
   );

@@ -250,7 +250,7 @@ export default function ClinicCheckClient() {
               disabled={busy || name.trim().length < MIN_CLINIC_NAME_LENGTH}
               className="flex-shrink-0 px-7 py-3.5 bg-gradient-to-br from-[#ff4628] to-[#e63a1c] text-white font-bold rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
             >
-              {lookupLoading ? '병원 찾는 중…' : busyMngNo ? '진단 중…' : '무료 진단하기'}
+              {lookupLoading ? '병원 찾는 중…' : busyMngNo ? '진단 중…' : '진단 받아보기'}
             </button>
           </div>
 
@@ -277,7 +277,7 @@ export default function ClinicCheckClient() {
         </form>
 
         <p className="text-[11px] text-[#8a93a0] text-center mt-2.5 leading-relaxed">
-          행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 무료
+          행정안전부 공표 정보 · 네이버 공개 API · 공개된 블로그 글과 홈페이지 열람만 사용해요 · 비용 없음
         </p>
 
         {/*
@@ -286,7 +286,7 @@ export default function ClinicCheckClient() {
           ⚠️위 출처 안내보다 한 단계 작고 옅게 — 진단을 막는 문구가 아니라 고지다.
         */}
         <p className="text-[10.5px] text-[#a8b0bb] text-center mt-1.5 leading-relaxed">
-          무료 진단 결과는 닥터포스트 홍보에 활용될 수 있어요.
+          진단 결과는 닥터포스트 홍보에 활용될 수 있어요.
         </p>
 
         {busy && (

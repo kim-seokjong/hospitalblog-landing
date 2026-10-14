@@ -22,7 +22,7 @@ import { SITE_NAME } from '@/dev/lib/seo/site';
 const PAGE_TITLE = '병원 온라인 노출 무료진단 — 플레이스·블로그·홈페이지·AI 검색 실측';
 
 const PAGE_DESCRIPTION =
-  '병원 이름만 넣으면 네이버 블로그 노출, 홈페이지 접속·검색 설정, AI 검색 인용 여부, 의료광고법에서 자주 지적되는 표현까지 공개 자료로 조회해 무료로 진단해 드립니다.';
+  '병원 이름만 넣으면 네이버 블로그 노출, 홈페이지 접속·검색 설정, AI 검색 인용 여부, 의료광고법에서 자주 지적되는 표현까지 공개 자료로 조회한 진단을 비용 없이 제공해 드립니다.';
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,
@@ -61,7 +61,7 @@ const CLINIC_CHECK_FAQS: readonly FaqEntry[] = [
   {
     question: '진단에 회원가입이나 결제가 필요한가요?',
     answer:
-      '필요 없습니다. 병원 이름만 입력하면 회원가입·카드 등록 없이 무료로 진단 결과를 볼 수 있습니다. 결과를 나중에 다시 보거나 원장님께 전달하시려면 이메일로 리포트 링크를 보내드립니다.',
+      '필요 없습니다. 병원 이름만 입력하면 회원가입·카드 등록 없이 진단 결과를 볼 수 있고, 비용은 들지 않습니다. 결과를 나중에 다시 보거나 원장님께 전달하시려면 이메일로 리포트 링크를 보내드립니다.',
   },
   {
     question: '어떤 자료를 보고 진단하나요?',
@@ -99,12 +99,12 @@ export default function ClinicCheckPage() {
             className="text-[22px] sm:text-[30px] font-black leading-tight"
             style={{ letterSpacing: '-0.5px' }}
           >
-            무료진단은 무엇을 보나요
+            진단은 무엇을 보나요
           </h2>
 
           <div className="mt-5 space-y-5 text-[15px] sm:text-base leading-relaxed text-[#4a4f55]">
             <p>
-              닥터포스트 무료진단은 병원 이름 하나로{' '}
+              닥터포스트 진단은 병원 이름 하나로{' '}
               <b className="font-bold text-[#202020]">
                 네이버 플레이스 · 네이버 블로그 · 인스타·유튜브 · 홈페이지 · AI 검색 · 의료광고법 표현
               </b>{' '}

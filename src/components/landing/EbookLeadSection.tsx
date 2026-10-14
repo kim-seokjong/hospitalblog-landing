@@ -58,7 +58,7 @@ export default function EbookLeadSection() {
               이 표현 쓰면 <span className="text-[#e52000]">처분받습니다</span>
             </h2>
             <p className="text-[#4a4f55] mt-4 text-[15px] sm:text-base leading-relaxed">
-              보건복지부 공식 통계로 정리한 <b>의료광고법 핵심 요약판(무료 PDF)</b>을 보내드려요.
+              보건복지부 공식 통계로 정리한 <b>의료광고법 핵심 요약판(PDF)</b>을 비용 없이 제공해 드려요.
               즉시 아웃 5대 표현, 위험·주의·안전 등급표, 발행 전 3분 체크리스트가 담겨 있어요.
             </p>
             <ul className="mt-4 space-y-1.5 text-sm text-[#4a4f55]">
@@ -83,7 +83,7 @@ export default function EbookLeadSection() {
                   요약판 PDF 다운로드
                 </a>
                 <p className="text-xs text-[#666f7d] mt-4">
-                  전체판(45p)과 자동 검사가 궁금하시면 가입 시 글 2회 무료 생성으로 확인해 보세요.
+                  전체판(45p)과 자동 검사가 궁금하시면 가입 혜택인 글 2회 생성으로 확인해 보세요.
                 </p>
               </div>
             ) : (
@@ -131,7 +131,7 @@ export default function EbookLeadSection() {
                   disabled={!consent || status === 'loading'}
                   className="w-full py-3.5 bg-gradient-to-br from-[#e52000] to-[#c91b00] text-white font-bold rounded-xl transition-all shadow-[0_12px_30px_-14px_rgba(255,70,40,0.30)] hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {status === 'loading' ? '준비 중…' : '무료 요약판 받기'}
+                  {status === 'loading' ? '준비 중…' : '요약판 받기'}
                 </button>
                 <p className="text-[11.5px] text-[#666f7d] leading-relaxed">
                   입력하신 정보는 자료 제공과 (동의 시) 서비스 안내에만 사용해요.
