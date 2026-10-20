@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/dev/lib/supabase/server';
+import { requirePaidPlan } from '@/payment/lib/usage-guard';
+import { logUsage } from '@/dev/lib/usage-logger';
 import { suggestThumbnailCopy } from '@/content/lib/thumbnail/copy-suggest';
 
 export const dynamic = 'force-dynamic';
@@ -12,13 +13,12 @@ export const maxDuration = 30;
  * 응답: { suggestions: [{ pattern, patternLabel, klabel, line1, line2?, accentWord }] }
  */
 export async function POST(req: NextRequest) {
+  // 2026-10-20 W43 Codex 지적: 로그인만 보고 Claude 를 불러 무료·만료 계정이 무제한으로 썼다.
+  // 다른 부속 기능과 같은 가드 + 사용 로그(FREE_TRIAL_ACCESSORY_FEATURES 가 센다)
   try {
-    const supabase = await createServerSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    const gate = await requirePaidPlan();
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.message, reason: gate.reason }, { status: gate.status });
     }
 
     const raw = (await req.json().catch(() => null)) as Record<string, unknown> | null;
@@ -34,7 +34,16 @@ export async function POST(req: NextRequest) {
     const hospitalType =
       typeof raw?.hospitalType === 'string' ? raw.hospitalType.trim().slice(0, 20) : undefined;
 
-    const suggestions = await suggestThumbnailCopy({ title, keyword, hospitalType });
+    const suggestions = await suggestThumbnailCopy({ title, keyword, hospitalType }, (usage) =>
+      logUsage({
+        feature: 'thumbnail-copy',
+        api_provider: 'anthropic',
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens,
+        user_id: gate.userId,
+        user_agent: req.headers.get('user-agent') ?? null,
+      }),
+    );
 
     return NextResponse.json({ suggestions });
   } catch (error) {

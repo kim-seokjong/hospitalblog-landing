@@ -9,6 +9,7 @@ export type FeatureType =
   | 'check-originality'
   | 'regenerate-image'
   | 'generate-style'
+  | 'thumbnail-copy'
   | 'free-sample';
 
 export type ApiProvider = 'anthropic' | 'fal' | 'pexels' | 'openai';

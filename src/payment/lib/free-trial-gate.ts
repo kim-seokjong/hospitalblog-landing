@@ -59,6 +59,7 @@ export const FREE_TRIAL_ACCESSORY_FEATURES = [
   'generate-cardnews-slides',
   'check-originality',
   'generate-style',
+  'thumbnail-copy',
 ] as const
 
 export function freeTrialAccessoryVerdict(input: {

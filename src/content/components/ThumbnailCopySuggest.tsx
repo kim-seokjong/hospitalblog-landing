@@ -15,6 +15,8 @@ interface ThumbnailCopySuggestProps {
 interface SuggestState {
   loading: boolean;
   error?: string;
+  /** 402(구독 필요·무료 체험 상한) — 다시 시도해도 같으니 요금제 안내를 띄운다 */
+  needsPlan?: boolean;
   suggestions: CopySuggestion[];
 }
 
@@ -39,6 +41,10 @@ export default function ThumbnailCopySuggest({ title, keyword, onApply }: Thumbn
         suggestions?: CopySuggestion[];
         error?: string;
       };
+      if (res.status === 402) {
+        setState({ loading: false, suggestions: [], error: json.error || '구독 플랜이 필요합니다.', needsPlan: true });
+        return;
+      }
       if (!res.ok) throw new Error(json.error || '카피 제안 실패');
       setState({ loading: false, suggestions: Array.isArray(json.suggestions) ? json.suggestions : [] });
     } catch (e) {
@@ -69,12 +75,18 @@ export default function ThumbnailCopySuggest({ title, keyword, onApply }: Thumbn
     return (
       <div className="flex items-center gap-2 py-1">
         <p className="text-[11px] text-[#ff4628]">{state.error}</p>
-        <button
-          onClick={() => void load()}
-          className="text-[11px] font-bold text-[#5b6573] underline"
-        >
-          다시 시도
-        </button>
+        {state.needsPlan ? (
+          <a href="/pricing" className="text-[11px] font-bold text-[#5b6573] underline">
+            요금제 보기
+          </a>
+        ) : (
+          <button
+            onClick={() => void load()}
+            className="text-[11px] font-bold text-[#5b6573] underline"
+          >
+            다시 시도
+          </button>
+        )}
       </div>
     );
   }

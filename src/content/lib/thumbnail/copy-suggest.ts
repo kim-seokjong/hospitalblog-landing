@@ -170,7 +170,10 @@ export function parseCopySuggestions(rawText: string): CopySuggestion[] {
  * 글 제목에서 썸네일 카피 5안(최대)을 생성한다.
  * Claude 호출 실패 시 예외를 던진다 — 라우트에서 사용자 메시지로 변환.
  */
-export async function suggestThumbnailCopy(input: CopySuggestInput): Promise<CopySuggestion[]> {
+export async function suggestThumbnailCopy(
+  input: CopySuggestInput,
+  onUsage?: (usage: { input_tokens: number; output_tokens: number }) => Promise<void>,
+): Promise<CopySuggestion[]> {
   const anthropic = getAnthropicClient();
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -178,6 +181,8 @@ export async function suggestThumbnailCopy(input: CopySuggestInput): Promise<Cop
     system: buildSystemPrompt(),
     messages: [{ role: 'user', content: buildUserPrompt(input) }],
   });
+  // 호출 비용은 응답 파싱 성패와 무관하게 이미 나갔다 — 먼저 기록한다(무료 체험 부속 기능 상한이 센다)
+  if (onUsage) await onUsage(response.usage);
 
   const textBlock = response.content.find((b) => b.type === 'text');
   if (!textBlock || textBlock.type !== 'text') {
