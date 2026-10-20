@@ -35,8 +35,12 @@ test('가입자 확인 번호 검사는 존재·프로필 검사 뒤, 5분 창�
   assert.ok(gates.nonce > Math.max(gates.exists, gates.profile))
   assert.ok(gates.window > gates.nonce, '5분 창 검사가 번호 판정보다 앞에 있다 — 예외 조건을 쓸 수 없다')
   assert.ok(gates.allow > Math.max(gates.nonce, gates.window), '롤백 허용 표시가 번호·5분 창 검사보다 앞에서 켜진다')
-  assert.match(body, /ageMs > SIGNUP_WINDOW_MS && !\(nonceCheck === 'ok' && !targetUser\.email_confirmed_at\)/,
-    '5분 창 예외는 번호가 맞고(ok) 이메일 미확인인 계정에만 — legacy 는 예외가 아니다')
+  // 10/20 legacy 제거: 번호가 틀리면 앞에서 403 으로 끝나므로 여기 오는 계정은 전부 ok — 창은 이메일 확인된 계정에만 건다.
+  assert.match(body, /if \(nonceCheck === 'mismatch'\) \{\s*return NextResponse\.json\(/,
+    '번호 mismatch 는 5분 창보다 먼저 403 으로 끝나야 한다')
+  assert.match(body, /ageMs > SIGNUP_WINDOW_MS && targetUser\.email_confirmed_at\)/,
+    '5분 창 예외는 번호가 맞고 이메일 미확인인 계정에만')
+  assert.doesNotMatch(body, /'legacy'/, 'legacy 판정이 라우트에 다시 들어왔다')
   assert.equal(body.split('rollbackAllowed = true').length - 1, 1, '롤백 허용 표시를 켜는 곳은 한 곳뿐이어야 한다')
 })
 

@@ -73,14 +73,10 @@ export async function POST(req: NextRequest) {
     if (nonceCheck === 'mismatch') {
       return NextResponse.json({ error: '가입 확인 정보가 맞지 않습니다. 다시 시도해주세요.' }, { status: 403 });
     }
-    if (nonceCheck === 'legacy') {
-      console.warn('register 가입자 확인 해시 없음(옛 화면 가입) — 직전 규칙으로 처리:', userId);
-    }
     // 5분 창 — 2026-10-13 대표 결정 ④: 가입 중간에 그만둔 사람이 5분 뒤 다시 시도하면 영영 막혔다
     //   (Supabase 가 같은 이메일의 미확인 계정을 그대로 돌려주는데 created_at 은 첫 시도 그대로다).
-    //   ⇒ 확인 번호가 맞고(ok) 이메일 미확인·프로필 미등록인 계정 = 본인이 이어서 가입하는 중 ⇒ 창이 지나도 받는다.
-    //   번호가 없는 옛 계정(legacy)은 직전 규칙(5분) 그대로.
-    if (ageMs > SIGNUP_WINDOW_MS && !(nonceCheck === 'ok' && !targetUser.email_confirmed_at)) {
+    //   ⇒ 확인 번호가 맞고(여기까지 왔으면 ok) 이메일 미확인·프로필 미등록인 계정 = 본인이 이어서 가입하는 중 ⇒ 창이 지나도 받는다.
+    if (ageMs > SIGNUP_WINDOW_MS && targetUser.email_confirmed_at) {
       return NextResponse.json({ error: '가입 처리 시간이 만료되었습니다. 다시 시도해주세요.' }, { status: 403 });
     }
     rollbackAllowed = true;
